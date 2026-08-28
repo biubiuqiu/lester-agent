@@ -3,9 +3,8 @@ WORKDIR /src
 COPY go.mod ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -o /out/lester-api ./apps/api
+RUN CGO_ENABLED=0 go build -o /out/lester-api ./cmd/api
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/lester-api /lester-api
 USER nonroot:nonroot
 ENTRYPOINT ["/lester-api"]
-

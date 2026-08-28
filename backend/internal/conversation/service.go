@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/biubiuqiu/lester-agent/internal/model"
-	"github.com/biubiuqiu/lester-agent/internal/sandbox"
-	"github.com/biubiuqiu/lester-agent/packages/prompts"
+	"github.com/biubiuqiu/lester-agent/backend/internal/model"
+	"github.com/biubiuqiu/lester-agent/backend/internal/sandbox"
+	"github.com/biubiuqiu/lester-agent/backend/prompts"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"

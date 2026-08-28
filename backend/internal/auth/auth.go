@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/biubiuqiu/lester-agent/internal/httpapi"
+	"github.com/biubiuqiu/lester-agent/backend/internal/httpapi"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/argon2"

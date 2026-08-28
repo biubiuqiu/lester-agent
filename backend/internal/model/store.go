@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/biubiuqiu/lester-agent/internal/secret"
+	"github.com/biubiuqiu/lester-agent/backend/internal/secret"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )

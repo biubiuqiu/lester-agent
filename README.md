@@ -16,11 +16,26 @@ This repository implements **Phase 0 through Phase 4** from the v0.1 architectur
 
 Phase 5+ features remain intentionally excluded: Skill installation, Artifacts/snapshots, Kubernetes/Helm, E2B, Memory, browser use, workflow/DAG building, RAG products, and multi-agent orchestration.
 
+## Repository layout
+
+```text
+frontend/                    Next.js web application
+backend/
+  cmd/api/                   API executable
+  cmd/sandbox-service/       sandbox executable
+  internal/                  shared backend implementation
+  prompts/                   embedded Agent prompts
+  migrations/                PostgreSQL migrations
+deploy/                      local Docker Compose deployment
+```
+
+The repository is a monorepo, but frontend and backend have independent build contexts. The API and sandbox service are separate backend executables and run in separate containers.
+
 ## Run locally
 
 ```bash
-cp deploy/docker-compose/.env.example deploy/docker-compose/.env
-docker compose --env-file deploy/docker-compose/.env -f deploy/docker-compose/compose.yaml up --build
+cp deploy/.env.example deploy/.env
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up --build
 ```
 
 Open <http://localhost:3000>, register, configure a provider under **Settings â†’ Models**, and start a conversation. Replace the development master key before any non-local deployment.
@@ -28,11 +43,10 @@ Open <http://localhost:3000>, register, configure a provider under **Settings â†
 ## Checks
 
 ```bash
-go test ./...
-pnpm --dir apps/web install --frozen-lockfile
-pnpm --dir apps/web lint
-pnpm --dir apps/web build
+cd backend && go test ./...
+pnpm --dir frontend install --frozen-lockfile
+pnpm --dir frontend lint
+pnpm --dir frontend build
 ```
 
 The Skills tab is a visible Phase 5 placeholder only; uploads and Artifact persistence are disabled.
-

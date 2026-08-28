@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/biubiuqiu/lester-agent/internal/sandbox"
+	"github.com/biubiuqiu/lester-agent/backend/internal/sandbox"
 	"log/slog"
 	"net/http"
 	"os"

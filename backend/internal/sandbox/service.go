@@ -2,7 +2,7 @@ package sandbox
 
 import (
 	"context"
-	"github.com/biubiuqiu/lester-agent/internal/httpapi"
+	"github.com/biubiuqiu/lester-agent/backend/internal/httpapi"
 	"github.com/creack/pty"
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"

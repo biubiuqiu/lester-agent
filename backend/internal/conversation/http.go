@@ -9,9 +9,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/biubiuqiu/lester-agent/internal/auth"
-	"github.com/biubiuqiu/lester-agent/internal/httpapi"
-	"github.com/biubiuqiu/lester-agent/internal/sandbox"
+	"github.com/biubiuqiu/lester-agent/backend/internal/auth"
+	"github.com/biubiuqiu/lester-agent/backend/internal/httpapi"
+	"github.com/biubiuqiu/lester-agent/backend/internal/sandbox"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"

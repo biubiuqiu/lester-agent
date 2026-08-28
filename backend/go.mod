@@ -1,4 +1,4 @@
-module github.com/biubiuqiu/lester-agent
+module github.com/biubiuqiu/lester-agent/backend
 
 go 1.24
 
@@ -11,4 +11,3 @@ require (
 	github.com/redis/go-redis/v9 v9.12.1
 	golang.org/x/crypto v0.42.0
 )
-

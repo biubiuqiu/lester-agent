@@ -4,8 +4,7 @@
 coverage.out
 bin/
 tmp/
-apps/web/.next/
-apps/web/node_modules/
-apps/web/.env.local
+frontend/.next/
+frontend/node_modules/
+frontend/.env.local
 reference/
-

@@ -10,6 +10,9 @@ permissions:
 jobs:
   go:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -17,14 +20,14 @@ jobs:
           go-version: "1.24.x"
           cache: false
       - run: go mod tidy
-      - run: test -z "$(gofmt -l apps internal packages)"
+      - run: test -z "$(gofmt -l cmd internal prompts)"
       - run: go test ./...
 
   web:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: apps/web
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -34,8 +37,7 @@ jobs:
         with:
           node-version: "22"
           cache: pnpm
-          cache-dependency-path: apps/web/pnpm-lock.yaml
+          cache-dependency-path: frontend/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm build
-

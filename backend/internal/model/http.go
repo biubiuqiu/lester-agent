@@ -2,8 +2,8 @@ package model
 
 import (
 	"errors"
-	"github.com/biubiuqiu/lester-agent/internal/auth"
-	"github.com/biubiuqiu/lester-agent/internal/httpapi"
+	"github.com/biubiuqiu/lester-agent/backend/internal/auth"
+	"github.com/biubiuqiu/lester-agent/backend/internal/httpapi"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"net/http"

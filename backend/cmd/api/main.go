@@ -9,14 +9,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/biubiuqiu/lester-agent/internal/auth"
-	"github.com/biubiuqiu/lester-agent/internal/config"
-	"github.com/biubiuqiu/lester-agent/internal/conversation"
-	"github.com/biubiuqiu/lester-agent/internal/database"
-	"github.com/biubiuqiu/lester-agent/internal/model"
-	"github.com/biubiuqiu/lester-agent/internal/sandbox"
-	"github.com/biubiuqiu/lester-agent/internal/secret"
-	"github.com/biubiuqiu/lester-agent/internal/server"
+	"github.com/biubiuqiu/lester-agent/backend/internal/auth"
+	"github.com/biubiuqiu/lester-agent/backend/internal/config"
+	"github.com/biubiuqiu/lester-agent/backend/internal/conversation"
+	"github.com/biubiuqiu/lester-agent/backend/internal/database"
+	"github.com/biubiuqiu/lester-agent/backend/internal/model"
+	"github.com/biubiuqiu/lester-agent/backend/internal/sandbox"
+	"github.com/biubiuqiu/lester-agent/backend/internal/secret"
+	"github.com/biubiuqiu/lester-agent/backend/internal/server"
 	"github.com/redis/go-redis/v9"
 )
 

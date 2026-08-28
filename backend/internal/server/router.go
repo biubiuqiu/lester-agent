@@ -4,10 +4,10 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/biubiuqiu/lester-agent/internal/auth"
-	"github.com/biubiuqiu/lester-agent/internal/conversation"
-	"github.com/biubiuqiu/lester-agent/internal/httpapi"
-	"github.com/biubiuqiu/lester-agent/internal/model"
+	"github.com/biubiuqiu/lester-agent/backend/internal/auth"
+	"github.com/biubiuqiu/lester-agent/backend/internal/conversation"
+	"github.com/biubiuqiu/lester-agent/backend/internal/httpapi"
+	"github.com/biubiuqiu/lester-agent/backend/internal/model"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
