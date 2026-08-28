@@ -25,6 +25,7 @@ type Tool struct {
 type ToolCall struct {
 	ID, Name  string
 	Arguments json.RawMessage
+	Index     int `json:"-"`
 }
 type ModelRequest struct {
 	Model       string
@@ -159,6 +160,13 @@ func (c *HTTPClient) openAIPayload(req ModelRequest) map[string]any {
 		if m.ToolCallID != "" {
 			item["tool_call_id"] = m.ToolCallID
 		}
+		if len(m.ToolCalls) > 0 {
+			calls := make([]any, 0, len(m.ToolCalls))
+			for _, call := range m.ToolCalls {
+				calls = append(calls, map[string]any{"id": call.ID, "type": "function", "function": map[string]any{"name": call.Name, "arguments": string(call.Arguments)}})
+			}
+			item["tool_calls"] = calls
+		}
 		messages = append(messages, item)
 	}
 	payload := map[string]any{"model": req.Model, "messages": messages, "stream": true, "stream_options": map[string]bool{"include_usage": true}}
@@ -177,11 +185,24 @@ func (c *HTTPClient) openAIPayload(req ModelRequest) map[string]any {
 func (c *HTTPClient) anthropicPayload(req ModelRequest) map[string]any {
 	messages := make([]map[string]any, 0, len(req.Messages))
 	for _, m := range req.Messages {
-		role := m.Role
-		if role == "tool" {
-			role = "user"
+		if m.Role == "tool" {
+			messages = append(messages, map[string]any{"role": "user", "content": []any{map[string]any{"type": "tool_result", "tool_use_id": m.ToolCallID, "content": m.Content}}})
+			continue
 		}
-		messages = append(messages, map[string]any{"role": role, "content": m.Content})
+		if len(m.ToolCalls) > 0 {
+			content := make([]any, 0, len(m.ToolCalls)+1)
+			if m.Content != "" {
+				content = append(content, map[string]any{"type": "text", "text": m.Content})
+			}
+			for _, call := range m.ToolCalls {
+				var input any = map[string]any{}
+				_ = json.Unmarshal(call.Arguments, &input)
+				content = append(content, map[string]any{"type": "tool_use", "id": call.ID, "name": call.Name, "input": input})
+			}
+			messages = append(messages, map[string]any{"role": "assistant", "content": content})
+			continue
+		}
+		messages = append(messages, map[string]any{"role": m.Role, "content": m.Content})
 	}
 	payload := map[string]any{"model": req.Model, "system": req.System, "messages": messages, "max_tokens": max(req.MaxTokens, 4096), "stream": true}
 	if len(req.Tools) > 0 {
@@ -203,8 +224,8 @@ func parseOpenAI(raw map[string]any) ModelEvent {
 		if calls, _ := delta["tool_calls"].([]any); len(calls) > 0 {
 			call, _ := calls[0].(map[string]any)
 			fn, _ := call["function"].(map[string]any)
-			args, _ := json.Marshal(fn["arguments"])
-			event.ToolCall = &ToolCall{ID: asString(call["id"]), Name: asString(fn["name"]), Arguments: args}
+			args := asString(fn["arguments"])
+			event.ToolCall = &ToolCall{ID: asString(call["id"]), Name: asString(fn["name"]), Arguments: json.RawMessage(args), Index: asInt(call["index"])}
 		}
 	}
 	return event
@@ -213,15 +234,20 @@ func parseAnthropic(raw map[string]any) ModelEvent {
 	event := ModelEvent{Type: "MODEL_DELTA"}
 	delta, _ := raw["delta"].(map[string]any)
 	event.Delta = asString(delta["text"])
+	index := asInt(raw["index"])
 	if raw["type"] == "content_block_start" {
 		block, _ := raw["content_block"].(map[string]any)
 		if block["type"] == "tool_use" {
 			args, _ := json.Marshal(block["input"])
-			event.ToolCall = &ToolCall{ID: asString(block["id"]), Name: asString(block["name"]), Arguments: args}
+			event.ToolCall = &ToolCall{ID: asString(block["id"]), Name: asString(block["name"]), Arguments: args, Index: index}
 		}
+	}
+	if raw["type"] == "content_block_delta" && delta["type"] == "input_json_delta" {
+		event.ToolCall = &ToolCall{Arguments: json.RawMessage(asString(delta["partial_json"])), Index: index}
 	}
 	return event
 }
 func asString(value any) string { result, _ := value.(string); return result }
+func asInt(value any) int       { number, _ := value.(float64); return int(number) }
 
 var _ = errors.New

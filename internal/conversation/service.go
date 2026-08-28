@@ -173,7 +173,7 @@ func (s *Service) execute(ctx context.Context, workspaceID, conversationID, runI
 			return
 		}
 		text := ""
-		calls := []model.ToolCall{}
+		callsByIndex := map[int]*model.ToolCall{}
 		for event := range stream {
 			if event.Err != nil {
 				s.fail(ctx, runID, conversationID, event.Err)
@@ -184,7 +184,29 @@ func (s *Service) execute(ctx context.Context, workspaceID, conversationID, runI
 				s.event(ctx, runID, conversationID, "MODEL_DELTA", map[string]any{"delta": event.Delta})
 			}
 			if event.ToolCall != nil {
-				calls = append(calls, *event.ToolCall)
+				call := callsByIndex[event.ToolCall.Index]
+				if call == nil {
+					call = &model.ToolCall{Index: event.ToolCall.Index}
+					callsByIndex[event.ToolCall.Index] = call
+				}
+				if event.ToolCall.ID != "" {
+					call.ID = event.ToolCall.ID
+				}
+				if event.ToolCall.Name != "" {
+					call.Name = event.ToolCall.Name
+				}
+				if fragment := event.ToolCall.Arguments; len(fragment) > 0 && string(fragment) != "{}" {
+					call.Arguments = append(call.Arguments, fragment...)
+				}
+			}
+		}
+		calls := make([]model.ToolCall, 0, len(callsByIndex))
+		for index := 0; index < len(callsByIndex); index++ {
+			if call := callsByIndex[index]; call != nil && call.Name != "" {
+				if len(call.Arguments) == 0 {
+					call.Arguments = json.RawMessage(`{}`)
+				}
+				calls = append(calls, *call)
 			}
 		}
 		s.event(ctx, runID, conversationID, "MODEL_COMPLETED", map[string]any{})
