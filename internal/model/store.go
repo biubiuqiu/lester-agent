@@ -119,12 +119,31 @@ func (s *Store) Client(ctx context.Context, workspaceID, deploymentID uuid.UUID)
 	if err != nil {
 		return nil, d, err
 	}
+	if c.Provider == "bedrock" {
+		client, clientErr := NewBedrockClient(c.Config, credential)
+		return client, d, clientErr
+	}
 	headers := map[string]string{}
 	if c.Provider == "azure_openai" {
 		headers["api-key"] = string(credential)
 		credential = []byte("")
 	}
-	return &HTTPClient{Protocol: c.Protocol, Endpoint: c.Endpoint, APIKey: string(credential), Headers: headers}, d, nil
+	mode := ""
+	if c.Provider == "vertex" {
+		region, project := asString(c.Config["region"]), asString(c.Config["project"])
+		if region == "" || project == "" {
+			return nil, d, errors.New("Vertex requires project and region")
+		}
+		c.Endpoint = fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/anthropic/models/%s:streamRawPredict", region, project, region, d.ModelID)
+		headers["Authorization"] = "Bearer " + string(credential)
+		credential = []byte("")
+		mode = "vertex"
+	}
+	if c.Provider == "foundry" {
+		headers["api-key"] = string(credential)
+		credential = []byte("")
+	}
+	return &HTTPClient{Protocol: c.Protocol, Endpoint: c.Endpoint, APIKey: string(credential), Headers: headers, Mode: mode}, d, nil
 }
 func defaultEndpoint(provider string, config map[string]any) string {
 	switch provider {

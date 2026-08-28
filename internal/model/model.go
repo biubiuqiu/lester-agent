@@ -55,9 +55,9 @@ type ModelClient interface {
 }
 
 type HTTPClient struct {
-	Protocol, Endpoint, APIKey string
-	Headers                    map[string]string
-	Client                     *http.Client
+	Protocol, Endpoint, APIKey, Mode string
+	Headers                          map[string]string
+	Client                           *http.Client
 }
 
 func (c *HTTPClient) Capabilities(context.Context, string) (ModelCapabilities, error) {
@@ -95,7 +95,9 @@ func (c *HTTPClient) Stream(ctx context.Context, req ModelRequest) (<-chan Model
 	}
 	request.Header.Set("Content-Type", "application/json")
 	if c.Protocol == "anthropic" {
-		request.Header.Set("x-api-key", c.APIKey)
+		if c.APIKey != "" {
+			request.Header.Set("x-api-key", c.APIKey)
+		}
 		request.Header.Set("anthropic-version", "2023-06-01")
 	} else {
 		request.Header.Set("Authorization", "Bearer "+c.APIKey)
@@ -205,6 +207,10 @@ func (c *HTTPClient) anthropicPayload(req ModelRequest) map[string]any {
 		messages = append(messages, map[string]any{"role": m.Role, "content": m.Content})
 	}
 	payload := map[string]any{"model": req.Model, "system": req.System, "messages": messages, "max_tokens": max(req.MaxTokens, 4096), "stream": true}
+	if c.Mode == "vertex" {
+		delete(payload, "model")
+		payload["anthropic_version"] = "vertex-2023-10-16"
+	}
 	if len(req.Tools) > 0 {
 		tools := make([]any, 0, len(req.Tools))
 		for _, t := range req.Tools {
