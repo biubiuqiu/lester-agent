@@ -13,10 +13,10 @@ import (
 	"github.com/biubiuqiu/lester-agent/internal/config"
 	"github.com/biubiuqiu/lester-agent/internal/conversation"
 	"github.com/biubiuqiu/lester-agent/internal/database"
-	"github.com/biubiuqiu/lester-agent/internal/httpapi"
 	"github.com/biubiuqiu/lester-agent/internal/model"
 	"github.com/biubiuqiu/lester-agent/internal/sandbox"
 	"github.com/biubiuqiu/lester-agent/internal/secret"
+	"github.com/biubiuqiu/lester-agent/internal/server"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -52,7 +52,7 @@ func main() {
 	conversationService := conversation.New(db, redisClient, modelStore, sandboxClient)
 	conversationHandler := conversation.NewHandler(conversationService, db, redisClient, sandboxClient, cfg.SandboxURL)
 	authService := auth.New(db, cfg.SessionTTL, false)
-	handler := httpapi.Router(httpapi.Dependencies{Logger: logger, WebOrigin: cfg.WebOrigin, Auth: authService, Models: model.NewHandler(modelStore), Conversations: conversationHandler})
+	handler := server.Router(server.Dependencies{Logger: logger, WebOrigin: cfg.WebOrigin, Auth: authService, Models: model.NewHandler(modelStore), Conversations: conversationHandler})
 	server := &http.Server{Addr: cfg.HTTPAddr, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 	go conversationService.SuspendIdle(ctx, cfg.SandboxIdleTTL)
 	go func() {

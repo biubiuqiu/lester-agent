@@ -1,13 +1,15 @@
-package httpapi
+package server
 
 import (
+	"log/slog"
+	"net/http"
+
 	"github.com/biubiuqiu/lester-agent/internal/auth"
 	"github.com/biubiuqiu/lester-agent/internal/conversation"
+	"github.com/biubiuqiu/lester-agent/internal/httpapi"
 	"github.com/biubiuqiu/lester-agent/internal/model"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"log/slog"
-	"net/http"
 )
 
 type Dependencies struct {
@@ -19,10 +21,10 @@ type Dependencies struct {
 }
 
 func Router(deps Dependencies) http.Handler {
-	r := chi.NewRouter()
-	r.Use(middleware.RequestID, middleware.RealIP, Recover(deps.Logger), AccessLog(deps.Logger), CORS(deps.WebOrigin))
-	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { JSON(w, 200, map[string]bool{"ok": true}) })
-	r.Route("/api/v1", func(api chi.Router) {
+	router := chi.NewRouter()
+	router.Use(middleware.RequestID, middleware.RealIP, httpapi.Recover(deps.Logger), httpapi.AccessLog(deps.Logger), httpapi.CORS(deps.WebOrigin))
+	router.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { httpapi.JSON(w, 200, map[string]bool{"ok": true}) })
+	router.Route("/api/v1", func(api chi.Router) {
 		api.Post("/auth/register", deps.Auth.Register)
 		api.Post("/auth/login", deps.Auth.Login)
 		api.Post("/auth/logout", deps.Auth.Logout)
@@ -30,7 +32,7 @@ func Router(deps Dependencies) http.Handler {
 			private.Use(deps.Auth.Middleware)
 			private.Get("/me", deps.Auth.Me)
 			private.Get("/agents", func(w http.ResponseWriter, _ *http.Request) {
-				JSON(w, 200, map[string]any{"agents": []map[string]string{{"slug": "lester", "name": "Lester"}, {"slug": "franklin", "name": "Franklin"}, {"slug": "michael", "name": "Michael"}, {"slug": "trevor", "name": "Trevor"}}})
+				httpapi.JSON(w, 200, map[string]any{"agents": []map[string]string{{"slug": "lester", "name": "Lester"}, {"slug": "franklin", "name": "Franklin"}, {"slug": "michael", "name": "Michael"}, {"slug": "trevor", "name": "Trevor"}}})
 			})
 			private.Get("/model-connections", deps.Models.ListConnections)
 			private.Post("/model-connections", deps.Models.CreateConnection)
@@ -51,5 +53,5 @@ func Router(deps Dependencies) http.Handler {
 			private.Get("/conversations/{id}/terminal", deps.Conversations.Terminal)
 		})
 	})
-	return r
+	return router
 }
