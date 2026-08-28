@@ -1,0 +1,178 @@
+package auth
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/base64"
+	"errors"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/biubiuqiu/lester-agent/internal/httpapi"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/crypto/argon2"
+)
+
+type Principal struct {
+	UserID      uuid.UUID `json:"user_id"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+	Email       string    `json:"email"`
+	DisplayName string    `json:"display_name"`
+}
+type contextKey struct{}
+
+func FromContext(ctx context.Context) (Principal, bool) {
+	p, ok := ctx.Value(contextKey{}).(Principal)
+	return p, ok
+}
+
+type Service struct {
+	db     *pgxpool.Pool
+	ttl    time.Duration
+	secure bool
+}
+
+func New(db *pgxpool.Pool, ttl time.Duration, secure bool) *Service {
+	return &Service{db: db, ttl: ttl, secure: secure}
+}
+
+func (s *Service) Register(w http.ResponseWriter, r *http.Request) {
+	var req struct{ Email, Password, DisplayName string }
+	if !httpapi.Decode(w, r, &req) {
+		return
+	}
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	req.DisplayName = strings.TrimSpace(req.DisplayName)
+	if !strings.Contains(req.Email, "@") || len(req.Password) < 10 || req.DisplayName == "" {
+		httpapi.Error(w, 400, errors.New("valid email, display name, and password of at least 10 characters are required"))
+		return
+	}
+	hash, err := hashPassword(req.Password)
+	if err != nil {
+		httpapi.Error(w, 500, err)
+		return
+	}
+	tx, err := s.db.Begin(r.Context())
+	if err != nil {
+		httpapi.Error(w, 500, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	var userID, workspaceID uuid.UUID
+	if err = tx.QueryRow(r.Context(), `INSERT INTO users(email,display_name,password_hash) VALUES($1,$2,$3) RETURNING id`, req.Email, req.DisplayName, hash).Scan(&userID); err != nil {
+		httpapi.Error(w, 409, errors.New("account already exists"))
+		return
+	}
+	if err = tx.QueryRow(r.Context(), `INSERT INTO workspaces(name) VALUES($1) RETURNING id`, req.DisplayName+" 的 Personal Workspace").Scan(&workspaceID); err != nil {
+		httpapi.Error(w, 500, err)
+		return
+	}
+	if _, err = tx.Exec(r.Context(), `INSERT INTO workspace_members(workspace_id,user_id) VALUES($1,$2)`, workspaceID, userID); err != nil {
+		httpapi.Error(w, 500, err)
+		return
+	}
+	if err = tx.Commit(r.Context()); err != nil {
+		httpapi.Error(w, 500, err)
+		return
+	}
+	s.issue(w, r, userID)
+	httpapi.JSON(w, 201, map[string]any{"user_id": userID, "workspace_id": workspaceID})
+}
+
+func (s *Service) Login(w http.ResponseWriter, r *http.Request) {
+	var req struct{ Email, Password string }
+	if !httpapi.Decode(w, r, &req) {
+		return
+	}
+	var id uuid.UUID
+	var hash string
+	if err := s.db.QueryRow(r.Context(), `SELECT id,password_hash FROM users WHERE email=$1`, strings.ToLower(strings.TrimSpace(req.Email))).Scan(&id, &hash); err != nil || !verifyPassword(req.Password, hash) {
+		httpapi.Error(w, 401, errors.New("invalid email or password"))
+		return
+	}
+	s.issue(w, r, id)
+	w.WriteHeader(204)
+}
+func (s *Service) Logout(w http.ResponseWriter, r *http.Request) {
+	if cookie, err := r.Cookie("lester_session"); err == nil {
+		if raw, e := base64.RawURLEncoding.DecodeString(cookie.Value); e == nil {
+			sum := sha256.Sum256(raw)
+			_, _ = s.db.Exec(r.Context(), `DELETE FROM sessions WHERE token_hash=$1`, sum[:])
+		}
+	}
+	http.SetCookie(w, &http.Cookie{Name: "lester_session", Value: "", Path: "/", HttpOnly: true, Secure: s.secure, SameSite: http.SameSiteLaxMode, MaxAge: -1})
+	w.WriteHeader(204)
+}
+func (s *Service) Me(w http.ResponseWriter, r *http.Request) {
+	p, _ := FromContext(r.Context())
+	httpapi.JSON(w, 200, p)
+}
+
+func (s *Service) Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie("lester_session")
+		if err != nil {
+			httpapi.Error(w, 401, errors.New("authentication required"))
+			return
+		}
+		raw, err := base64.RawURLEncoding.DecodeString(cookie.Value)
+		if err != nil {
+			httpapi.Error(w, 401, errors.New("invalid session"))
+			return
+		}
+		sum := sha256.Sum256(raw)
+		var p Principal
+		err = s.db.QueryRow(r.Context(), `SELECT u.id,u.email,u.display_name,wm.workspace_id FROM sessions s JOIN users u ON u.id=s.user_id JOIN workspace_members wm ON wm.user_id=u.id WHERE s.token_hash=$1 AND s.expires_at>now() ORDER BY wm.workspace_id LIMIT 1`, sum[:]).Scan(&p.UserID, &p.Email, &p.DisplayName, &p.WorkspaceID)
+		if err != nil {
+			httpapi.Error(w, 401, errors.New("session expired"))
+			return
+		}
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), contextKey{}, p)))
+	})
+}
+func (s *Service) issue(w http.ResponseWriter, r *http.Request, userID uuid.UUID) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return
+	}
+	sum := sha256.Sum256(raw)
+	expires := time.Now().Add(s.ttl)
+	_, _ = s.db.Exec(r.Context(), `INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,$3)`, userID, sum[:], expires)
+	http.SetCookie(w, &http.Cookie{Name: "lester_session", Value: base64.RawURLEncoding.EncodeToString(raw), Path: "/", HttpOnly: true, Secure: s.secure, SameSite: http.SameSiteLaxMode, Expires: expires})
+}
+
+func hashPassword(password string) (string, error) {
+	salt := make([]byte, 16)
+	if _, err := rand.Read(salt); err != nil {
+		return "", err
+	}
+	hash := argon2.IDKey([]byte(password), salt, 3, 64*1024, 2, 32)
+	return fmt.Sprintf("$argon2id$v=19$m=65536,t=3,p=2$%s$%s", base64.RawStdEncoding.EncodeToString(salt), base64.RawStdEncoding.EncodeToString(hash)), nil
+}
+func verifyPassword(password, encoded string) bool {
+	parts := strings.Split(encoded, "$")
+	if len(parts) != 6 || parts[1] != "argon2id" {
+		return false
+	}
+	var version int
+	var memory, iterations uint32
+	var parallelism uint8
+	if _, err := fmt.Sscanf(parts[2], "v=%d", &version); err != nil || version != argon2.Version {
+		return false
+	}
+	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &iterations, &parallelism); err != nil {
+		return false
+	}
+	salt, err1 := base64.RawStdEncoding.DecodeString(parts[4])
+	expected, err2 := base64.RawStdEncoding.DecodeString(parts[5])
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	actual := argon2.IDKey([]byte(password), salt, iterations, memory, parallelism, uint32(len(expected)))
+	return subtle.ConstantTimeCompare(actual, expected) == 1
+}

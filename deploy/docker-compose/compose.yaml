@@ -1,0 +1,79 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lester}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lester}
+      POSTGRES_DB: ${POSTGRES_DB:-lester}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ../../migrations/000001_phase_0_4.up.sql:/docker-entrypoint-initdb.d/001.sql:ro
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:8-alpine
+    command: redis-server --appendonly yes
+    volumes: [redis-data:/data]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: lester
+      MINIO_ROOT_PASSWORD: lester-development
+    volumes: [minio-data:/data]
+    ports: ["9000:9000", "9001:9001"]
+
+  sandbox-service:
+    build:
+      context: ../..
+      dockerfile: deploy/docker-compose/Dockerfile.sandbox-service
+    environment:
+      HTTP_ADDR: :8090
+      SANDBOX_IMAGE: ${SANDBOX_IMAGE:-python:3.12-slim}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports: ["8090:8090"]
+
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/docker-compose/Dockerfile.api
+    environment:
+      HTTP_ADDR: :8080
+      DATABASE_URL: postgres://${POSTGRES_USER:-lester}:${POSTGRES_PASSWORD:-lester}@postgres:5432/${POSTGRES_DB:-lester}?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
+      SANDBOX_SERVICE_URL: http://sandbox-service:8090
+      MASTER_KEY_BASE64: ${MASTER_KEY_BASE64}
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      sandbox-service: {condition: service_started}
+    ports: ["8080:8080"]
+
+  web:
+    build:
+      context: ../..
+      dockerfile: deploy/docker-compose/Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+    depends_on: [api]
+    ports: ["3000:3000"]
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
+
