@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/biubiuqiu/lester-agent/internal/auth"
@@ -15,6 +14,7 @@ import (
 	"github.com/biubiuqiu/lester-agent/internal/sandbox"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
@@ -25,10 +25,11 @@ type Handler struct {
 	redis      *redis.Client
 	sandboxes  *sandbox.Client
 	sandboxURL string
+	upgrader   websocket.Upgrader
 }
 
 func NewHandler(service *Service, db *pgxpool.Pool, redisClient *redis.Client, sandboxes *sandbox.Client, sandboxURL string) *Handler {
-	return &Handler{service: service, db: db, redis: redisClient, sandboxes: sandboxes, sandboxURL: strings.TrimRight(sandboxURL, "/")}
+	return &Handler{service: service, db: db, redis: redisClient, sandboxes: sandboxes, sandboxURL: strings.TrimRight(sandboxURL, "/"), upgrader: websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}}
 }
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.FromContext(r.Context())
@@ -263,14 +264,35 @@ func (h *Handler) Terminal(w http.ResponseWriter, r *http.Request) {
 		httpapi.Error(w, 404, err)
 		return
 	}
-	target := h.sandboxURL + "/v1/sandboxes/" + id.String() + "/terminal"
-	parsed, _ := url.Parse(target)
-	if parsed.Scheme == "http" {
-		parsed.Scheme = "ws"
-	} else {
-		parsed.Scheme = "wss"
+	client, err := h.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return
 	}
-	http.Redirect(w, r, parsed.String(), http.StatusTemporaryRedirect)
+	defer client.Close()
+	target := strings.Replace(h.sandboxURL, "http://", "ws://", 1)
+	target = strings.Replace(target, "https://", "wss://", 1) + "/v1/sandboxes/" + id.String() + "/terminal"
+	upstream, _, err := websocket.DefaultDialer.DialContext(r.Context(), target, nil)
+	if err != nil {
+		_ = client.WriteJSON(map[string]string{"type": "error", "data": err.Error()})
+		return
+	}
+	defer upstream.Close()
+	done := make(chan struct{}, 2)
+	copyMessages := func(destination, source *websocket.Conn) {
+		defer func() { done <- struct{}{} }()
+		for {
+			messageType, data, readErr := source.ReadMessage()
+			if readErr != nil || destination.WriteMessage(messageType, data) != nil {
+				return
+			}
+		}
+	}
+	go copyMessages(upstream, client)
+	go copyMessages(client, upstream)
+	select {
+	case <-done:
+	case <-r.Context().Done():
+	}
 }
 
 var _ = bufio.ErrInvalidUnreadByte
