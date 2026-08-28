@@ -106,6 +106,7 @@ lester-agent/
 │   ├── Dockerfile.api
 │   └── Dockerfile.sandbox-service
 ├── deploy/                       Docker Compose 与环境配置
+├── AGENTS.md                     编码 Agent 的开发约束
 ├── Makefile
 └── README.md
 ```
