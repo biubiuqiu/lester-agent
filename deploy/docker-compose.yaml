@@ -9,6 +9,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ../backend/migrations/000001_phase_0_4.up.sql:/docker-entrypoint-initdb.d/001.sql:ro
       - ../backend/migrations/000002_user_sandboxes.up.sql:/docker-entrypoint-initdb.d/002.sql:ro
+      - ../backend/migrations/000003_skills_attachments.up.sql:/docker-entrypoint-initdb.d/003.sql:ro
     healthcheck:
       test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
       interval: 3s
@@ -29,8 +30,8 @@ services:
     image: minio/minio:latest
     command: server /data --console-address :9001
     environment:
-      MINIO_ROOT_USER: lester
-      MINIO_ROOT_PASSWORD: lester-development
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-lester}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-lester-development}
     volumes: [minio-data:/data]
     ports: ["9000:9000", "9001:9001"]
 
@@ -56,10 +57,16 @@ services:
       WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
       SANDBOX_SERVICE_URL: http://sandbox-service:8090
       MASTER_KEY_BASE64: ${MASTER_KEY_BASE64}
+      OBJECT_STORE_ENDPOINT: minio:9000
+      OBJECT_STORE_ACCESS_KEY: ${MINIO_ROOT_USER:-lester}
+      OBJECT_STORE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-lester-development}
+      OBJECT_STORE_BUCKET: ${OBJECT_STORE_BUCKET:-lester-skills}
+      OBJECT_STORE_USE_SSL: "false"
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
       sandbox-service: {condition: service_started}
+      minio: {condition: service_started}
     ports: ["18080:8080"]
 
   web:

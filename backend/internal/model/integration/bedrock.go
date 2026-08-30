@@ -1,4 +1,4 @@
-package model
+package integration
 
 import (
 	"bytes"
@@ -12,51 +12,73 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
+
+	modelruntime "github.com/biubiuqiu/lester-agent/backend/internal/model/runtime"
 )
 
-type bedrockCredentials struct {
-	AccessKeyID     string `json:"access_key_id"`
-	SecretAccessKey string `json:"secret_access_key"`
-	SessionToken    string `json:"session_token"`
+type Bedrock struct{}
+
+func (Bedrock) Name() string                          { return "bedrock" }
+func (Bedrock) Protocol() string                      { return "anthropic" }
+func (Bedrock) DefaultEndpoint(map[string]any) string { return "" }
+func (Bedrock) NewClient(spec ClientSpec) (modelruntime.Client, error) {
+	var credentials bedrockCredentials
+	if json.Unmarshal(spec.Credential, &credentials) != nil || credentials.AccessKeyID == "" || credentials.SecretAccessKey == "" {
+		return nil, errors.New("Bedrock credential must contain access_key_id and secret_access_key")
+	}
+	region := configString(spec.Config, "region")
+	if region == "" {
+		return nil, errors.New("Bedrock requires region")
+	}
+	return &bedrockClient{region: region, credentials: credentials, http: &http.Client{Timeout: 10 * time.Minute}}, nil
 }
-type BedrockClient struct {
+
+type bedrockCredentials struct {
+	AccessKeyID, SecretAccessKey, SessionToken string
+}
+
+func (c *bedrockCredentials) UnmarshalJSON(data []byte) error {
+	type credentials struct {
+		AccessKeyID     string `json:"access_key_id"`
+		SecretAccessKey string `json:"secret_access_key"`
+		SessionToken    string `json:"session_token"`
+	}
+	var decoded credentials
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	c.AccessKeyID, c.SecretAccessKey, c.SessionToken = decoded.AccessKeyID, decoded.SecretAccessKey, decoded.SessionToken
+	return nil
+}
+
+type bedrockClient struct {
 	region      string
 	credentials bedrockCredentials
 	http        *http.Client
 }
 
-func NewBedrockClient(config map[string]any, raw []byte) (*BedrockClient, error) {
-	var credentials bedrockCredentials
-	if json.Unmarshal(raw, &credentials) != nil || credentials.AccessKeyID == "" || credentials.SecretAccessKey == "" {
-		return nil, errors.New("Bedrock credential must contain access_key_id and secret_access_key")
-	}
-	region := asString(config["region"])
-	if region == "" {
-		return nil, errors.New("Bedrock requires region")
-	}
-	return &BedrockClient{region: region, credentials: credentials, http: &http.Client{Timeout: 10 * time.Minute}}, nil
+func (c *bedrockClient) Capabilities(context.Context, string) (modelruntime.Capabilities, error) {
+	return modelruntime.Capabilities{Streaming: false, Tools: true, Vision: true, TokenCounting: true}, nil
 }
-func (c *BedrockClient) Capabilities(context.Context, string) (ModelCapabilities, error) {
-	return ModelCapabilities{Streaming: false, Tools: true, Vision: true, TokenCounting: true}, nil
-}
-func (c *BedrockClient) Stream(ctx context.Context, request ModelRequest) (<-chan ModelEvent, error) {
+
+func (c *bedrockClient) Stream(ctx context.Context, request modelruntime.Request) (<-chan modelruntime.Event, error) {
 	response, err := c.Generate(ctx, request)
 	if err != nil {
 		return nil, err
 	}
-	events := make(chan ModelEvent, 3)
-	events <- ModelEvent{Type: "MODEL_DELTA", Delta: response.Content}
+	events := make(chan modelruntime.Event, 3)
+	events <- modelruntime.Event{Type: "MODEL_DELTA", Delta: response.Content}
 	for index := range response.ToolCalls {
 		call := response.ToolCalls[index]
-		events <- ModelEvent{Type: "MODEL_DELTA", ToolCall: &call}
+		events <- modelruntime.Event{Type: "MODEL_DELTA", ToolCall: &call}
 	}
-	events <- ModelEvent{Type: "MODEL_COMPLETED", Usage: response.Usage}
+	events <- modelruntime.Event{Type: "MODEL_COMPLETED", Usage: response.Usage}
 	close(events)
 	return events, nil
 }
-func (c *BedrockClient) Generate(ctx context.Context, request ModelRequest) (*ModelResponse, error) {
+
+func (c *bedrockClient) Generate(ctx context.Context, request modelruntime.Request) (*modelruntime.Response, error) {
 	messages := make([]map[string]any, 0, len(request.Messages))
 	for _, message := range request.Messages {
 		if message.Role == "tool" {
@@ -80,13 +102,13 @@ func (c *BedrockClient) Generate(ctx context.Context, request ModelRequest) (*Mo
 		payload["tools"] = tools
 	}
 	body, _ := json.Marshal(payload)
-	path := "/model/" + url.PathEscape(request.Model) + "/invoke"
-	endpoint := "https://bedrock-runtime." + c.region + ".amazonaws.com" + path
+	requestPath := "/model/" + url.PathEscape(request.Model) + "/invoke"
+	endpoint := "https://bedrock-runtime." + c.region + ".amazonaws.com" + requestPath
 	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
-	c.sign(httpRequest, body, time.Now().UTC(), path)
+	c.sign(httpRequest, body, time.Now().UTC(), requestPath)
 	response, err := c.http.Do(httpRequest)
 	if err != nil {
 		return nil, err
@@ -109,21 +131,21 @@ func (c *BedrockClient) Generate(ctx context.Context, request ModelRequest) (*Mo
 	if err = json.Unmarshal(data, &decoded); err != nil {
 		return nil, err
 	}
-	result := &ModelResponse{Usage: map[string]int{"input_tokens": decoded.Usage.InputTokens, "output_tokens": decoded.Usage.OutputTokens}}
+	result := &modelruntime.Response{Usage: map[string]int{"input_tokens": decoded.Usage.InputTokens, "output_tokens": decoded.Usage.OutputTokens}}
 	for index, block := range decoded.Content {
 		if block.Type == "text" {
 			result.Content += block.Text
 		}
 		if block.Type == "tool_use" {
-			result.ToolCalls = append(result.ToolCalls, ToolCall{ID: block.ID, Name: block.Name, Arguments: block.Input, Index: index})
+			result.ToolCalls = append(result.ToolCalls, modelruntime.ToolCall{ID: block.ID, Name: block.Name, Arguments: block.Input, Index: index})
 		}
 	}
 	return result, nil
 }
-func (c *BedrockClient) sign(request *http.Request, body []byte, now time.Time, path string) {
+
+func (c *bedrockClient) sign(request *http.Request, body []byte, now time.Time, requestPath string) {
 	payloadHash := sha256Hex(body)
-	date := now.Format("20060102")
-	timestamp := now.Format("20060102T150405Z")
+	date, timestamp := now.Format("20060102"), now.Format("20060102T150405Z")
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Host", request.URL.Host)
 	request.Header.Set("X-Amz-Date", timestamp)
@@ -135,7 +157,7 @@ func (c *BedrockClient) sign(request *http.Request, body []byte, now time.Time, 
 		signedHeaders += ";x-amz-security-token"
 		canonicalHeaders += "x-amz-security-token:" + c.credentials.SessionToken + "\n"
 	}
-	canonical := request.Method + "\n" + path + "\n\n" + canonicalHeaders + "\n" + signedHeaders + "\n" + payloadHash
+	canonical := request.Method + "\n" + requestPath + "\n\n" + canonicalHeaders + "\n" + signedHeaders + "\n" + payloadHash
 	scope := date + "/" + c.region + "/bedrock/aws4_request"
 	stringToSign := "AWS4-HMAC-SHA256\n" + timestamp + "\n" + scope + "\n" + sha256Hex([]byte(canonical))
 	dateKey := hmacSHA([]byte("AWS4"+c.credentials.SecretAccessKey), date)
@@ -145,11 +167,10 @@ func (c *BedrockClient) sign(request *http.Request, body []byte, now time.Time, 
 	signature := hex.EncodeToString(hmacSHA(signingKey, stringToSign))
 	request.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential="+c.credentials.AccessKeyID+"/"+scope+", SignedHeaders="+signedHeaders+", Signature="+signature)
 }
+
 func hmacSHA(key []byte, value string) []byte {
 	mac := hmac.New(sha256.New, key)
 	_, _ = mac.Write([]byte(value))
 	return mac.Sum(nil)
 }
 func sha256Hex(value []byte) string { sum := sha256.Sum256(value); return hex.EncodeToString(sum[:]) }
-
-var _ = strings.Builder{}

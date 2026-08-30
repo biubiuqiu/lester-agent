@@ -95,16 +95,54 @@ func (h *Handler) Send(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var req struct{ Content string }
+	var req struct {
+		Content       string      `json:"content"`
+		AttachmentIDs []uuid.UUID `json:"attachment_ids"`
+	}
 	if !httpapi.Decode(w, r, &req) {
 		return
 	}
-	runID, err := h.service.Send(r.Context(), p.WorkspaceID, id, req.Content)
+	runID, err := h.service.Send(r.Context(), p.WorkspaceID, p.UserID, id, req.Content, req.AttachmentIDs)
 	if err != nil {
 		httpapi.Error(w, 400, err)
 		return
 	}
 	httpapi.JSON(w, 202, map[string]any{"run_id": runID})
+}
+
+func (h *Handler) UploadAttachment(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	const maxUpload = 25 << 20
+	r.Body = http.MaxBytesReader(w, r.Body, maxUpload+(1<<20))
+	if err := r.ParseMultipartForm(maxUpload); err != nil {
+		httpapi.Error(w, http.StatusBadRequest, errors.New("attachment must be a multipart file no larger than 25 MiB"))
+		return
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		httpapi.Error(w, http.StatusBadRequest, errors.New("file is required"))
+		return
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, maxUpload+1))
+	if err != nil || len(data) > maxUpload {
+		httpapi.Error(w, http.StatusBadRequest, errors.New("attachment exceeds the 25 MiB limit"))
+		return
+	}
+	contentType := header.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = http.DetectContentType(data)
+	}
+	item, err := h.service.UploadAttachment(r.Context(), p.WorkspaceID, p.UserID, id, header.Filename, contentType, data)
+	if err != nil {
+		httpapi.Error(w, http.StatusBadRequest, err)
+		return
+	}
+	httpapi.JSON(w, http.StatusCreated, item)
 }
 func (h *Handler) Events(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.FromContext(r.Context())

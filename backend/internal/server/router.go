@@ -8,6 +8,7 @@ import (
 	"github.com/biubiuqiu/lester-agent/backend/internal/conversation"
 	"github.com/biubiuqiu/lester-agent/backend/internal/httpapi"
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
+	"github.com/biubiuqiu/lester-agent/backend/internal/skill"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -18,6 +19,7 @@ type Dependencies struct {
 	Auth          *auth.Service
 	Models        *model.Handler
 	Conversations *conversation.Handler
+	Skills        *skill.Handler
 }
 
 func Router(deps Dependencies) http.Handler {
@@ -39,11 +41,16 @@ func Router(deps Dependencies) http.Handler {
 			private.Post("/model-connections/{id}/test", deps.Models.TestConnection)
 			private.Get("/model-deployments", deps.Models.ListDeployments)
 			private.Post("/model-deployments", deps.Models.CreateDeployment)
+			private.Get("/skills", deps.Skills.List)
 			private.Get("/conversations", deps.Conversations.List)
 			private.Post("/conversations", deps.Conversations.Create)
 			private.Get("/conversations/{id}", deps.Conversations.Get)
 			private.Patch("/conversations/{id}", deps.Conversations.Update)
 			private.Post("/conversations/{id}/messages", deps.Conversations.Send)
+			private.Post("/conversations/{id}/attachments", deps.Conversations.UploadAttachment)
+			private.Get("/conversations/{id}/skills", deps.Skills.Installed)
+			private.Post("/conversations/{id}/skills/{slug}/install", deps.Skills.Install)
+			private.Delete("/conversations/{id}/skills/{slug}", deps.Skills.Uninstall)
 			private.Get("/conversations/{id}/events", deps.Conversations.Events)
 			private.Get("/conversations/{id}/computer", deps.Conversations.Computer)
 			private.Get("/conversations/{id}/files", deps.Conversations.Files)

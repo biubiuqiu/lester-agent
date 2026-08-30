@@ -16,6 +16,8 @@
 - 为每个用户分配一个持久化 Docker Computer，并以 `/workspace/conversations/{conversationId}` 隔离会话目录
 - Agent 可以在 Computer 中执行命令、读写文件和使用终端
 - Computer 工作目录使用用户级 Docker Volume 持久化，空闲后自动暂停并在下次访问时恢复；服务会持续校验其真实运行状态
+- 内置 Skill 广场，并支持把 Skill 安装到当前会话的 `.agent/skills` 后按需加载
+- 支持会话附件上传；文件只写入 `.agent/upload`，模型默认只接收文件路径提示，不会自动注入文件内容
 
 ## 当前不包含
 
@@ -27,11 +29,8 @@
 - Knowledge Base/RAG 产品
 - Memory
 - 浏览器自动化
-- Skill 安装与 Skill 广场
-- 文件上传、Artifact 持久化和 Computer 快照
+- Artifact 持久化和 Computer 快照
 - Kubernetes、Helm 和 E2B Sandbox
-
-界面中的 Skills 入口目前仅用于展示产品方向，不具备安装或执行能力。
 
 ## 系统结构
 
@@ -41,11 +40,12 @@ flowchart TD
     API --> Model["Model Providers"]
     API --> PostgreSQL
     API --> Redis
+    API --> MinIO["Object Store · MinIO/S3"]
     API --> Sandbox["Sandbox Service · Go"]
     Sandbox --> Docker["User Computers · Docker"]
 ```
 
-Web、API 和 Sandbox Service 分别构建和运行在独立容器中。只有 Sandbox Service 挂载 Docker Socket，并负责创建、监控和管理用户 Computer。
+Web、API 和 Sandbox Service 分别构建和运行在独立容器中。只有 Sandbox Service 挂载 Docker Socket，并负责创建、监控和管理用户 Computer。Skill 安装包由 API 通过对象存储接口访问，当前 Compose 使用兼容 S3 API 的 MinIO。
 
 ## 沙箱机制
 
@@ -86,6 +86,16 @@ User
 
 `bash` 支持 `run_in_background: true`。后台命令会立即返回任务 ID、PID 和 `.lester/tasks/{taskId}.log`，Agent 可以随后使用 `read` 查看日志。前台 Bash 默认超时 120 秒，最大可配置为 600 秒。
 
+`bash`、`read` 和 `load_skill` 的大段文本结果会按字符数截断，并明确返回省略字符数和继续读取提示，避免单次工具结果挤满模型上下文。
+
+## Skill 与附件机制
+
+Skill 广场的元数据保存在 PostgreSQL，版本化安装包保存在对象存储。`backend/internal/blob.Store` 是存储边界，当前实现连接 MinIO，也可以替换为 AWS S3 或其他兼容实现。服务启动时会写入三个默认 Skill：Code Review、Project Planner 和 Data Explorer。
+
+Skill 是会话级能力：安装后解包到 `/workspace/conversations/{conversationId}/.agent/skills/{slug}`，数据库记录会话与 Skill 的关系。运行时 Prompt 只列出已安装 Skill 的名称、说明与路径；Agent 必须调用 `load_skill` 读取 `SKILL.md` 后才能使用它。卸载会同时清理当前会话目录和安装关系，不影响其他会话。
+
+附件上传后写入 `/workspace/conversations/{conversationId}/.agent/upload`。消息只记录附件元数据，并向模型提供文件路径、原始名称、类型和大小，不会预先解析文件，也不会把文件内容直接塞入上下文。Agent 只有在任务确实需要时才使用 `read` 或 `bash` 检查附件。
+
 | 服务 | 本地端口 → 容器端口 | 用途 |
 | --- | ---: | --- |
 | Web | `13000 → 3000` | 用户界面 |
@@ -93,7 +103,7 @@ User
 | Sandbox Service | `18090 → 8090` | Computer 生命周期、命令、文件和终端 |
 | PostgreSQL | `5432` | 持久化业务数据 |
 | Redis | `6379` | SSE 事件分发 |
-| MinIO | `9000` / `9001` | 预留对象存储服务，当前功能暂未使用 |
+| MinIO | `9000` / `9001` | Skill 安装包对象存储（S3 兼容） |
 
 ## 快速启动
 
@@ -140,6 +150,8 @@ lester-agent/
 │   ├── cmd/api/                  API 服务入口
 │   ├── cmd/sandbox-service/      Sandbox 服务入口
 │   ├── internal/                 后端内部实现
+│   │   ├── agenttool/            工具注册表与独立工具 Handler
+│   │   └── model/                模型存储、运行时契约与 Provider 集成
 │   ├── prompts/                  Agent 系统 Prompt
 │   ├── migrations/               PostgreSQL 迁移
 │   ├── Dockerfile.api
@@ -151,6 +163,8 @@ lester-agent/
 ```
 
 这是一个 Monorepo，但前端和后端拥有独立的依赖、构建上下文与 Dockerfile。API 和 Sandbox Service 同属 Go 后端工程，但会编译成两个可执行程序并运行在两个容器中。
+
+Agent 工具通过注册表扩展，每个工具独立维护参数 Schema 和执行逻辑；模型 Provider 通过 `internal/model/integration.Provider` 注册，数据库 Store 与对话运行时不包含具体 Provider 分支。详细扩展约束见 [`backend/ARCHITECTURE.md`](backend/ARCHITECTURE.md)。
 
 ## 开发检查
 

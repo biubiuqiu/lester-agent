@@ -14,8 +14,7 @@ The current implementation intentionally does not include:
 - Knowledge Base/RAG products
 - Memory
 - browser automation
-- Skill installation or a Skill marketplace
-- uploads, Artifact persistence, or Computer snapshots
+- Artifact persistence or Computer snapshots
 - Kubernetes, Helm, or E2B sandbox providers
 
 Do not implement, simulate, or silently scaffold these capabilities without an explicit request. A disabled UI placeholder must remain clearly disabled and must not imply that the feature works.
@@ -39,6 +38,9 @@ backend/
   cmd/api/                    API executable
   cmd/sandbox-service/        Sandbox Service executable
   internal/                   backend implementation
+    agenttool/                Agent tool registry and individual handlers
+    model/runtime/            Provider-neutral model contracts
+    model/integration/        Model provider registry and adapters
   prompts/                    embedded Agent prompts
   migrations/                 PostgreSQL migrations
 deploy/                       Docker Compose and environment templates
@@ -70,17 +72,26 @@ Preserve these behaviors when changing the implementation:
 - Conversations are rooted at `/workspace/conversations/{conversationId}` inside that Computer; file APIs and terminal sessions must stay scoped to that directory.
 - User Computers default to no network access and retain CPU, memory, and PID limits.
 - Computer state must be reconciled with the sandbox provider; use should recover a stopped or missing Computer while idle suspend/resume preserves the user workspace.
+- Conversation Skills must be installed under `.agent/skills/{slug}` and only installed Skills may be exposed to or loaded by the Agent runtime.
+- Conversation attachments must be stored under `.agent/upload`; do not parse or inject attachment contents into model context automatically.
+- Skill package storage must remain behind the object-store interface so MinIO can be replaced with S3 or another implementation without changing application behavior.
+- Large tool results must be bounded and must tell the model when output was truncated and how to continue.
 
 ## Backend conventions
 
 - Use Go `1.24` and keep the module rooted at `backend/`.
 - Keep `cmd/*/main.go` focused on dependency wiring and process lifecycle.
 - Put application behavior in the appropriate `backend/internal/*` package.
+- Keep the HTTP transport on standard `net/http` with `chi`. Do not introduce Gin or another HTTP framework unless a measured requirement cannot be met by the current stack.
+- Keep HTTP handlers thin: decode and validate transport input, resolve request identity, call an application service, and encode the response. Business rules belong in services or focused domain packages.
+- Organize routes by domain as the API grows. The root router owns global middleware and mounting; feature packages own their handlers and must not depend on the concrete router implementation.
 - Keep Agent Prompt text in `backend/prompts/`; do not scatter system prompts across handlers.
 - Format all Go files with `gofmt`.
 - Wrap errors with useful operation context, but never include credentials or sensitive payloads.
 - Add forward and rollback SQL when changing the database schema.
 - Reuse existing interfaces before adding provider-specific branching to higher layers.
+- Add Agent tools as independent `agenttool.Handler` implementations and register them in the tool registry; do not add tool-name switches to the conversation service.
+- Add model providers through `model/integration.Provider`; provider authentication, endpoints, and protocol adaptation must not branch inside `model.Store` or conversation code.
 
 ## Frontend conventions
 

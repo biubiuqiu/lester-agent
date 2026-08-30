@@ -9,14 +9,18 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/biubiuqiu/lester-agent/backend/internal/agenttool"
 	"github.com/biubiuqiu/lester-agent/backend/internal/auth"
+	"github.com/biubiuqiu/lester-agent/backend/internal/blob"
 	"github.com/biubiuqiu/lester-agent/backend/internal/config"
 	"github.com/biubiuqiu/lester-agent/backend/internal/conversation"
 	"github.com/biubiuqiu/lester-agent/backend/internal/database"
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
+	"github.com/biubiuqiu/lester-agent/backend/internal/model/integration"
 	"github.com/biubiuqiu/lester-agent/backend/internal/sandbox"
 	"github.com/biubiuqiu/lester-agent/backend/internal/secret"
 	"github.com/biubiuqiu/lester-agent/backend/internal/server"
+	"github.com/biubiuqiu/lester-agent/backend/internal/skill"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -47,12 +51,27 @@ func main() {
 		logger.Error("secret store", "error", err)
 		os.Exit(1)
 	}
-	modelStore := model.NewStore(db, secrets)
+	modelStore := model.NewStore(db, secrets, integration.NewDefaultRegistry())
 	sandboxClient := sandbox.NewClient(cfg.SandboxURL)
-	conversationService := conversation.New(db, redisClient, modelStore, sandboxClient)
+	toolRegistry := agenttool.NewDefaultRegistry(db)
+	conversationService := conversation.New(db, redisClient, modelStore, sandboxClient, toolRegistry)
 	conversationHandler := conversation.NewHandler(conversationService, db, redisClient, sandboxClient, cfg.SandboxURL)
+	objectStore, err := blob.NewMinIO(cfg.ObjectStoreEndpoint, cfg.ObjectStoreAccessKey, cfg.ObjectStoreSecretKey, cfg.ObjectStoreBucket, cfg.ObjectStoreUseSSL)
+	if err != nil {
+		logger.Error("object store", "error", err)
+		os.Exit(1)
+	}
+	if err = waitForObjectStore(ctx, objectStore); err != nil {
+		logger.Error("object store", "error", err)
+		os.Exit(1)
+	}
+	skillService := skill.New(db, objectStore, sandboxClient)
+	if err = skillService.SeedDefaults(ctx); err != nil {
+		logger.Error("seed skills", "error", err)
+		os.Exit(1)
+	}
 	authService := auth.New(db, cfg.SessionTTL, false)
-	handler := server.Router(server.Dependencies{Logger: logger, WebOrigin: cfg.WebOrigin, Auth: authService, Models: model.NewHandler(modelStore), Conversations: conversationHandler})
+	handler := server.Router(server.Dependencies{Logger: logger, WebOrigin: cfg.WebOrigin, Auth: authService, Models: model.NewHandler(modelStore), Conversations: conversationHandler, Skills: skill.NewHandler(skillService, conversationService)})
 	server := &http.Server{Addr: cfg.HTTPAddr, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 	go conversationService.SuspendIdle(ctx, cfg.SandboxIdleTTL)
 	go conversationService.MonitorSandboxes(ctx, cfg.SandboxMonitorInterval)
@@ -67,4 +86,19 @@ func main() {
 		logger.Error("server", "error", err)
 		os.Exit(1)
 	}
+}
+
+func waitForObjectStore(ctx context.Context, store blob.Store) error {
+	var err error
+	for attempt := 0; attempt < 30; attempt++ {
+		if err = store.Ensure(ctx); err == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Second):
+		}
+	}
+	return err
 }

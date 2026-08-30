@@ -3,17 +3,12 @@ package model
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
-	"net/url"
-	"strings"
 
+	"github.com/biubiuqiu/lester-agent/backend/internal/model/integration"
 	"github.com/biubiuqiu/lester-agent/backend/internal/secret"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-var providers = map[string]string{"openai": "openai", "azure_openai": "openai", "openai_compatible": "openai", "anthropic": "anthropic", "bedrock": "anthropic", "vertex": "anthropic", "foundry": "anthropic", "anthropic_compatible": "anthropic"}
 
 type Connection struct {
 	ID           uuid.UUID      `json:"id"`
@@ -34,20 +29,21 @@ type Deployment struct {
 	Capabilities ModelCapabilities `json:"capabilities"`
 }
 type Store struct {
-	db      *pgxpool.Pool
-	secrets *secret.Store
+	db        *pgxpool.Pool
+	secrets   *secret.Store
+	providers *integration.Registry
 }
 
-func NewStore(db *pgxpool.Pool, secrets *secret.Store) *Store {
-	return &Store{db: db, secrets: secrets}
+func NewStore(db *pgxpool.Pool, secrets *secret.Store, providers *integration.Registry) *Store {
+	return &Store{db: db, secrets: secrets, providers: providers}
 }
 func (s *Store) CreateConnection(ctx context.Context, workspaceID uuid.UUID, name, provider, endpoint string, config map[string]any, credential string) (Connection, error) {
-	protocol, ok := providers[provider]
-	if !ok {
-		return Connection{}, errors.New("unsupported provider")
+	integrationProvider, err := s.providers.Resolve(provider)
+	if err != nil {
+		return Connection{}, err
 	}
 	if endpoint == "" {
-		endpoint = defaultEndpoint(provider, config)
+		endpoint = integrationProvider.DefaultEndpoint(config)
 	}
 	credentialID, err := s.secrets.Put(ctx, workspaceID, []byte(credential))
 	if err != nil {
@@ -57,7 +53,7 @@ func (s *Store) CreateConnection(ctx context.Context, workspaceID uuid.UUID, nam
 	var result Connection
 	result.Config = config
 	result.CredentialID = credentialID
-	err = s.db.QueryRow(ctx, `INSERT INTO model_connections(workspace_id,name,provider,protocol,endpoint,config,credential_id) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,workspace_id,name,provider,protocol,endpoint`, workspaceID, name, provider, protocol, endpoint, raw, credentialID).Scan(&result.ID, &result.WorkspaceID, &result.Name, &result.Provider, &result.Protocol, &result.Endpoint)
+	err = s.db.QueryRow(ctx, `INSERT INTO model_connections(workspace_id,name,provider,protocol,endpoint,config,credential_id) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,workspace_id,name,provider,protocol,endpoint`, workspaceID, name, provider, integrationProvider.Protocol(), endpoint, raw, credentialID).Scan(&result.ID, &result.WorkspaceID, &result.Name, &result.Provider, &result.Protocol, &result.Endpoint)
 	return result, err
 }
 func (s *Store) ListConnections(ctx context.Context, workspaceID uuid.UUID) ([]Connection, error) {
@@ -120,61 +116,6 @@ func (s *Store) Client(ctx context.Context, workspaceID, deploymentID uuid.UUID)
 	if err != nil {
 		return nil, d, err
 	}
-	if c.Provider == "bedrock" {
-		client, clientErr := NewBedrockClient(c.Config, credential)
-		return client, d, clientErr
-	}
-	headers := map[string]string{}
-	if c.Provider == "azure_openai" {
-		headers["api-key"] = string(credential)
-		credential = []byte("")
-	}
-	mode := ""
-	if c.Provider == "vertex" {
-		region, project := asString(c.Config["region"]), asString(c.Config["project"])
-		if region == "" || project == "" {
-			return nil, d, errors.New("Vertex requires project and region")
-		}
-		c.Endpoint = fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/anthropic/models/%s:streamRawPredict", region, project, region, d.ModelID)
-		headers["Authorization"] = "Bearer " + string(credential)
-		credential = []byte("")
-		mode = "vertex"
-	}
-	if c.Provider == "foundry" {
-		headers["api-key"] = string(credential)
-		credential = []byte("")
-	}
-	if c.Provider == "openai_compatible" {
-		c.Endpoint = ensureEndpointPath(c.Endpoint, "/chat/completions")
-	}
-	if c.Provider == "anthropic_compatible" {
-		c.Endpoint = ensureEndpointPath(c.Endpoint, "/v1/messages")
-	}
-	return &HTTPClient{Protocol: c.Protocol, Endpoint: c.Endpoint, APIKey: string(credential), Headers: headers, Mode: mode}, d, nil
-}
-
-func ensureEndpointPath(endpoint, suffix string) string {
-	parsed, err := url.Parse(strings.TrimSpace(endpoint))
-	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		return endpoint
-	}
-	path := strings.TrimRight(parsed.Path, "/")
-	if !strings.HasSuffix(path, suffix) {
-		parsed.Path = path + suffix
-	}
-	return parsed.String()
-}
-
-func defaultEndpoint(provider string, config map[string]any) string {
-	switch provider {
-	case "openai":
-		return "https://api.openai.com/v1/chat/completions"
-	case "anthropic":
-		return "https://api.anthropic.com/v1/messages"
-	case "azure_openai":
-		return fmt.Sprintf("%s/openai/deployments/%s/chat/completions?api-version=%s", strings.TrimRight(asString(config["resource_endpoint"]), "/"), asString(config["deployment"]), asString(config["api_version"]))
-	case "foundry":
-		return strings.TrimRight(asString(config["resource_endpoint"]), "/") + "/anthropic/v1/messages"
-	}
-	return asString(config["endpoint"])
+	client, err := s.providers.NewClient(integration.ClientSpec{Provider: c.Provider, Protocol: c.Protocol, Endpoint: c.Endpoint, ModelID: d.ModelID, Config: c.Config, Credential: credential})
+	return client, d, err
 }

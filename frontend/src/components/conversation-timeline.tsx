@@ -1,6 +1,7 @@
 import type { Message } from "@/lib/api";
 import { MessageContent } from "./message-content";
 import { RunEvent, RunNarrative } from "./tool-timeline";
+import { FileText } from "lucide-react";
 
 type TimelineItem =
   | { kind: "message"; id: string; timestamp: number; message: Message }
@@ -20,10 +21,17 @@ function ChatMessage({ message }: { message: Message }) {
       {isUser && <span className="message-avatar">W</span>}
       <div className="chat-message-content">
         <MessageContent content={message.content} />
+        {message.metadata?.attachments?.length ? <div className="message-attachments">{message.metadata.attachments.map((attachment) => <span key={attachment.id}><FileText /><span><strong>{attachment.original_name}</strong><small>{formatBytes(attachment.size_bytes)} · .agent/upload</small></span></span>)}</div> : null}
         <time>{new Date(message.created_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</time>
       </div>
     </article>
   );
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function buildTimeline(messages: Message[], events: RunEvent[]): TimelineItem[] {

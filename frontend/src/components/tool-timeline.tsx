@@ -133,6 +133,7 @@ function activityLabel(activity: ToolActivity) {
     read: "读取文件",
     write: "写入文件",
     edit: "编辑文件",
+    load_skill: "加载 Skill",
     computer_exec: "运行命令",
     computer_list_files: "查看文件",
     computer_read_file: "读取文件",
@@ -146,6 +147,7 @@ function activityIcon(activity: ToolActivity) {
   if (activity.tool === "bash" || activity.tool === "computer_exec") return <TerminalSquare />;
   if (activity.tool === "read" || activity.tool === "computer_read_file" || activity.tool === "computer_list_files") return <FileText />;
   if (activity.tool === "write" || activity.tool === "edit" || activity.tool === "computer_write_file") return <Wrench />;
+  if (activity.tool === "load_skill") return <Wrench />;
   return activity.status === "completed" ? <Check /> : <Wrench />;
 }
 
@@ -179,6 +181,7 @@ function formatArguments(tool: string, value: unknown) {
     if (tool === "bash" || tool === "computer_exec") return String(parsed.command ?? "");
     const filePath = String(parsed.file_path ?? parsed.path ?? "");
     if (tool === "edit") return `${filePath}${parsed.replace_all ? " · 替换全部匹配" : " · 精确替换"}`;
+    if (tool === "load_skill") return String(parsed.name ?? "");
     if (tool === "write" || tool === "read" || tool.startsWith("computer_")) return filePath;
     return Object.values(parsed).map((item) => typeof item === "string" ? item : JSON.stringify(item)).join(" · ");
   } catch {
