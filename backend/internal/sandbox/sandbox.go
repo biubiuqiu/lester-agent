@@ -20,6 +20,7 @@ type Sandbox struct {
 }
 type Command struct {
 	Command        string `json:"command"`
+	WorkDir        string `json:"work_dir,omitempty"`
 	TimeoutSeconds int    `json:"timeout_seconds,omitempty"`
 }
 type CommandResult struct {
@@ -37,14 +38,15 @@ type FileEntry struct {
 }
 type Provider interface {
 	Create(context.Context, CreateOptions) (*Sandbox, error)
+	Inspect(context.Context, string) (*Sandbox, error)
 	Start(context.Context, string) error
 	Suspend(context.Context, string) error
 	Resume(context.Context, string) error
 	Destroy(context.Context, string) error
 	Exec(context.Context, string, Command) (*CommandResult, error)
-	ReadFile(context.Context, string, string) ([]byte, error)
-	WriteFile(context.Context, string, string, []byte) error
-	ListFiles(context.Context, string, string) ([]FileEntry, error)
+	ReadFile(context.Context, string, string, string) ([]byte, error)
+	WriteFile(context.Context, string, string, string, []byte) error
+	ListFiles(context.Context, string, string, string) ([]FileEntry, error)
 }
 
 func decodeEntries(data []byte) ([]FileEntry, error) {

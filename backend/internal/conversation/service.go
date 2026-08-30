@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
 	"github.com/biubiuqiu/lester-agent/backend/internal/sandbox"
 	"github.com/biubiuqiu/lester-agent/backend/prompts"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
@@ -46,6 +49,23 @@ type Service struct {
 	redis     *redis.Client
 	models    *model.Store
 	sandboxes *sandbox.Client
+	locks     sync.Map
+}
+
+type Computer struct {
+	SandboxID string
+	WorkDir   string
+	Status    string
+}
+
+type ComputerState struct {
+	ConversationID uuid.UUID  `json:"conversation_id"`
+	UserID         uuid.UUID  `json:"user_id"`
+	Provider       string     `json:"provider,omitempty"`
+	ProviderRef    string     `json:"provider_ref,omitempty"`
+	Status         string     `json:"status"`
+	LastError      string     `json:"last_error,omitempty"`
+	LastCheckedAt  *time.Time `json:"last_checked_at,omitempty"`
 }
 
 func New(db *pgxpool.Pool, redisClient *redis.Client, models *model.Store, sandboxes *sandbox.Client) *Service {
@@ -150,7 +170,7 @@ func (s *Service) execute(ctx context.Context, workspaceID, conversationID, runI
 		s.fail(ctx, runID, conversationID, err)
 		return
 	}
-	computer, err := s.ensureComputer(ctx, conversationID)
+	computer, err := s.ensureComputer(ctx, conversation)
 	if err != nil {
 		s.fail(ctx, runID, conversationID, err)
 		return
@@ -164,7 +184,7 @@ func (s *Service) execute(ctx context.Context, workspaceID, conversationID, runI
 	for _, m := range messages {
 		history = append(history, model.Message{Role: m.Role, Content: m.Content})
 	}
-	request := model.ModelRequest{Model: deployment.ModelID, System: system, Messages: history, Tools: computerTools(), MaxTokens: 4096}
+	request := model.ModelRequest{Model: deployment.ModelID, System: system, Messages: history, Tools: agentTools(), MaxTokens: 4096}
 	for turn := 0; turn < 12; turn++ {
 		s.event(ctx, runID, conversationID, "MODEL_STARTED", map[string]any{"turn": turn + 1})
 		stream, err := client.Stream(ctx, request)
@@ -224,9 +244,13 @@ func (s *Service) execute(ctx context.Context, workspaceID, conversationID, runI
 		}
 		request.Messages = append(request.Messages, model.Message{Role: "assistant", Content: text, ToolCalls: calls})
 		for _, call := range calls {
-			result, toolErr := s.runTool(ctx, runID, conversationID, call)
+			s.event(ctx, runID, conversationID, "TOOL_STARTED", map[string]any{"tool": call.Name, "arguments": string(call.Arguments)})
+			result, toolErr := s.runTool(ctx, runID, conversationID, computer, call)
 			if toolErr != nil {
+				s.event(ctx, runID, conversationID, "TOOL_FAILED", map[string]any{"tool": call.Name, "error": toolErr.Error()})
 				result = map[string]any{"error": toolErr.Error()}
+			} else {
+				s.event(ctx, runID, conversationID, "TOOL_COMPLETED", map[string]any{"tool": call.Name})
 			}
 			raw, _ := json.Marshal(result)
 			request.Messages = append(request.Messages, model.Message{Role: "tool", Content: string(raw), ToolCallID: call.ID})
@@ -234,30 +258,137 @@ func (s *Service) execute(ctx context.Context, workspaceID, conversationID, runI
 	}
 	s.fail(ctx, runID, conversationID, errors.New("tool loop limit reached"))
 }
-func (s *Service) ensureComputer(ctx context.Context, conversationID uuid.UUID) (*sandbox.Sandbox, error) {
-	var providerRef, status string
-	err := s.db.QueryRow(ctx, `SELECT provider_ref,status FROM sandboxes WHERE conversation_id=$1`, conversationID).Scan(&providerRef, &status)
-	if err == nil {
-		if status != "running" {
-			if err = s.sandboxes.Action(ctx, providerRef, "resume"); err != nil {
-				return nil, err
-			}
-			status = "running"
-			_, _ = s.db.Exec(ctx, `UPDATE sandboxes SET status='running',last_active_at=now() WHERE conversation_id=$1`, conversationID)
-		}
-		return &sandbox.Sandbox{ID: providerRef, ProviderRef: providerRef, Status: status}, nil
+func conversationWorkDir(conversationID uuid.UUID) string {
+	return "/workspace/conversations/" + conversationID.String()
+}
+
+func (s *Service) userLock(userID uuid.UUID) *sync.Mutex {
+	lock, _ := s.locks.LoadOrStore(userID, &sync.Mutex{})
+	return lock.(*sync.Mutex)
+}
+
+func (s *Service) ensureComputer(ctx context.Context, conversation Conversation) (*Computer, error) {
+	lock := s.userLock(conversation.CreatedBy)
+	lock.Lock()
+	defer lock.Unlock()
+
+	providerID := conversation.CreatedBy.String()
+	var status string
+	err := s.db.QueryRow(ctx, `SELECT provider_ref,status FROM sandboxes WHERE workspace_id=$1 AND user_id=$2`, conversation.WorkspaceID, conversation.CreatedBy).Scan(&providerID, &status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = s.db.QueryRow(ctx, `INSERT INTO sandboxes(workspace_id,user_id,provider_ref,status) VALUES($1,$2,$3,'creating') ON CONFLICT(user_id) DO UPDATE SET last_active_at=now() RETURNING provider_ref,status`, conversation.WorkspaceID, conversation.CreatedBy, providerID).Scan(&providerID, &status)
 	}
-	item, err := s.sandboxes.Create(ctx, conversationID.String())
+	if err != nil {
+		return nil, fmt.Errorf("load user computer: %w", err)
+	}
+
+	actual, err := s.sandboxes.Inspect(ctx, providerID)
+	if err != nil {
+		s.recordComputerError(ctx, conversation.CreatedBy, err)
+		return nil, fmt.Errorf("inspect user computer: %w", err)
+	}
+	switch actual.Status {
+	case "missing":
+		actual, err = s.sandboxes.Create(ctx, providerID)
+	case "running":
+		// Already ready.
+	case "unhealthy":
+		if destroyErr := s.sandboxes.Action(ctx, providerID, "destroy"); destroyErr != nil {
+			err = destroyErr
+			break
+		}
+		actual, err = s.sandboxes.Create(ctx, providerID)
+	default:
+		err = s.sandboxes.Action(ctx, providerID, "resume")
+		if err == nil {
+			actual, err = s.sandboxes.Inspect(ctx, providerID)
+		}
+	}
+	if err != nil {
+		s.recordComputerError(ctx, conversation.CreatedBy, err)
+		return nil, fmt.Errorf("recover user computer: %w", err)
+	}
+	if actual.Status != "running" {
+		err = fmt.Errorf("user computer is %s after recovery", actual.Status)
+		s.recordComputerError(ctx, conversation.CreatedBy, err)
+		return nil, err
+	}
+	workDir := conversationWorkDir(conversation.ID)
+	if _, err = s.sandboxes.Exec(ctx, providerID, sandbox.Command{Command: "true", WorkDir: workDir}); err != nil {
+		s.recordComputerError(ctx, conversation.CreatedBy, err)
+		return nil, fmt.Errorf("prepare conversation directory: %w", err)
+	}
+	_, _ = s.db.Exec(ctx, `UPDATE sandboxes SET status='running',last_error=NULL,last_checked_at=now(),last_active_at=now() WHERE workspace_id=$1 AND user_id=$2`, conversation.WorkspaceID, conversation.CreatedBy)
+	return &Computer{SandboxID: providerID, WorkDir: workDir, Status: "running"}, nil
+}
+
+func (s *Service) recordComputerError(ctx context.Context, userID uuid.UUID, err error) {
+	_, _ = s.db.Exec(ctx, `UPDATE sandboxes SET status='error',last_error=$2,last_checked_at=now() WHERE user_id=$1`, userID, err.Error())
+}
+
+func (s *Service) ComputerForConversation(ctx context.Context, workspaceID, conversationID uuid.UUID) (*Computer, error) {
+	conversation, _, err := s.Get(ctx, workspaceID, conversationID)
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.db.Exec(ctx, `INSERT INTO sandboxes(conversation_id,provider_ref,status) VALUES($1,$2,'running') ON CONFLICT(conversation_id) DO UPDATE SET status='running',last_active_at=now()`, conversationID, conversationID.String())
-	return item, err
+	return s.ensureComputer(ctx, conversation)
 }
-func computerTools() []model.Tool {
-	return []model.Tool{{Name: "computer_exec", Description: "Run a shell command inside this conversation's Computer", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"command": map[string]string{"type": "string"}}, "required": []string{"command"}}}, {Name: "computer_list_files", Description: "List files under /workspace", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"path": map[string]string{"type": "string"}}}}, {Name: "computer_read_file", Description: "Read a text file under /workspace", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"path": map[string]string{"type": "string"}}, "required": []string{"path"}}}, {Name: "computer_write_file", Description: "Write a text file under /workspace", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"path": map[string]string{"type": "string"}, "content": map[string]string{"type": "string"}}, "required": []string{"path", "content"}}}}
+
+func (s *Service) ComputerStatus(ctx context.Context, workspaceID, conversationID uuid.UUID) (ComputerState, error) {
+	conversation, _, err := s.Get(ctx, workspaceID, conversationID)
+	if err != nil {
+		return ComputerState{}, err
+	}
+	state := ComputerState{ConversationID: conversationID, UserID: conversation.CreatedBy, Status: "not_created"}
+	var checkedAt *time.Time
+	err = s.db.QueryRow(ctx, `SELECT provider,provider_ref,status,COALESCE(last_error,''),last_checked_at FROM sandboxes WHERE workspace_id=$1 AND user_id=$2`, workspaceID, conversation.CreatedBy).Scan(&state.Provider, &state.ProviderRef, &state.Status, &state.LastError, &checkedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return state, nil
+	}
+	if err != nil {
+		return ComputerState{}, err
+	}
+	actual, inspectErr := s.sandboxes.Inspect(ctx, state.ProviderRef)
+	if inspectErr != nil {
+		s.recordComputerError(ctx, conversation.CreatedBy, inspectErr)
+		state.Status = "error"
+		state.LastError = inspectErr.Error()
+		now := time.Now()
+		state.LastCheckedAt = &now
+		return state, nil
+	}
+	state.Status = actual.Status
+	state.LastError = ""
+	_, _ = s.db.Exec(ctx, `UPDATE sandboxes SET status=$2,last_error=NULL,last_checked_at=now() WHERE user_id=$1`, conversation.CreatedBy, state.Status)
+	now := time.Now()
+	state.LastCheckedAt = &now
+	return state, nil
 }
-func (s *Service) runTool(ctx context.Context, runID, conversationID uuid.UUID, call model.ToolCall) (any, error) {
+func agentTools() []model.Tool {
+	pathProperty := map[string]any{"type": "string", "description": "Path relative to the current conversation directory. Do not prefix it with /workspace."}
+	return []model.Tool{
+		{Name: "bash", Description: "Run a Bash command in the current conversation directory. Use it for listing, searching, tests, builds, and long-running processes.", InputSchema: map[string]any{"type": "object", "properties": map[string]any{
+			"command":           map[string]any{"type": "string", "description": "The Bash command to execute."},
+			"description":       map[string]any{"type": "string", "description": "A short description of what the command does."},
+			"timeout":           map[string]any{"type": "integer", "minimum": 1000, "maximum": 600000, "description": "Foreground timeout in milliseconds. Defaults to 120000. For background tasks, only applied when explicitly provided."},
+			"run_in_background": map[string]any{"type": "boolean", "description": "Run asynchronously and return a task ID plus a log file path."},
+		}, "required": []string{"command"}, "additionalProperties": false}},
+		{Name: "read", Description: "Read a text file from the current conversation directory, optionally by line range.", InputSchema: map[string]any{"type": "object", "properties": map[string]any{
+			"file_path": pathProperty,
+			"offset":    map[string]any{"type": "integer", "minimum": 1, "description": "One-based first line to return. Defaults to 1."},
+			"limit":     map[string]any{"type": "integer", "minimum": 1, "maximum": 2000, "description": "Maximum number of lines to return. Defaults to 2000."},
+		}, "required": []string{"file_path"}, "additionalProperties": false}},
+		{Name: "write", Description: "Create or completely overwrite a text file in the current conversation directory.", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"file_path": pathProperty, "content": map[string]any{"type": "string", "description": "The complete file content."}}, "required": []string{"file_path", "content"}, "additionalProperties": false}},
+		{Name: "edit", Description: "Edit a text file by exact string replacement. This is not a regular expression or AST edit.", InputSchema: map[string]any{"type": "object", "properties": map[string]any{
+			"file_path":   pathProperty,
+			"old_string":  map[string]any{"type": "string", "description": "The exact text to replace. Include enough context to make a single match."},
+			"new_string":  map[string]any{"type": "string", "description": "The replacement text. It may be empty."},
+			"replace_all": map[string]any{"type": "boolean", "description": "Replace every exact match. Defaults to false; otherwise multiple matches are rejected as ambiguous."},
+		}, "required": []string{"file_path", "old_string", "new_string"}, "additionalProperties": false}},
+	}
+}
+func (s *Service) runTool(ctx context.Context, runID, conversationID uuid.UUID, computer *Computer, call model.ToolCall) (any, error) {
+	_, _ = s.db.Exec(ctx, `UPDATE sandboxes SET last_active_at=now() WHERE provider_ref=$1`, computer.SandboxID)
 	var input map[string]any
 	if len(call.Arguments) > 0 {
 		if err := json.Unmarshal(call.Arguments, &input); err != nil {
@@ -265,29 +396,226 @@ func (s *Service) runTool(ctx context.Context, runID, conversationID uuid.UUID, 
 		}
 	}
 	switch call.Name {
-	case "computer_exec":
-		command := fmt.Sprint(input["command"])
+	case "bash", "computer_exec":
+		command, err := requiredToolStringArgument(input, "command")
+		if err != nil {
+			return nil, err
+		}
+		background, err := toolBoolArgument(input, "run_in_background")
+		if err != nil {
+			return nil, err
+		}
+		timeoutMS, hasTimeout, err := toolIntArgument(input, "timeout")
+		if err != nil {
+			return nil, err
+		}
+		if hasTimeout && (timeoutMS < 1000 || timeoutMS > 600000) {
+			return nil, errors.New("tool argument \"timeout\" must be between 1000 and 600000 milliseconds")
+		}
 		s.event(ctx, runID, conversationID, "COMMAND_STARTED", map[string]any{"command": command})
-		result, err := s.sandboxes.Exec(ctx, conversationID.String(), sandbox.Command{Command: command})
+		if background {
+			return s.startBackgroundCommand(ctx, runID, conversationID, computer, command, timeoutMS, hasTimeout)
+		}
+		if !hasTimeout {
+			timeoutMS = 120000
+		}
+		result, err := s.sandboxes.Exec(ctx, computer.SandboxID, sandbox.Command{Command: command, WorkDir: computer.WorkDir, TimeoutSeconds: millisecondsToSeconds(timeoutMS)})
 		if err == nil {
 			s.event(ctx, runID, conversationID, "COMMAND_OUTPUT", map[string]any{"stdout": result.Stdout, "stderr": result.Stderr})
 			s.event(ctx, runID, conversationID, "COMMAND_COMPLETED", map[string]any{"exit_code": result.ExitCode})
 		}
 		return result, err
 	case "computer_list_files":
-		return s.sandboxes.ListFiles(ctx, conversationID.String(), fmt.Sprint(input["path"]))
-	case "computer_read_file":
-		data, err := s.sandboxes.ReadFile(ctx, conversationID.String(), fmt.Sprint(input["path"]))
-		return map[string]string{"content": string(data)}, err
-	case "computer_write_file":
-		path := fmt.Sprint(input["path"])
-		err := s.sandboxes.WriteFile(ctx, conversationID.String(), path, []byte(fmt.Sprint(input["content"])))
+		filePath, err := toolStringArgument(input, "path", false)
+		if err != nil {
+			return nil, err
+		}
+		return s.sandboxes.ListFiles(ctx, computer.SandboxID, computer.WorkDir, filePath)
+	case "read", "computer_read_file":
+		filePath, err := toolFilePathArgument(input)
+		if err != nil {
+			return nil, err
+		}
+		data, err := s.sandboxes.ReadFile(ctx, computer.SandboxID, computer.WorkDir, filePath)
+		if err != nil {
+			return nil, err
+		}
+		offset, hasOffset, err := toolIntArgument(input, "offset")
+		if err != nil {
+			return nil, err
+		}
+		if !hasOffset {
+			offset = 1
+		}
+		limit, hasLimit, err := toolIntArgument(input, "limit")
+		if err != nil {
+			return nil, err
+		}
+		if !hasLimit {
+			limit = 2000
+		}
+		if offset < 1 || limit < 1 || limit > 2000 {
+			return nil, errors.New("read offset must be at least 1 and limit must be between 1 and 2000")
+		}
+		content, totalLines, returnedLines := sliceFileLines(string(data), offset, limit)
+		return map[string]any{"content": content, "start_line": offset, "line_count": returnedLines, "total_lines": totalLines}, nil
+	case "write", "computer_write_file":
+		filePath, err := toolFilePathArgument(input)
+		if err != nil {
+			return nil, err
+		}
+		content, err := toolStringArgument(input, "content", true)
+		if err != nil {
+			return nil, err
+		}
+		err = s.sandboxes.WriteFile(ctx, computer.SandboxID, computer.WorkDir, filePath, []byte(content))
 		if err == nil {
-			s.event(ctx, runID, conversationID, "FILE_UPDATED", map[string]any{"path": path})
+			s.event(ctx, runID, conversationID, "FILE_UPDATED", map[string]any{"path": filePath, "operation": "write"})
 		}
 		return map[string]bool{"ok": err == nil}, err
+	case "edit":
+		filePath, err := toolFilePathArgument(input)
+		if err != nil {
+			return nil, err
+		}
+		oldString, err := requiredToolStringArgument(input, "old_string")
+		if err != nil {
+			return nil, err
+		}
+		newString, err := toolStringArgument(input, "new_string", true)
+		if err != nil {
+			return nil, err
+		}
+		replaceAll, err := toolBoolArgument(input, "replace_all")
+		if err != nil {
+			return nil, err
+		}
+		data, err := s.sandboxes.ReadFile(ctx, computer.SandboxID, computer.WorkDir, filePath)
+		if err != nil {
+			return nil, err
+		}
+		updated, replacements, err := replaceExactString(string(data), oldString, newString, replaceAll)
+		if err != nil {
+			return nil, err
+		}
+		if err = s.sandboxes.WriteFile(ctx, computer.SandboxID, computer.WorkDir, filePath, []byte(updated)); err != nil {
+			return nil, err
+		}
+		s.event(ctx, runID, conversationID, "FILE_UPDATED", map[string]any{"path": filePath, "operation": "edit", "replacements": replacements})
+		return map[string]any{"ok": true, "replacements": replacements}, nil
 	}
-	return nil, errors.New("unknown computer tool")
+	return nil, errors.New("unknown tool")
+}
+
+func (s *Service) startBackgroundCommand(ctx context.Context, runID, conversationID uuid.UUID, computer *Computer, command string, timeoutMS int, hasTimeout bool) (any, error) {
+	taskID := uuid.NewString()
+	logPath := ".lester/tasks/" + taskID + ".log"
+	inner := command + "\nexit_code=$?\nprintf '\\n[Lester background task exited with code %s]\\n' \"$exit_code\"\nexit \"$exit_code\""
+	runner := "sh -lc " + shellQuoteArgument(inner)
+	if hasTimeout {
+		runner = fmt.Sprintf("timeout %ds %s", millisecondsToSeconds(timeoutMS), runner)
+	}
+	launch := "mkdir -p .lester/tasks; nohup " + runner + " > " + shellQuoteArgument(logPath) + " 2>&1 < /dev/null & echo $!"
+	result, err := s.sandboxes.Exec(ctx, computer.SandboxID, sandbox.Command{Command: launch, WorkDir: computer.WorkDir, TimeoutSeconds: 30})
+	if err != nil {
+		return nil, err
+	}
+	if result.ExitCode != 0 {
+		return nil, fmt.Errorf("start background command: %s", strings.TrimSpace(result.Stderr))
+	}
+	payload := map[string]any{"task_id": taskID, "pid": strings.TrimSpace(result.Stdout), "log_path": logPath, "status": "running"}
+	s.event(ctx, runID, conversationID, "BACKGROUND_STARTED", payload)
+	return payload, nil
+}
+
+func toolStringArgument(input map[string]any, name string, required bool) (string, error) {
+	value, exists := input[name]
+	if !exists || value == nil {
+		if required {
+			return "", fmt.Errorf("missing required tool argument %q", name)
+		}
+		return "", nil
+	}
+	text, ok := value.(string)
+	if !ok {
+		return "", fmt.Errorf("tool argument %q must be a string", name)
+	}
+	return text, nil
+}
+
+func requiredToolStringArgument(input map[string]any, name string) (string, error) {
+	text, err := toolStringArgument(input, name, true)
+	if err == nil && strings.TrimSpace(text) == "" {
+		err = fmt.Errorf("tool argument %q cannot be empty", name)
+	}
+	return text, err
+}
+
+func toolFilePathArgument(input map[string]any) (string, error) {
+	if _, exists := input["file_path"]; exists {
+		return requiredToolStringArgument(input, "file_path")
+	}
+	return requiredToolStringArgument(input, "path")
+}
+
+func toolBoolArgument(input map[string]any, name string) (bool, error) {
+	value, exists := input[name]
+	if !exists || value == nil {
+		return false, nil
+	}
+	result, ok := value.(bool)
+	if !ok {
+		return false, fmt.Errorf("tool argument %q must be a boolean", name)
+	}
+	return result, nil
+}
+
+func toolIntArgument(input map[string]any, name string) (int, bool, error) {
+	value, exists := input[name]
+	if !exists || value == nil {
+		return 0, false, nil
+	}
+	number, ok := value.(float64)
+	if !ok || number != float64(int(number)) {
+		return 0, true, fmt.Errorf("tool argument %q must be an integer", name)
+	}
+	return int(number), true, nil
+}
+
+func millisecondsToSeconds(milliseconds int) int {
+	return (milliseconds + 999) / 1000
+}
+
+func sliceFileLines(content string, offset, limit int) (string, int, int) {
+	lines := strings.Split(content, "\n")
+	if content == "" {
+		lines = nil
+	}
+	total := len(lines)
+	start := min(offset-1, total)
+	end := min(start+limit, total)
+	return strings.Join(lines[start:end], "\n"), total, end - start
+}
+
+func replaceExactString(content, oldString, newString string, replaceAll bool) (string, int, error) {
+	if oldString == "" {
+		return "", 0, errors.New("tool argument \"old_string\" cannot be empty")
+	}
+	matches := strings.Count(content, oldString)
+	if matches == 0 {
+		return "", 0, errors.New("old_string was not found in the file")
+	}
+	if matches > 1 && !replaceAll {
+		return "", 0, fmt.Errorf("old_string matched %d locations; include more context or set replace_all", matches)
+	}
+	if replaceAll {
+		return strings.ReplaceAll(content, oldString, newString), matches, nil
+	}
+	return strings.Replace(content, oldString, newString, 1), 1, nil
+}
+
+func shellQuoteArgument(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
 func (s *Service) event(ctx context.Context, runID, conversationID uuid.UUID, eventType string, payload map[string]any) {
 	raw, _ := json.Marshal(payload)
@@ -314,16 +642,51 @@ func (s *Service) SuspendIdle(ctx context.Context, idle time.Duration) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			rows, err := s.db.Query(ctx, `SELECT conversation_id,provider_ref FROM sandboxes WHERE status='running' AND last_active_at<now()-$1::interval`, fmt.Sprintf("%f seconds", idle.Seconds()))
+			rows, err := s.db.Query(ctx, `SELECT id,provider_ref FROM sandboxes WHERE status='running' AND last_active_at<now()-$1::interval`, fmt.Sprintf("%f seconds", idle.Seconds()))
 			if err != nil {
 				continue
 			}
 			for rows.Next() {
-				var conversationID uuid.UUID
+				var sandboxID uuid.UUID
 				var ref string
-				if rows.Scan(&conversationID, &ref) == nil && s.sandboxes.Action(ctx, ref, "suspend") == nil {
-					_, _ = s.db.Exec(ctx, `UPDATE sandboxes SET status='suspended' WHERE conversation_id=$1`, conversationID)
+				if rows.Scan(&sandboxID, &ref) == nil && s.sandboxes.Action(ctx, ref, "suspend") == nil {
+					_, _ = s.db.Exec(ctx, `UPDATE sandboxes SET status='suspended',last_checked_at=now() WHERE id=$1`, sandboxID)
 				}
+			}
+			rows.Close()
+		}
+	}
+}
+
+func (s *Service) MonitorSandboxes(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		interval = 30 * time.Second
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			rows, err := s.db.Query(ctx, `SELECT id,provider_ref FROM sandboxes WHERE status<>'not_created'`)
+			if err != nil {
+				continue
+			}
+			for rows.Next() {
+				var id uuid.UUID
+				var ref string
+				if rows.Scan(&id, &ref) != nil {
+					continue
+				}
+				checkCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+				actual, inspectErr := s.sandboxes.Inspect(checkCtx, ref)
+				cancel()
+				if inspectErr != nil {
+					_, _ = s.db.Exec(ctx, `UPDATE sandboxes SET status='error',last_error=$2,last_checked_at=now() WHERE id=$1`, id, inspectErr.Error())
+					continue
+				}
+				_, _ = s.db.Exec(ctx, `UPDATE sandboxes SET status=$2,last_error=NULL,last_checked_at=now() WHERE id=$1`, id, actual.Status)
 			}
 			rows.Close()
 		}

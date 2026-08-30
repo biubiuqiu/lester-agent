@@ -18,7 +18,8 @@ func Compose(persona, conversationID, workspaceID, model, computerStatus string)
 		}
 		parts = append(parts, strings.TrimSpace(string(body)))
 	}
-	runtime := fmt.Sprintf("<runtime>\nconversation_id: %s\nworkspace_id: %s\nagent: %s\nmodel: %s\ncomputer:\n  status: %s\n  workspace_path: /workspace\n</runtime>", conversationID, workspaceID, persona, model, computerStatus)
+	conversationPath := "/workspace/conversations/" + conversationID
+	runtime := fmt.Sprintf("<runtime>\nconversation_id: %s\nworkspace_id: %s\nagent: %s\nmodel: %s\ncomputer:\n  status: %s\n  workspace_path: %s\n  file_tool_root: .\n</runtime>", conversationID, workspaceID, persona, model, computerStatus, conversationPath)
 	parts = append(parts, runtime)
 	return strings.Join(parts, "\n\n"), nil
 }

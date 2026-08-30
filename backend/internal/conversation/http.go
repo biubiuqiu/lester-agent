@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/biubiuqiu/lester-agent/backend/internal/auth"
@@ -167,17 +168,12 @@ func (h *Handler) Computer(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, _, err := h.service.Get(r.Context(), p.WorkspaceID, id); err != nil {
+	state, err := h.service.ComputerStatus(r.Context(), p.WorkspaceID, id)
+	if err != nil {
 		httpapi.Error(w, 404, err)
 		return
 	}
-	var status, ref string
-	err := h.db.QueryRow(r.Context(), `SELECT status,provider_ref FROM sandboxes WHERE conversation_id=$1`, id).Scan(&status, &ref)
-	if err != nil {
-		httpapi.JSON(w, 200, map[string]any{"conversation_id": id, "status": "not_created"})
-		return
-	}
-	httpapi.JSON(w, 200, map[string]any{"conversation_id": id, "provider": "docker", "provider_ref": ref, "status": status})
+	httpapi.JSON(w, 200, state)
 }
 func (h *Handler) Files(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.FromContext(r.Context())
@@ -185,11 +181,12 @@ func (h *Handler) Files(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, _, err := h.service.Get(r.Context(), p.WorkspaceID, id); err != nil {
+	computer, err := h.service.ComputerForConversation(r.Context(), p.WorkspaceID, id)
+	if err != nil {
 		httpapi.Error(w, 404, err)
 		return
 	}
-	items, err := h.sandboxes.ListFiles(r.Context(), id.String(), r.URL.Query().Get("path"))
+	items, err := h.sandboxes.ListFiles(r.Context(), computer.SandboxID, computer.WorkDir, r.URL.Query().Get("path"))
 	if err != nil {
 		httpapi.Error(w, 500, err)
 		return
@@ -202,11 +199,12 @@ func (h *Handler) ReadFile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, _, err := h.service.Get(r.Context(), p.WorkspaceID, id); err != nil {
+	computer, err := h.service.ComputerForConversation(r.Context(), p.WorkspaceID, id)
+	if err != nil {
 		httpapi.Error(w, 404, err)
 		return
 	}
-	data, err := h.sandboxes.ReadFile(r.Context(), id.String(), r.URL.Query().Get("path"))
+	data, err := h.sandboxes.ReadFile(r.Context(), computer.SandboxID, computer.WorkDir, r.URL.Query().Get("path"))
 	if err != nil {
 		httpapi.Error(w, 404, err)
 		return
@@ -219,7 +217,8 @@ func (h *Handler) WriteFile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, _, err := h.service.Get(r.Context(), p.WorkspaceID, id); err != nil {
+	computer, err := h.service.ComputerForConversation(r.Context(), p.WorkspaceID, id)
+	if err != nil {
 		httpapi.Error(w, 404, err)
 		return
 	}
@@ -227,7 +226,7 @@ func (h *Handler) WriteFile(w http.ResponseWriter, r *http.Request) {
 	if !httpapi.Decode(w, r, &req) {
 		return
 	}
-	if err := h.sandboxes.WriteFile(r.Context(), id.String(), req.Path, []byte(req.Content)); err != nil {
+	if err := h.sandboxes.WriteFile(r.Context(), computer.SandboxID, computer.WorkDir, req.Path, []byte(req.Content)); err != nil {
 		httpapi.Error(w, 500, err)
 		return
 	}
@@ -239,7 +238,8 @@ func (h *Handler) Exec(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, _, err := h.service.Get(r.Context(), p.WorkspaceID, id); err != nil {
+	computer, err := h.service.ComputerForConversation(r.Context(), p.WorkspaceID, id)
+	if err != nil {
 		httpapi.Error(w, 404, err)
 		return
 	}
@@ -247,7 +247,8 @@ func (h *Handler) Exec(w http.ResponseWriter, r *http.Request) {
 	if !httpapi.Decode(w, r, &command) {
 		return
 	}
-	result, err := h.sandboxes.Exec(r.Context(), id.String(), command)
+	command.WorkDir = computer.WorkDir
+	result, err := h.sandboxes.Exec(r.Context(), computer.SandboxID, command)
 	if err != nil {
 		httpapi.Error(w, 500, err)
 		return
@@ -260,7 +261,8 @@ func (h *Handler) Terminal(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, _, err := h.service.Get(r.Context(), p.WorkspaceID, id); err != nil {
+	computer, err := h.service.ComputerForConversation(r.Context(), p.WorkspaceID, id)
+	if err != nil {
 		httpapi.Error(w, 404, err)
 		return
 	}
@@ -270,7 +272,7 @@ func (h *Handler) Terminal(w http.ResponseWriter, r *http.Request) {
 	}
 	defer client.Close()
 	target := strings.Replace(h.sandboxURL, "http://", "ws://", 1)
-	target = strings.Replace(target, "https://", "wss://", 1) + "/v1/sandboxes/" + id.String() + "/terminal"
+	target = strings.Replace(target, "https://", "wss://", 1) + "/v1/sandboxes/" + computer.SandboxID + "/terminal?work_dir=" + url.QueryEscape(computer.WorkDir)
 	upstream, _, err := websocket.DefaultDialer.DialContext(r.Context(), target, nil)
 	if err != nil {
 		_ = client.WriteJSON(map[string]string{"type": "error", "data": err.Error()})

@@ -55,6 +55,7 @@ func main() {
 	handler := server.Router(server.Dependencies{Logger: logger, WebOrigin: cfg.WebOrigin, Auth: authService, Models: model.NewHandler(modelStore), Conversations: conversationHandler})
 	server := &http.Server{Addr: cfg.HTTPAddr, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 	go conversationService.SuspendIdle(ctx, cfg.SandboxIdleTTL)
+	go conversationService.MonitorSandboxes(ctx, cfg.SandboxMonitorInterval)
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, stop := context.WithTimeout(context.Background(), 10*time.Second)

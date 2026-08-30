@@ -1,10 +1,233 @@
 "use client";
-import {FormEvent,useEffect,useState} from "react";
-import {Check,Plus,Server,ShieldCheck} from "lucide-react";
-import {SettingsShell} from "@/components/settings-shell";
-import {api,Deployment} from "@/lib/api";
-type Connection={id:string;name:string;provider:string;protocol:string;endpoint:string};
-const providers=[['openai','OpenAI Official','OpenAI'],['azure_openai','Azure OpenAI','OpenAI'],['openai_compatible','OpenAI Compatible','OpenAI'],['anthropic','Anthropic Official','Anthropic'],['bedrock','AWS Bedrock Claude','Anthropic'],['vertex','Google Vertex Claude','Anthropic'],['foundry','Microsoft Foundry Claude','Anthropic'],['anthropic_compatible','Anthropic Compatible','Anthropic']];
-export default function Models(){const[connections,setConnections]=useState<Connection[]>([]);const[deployments,setDeployments]=useState<Deployment[]>([]);const[provider,setProvider]=useState('openai');const[message,setMessage]=useState('');async function load(){const[c,d]=await Promise.all([api<{connections:Connection[]}>('/api/v1/model-connections'),api<{deployments:Deployment[]}>('/api/v1/model-deployments')]);setConnections(c.connections);setDeployments(d.deployments)}useEffect(()=>{void Promise.all([api<{connections:Connection[]}>('/api/v1/model-connections'),api<{deployments:Deployment[]}>('/api/v1/model-deployments')]).then(([c,d])=>{setConnections(c.connections);setDeployments(d.deployments)})},[]);async function addConnection(event:FormEvent<HTMLFormElement>){event.preventDefault();const data=new FormData(event.currentTarget);await api('/api/v1/model-connections',{method:'POST',body:JSON.stringify({name:data.get('name'),provider,endpoint:data.get('endpoint'),credential:data.get('credential'),config:parseJSON(String(data.get('config')||'{}'))})});event.currentTarget.reset();setMessage('Provider Connection 已保存');await load()}async function addDeployment(event:FormEvent<HTMLFormElement>){event.preventDefault();const data=new FormData(event.currentTarget);await api('/api/v1/model-deployments',{method:'POST',body:JSON.stringify({connection_id:data.get('connection'),name:data.get('name'),model_id:data.get('model'),is_default:data.get('default')==='on'})});event.currentTarget.reset();setMessage('Model Deployment 已保存');await load()}return <SettingsShell active="models"><header className="settings-heading"><div><p className="eyebrow">Settings / Models</p><h1>模型连接</h1><p>凭证会单独加密保存，Agent 只引用 Deployment，不感知 Provider 差异。</p></div><span className="secure-badge"><ShieldCheck/>Encrypted credentials</span></header>{message&&<p className="success-banner"><Check/>{message}</p>}<section className="settings-grid"><form className="settings-card" onSubmit={addConnection}><header><span className="card-icon"><Server/></span><div><h2>Provider Connection</h2><p>端点、协议与密钥</p></div></header><label className="field">Provider<select value={provider} onChange={e=>setProvider(e.target.value)}>{providers.map(([value,label,protocol])=><option key={value} value={value}>{label} · {protocol}</option>)}</select></label><label className="field">名称<input name="name" required placeholder="Production OpenAI"/></label><label className="field">Endpoint（官方 Provider 可留空）<input name="endpoint" placeholder="https://…"/></label><label className="field">Credential<textarea name="credential" required rows={3} placeholder={provider==='bedrock'?'Bedrock JSON credentials':'API key / access token'}/></label><label className="field">Provider config JSON<textarea name="config" rows={3} defaultValue="{}"/></label><button className="primary-button"><Plus/>保存连接</button></form><form className="settings-card" onSubmit={addDeployment}><header><span className="card-icon"><DatabaseIcon/></span><div><h2>Model Deployment</h2><p>Agent 可选择的模型</p></div></header><label className="field">连接<select name="connection" required><option value="">选择连接</option>{connections.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="field">显示名称<input name="name" required placeholder="Claude Sonnet"/></label><label className="field">Model ID<input name="model" required placeholder="claude-sonnet-4-6"/></label><label className="check-field"><input type="checkbox" name="default"/>设为 Workspace 默认模型</label><button className="primary-button"><Plus/>保存 Deployment</button></form></section><section className="saved-section"><h2>已配置</h2><div className="provider-list">{connections.length===0?<p className="muted-block">还没有 Provider Connection。</p>:connections.map(item=><article key={item.id}><span className="status-dot"/><div><strong>{item.name}</strong><small>{providers.find(p=>p[0]===item.provider)?.[1]||item.provider}</small></div></article>)}</div><div className="deployment-list">{deployments.map(item=><article key={item.id}><div><strong>{item.name}</strong><small>{item.model_id}</small></div>{item.is_default&&<span>Default</span>}</article>)}</div></section></SettingsShell>}
-function parseJSON(value:string){try{return JSON.parse(value)}catch{throw new Error('Provider config 不是合法 JSON')}}
-function DatabaseIcon(){return <span className="db-glyph">M</span>}
+
+import { FormEvent, useEffect, useState } from "react";
+import { Check, Plus, Server, ShieldCheck } from "lucide-react";
+import { SettingsShell } from "@/components/settings-shell";
+import { api, Deployment } from "@/lib/api";
+
+type Connection = {
+  id: string;
+  name: string;
+  provider: string;
+  protocol: string;
+  endpoint: string;
+};
+
+const providers = [
+  ["openai", "OpenAI Official", "OpenAI"],
+  ["azure_openai", "Azure OpenAI", "OpenAI"],
+  ["openai_compatible", "OpenAI Compatible", "OpenAI"],
+  ["anthropic", "Anthropic Official", "Anthropic"],
+  ["bedrock", "AWS Bedrock Claude", "Anthropic"],
+  ["vertex", "Google Vertex Claude", "Anthropic"],
+  ["foundry", "Microsoft Foundry Claude", "Anthropic"],
+  ["anthropic_compatible", "Anthropic Compatible", "Anthropic"],
+];
+
+export default function Models() {
+  const [connections, setConnections] = useState<Connection[]>([]);
+  const [deployments, setDeployments] = useState<Deployment[]>([]);
+  const [provider, setProvider] = useState("openai");
+  const [message, setMessage] = useState("");
+
+  async function load() {
+    const [c, d] = await Promise.all([
+      api<{ connections: Connection[] }>("/api/v1/model-connections"),
+      api<{ deployments: Deployment[] }>("/api/v1/model-deployments"),
+    ]);
+    setConnections(c.connections);
+    setDeployments(d.deployments);
+  }
+
+  useEffect(() => {
+    void Promise.all([
+      api<{ connections: Connection[] }>("/api/v1/model-connections"),
+      api<{ deployments: Deployment[] }>("/api/v1/model-deployments"),
+    ]).then(([c, d]) => {
+      setConnections(c.connections);
+      setDeployments(d.deployments);
+    });
+  }, []);
+
+  async function addConnection(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    await api("/api/v1/model-connections", {
+      method: "POST",
+      body: JSON.stringify({
+        name: data.get("name"),
+        provider,
+        endpoint: data.get("endpoint"),
+        credential: data.get("credential"),
+        config: parseJSON(String(data.get("config") || "{}")),
+      }),
+    });
+    form.reset();
+    setMessage("Provider Connection 已保存");
+    await load();
+  }
+
+  async function addDeployment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    await api("/api/v1/model-deployments", {
+      method: "POST",
+      body: JSON.stringify({
+        connection_id: data.get("connection"),
+        name: data.get("name"),
+        model_id: data.get("model"),
+        is_default: data.get("default") === "on",
+      }),
+    });
+    form.reset();
+    setMessage("Model Deployment 已保存");
+    await load();
+  }
+
+  return (
+    <SettingsShell active="models">
+      <header className="settings-heading">
+        <div>
+          <p className="eyebrow">Settings / Models</p>
+          <h1>模型连接</h1>
+          <p>凭证会单独加密保存，Agent 只引用 Deployment，不感知 Provider 差异。</p>
+        </div>
+        <span className="secure-badge">
+          <ShieldCheck />Encrypted credentials
+        </span>
+      </header>
+      {message && (
+        <p className="success-banner">
+          <Check />
+          {message}
+        </p>
+      )}
+      <section className="settings-grid">
+        <form className="settings-card" onSubmit={addConnection}>
+          <header>
+            <span className="card-icon">
+              <Server />
+            </span>
+            <div>
+              <h2>Provider Connection</h2>
+              <p>端点、协议与密钥</p>
+            </div>
+          </header>
+          <label className="field">
+            Provider
+            <select value={provider} onChange={(event) => setProvider(event.target.value)}>
+              {providers.map(([value, label, protocol]) => (
+                <option key={value} value={value}>
+                  {label} · {protocol}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            名称
+            <input name="name" required placeholder="Production OpenAI" />
+          </label>
+          <label className="field">
+            Endpoint（官方 Provider 可留空）
+            <input name="endpoint" placeholder="https://…" />
+          </label>
+          <label className="field">
+            Credential
+            <textarea
+              name="credential"
+              required
+              rows={3}
+              placeholder={provider === "bedrock" ? "Bedrock JSON credentials" : "API key / access token"}
+            />
+          </label>
+          <label className="field">
+            Provider config JSON
+            <textarea name="config" rows={3} defaultValue="{}" />
+          </label>
+          <button className="primary-button">
+            <Plus />保存连接
+          </button>
+        </form>
+        <form className="settings-card" onSubmit={addDeployment}>
+          <header>
+            <span className="card-icon">
+              <DatabaseIcon />
+            </span>
+            <div>
+              <h2>Model Deployment</h2>
+              <p>Agent 可选择的模型</p>
+            </div>
+          </header>
+          <label className="field">
+            连接
+            <select name="connection" required>
+              <option value="">选择连接</option>
+              {connections.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            显示名称
+            <input name="name" required placeholder="Claude Sonnet" />
+          </label>
+          <label className="field">
+            Model ID
+            <input name="model" required placeholder="claude-sonnet-4-6" />
+          </label>
+          <label className="check-field">
+            <input type="checkbox" name="default" />设为 Workspace 默认模型
+          </label>
+          <button className="primary-button">
+            <Plus />保存 Deployment
+          </button>
+        </form>
+      </section>
+      <section className="saved-section">
+        <h2>已配置</h2>
+        <div className="provider-list">
+          {connections.length === 0 ? (
+            <p className="muted-block">还没有 Provider Connection。</p>
+          ) : (
+            connections.map((item) => (
+              <article key={item.id}>
+                <span className="status-dot" />
+                <div>
+                  <strong>{item.name}</strong>
+                  <small>{providers.find((providerItem) => providerItem[0] === item.provider)?.[1] || item.provider}</small>
+                </div>
+              </article>
+            ))
+          )}
+        </div>
+        <div className="deployment-list">
+          {deployments.map((item) => (
+            <article key={item.id}>
+              <div>
+                <strong>{item.name}</strong>
+                <small>{item.model_id}</small>
+              </div>
+              {item.is_default && <span>Default</span>}
+            </article>
+          ))}
+        </div>
+      </section>
+    </SettingsShell>
+  );
+}
+
+function parseJSON(value: string) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    throw new Error("Provider config 不是合法 JSON");
+  }
+}
+
+function DatabaseIcon() {
+  return <span className="db-glyph">M</span>;
+}

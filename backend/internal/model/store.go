@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/biubiuqiu/lester-agent/backend/internal/secret"
@@ -143,8 +144,27 @@ func (s *Store) Client(ctx context.Context, workspaceID, deploymentID uuid.UUID)
 		headers["api-key"] = string(credential)
 		credential = []byte("")
 	}
+	if c.Provider == "openai_compatible" {
+		c.Endpoint = ensureEndpointPath(c.Endpoint, "/chat/completions")
+	}
+	if c.Provider == "anthropic_compatible" {
+		c.Endpoint = ensureEndpointPath(c.Endpoint, "/v1/messages")
+	}
 	return &HTTPClient{Protocol: c.Protocol, Endpoint: c.Endpoint, APIKey: string(credential), Headers: headers, Mode: mode}, d, nil
 }
+
+func ensureEndpointPath(endpoint, suffix string) string {
+	parsed, err := url.Parse(strings.TrimSpace(endpoint))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return endpoint
+	}
+	path := strings.TrimRight(parsed.Path, "/")
+	if !strings.HasSuffix(path, suffix) {
+		parsed.Path = path + suffix
+	}
+	return parsed.String()
+}
+
 func defaultEndpoint(provider string, config map[string]any) string {
 	switch provider {
 	case "openai":

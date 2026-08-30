@@ -10,11 +10,11 @@ import (
 type Config struct {
 	HTTPAddr, DatabaseURL, RedisURL, WebOrigin, SandboxURL string
 	MasterKey                                              []byte
-	SessionTTL, SandboxIdleTTL                             time.Duration
+	SessionTTL, SandboxIdleTTL, SandboxMonitorInterval     time.Duration
 }
 
 func Load() (Config, error) {
-	c := Config{HTTPAddr: env("HTTP_ADDR", ":8080"), DatabaseURL: env("DATABASE_URL", "postgres://lester:lester@localhost:5432/lester?sslmode=disable"), RedisURL: env("REDIS_URL", "redis://localhost:6379/0"), WebOrigin: env("WEB_ORIGIN", "http://localhost:3000"), SandboxURL: env("SANDBOX_SERVICE_URL", "http://localhost:8090"), SessionTTL: 30 * 24 * time.Hour, SandboxIdleTTL: 30 * time.Minute}
+	c := Config{HTTPAddr: env("HTTP_ADDR", ":8080"), DatabaseURL: env("DATABASE_URL", "postgres://lester:lester@localhost:5432/lester?sslmode=disable"), RedisURL: env("REDIS_URL", "redis://localhost:6379/0"), WebOrigin: env("WEB_ORIGIN", "http://localhost:3000"), SandboxURL: env("SANDBOX_SERVICE_URL", "http://localhost:8090"), SessionTTL: 30 * 24 * time.Hour, SandboxIdleTTL: 30 * time.Minute, SandboxMonitorInterval: 30 * time.Second}
 	key, err := base64.StdEncoding.DecodeString(os.Getenv("MASTER_KEY_BASE64"))
 	if err != nil || len(key) != 32 {
 		return Config{}, fmt.Errorf("MASTER_KEY_BASE64 must decode to 32 bytes")

@@ -8,8 +8,9 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ../backend/migrations/000001_phase_0_4.up.sql:/docker-entrypoint-initdb.d/001.sql:ro
+      - ../backend/migrations/000002_user_sandboxes.up.sql:/docker-entrypoint-initdb.d/002.sql:ro
     healthcheck:
-      test: [CMD-SHELL, pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"]
+      test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
       interval: 3s
       timeout: 3s
       retries: 20
@@ -42,7 +43,7 @@ services:
       SANDBOX_IMAGE: ${SANDBOX_IMAGE:-python:3.12-slim}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    ports: ["8090:8090"]
+    ports: ["18090:8090"]
 
   api:
     build:
@@ -59,7 +60,7 @@ services:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
       sandbox-service: {condition: service_started}
-    ports: ["8080:8080"]
+    ports: ["18080:8080"]
 
   web:
     build:
@@ -70,7 +71,7 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
     depends_on: [api]
-    ports: ["3000:3000"]
+    ports: ["13000:3000"]
 
 volumes:
   postgres-data:

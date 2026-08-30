@@ -2,8 +2,29 @@
   "name": "lester-web",
   "version": "0.1.0",
   "private": true,
-  "scripts": {"dev":"next dev","build":"next build","start":"next start","lint":"eslint ."},
-  "dependencies": {"@xterm/addon-fit":"^0.10.0","@xterm/xterm":"^5.5.0","lucide-react":"^0.468.0","next":"16.1.6","react":"19.2.3","react-dom":"19.2.3"},
-  "devDependencies": {"@types/node":"^22","@types/react":"^19","@types/react-dom":"^19","eslint":"^9","eslint-config-next":"16.1.6","typescript":"^5.9.3"},
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "lucide-react": "^0.468.0",
+    "next": "16.1.6",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.1.6",
+    "typescript": "^5.9.3"
+  },
   "packageManager": "pnpm@10.17.1"
 }

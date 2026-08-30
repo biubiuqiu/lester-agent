@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"context"
+	"errors"
 	"github.com/biubiuqiu/lester-agent/backend/internal/httpapi"
 	"github.com/creack/pty"
 	"github.com/go-chi/chi/v5"
@@ -23,6 +24,7 @@ func NewServiceHandler(provider Provider) *ServiceHandler {
 func (h *ServiceHandler) Router() http.Handler {
 	r := chi.NewRouter()
 	r.Post("/v1/sandboxes", h.create)
+	r.Get("/v1/sandboxes/{id}", h.inspect)
 	r.Post("/v1/sandboxes/{id}/start", h.action(h.provider.Start))
 	r.Post("/v1/sandboxes/{id}/suspend", h.action(h.provider.Suspend))
 	r.Post("/v1/sandboxes/{id}/resume", h.action(h.provider.Resume))
@@ -34,6 +36,18 @@ func (h *ServiceHandler) Router() http.Handler {
 	r.Get("/v1/sandboxes/{id}/terminal", h.terminal)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { httpapi.JSON(w, 200, map[string]bool{"ok": true}) })
 	return r
+}
+func (h *ServiceHandler) inspect(w http.ResponseWriter, r *http.Request) {
+	item, err := h.provider.Inspect(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		if errors.Is(err, ErrSandboxNotFound) {
+			httpapi.Error(w, 404, err)
+			return
+		}
+		httpapi.Error(w, 500, err)
+		return
+	}
+	httpapi.JSON(w, 200, item)
 }
 func (h *ServiceHandler) create(w http.ResponseWriter, r *http.Request) {
 	var req CreateOptions
@@ -69,7 +83,7 @@ func (h *ServiceHandler) exec(w http.ResponseWriter, r *http.Request) {
 	httpapi.JSON(w, 200, item)
 }
 func (h *ServiceHandler) list(w http.ResponseWriter, r *http.Request) {
-	items, err := h.provider.ListFiles(r.Context(), chi.URLParam(r, "id"), r.URL.Query().Get("path"))
+	items, err := h.provider.ListFiles(r.Context(), chi.URLParam(r, "id"), r.URL.Query().Get("work_dir"), r.URL.Query().Get("path"))
 	if err != nil {
 		httpapi.Error(w, 500, err)
 		return
@@ -77,7 +91,7 @@ func (h *ServiceHandler) list(w http.ResponseWriter, r *http.Request) {
 	httpapi.JSON(w, 200, map[string]any{"files": items})
 }
 func (h *ServiceHandler) read(w http.ResponseWriter, r *http.Request) {
-	data, err := h.provider.ReadFile(r.Context(), chi.URLParam(r, "id"), r.URL.Query().Get("path"))
+	data, err := h.provider.ReadFile(r.Context(), chi.URLParam(r, "id"), r.URL.Query().Get("work_dir"), r.URL.Query().Get("path"))
 	if err != nil {
 		httpapi.Error(w, 404, err)
 		return
@@ -91,7 +105,7 @@ func (h *ServiceHandler) write(w http.ResponseWriter, r *http.Request) {
 		httpapi.Error(w, 400, err)
 		return
 	}
-	if err = h.provider.WriteFile(r.Context(), chi.URLParam(r, "id"), r.URL.Query().Get("path"), data); err != nil {
+	if err = h.provider.WriteFile(r.Context(), chi.URLParam(r, "id"), r.URL.Query().Get("work_dir"), r.URL.Query().Get("path"), data); err != nil {
 		httpapi.Error(w, 500, err)
 		return
 	}
@@ -105,6 +119,11 @@ type terminalMessage struct {
 
 func (h *ServiceHandler) terminal(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	workDir, err := safeWorkDir(r.URL.Query().Get("work_dir"))
+	if err != nil {
+		httpapi.Error(w, 400, err)
+		return
+	}
 	name, err := containerName(id)
 	if err != nil {
 		httpapi.Error(w, 400, err)
@@ -115,7 +134,11 @@ func (h *ServiceHandler) terminal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
-	command := exec.CommandContext(r.Context(), "docker", "exec", "-it", name, "sh")
+	if err = exec.CommandContext(r.Context(), "docker", "exec", name, "mkdir", "-p", workDir).Run(); err != nil {
+		_ = conn.WriteJSON(terminalMessage{Type: "error", Data: err.Error()})
+		return
+	}
+	command := exec.CommandContext(r.Context(), "docker", "exec", "-it", "-w", workDir, name, "sh")
 	terminal, err := pty.Start(command)
 	if err != nil {
 		_ = conn.WriteJSON(terminalMessage{Type: "error", Data: err.Error()})

@@ -4,3 +4,4 @@ export type Conversation={id:string;workspace_id:string;created_by:string;agent_
 export type Message={id:string;role:string;content:string;created_at:string};
 export type Deployment={id:string;connection_id:string;name:string;model_id:string;is_default:boolean};
 export type FileEntry={name:string;path:string;is_dir:boolean;size:number;modified_at:string};
+export type ComputerState={conversation_id:string;user_id:string;provider?:string;provider_ref?:string;status:'not_created'|'creating'|'running'|'suspended'|'stopped'|'unhealthy'|'missing'|'error';last_error?:string;last_checked_at?:string};

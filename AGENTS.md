@@ -4,7 +4,7 @@ This file defines the working agreement for coding agents in the Lester reposito
 
 ## Product contract
 
-Lester is an open-source, self-hostable AI Agent Workspace. The primary experience is conversation-first: a user starts a conversation, selects an Agent and model, and the Agent works with a Computer dedicated to that conversation.
+Lester is an open-source, self-hostable AI Agent Workspace. The primary experience is conversation-first: a user starts a conversation, selects an Agent and model, and the Agent works in that conversation's directory inside the user's Computer.
 
 Lester is not a Workflow/DAG orchestration product. Do not add a workflow editor, node canvas, conditional branches, DAG runtime, or workflow-oriented product language unless the product direction is explicitly changed.
 
@@ -66,9 +66,10 @@ Preserve these behaviors when changing the implementation:
 - The selected persona is fixed for the lifetime of a conversation.
 - Messages, runs, and events are durable in PostgreSQL. Redis is used for live SSE fan-out, not as the source of truth.
 - Tool-call fragments must be assembled before execution, and tool results must remain associated with the correct call ID.
-- Each conversation maps to one logical Computer and one persistent workspace volume.
-- Conversation Computers default to no network access and retain CPU, memory, and PID limits.
-- Idle suspend/resume must preserve the conversation workspace.
+- Each user maps to one logical Computer and one persistent workspace volume.
+- Conversations are rooted at `/workspace/conversations/{conversationId}` inside that Computer; file APIs and terminal sessions must stay scoped to that directory.
+- User Computers default to no network access and retain CPU, memory, and PID limits.
+- Computer state must be reconciled with the sandbox provider; use should recover a stopped or missing Computer while idle suspend/resume preserves the user workspace.
 
 ## Backend conventions
 
