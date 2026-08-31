@@ -1,6 +1,9 @@
 package sandbox
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestSafeWorkDir(t *testing.T) {
 	tests := []struct {
@@ -57,5 +60,22 @@ func TestScopedPath(t *testing.T) {
 				t.Fatalf("scopedPath() = %q, want %q", got, test.want)
 			}
 		})
+	}
+}
+
+func TestDecodeEntriesUsesPublicJSONShape(t *testing.T) {
+	entries, err := decodeEntries([]byte(`[{"name":"docs","path":"docs","is_dir":true,"size":4096,"modified_at":"2026-08-31T10:30:00Z"}]`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("len(entries) = %d, want 1", len(entries))
+	}
+	entry := entries[0]
+	if entry.Name != "docs" || entry.Path != "docs" || !entry.IsDir || entry.Size != 4096 {
+		t.Fatalf("decoded entry = %#v", entry)
+	}
+	if !entry.ModifiedAt.Equal(time.Date(2026, 8, 31, 10, 30, 0, 0, time.UTC)) {
+		t.Fatalf("modified_at = %s", entry.ModifiedAt)
 	}
 }

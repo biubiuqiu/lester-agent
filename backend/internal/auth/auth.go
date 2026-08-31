@@ -23,8 +23,13 @@ type Principal struct {
 	WorkspaceID uuid.UUID `json:"workspace_id"`
 	Email       string    `json:"email"`
 	DisplayName string    `json:"display_name"`
+	AvatarKey   string    `json:"avatar_key"`
 }
 type contextKey struct{}
+
+var allowedAvatarKeys = map[string]struct{}{
+	"forest": {}, "ocean": {}, "clay": {}, "lilac": {}, "amber": {}, "graphite": {},
+}
 
 func FromContext(ctx context.Context) (Principal, bool) {
 	p, ok := ctx.Value(contextKey{}).(Principal)
@@ -113,6 +118,40 @@ func (s *Service) Me(w http.ResponseWriter, r *http.Request) {
 	httpapi.JSON(w, 200, p)
 }
 
+func (s *Service) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	p, _ := FromContext(r.Context())
+	var req struct {
+		DisplayName string `json:"display_name"`
+		AvatarKey   string `json:"avatar_key"`
+	}
+	if !httpapi.Decode(w, r, &req) {
+		return
+	}
+	displayName, avatarKey, err := normalizeProfile(req.DisplayName, req.AvatarKey)
+	if err != nil {
+		httpapi.Error(w, http.StatusBadRequest, err)
+		return
+	}
+	if _, err = s.db.Exec(r.Context(), `UPDATE users SET display_name=$2,avatar_key=$3 WHERE id=$1`, p.UserID, displayName, avatarKey); err != nil {
+		httpapi.Error(w, http.StatusInternalServerError, fmt.Errorf("update profile: %w", err))
+		return
+	}
+	p.DisplayName = displayName
+	p.AvatarKey = avatarKey
+	httpapi.JSON(w, http.StatusOK, p)
+}
+
+func normalizeProfile(displayName, avatarKey string) (string, string, error) {
+	displayName = strings.TrimSpace(displayName)
+	if displayName == "" || len([]rune(displayName)) > 60 {
+		return "", "", errors.New("display name must be between 1 and 60 characters")
+	}
+	if _, ok := allowedAvatarKeys[avatarKey]; !ok {
+		return "", "", errors.New("invalid avatar")
+	}
+	return displayName, avatarKey, nil
+}
+
 func (s *Service) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("lester_session")
@@ -127,7 +166,7 @@ func (s *Service) Middleware(next http.Handler) http.Handler {
 		}
 		sum := sha256.Sum256(raw)
 		var p Principal
-		err = s.db.QueryRow(r.Context(), `SELECT u.id,u.email,u.display_name,wm.workspace_id FROM sessions s JOIN users u ON u.id=s.user_id JOIN workspace_members wm ON wm.user_id=u.id WHERE s.token_hash=$1 AND s.expires_at>now() ORDER BY wm.workspace_id LIMIT 1`, sum[:]).Scan(&p.UserID, &p.Email, &p.DisplayName, &p.WorkspaceID)
+		err = s.db.QueryRow(r.Context(), `SELECT u.id,u.email,u.display_name,wm.workspace_id,COALESCE(u.avatar_key,'forest') FROM sessions s JOIN users u ON u.id=s.user_id JOIN workspace_members wm ON wm.user_id=u.id WHERE s.token_hash=$1 AND s.expires_at>now() ORDER BY wm.workspace_id LIMIT 1`, sum[:]).Scan(&p.UserID, &p.Email, &p.DisplayName, &p.WorkspaceID, &p.AvatarKey)
 		if err != nil {
 			httpapi.Error(w, 401, errors.New("session expired"))
 			return

@@ -14,6 +14,37 @@ export async function upload<T>(path: string, body: FormData): Promise<T> {
   return parseResponse<T>(response);
 }
 
+export async function readConversationFile(conversationId: string, path: string, signal?: AbortSignal): Promise<string> {
+  const response = await fetchConversationFile(conversationId, path, signal);
+  return response.text();
+}
+
+export async function readConversationFileBytes(conversationId: string, path: string, signal?: AbortSignal): Promise<Uint8Array> {
+  const response = await fetchConversationFile(conversationId, path, signal);
+  return new Uint8Array(await response.arrayBuffer());
+}
+
+async function fetchConversationFile(conversationId: string, path: string, signal?: AbortSignal): Promise<Response> {
+  const response = await fetch(`${API}/api/v1/conversations/${conversationId}/files/content?path=${encodeURIComponent(path)}`, {
+    credentials: "include",
+    signal,
+  });
+  if (response.status === 401 && typeof window !== "undefined" && !location.pathname.startsWith("/login")) {
+    location.href = "/login";
+    throw new Error("authentication required");
+  }
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(body.error || response.statusText);
+  }
+  return response;
+}
+
+export function conversationFilePreviewURL(conversationId: string, path: string): string {
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  return `${API}/api/v1/conversations/${conversationId}/preview/${encodedPath}`;
+}
+
 async function parseResponse<T>(response: Response): Promise<T> {
   if (response.status === 401 && typeof window !== "undefined" && !location.pathname.startsWith("/login")) {
     location.href = "/login";
@@ -28,6 +59,8 @@ async function parseResponse<T>(response: Response): Promise<T> {
 }
 
 export type Conversation = { id: string; workspace_id: string; created_by: string; agent_slug: string; model_deployment_id: string; title: string; created_at: string; updated_at: string };
+export type UserProfile = { user_id: string; workspace_id: string; email: string; display_name: string; avatar_key: AvatarKey };
+export type AvatarKey = "forest" | "ocean" | "clay" | "lilac" | "amber" | "graphite";
 export type Attachment = { id: string; conversation_id: string; original_name: string; stored_path: string; content_type: string; size_bytes: number; created_at: string };
 export type Message = { id: string; role: string; content: string; metadata?: { attachments?: Attachment[] }; created_at: string };
 export type Deployment = { id: string; connection_id: string; name: string; model_id: string; is_default: boolean };

@@ -33,6 +33,7 @@ func Router(deps Dependencies) http.Handler {
 		api.Group(func(private chi.Router) {
 			private.Use(deps.Auth.Middleware)
 			private.Get("/me", deps.Auth.Me)
+			private.Patch("/me", deps.Auth.UpdateProfile)
 			private.Get("/agents", func(w http.ResponseWriter, _ *http.Request) {
 				httpapi.JSON(w, 200, map[string]any{"agents": []map[string]string{{"slug": "lester", "name": "Lester"}, {"slug": "franklin", "name": "Franklin"}, {"slug": "michael", "name": "Michael"}, {"slug": "trevor", "name": "Trevor"}}})
 			})
@@ -55,6 +56,7 @@ func Router(deps Dependencies) http.Handler {
 			private.Get("/conversations/{id}/computer", deps.Conversations.Computer)
 			private.Get("/conversations/{id}/files", deps.Conversations.Files)
 			private.Get("/conversations/{id}/files/content", deps.Conversations.ReadFile)
+			private.Get("/conversations/{id}/preview/*", deps.Conversations.PreviewFile)
 			private.Post("/conversations/{id}/files", deps.Conversations.WriteFile)
 			private.Post("/conversations/{id}/exec", deps.Conversations.Exec)
 			private.Get("/conversations/{id}/terminal", deps.Conversations.Terminal)

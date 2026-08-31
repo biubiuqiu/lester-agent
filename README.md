@@ -9,6 +9,7 @@
 ## Lester 能做什么
 
 - 使用邮箱和密码注册、登录，自动创建个人 Workspace
+- 左下角账户菜单统一进入个人资料、模型、Computer 和 Skill 设置；称呼与内置头像主题可持久化修改
 - 在 Workspace 中配置自己的模型 Provider 和密钥
 - 支持 OpenAI、Anthropic、Azure OpenAI、OpenAI-compatible、AWS Bedrock、Google Vertex AI 和 Microsoft Foundry
 - 通过 SSE 实时输出 Agent 回复，并持久化对话、消息、运行记录和事件
@@ -16,6 +17,7 @@
 - 创建对话时选择 Lester、Franklin、Michael 或 Trevor；同一对话内角色保持不变
 - 为每个用户分配一个持久化 Docker Computer，并以 `/workspace/conversations/{conversationId}` 隔离会话目录
 - Agent 可以在 Computer 中执行命令、读写文件和使用终端
+- 右侧 Files 提供类似 VS Code 的目录树与文件预览，支持代码/文本行号、图片、PDF，以及受限 iframe 中的 HTML 页面预览和源码切换
 - Computer 工作目录使用用户级 Docker Volume 持久化，空闲后自动暂停并在下次访问时恢复；服务会持续校验其真实运行状态
 - 内置 Skill 广场，并支持把 Skill 安装到当前会话的 `.agent/skills` 后按需加载
 - 支持会话附件上传；文件只写入 `.agent/upload`，模型默认只接收文件路径提示，不会自动注入文件内容
@@ -128,10 +130,13 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000004_durable_transcript.up.sql
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
+  sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  < backend/migrations/000005_user_profiles.up.sql
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api
 ```
 
-全新部署会自动执行 004。迁移保留旧聊天记录的原有排序，但不能补回旧版本从未保存的工具结果。回滚 SQL 保留消息文本，不过旧 API 不理解新增工具消息；完整应用降级应使用备份恢复。
+全新部署会自动执行 004–005。004 保留旧聊天记录的原有排序，但不能补回旧版本从未保存的工具结果；005 为用户资料增加内置头像主题。回滚 SQL 保留消息文本，不过旧 API 不理解新增工具消息；完整应用降级应使用备份恢复。
 
 ## Skill 与附件机制
 

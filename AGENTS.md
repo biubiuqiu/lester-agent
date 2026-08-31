@@ -83,6 +83,7 @@ Preserve these behaviors when changing the implementation:
 - Computer state must be reconciled with the sandbox provider; use should recover a stopped or missing Computer while idle suspend/resume preserves the user workspace.
 - Conversation Skills must be installed under `.agent/skills/{slug}` and only installed Skills may be exposed to or loaded by the Agent runtime.
 - Conversation attachments must be stored under `.agent/upload`; do not parse or inject attachment contents into model context automatically.
+- File browsing and previews must stay scoped to the conversation directory. Render HTML only through the authenticated preview endpoint in a sandboxed iframe; never inject workspace HTML into the Lester application DOM or grant it same-origin, form, popup, or top-navigation privileges.
 - Skill package storage must remain behind the object-store interface so MinIO can be replaced with S3 or another implementation without changing application behavior.
 - Large tool results must be bounded and must tell the model when output was truncated and how to continue.
 - `read` content uses `%6d\t%s` (1-based line number, TAB, original text). Preserve indentation and blank lines. Page at complete line boundaries with `next_offset`; do not concatenate a head and tail and imply a contiguous range. Prefixes must never be included in edit/write input.

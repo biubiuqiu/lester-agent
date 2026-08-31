@@ -189,7 +189,7 @@ if os.path.commonpath([base,target]) != base: raise PermissionError("path escape
 result=[]
 for name in os.listdir(target):
  item=os.path.join(target,name); stat=os.stat(item)
- result.append({"Name":name,"Path":os.path.relpath(item,base),"IsDir":os.path.isdir(item),"Size":stat.st_size,"ModifiedAt":datetime.datetime.fromtimestamp(stat.st_mtime,datetime.timezone.utc).isoformat()})
+ result.append({"name":name,"path":os.path.relpath(item,base),"is_dir":os.path.isdir(item),"size":stat.st_size,"modified_at":datetime.datetime.fromtimestamp(stat.st_mtime,datetime.timezone.utc).isoformat()})
 print(json.dumps(result))`
 	result, err := p.Exec(ctx, id, Command{WorkDir: "/workspace", Command: "python -c " + shellQuote(script) + " " + shellQuote(base) + " " + shellQuote(target)})
 	if err != nil {

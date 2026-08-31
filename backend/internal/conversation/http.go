@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 
 	"github.com/biubiuqiu/lester-agent/backend/internal/auth"
@@ -255,6 +257,66 @@ func (h *Handler) ReadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, _ = w.Write(data)
+}
+func (h *Handler) PreviewFile(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	filePath := strings.TrimPrefix(chi.URLParam(r, "*"), "/")
+	if filePath == "" {
+		httpapi.Error(w, http.StatusBadRequest, errors.New("preview path is required"))
+		return
+	}
+	computer, err := h.service.ComputerForConversation(r.Context(), p.WorkspaceID, id)
+	if err != nil {
+		httpapi.Error(w, http.StatusNotFound, err)
+		return
+	}
+	data, err := h.sandboxes.ReadFile(r.Context(), computer.SandboxID, computer.WorkDir, filePath)
+	if err != nil {
+		httpapi.Error(w, http.StatusNotFound, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Type", previewContentType(filePath))
+	w.Header().Set("Content-Security-Policy", previewContentSecurityPolicy(r))
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	_, _ = w.Write(data)
+}
+
+func previewContentSecurityPolicy(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+		scheme = "https"
+	}
+	host := r.Host
+	if host == "" || strings.ContainsAny(host, " \t\r\n;'\"") {
+		return "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'"
+	}
+	origin := scheme + "://" + host
+	return fmt.Sprintf("default-src 'none'; script-src 'unsafe-inline' %s; style-src 'unsafe-inline' %s; img-src %s data: blob:; font-src %s data:; media-src %s data: blob:; connect-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'", origin, origin, origin, origin, origin)
+}
+
+func previewContentType(filePath string) string {
+	extension := strings.ToLower(path.Ext(filePath))
+	switch extension {
+	case ".html", ".htm":
+		return "text/html; charset=utf-8"
+	case ".css":
+		return "text/css; charset=utf-8"
+	case ".js", ".mjs", ".ts", ".tsx", ".jsx":
+		return "text/javascript; charset=utf-8"
+	case ".json":
+		return "application/json; charset=utf-8"
+	case ".md", ".txt", ".log", ".csv", ".yaml", ".yml", ".toml", ".xml", ".py", ".go", ".rs", ".java", ".sh", ".sql":
+		return "text/plain; charset=utf-8"
+	}
+	if contentType := mime.TypeByExtension(extension); contentType != "" {
+		return contentType
+	}
+	return "application/octet-stream"
 }
 func (h *Handler) WriteFile(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.FromContext(r.Context())

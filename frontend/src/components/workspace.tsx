@@ -2,11 +2,13 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, FileText, Folder, Menu, Paperclip, Plus, Send, Settings2, TerminalSquare, Wrench, X } from "lucide-react";
+import { Check, ChevronDown, FileText, Folder, Menu, Paperclip, Plus, Send, TerminalSquare, Wrench, X } from "lucide-react";
 import { Brand } from "./brand";
 import { ConversationTimeline } from "./conversation-timeline";
+import { FileExplorer } from "./file-explorer";
 import { RunEvent } from "./tool-timeline";
-import { API, api, Attachment, ComputerState, Conversation, Deployment, FileEntry, Message, Skill, upload } from "@/lib/api";
+import { UserMenu } from "./user-menu";
+import { API, api, Attachment, ComputerState, Conversation, Deployment, Message, Skill, upload, UserProfile } from "@/lib/api";
 
 const agents = [
   { slug: "lester", name: "Lester", initial: "L", copy: "冷静、聪明、务实" },
@@ -32,6 +34,7 @@ export function Workspace({ conversationId }: { conversationId?: string }) {
   const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [deployments, setDeployments] = useState<Deployment[]>([]);
+  const [user, setUser] = useState<UserProfile | null>(null);
   const [current, setCurrent] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [events, setEvents] = useState<RunEvent[]>([]);
@@ -45,9 +48,11 @@ export function Workspace({ conversationId }: { conversationId?: string }) {
     Promise.all([
       api<{ conversations: Conversation[] }>("/api/v1/conversations"),
       api<{ deployments: Deployment[] }>("/api/v1/model-deployments"),
-    ]).then(([conversationResult, deploymentResult]) => {
+      api<UserProfile>("/api/v1/me"),
+    ]).then(([conversationResult, deploymentResult, userResult]) => {
       setConversations(conversationResult.conversations);
       setDeployments(deploymentResult.deployments);
+      setUser(userResult);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -113,7 +118,7 @@ export function Workspace({ conversationId }: { conversationId?: string }) {
     <aside className={`conversation-sidebar ${mobileMenu ? "mobile-open" : ""}`}>
       <div className="sidebar-top"><Brand /><button className="icon-button mobile-close" onClick={() => setMobileMenu(false)} aria-label="关闭"><X /></button><button className="new-button" onClick={() => setDialog(true)}><Plus />新对话</button></div>
       <div className="conversation-list">{loading ? <p className="muted-block">正在载入…</p> : conversations.map((item) => <button key={item.id} className={`conversation-item ${item.id === conversationId ? "active" : ""}`} onClick={() => router.push(`/app/c/${item.id}`)}><span className="mini-agent">{agentName(item.agent_slug)[0]}</span><span><strong>{item.title}</strong><small>{agentName(item.agent_slug)} · {relativeTime(item.updated_at)}</small></span></button>)}</div>
-      <div className="sidebar-footer"><button onClick={() => router.push("/app/settings/models")}><Settings2 />设置</button></div>
+      <div className="sidebar-footer"><UserMenu user={user} /></div>
     </aside>
     <section className={`conversation-main ${current ? "" : "empty-conversation"}`}>
       <header className="conversation-header"><button className="icon-button mobile-menu" onClick={() => setMobileMenu(true)}><Menu /></button>{current ? <><div className="agent-heading"><span className="agent-avatar">{agentName(current.agent_slug)[0]}</span><span><strong>{agentName(current.agent_slug)}</strong><small className={`run-state ${runState}`}>{activeLabel}</small></span></div><label className="model-selector"><select value={current.model_deployment_id || ""} onChange={(event) => chooseModel(event.target.value)}>{deployments.length === 0 ? <option value="">请先配置模型</option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown /></label></> : <><Brand /><button className="new-button mobile-new" onClick={() => setDialog(true)}><Plus />新对话</button></>}</header>
@@ -192,18 +197,7 @@ function ComputerPanel({ conversationId }: { conversationId: string }) {
     return () => { active = false; window.clearInterval(timer); };
   }, [conversationId]);
   const status = state?.status || "not_created";
-  return <aside className="computer-panel"><header><span><i className={`computer-status ${status}`} />Computer</span><small title={state?.last_error || undefined}>Docker · 用户级 · {computerStatusLabel[status]}</small></header><nav className="computer-tabs"><button className={tab === "files" ? "active" : ""} onClick={() => setTab("files")}><Folder />Files</button><button className={tab === "terminal" ? "active" : ""} onClick={() => setTab("terminal")}><TerminalSquare />Terminal</button><button className={tab === "skills" ? "active" : ""} onClick={() => setTab("skills")}><Wrench />Skills</button></nav>{tab === "files" ? <Files conversationId={conversationId} /> : null}{tab === "terminal" ? <Terminal conversationId={conversationId} /> : null}{tab === "skills" ? <ConversationSkills conversationId={conversationId} /> : null}</aside>;
-}
-
-function Files({ conversationId }: { conversationId: string }) {
-  const [result, setResult] = useState<{ conversationId: string; files: FileEntry[]; error: string }>({ conversationId: "", files: [], error: "" });
-  useEffect(() => {
-    let active = true;
-    api<{ files: FileEntry[] }>(`/api/v1/conversations/${conversationId}/files`).then((response) => { if (active) setResult({ conversationId, files: response.files, error: "" }); }).catch((error: Error) => { if (active) setResult({ conversationId, files: [], error: error.message }); });
-    return () => { active = false; };
-  }, [conversationId]);
-  const current = result.conversationId === conversationId ? result : { conversationId, files: [], error: "" };
-  return <div className="files"><div className="pathbar" title={`/workspace/conversations/${conversationId}`}>/ workspace / conversations / {conversationId.slice(0, 8)}…</div>{current.error ? <p className="muted-block">Computer 暂时不可用：{current.error}</p> : current.files.length === 0 ? <p className="muted-block">当前会话目录还没有文件。</p> : current.files.map((file) => <div className="file-row" key={file.path}>{file.is_dir ? <Folder /> : <FileText />}<span><strong>{file.name}</strong><small>{file.is_dir ? "Folder" : formatBytes(file.size)}</small></span></div>)}</div>;
+  return <aside className="computer-panel"><header><span><i className={`computer-status ${status}`} />Computer</span><small title={state?.last_error || undefined}>Docker · 用户级 · {computerStatusLabel[status]}</small></header><nav className="computer-tabs"><button className={tab === "files" ? "active" : ""} onClick={() => setTab("files")}><Folder />Files</button><button className={tab === "terminal" ? "active" : ""} onClick={() => setTab("terminal")}><TerminalSquare />Terminal</button><button className={tab === "skills" ? "active" : ""} onClick={() => setTab("skills")}><Wrench />Skills</button></nav>{tab === "files" ? <FileExplorer key={conversationId} conversationId={conversationId} /> : null}{tab === "terminal" ? <Terminal conversationId={conversationId} /> : null}{tab === "skills" ? <ConversationSkills conversationId={conversationId} /> : null}</aside>;
 }
 
 function ConversationSkills({ conversationId }: { conversationId: string }) {
@@ -258,4 +252,3 @@ function Terminal({ conversationId }: { conversationId: string }) {
 }
 
 function relativeTime(value: string) { const minutes = Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 60000)); return minutes < 1 ? "刚刚" : minutes < 60 ? `${minutes} 分钟前` : minutes < 1440 ? `${Math.floor(minutes / 60)} 小时前` : `${Math.floor(minutes / 1440)} 天前`; }
-function formatBytes(bytes: number) { if (bytes < 1024) return `${bytes} B`; if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`; return `${(bytes / 1024 / 1024).toFixed(1)} MB`; }
