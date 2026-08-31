@@ -80,7 +80,7 @@ func TestFileHandlersComposeThroughRegistry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.(map[string]any)["content"] != "green green" {
+	if result.(map[string]any)["content"] != "     1\tgreen green" {
 		t.Fatalf("read result = %#v", result)
 	}
 }

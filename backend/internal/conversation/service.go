@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"path"
 	"strings"
 	"sync"
@@ -32,12 +33,17 @@ type Conversation struct {
 	UpdatedAt         time.Time `json:"updated_at"`
 }
 type Message struct {
-	ID             uuid.UUID      `json:"id"`
-	ConversationID uuid.UUID      `json:"conversation_id"`
-	Role           string         `json:"role"`
-	Content        string         `json:"content"`
-	Metadata       map[string]any `json:"metadata"`
-	CreatedAt      time.Time      `json:"created_at"`
+	ID             uuid.UUID        `json:"id"`
+	ConversationID uuid.UUID        `json:"conversation_id"`
+	Role           string           `json:"role"`
+	Content        string           `json:"content"`
+	Metadata       map[string]any   `json:"metadata"`
+	CreatedAt      time.Time        `json:"created_at"`
+	Seq            int64            `json:"seq"`
+	RunID          *uuid.UUID       `json:"run_id,omitempty"`
+	ToolCalls      []model.ToolCall `json:"tool_calls,omitempty"`
+	ToolCallID     string           `json:"tool_call_id,omitempty"`
+	ToolName       string           `json:"tool_name,omitempty"`
 }
 type RunEvent struct {
 	ID             int64          `json:"id"`
@@ -122,7 +128,7 @@ func (s *Service) Get(ctx context.Context, workspaceID, id uuid.UUID) (Conversat
 	if err != nil {
 		return c, nil, err
 	}
-	rows, err := s.db.Query(ctx, `SELECT id,conversation_id,role,content,metadata,created_at FROM messages WHERE conversation_id=$1 ORDER BY created_at,id`, id)
+	rows, err := s.db.Query(ctx, `SELECT id,conversation_id,role,content,metadata,created_at,seq,run_id,tool_calls,COALESCE(tool_call_id,''),COALESCE(tool_name,'') FROM messages WHERE conversation_id=$1 ORDER BY seq`, id)
 	if err != nil {
 		return c, nil, err
 	}
@@ -130,11 +136,16 @@ func (s *Service) Get(ctx context.Context, workspaceID, id uuid.UUID) (Conversat
 	messages := []Message{}
 	for rows.Next() {
 		var m Message
-		var raw []byte
-		if err = rows.Scan(&m.ID, &m.ConversationID, &m.Role, &m.Content, &raw, &m.CreatedAt); err != nil {
+		var raw, calls []byte
+		if err = rows.Scan(&m.ID, &m.ConversationID, &m.Role, &m.Content, &raw, &m.CreatedAt, &m.Seq, &m.RunID, &calls, &m.ToolCallID, &m.ToolName); err != nil {
 			return c, nil, err
 		}
-		_ = json.Unmarshal(raw, &m.Metadata)
+		if err = json.Unmarshal(raw, &m.Metadata); err != nil {
+			return c, nil, err
+		}
+		if err = json.Unmarshal(calls, &m.ToolCalls); err != nil {
+			return c, nil, err
+		}
 		messages = append(messages, m)
 	}
 	return c, messages, rows.Err()
@@ -151,6 +162,21 @@ func (s *Service) Send(ctx context.Context, workspaceID, userID, id uuid.UUID, c
 	attachmentIDs = uniqueUUIDs(attachmentIDs)
 	if strings.TrimSpace(content) == "" && len(attachmentIDs) == 0 {
 		return uuid.Nil, errors.New("message is required")
+	}
+	// Session lock also coordinates separate API processes. It uses a dedicated
+	// connection, not a pool slot or a long-lived transaction.
+	guard, err := s.acquireRun(ctx, workspaceID, id)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	handedOff := false
+	defer func() {
+		if !handedOff {
+			guard.Close()
+		}
+	}()
+	if err = s.recoverInterruptedRuns(ctx, id); err != nil {
+		return uuid.Nil, err
 	}
 	var runID uuid.UUID
 	tx, err := s.db.Begin(ctx)
@@ -185,21 +211,29 @@ func (s *Service) Send(ctx context.Context, workspaceID, userID, id uuid.UUID, c
 		content = "已上传附件：" + attachmentNames(attachments)
 	}
 	metadata, _ := json.Marshal(map[string]any{"attachments": attachments})
-	result, err := tx.Exec(ctx, `INSERT INTO messages(conversation_id,role,content,metadata) SELECT id,'user',$3,$4 FROM conversations WHERE workspace_id=$1 AND id=$2`, workspaceID, id, content, metadata)
-	if err != nil {
+	if err = tx.QueryRow(ctx, `INSERT INTO runs(conversation_id,status) VALUES($1,'running') RETURNING id`, id).Scan(&runID); err != nil {
 		return uuid.Nil, err
 	}
-	if result.RowsAffected() == 0 {
-		return uuid.Nil, errors.New("conversation not found")
+	var messageID uuid.UUID
+	if err = tx.QueryRow(ctx, `INSERT INTO messages(conversation_id,run_id,role,content,metadata) VALUES($1,$2,'user',$3,$4) RETURNING id`, id, runID, content, metadata).Scan(&messageID); err != nil {
+		return uuid.Nil, err
 	}
-	if err = tx.QueryRow(ctx, `INSERT INTO runs(conversation_id,status) VALUES($1,'running') RETURNING id`, id).Scan(&runID); err != nil {
+	if _, err = tx.Exec(ctx, `UPDATE runs SET input_message_id=$2 WHERE id=$1`, runID, messageID); err != nil {
 		return uuid.Nil, err
 	}
 	_, _ = tx.Exec(ctx, `UPDATE conversations SET updated_at=now(),title=CASE WHEN title='新对话' THEN left($2,60) ELSE title END WHERE id=$1`, id, content)
 	if err = tx.Commit(ctx); err != nil {
 		return uuid.Nil, err
 	}
-	go s.execute(context.Background(), workspaceID, id, runID)
+	handedOff = true
+	go func() {
+		defer guard.Close()
+		runCtx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		stop := guard.Watch(runCtx, cancel)
+		defer stop()
+		s.execute(runCtx, workspaceID, id, runID)
+	}()
 	return runID, nil
 }
 
@@ -264,11 +298,16 @@ func (s *Service) execute(ctx context.Context, workspaceID, conversationID, runI
 		s.fail(ctx, runID, conversationID, err)
 		return
 	}
-	history := make([]model.Message, 0, len(messages))
-	for _, m := range messages {
-		history = append(history, model.Message{Role: m.Role, Content: messageContentForModel(m)})
-	}
+	history := modelHistory(messages)
 	request := model.ModelRequest{Model: deployment.ModelID, System: system, Messages: history, Tools: s.tools.Definitions(), MaxTokens: 4096}
+	if err = s.saveRunContext(ctx, runID, messages, request); err != nil {
+		s.fail(ctx, runID, conversationID, err)
+		return
+	}
+	s.executeTurns(ctx, conversationID, runID, computer, client, request)
+}
+
+func (s *Service) executeTurns(ctx context.Context, conversationID, runID uuid.UUID, computer *Computer, client model.ModelClient, request model.ModelRequest) {
 	for turn := 0; turn < 12; turn++ {
 		s.event(ctx, runID, conversationID, "MODEL_STARTED", map[string]any{"turn": turn + 1})
 		stream, err := client.Stream(ctx, request)
@@ -280,6 +319,7 @@ func (s *Service) execute(ctx context.Context, workspaceID, conversationID, runI
 		callsByIndex := map[int]*model.ToolCall{}
 		for event := range stream {
 			if event.Err != nil {
+				s.savePartialResponse(runID, conversationID, text, callsByIndex)
 				s.fail(ctx, runID, conversationID, event.Err)
 				return
 			}
@@ -304,40 +344,62 @@ func (s *Service) execute(ctx context.Context, workspaceID, conversationID, runI
 				}
 			}
 		}
-		calls := make([]model.ToolCall, 0, len(callsByIndex))
-		for index := 0; index < len(callsByIndex); index++ {
-			if call := callsByIndex[index]; call != nil && call.Name != "" {
-				if len(call.Arguments) == 0 {
-					call.Arguments = json.RawMessage(`{}`)
-				}
-				calls = append(calls, *call)
-			}
+		if ctx.Err() != nil {
+			s.savePartialResponse(runID, conversationID, text, callsByIndex)
+			s.fail(ctx, runID, conversationID, ctx.Err())
+			return
+		}
+		calls, err := assembledToolCalls(callsByIndex)
+		if err != nil {
+			s.savePartialResponse(runID, conversationID, text, callsByIndex)
+			s.fail(ctx, runID, conversationID, err)
+			return
+		}
+		assistant := model.Message{Role: "assistant", Content: text, ToolCalls: calls}
+		if err = s.appendMessage(ctx, conversationID, runID, assistant, "", nil); err != nil {
+			s.fail(ctx, runID, conversationID, err)
+			return
 		}
 		s.event(ctx, runID, conversationID, "MODEL_COMPLETED", map[string]any{})
 		if len(calls) == 0 {
-			if text != "" {
-				_, err = s.db.Exec(ctx, `INSERT INTO messages(conversation_id,role,content) VALUES($1,'assistant',$2)`, conversationID, text)
-				if err != nil {
-					s.fail(ctx, runID, conversationID, err)
-					return
-				}
+			if _, err = s.db.Exec(ctx, `UPDATE runs SET status='completed',completed_at=now() WHERE id=$1 AND status='running'`, runID); err != nil {
+				s.fail(ctx, runID, conversationID, err)
+				return
 			}
-			_, _ = s.db.Exec(ctx, `UPDATE runs SET status='completed',completed_at=now() WHERE id=$1`, runID)
 			s.event(ctx, runID, conversationID, "RUN_COMPLETED", map[string]any{})
 			return
 		}
-		request.Messages = append(request.Messages, model.Message{Role: "assistant", Content: text, ToolCalls: calls})
+		request.Messages = append(request.Messages, assistant)
 		for _, call := range calls {
-			s.event(ctx, runID, conversationID, "TOOL_STARTED", map[string]any{"tool": call.Name, "arguments": string(call.Arguments)})
-			result, toolErr := s.runTool(ctx, runID, conversationID, computer, call)
-			if toolErr != nil {
-				s.event(ctx, runID, conversationID, "TOOL_FAILED", map[string]any{"tool": call.Name, "error": toolErr.Error()})
-				result = map[string]any{"error": toolErr.Error()}
-			} else {
-				s.event(ctx, runID, conversationID, "TOOL_COMPLETED", map[string]any{"tool": call.Name})
+			if ctx.Err() != nil {
+				s.fail(ctx, runID, conversationID, ctx.Err())
+				return
 			}
-			raw, _ := json.Marshal(result)
-			request.Messages = append(request.Messages, model.Message{Role: "tool", Content: string(raw), ToolCallID: call.ID})
+			s.event(ctx, runID, conversationID, "TOOL_STARTED", map[string]any{"tool": call.Name, "tool_call_id": call.ID, "arguments": string(call.Arguments)})
+			result, toolErr := s.runTool(ctx, runID, conversationID, computer, call)
+			eventType := "TOOL_COMPLETED"
+			metadata := map[string]any{}
+			if toolErr != nil {
+				result = map[string]any{"error": toolErr.Error()}
+				metadata["is_error"] = true
+				eventType = "TOOL_FAILED"
+			}
+			raw, err := json.Marshal(result)
+			if err != nil {
+				s.fail(ctx, runID, conversationID, fmt.Errorf("encode tool result: %w", err))
+				return
+			}
+			toolMessage := model.Message{Role: "tool", Content: string(raw), ToolCallID: call.ID}
+			if err = s.appendMessage(ctx, conversationID, runID, toolMessage, call.Name, metadata); err != nil {
+				s.fail(ctx, runID, conversationID, err)
+				return
+			}
+			payload := map[string]any{"tool": call.Name, "tool_call_id": call.ID, "result": json.RawMessage(raw)}
+			if toolErr != nil {
+				payload["error"] = toolErr.Error()
+			}
+			s.event(ctx, runID, conversationID, eventType, payload)
+			request.Messages = append(request.Messages, toolMessage)
 		}
 	}
 	s.fail(ctx, runID, conversationID, errors.New("tool loop limit reached"))
@@ -455,6 +517,8 @@ func (s *Service) runTool(ctx context.Context, runID, conversationID uuid.UUID, 
 		SandboxID: computer.SandboxID, WorkDir: computer.WorkDir,
 		Sandboxes: s.sandboxes,
 		Emit: func(eventType string, payload map[string]any) {
+			payload["tool_call_id"] = call.ID
+			payload["tool"] = call.Name
 			s.event(ctx, runID, conversationID, eventType, payload)
 		},
 	}
@@ -550,12 +614,17 @@ func (s *Service) event(ctx context.Context, runID, conversationID uuid.UUID, ev
 	event.Payload = payload
 	if err := s.db.QueryRow(ctx, `INSERT INTO run_events(run_id,conversation_id,type,payload) VALUES($1,$2,$3,$4) RETURNING id,created_at`, runID, conversationID, eventType, raw).Scan(&event.ID, &event.CreatedAt); err == nil {
 		encoded, _ := json.Marshal(event)
-		_ = s.redis.Publish(ctx, "conversation:"+conversationID.String(), encoded).Err()
+		if s.redis != nil {
+			_ = s.redis.Publish(ctx, "conversation:"+conversationID.String(), encoded).Err()
+		}
 	}
 }
 func (s *Service) fail(ctx context.Context, runID, conversationID uuid.UUID, err error) {
-	_, _ = s.db.Exec(ctx, `UPDATE runs SET status='failed',completed_at=now() WHERE id=$1`, runID)
-	s.event(ctx, runID, conversationID, "RUN_FAILED", map[string]any{"error": err.Error()})
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	if saveErr := s.finishFailedRun(cleanupCtx, runID, conversationID, err.Error()); saveErr != nil {
+		slog.Error("persist failed run", "run_id", runID, "error", saveErr)
+	}
 }
 
 func (s *Service) SuspendIdle(ctx context.Context, idle time.Duration) {

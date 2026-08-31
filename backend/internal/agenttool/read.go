@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
 )
@@ -19,7 +21,7 @@ type readInput struct {
 }
 
 func (Read) Definition() model.Tool {
-	return model.Tool{Name: "read", Description: "Read a text file from the current conversation directory, optionally by line range. Results are limited to 30000 characters; continue with offset when truncated.", InputSchema: map[string]any{"type": "object", "properties": map[string]any{
+	return model.Tool{Name: "read", Description: "Read a text file from the current conversation directory by line range. Each content line is formatted as a right-aligned line number, a TAB, then the original text (cat -n style). Numbers are 1-based. The number and separator are display-only: never include them in edit/write input; preserve any indentation after the separator. Returns at most 2000 lines and 30000 characters per page. Use next_offset to continue. Individual lines longer than 2000 characters are explicitly truncated; inspect those with a narrower bash command.", InputSchema: map[string]any{"type": "object", "properties": map[string]any{
 		"file_path": pathProperty(),
 		"offset":    map[string]any{"type": "integer", "minimum": 1, "description": "One-based first line to return. Defaults to 1."},
 		"limit":     map[string]any{"type": "integer", "minimum": 1, "maximum": 2000, "description": "Maximum number of lines to return. Defaults to 2000."},
@@ -53,23 +55,74 @@ func (Read) Execute(ctx context.Context, environment Environment, raw json.RawMe
 	if err != nil {
 		return nil, err
 	}
-	content, totalLines, returnedLines := sliceLines(string(data), offset, limit)
-	limited, truncated, omitted := truncateText(content, outputCharacterLimit)
-	result := map[string]any{"content": limited, "start_line": offset, "line_count": returnedLines, "total_lines": totalLines, "truncated": truncated}
-	if truncated {
-		result["omitted_characters"] = omitted
-		result["notice"] = "Output was truncated. Use read with a later offset/smaller limit or a narrower bash command to continue."
-	}
-	return result, nil
+	return numberedReadResult(string(data), offset, limit), nil
 }
 
 func sliceLines(content string, offset, limit int) (string, int, int) {
-	lines := strings.Split(content, "\n")
-	if content == "" {
-		lines = nil
-	}
+	lines := fileLines(content)
 	total := len(lines)
 	start := min(offset-1, total)
 	end := min(start+limit, total)
 	return strings.Join(lines[start:end], "\n"), total, end - start
+}
+
+func fileLines(content string) []string {
+	if content == "" {
+		return nil
+	}
+	lines := strings.Split(content, "\n")
+	// A terminating newline does not introduce another physical line, as in cat -n.
+	if lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
+}
+
+func numberedReadResult(content string, offset, limit int) map[string]any {
+	lines := fileLines(content)
+	start := min(offset-1, len(lines))
+	end := min(start+limit, len(lines))
+	var output strings.Builder
+	count, characters, omitted := 0, 0, 0
+	longLines := []int{}
+	for index := start; index < end; index++ {
+		line := lines[index]
+		runes := []rune(line)
+		lineOmitted := 0
+		if len(runes) > 2000 {
+			lineOmitted = len(runes) - 2000
+			line = string(runes[:2000]) + fmt.Sprintf(" [line truncated: %d characters omitted]", lineOmitted)
+		}
+		formatted := fmt.Sprintf("%6d\t%s", index+1, line)
+		needed := utf8.RuneCountInString(formatted)
+		if count > 0 {
+			needed++
+		}
+		if characters+needed > outputCharacterLimit {
+			break
+		}
+		if count > 0 {
+			output.WriteByte('\n')
+		}
+		output.WriteString(formatted)
+		characters += needed
+		count++
+		omitted += lineOmitted
+		if lineOmitted > 0 {
+			longLines = append(longLines, index+1)
+		}
+	}
+	hasMore := start+count < len(lines)
+	result := map[string]any{"content": output.String(), "start_line": offset, "line_count": count, "total_lines": len(lines), "truncated": hasMore || len(longLines) > 0}
+	if hasMore {
+		result["next_offset"] = start + count + 1
+		result["notice"] = "Partial file view. Continue with next_offset; line numbers and the separating TAB are not file content."
+	}
+	if len(longLines) > 0 {
+		result["truncated_lines"] = longLines
+		result["omitted_characters"] = omitted
+		notice, _ := result["notice"].(string)
+		result["notice"] = strings.TrimSpace(notice + " Lines listed in truncated_lines exceed 2000 characters; use a narrower bash command to inspect their remaining content.")
+	}
+	return result
 }

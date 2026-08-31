@@ -12,6 +12,7 @@
 - 在 Workspace 中配置自己的模型 Provider 和密钥
 - 支持 OpenAI、Anthropic、Azure OpenAI、OpenAI-compatible、AWS Bedrock、Google Vertex AI 和 Microsoft Foundry
 - 通过 SSE 实时输出 Agent 回复，并持久化对话、消息、运行记录和事件
+- 完整保存中间回复、工具调用与工具结果；下一轮对话恢复上下文时保留工具调用 ID 和结果配对
 - 创建对话时选择 Lester、Franklin、Michael 或 Trevor；同一对话内角色保持不变
 - 为每个用户分配一个持久化 Docker Computer，并以 `/workspace/conversations/{conversationId}` 隔离会话目录
 - Agent 可以在 Computer 中执行命令、读写文件和使用终端
@@ -87,6 +88,34 @@ User
 `bash` 支持 `run_in_background: true`。后台命令会立即返回任务 ID、PID 和 `.lester/tasks/{taskId}.log`，Agent 可以随后使用 `read` 查看日志。前台 Bash 默认超时 120 秒，最大可配置为 600 秒。
 
 `bash`、`read` 和 `load_skill` 的大段文本结果会按字符数截断，并明确返回省略字符数和继续读取提示，避免单次工具结果挤满模型上下文。
+
+`read` 返回带行号的文本，格式为“右对齐的行号 + Tab + 原始内容”，行号从 1 开始。例如 JSON 中的 `"     1\tport: 8080"`。读取范围仍使用 `offset` / `limit`；达到行数或字符限制时返回连续的一页与 `next_offset`，不会把开头和结尾拼成一段。单行超过 2000 字符会明确标记截断，需使用更精确的命令检查剩余部分。编辑时不要把行号和分隔 Tab 写入文件，原有缩进则需保留。
+
+## 上下文存储
+
+- `messages` 保存用户输入、中间/最终助手消息、`tool_calls` 和 `tool` 结果；`run_id` 关联执行，`tool_call_id` 配对调用与结果。完整保存的是工具实际返回给模型的内容（包括截断提示），不是未截断的所有文件或命令输出。
+- 每个会话按数据库生成的递增 `seq` 恢复历史，不再依赖时间戳或随机 UUID 排序。
+- `runs` 记录触发消息，以及当次 System Prompt、工具定义、模型 ID、输出参数和历史起点快照信息（`history_through_seq` 为初始历史的末尾序号），不保存 Provider 密钥。
+- `run_events` 继续供界面展示执行过程。工具开始/完成/失败事件携带调用 ID，完成/失败事件包含工具结果；它们不替代消息历史。
+- 同一会话一次只执行一个 Run；重复发送返回 HTTP 409，且不会提前插入消息。不同会话仍可并行。每个运行使用一个额外的数据库会话持有锁，因此数据库需直连或使用 session pooling，不能使用 transaction pooling。
+- 进程中断后，下一次发送会将无主运行标记为失败，为尚未返回结果的工具补充“执行中断、结果未知”的记录，不会自动重跑工具。已发生的文件修改不会自动撤销。部分模型流会保留为不完整审计记录，但不作为完整消息传给后续模型。
+- 默认会话查询仍只展示用户消息和最终回答；`GET /api/v1/conversations/{id}?include_internal=true` 可查看完整有序记录（需正常登录与 Workspace 权限）。
+
+目前仍未实现历史摘要或 token 预算压缩；完整工具历史会增加长对话的上下文长度。
+
+### 已有部署升级
+
+已有 PostgreSQL Volume 不会重新执行 Docker 的初始化 SQL。先备份数据库、停止 API 写入，并确认已应用迁移 001–003，再执行一次：
+
+```bash
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
+  sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  < backend/migrations/000004_durable_transcript.up.sql
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api
+```
+
+全新部署会自动执行 004。迁移保留旧聊天记录的原有排序，但不能补回旧版本从未保存的工具结果。回滚 SQL 保留消息文本，不过旧 API 不理解新增工具消息；完整应用降级应使用备份恢复。
 
 ## Skill 与附件机制
 

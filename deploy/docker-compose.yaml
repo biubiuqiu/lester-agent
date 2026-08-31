@@ -10,6 +10,7 @@ services:
       - ../backend/migrations/000001_phase_0_4.up.sql:/docker-entrypoint-initdb.d/001.sql:ro
       - ../backend/migrations/000002_user_sandboxes.up.sql:/docker-entrypoint-initdb.d/002.sql:ro
       - ../backend/migrations/000003_skills_attachments.up.sql:/docker-entrypoint-initdb.d/003.sql:ro
+      - ../backend/migrations/000004_durable_transcript.up.sql:/docker-entrypoint-initdb.d/004.sql:ro
     healthcheck:
       test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
       interval: 3s

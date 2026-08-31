@@ -67,10 +67,11 @@ func (c *bedrockClient) Stream(ctx context.Context, request modelruntime.Request
 	if err != nil {
 		return nil, err
 	}
-	events := make(chan modelruntime.Event, 3)
+	events := make(chan modelruntime.Event, len(response.ToolCalls)+2)
 	events <- modelruntime.Event{Type: "MODEL_DELTA", Delta: response.Content}
 	for index := range response.ToolCalls {
 		call := response.ToolCalls[index]
+		call.Index = index
 		events <- modelruntime.Event{Type: "MODEL_DELTA", ToolCall: &call}
 	}
 	events <- modelruntime.Event{Type: "MODEL_COMPLETED", Usage: response.Usage}
