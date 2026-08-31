@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	modelruntime "github.com/biubiuqiu/lester-agent/backend/internal/model/runtime"
+	"github.com/biubiuqiu/lester-agent/backend/internal/toolcontext"
 )
 
 func TestOpenAICompatibleStream(t *testing.T) {
@@ -87,6 +88,55 @@ func TestRestoredToolMessagesConvertToProviderProtocols(t *testing.T) {
 	result := anthropic[2]["content"].([]any)[0].(map[string]any)
 	if result["tool_use_id"] != "read-1" || result["content"] != request.Messages[2].Content {
 		t.Fatalf("Anthropic payload=%#v", anthropic)
+	}
+}
+
+func TestProjectedToolContextConvertsToProviderProtocols(t *testing.T) {
+	history := []modelruntime.Message{{Role: "user", Content: "inspect"}}
+	for i := 0; i < 12; i++ {
+		id := fmt.Sprintf("read-%d", i)
+		history = append(history,
+			modelruntime.Message{Role: "assistant", RunID: "run", ToolCalls: []modelruntime.ToolCall{{ID: id, Name: "read", Arguments: json.RawMessage(`{"file_path":"x"}`)}}},
+			modelruntime.Message{Role: "tool", ToolCallID: id, Content: `{"content":"original source"}`},
+		)
+	}
+	projection, err := toolcontext.Build(history)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := modelruntime.Request{Messages: projection.Messages}
+	for name, payload := range map[string]map[string]any{"openai": openAIPayload(request), "anthropic": anthropicPayload(request, ""), "vertex": anthropicPayload(request, "vertex")} {
+		t.Run(name, func(t *testing.T) {
+			calls, results, references := 0, 0, 0
+			for _, message := range payload["messages"].([]map[string]any) {
+				if _, ok := message["RunID"]; ok {
+					t.Fatal("local provenance leaked as a provider field")
+				}
+				if text, ok := message["content"].(string); ok && strings.Contains(text, "Historical tool references") {
+					references++
+				}
+				if name == "openai" {
+					if message["role"] == "tool" {
+						results++
+					}
+					if list, ok := message["tool_calls"].([]any); ok {
+						calls += len(list)
+					}
+				} else if blocks, ok := message["content"].([]any); ok {
+					for _, block := range blocks {
+						switch block.(map[string]any)["type"] {
+						case "tool_use":
+							calls++
+						case "tool_result":
+							results++
+						}
+					}
+				}
+			}
+			if calls != 10 || results != 10 || references != 2 {
+				t.Fatalf("calls=%d results=%d references=%d", calls, results, references)
+			}
+		})
 	}
 }
 
