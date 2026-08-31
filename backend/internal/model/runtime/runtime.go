@@ -17,9 +17,10 @@ type Tool struct {
 }
 
 type ToolCall struct {
-	ID, Name  string
-	Arguments json.RawMessage
-	Index     int `json:"-"`
+	ID        string          `json:"id"`
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments"`
+	Index     int             `json:"-"`
 }
 
 type Request struct {

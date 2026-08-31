@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	modelruntime "github.com/biubiuqiu/lester-agent/backend/internal/model/runtime"
@@ -48,6 +50,43 @@ func TestOpenAICompatibleStream(t *testing.T) {
 	}
 	if content != "hello" {
 		t.Fatalf("content = %q", content)
+	}
+}
+
+func TestStreamRetainsAllToolCallsAndDetectsInterruptedEOF(t *testing.T) {
+	body := "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"a\",\"function\":{\"name\":\"read\",\"arguments\":\"{}\"}},{\"index\":1,\"id\":\"b\",\"function\":{\"name\":\"read\",\"arguments\":\"{}\"}}]}}]}\n\n"
+	client := &httpClient{protocol: "openai"}
+	events := make(chan modelruntime.Event, 10)
+	client.readSSE(context.Background(), io.NopCloser(strings.NewReader(body)), events)
+	var calls []string
+	var streamErr error
+	for event := range events {
+		if event.ToolCall != nil {
+			calls = append(calls, event.ToolCall.ID)
+		}
+		if event.Err != nil {
+			streamErr = event.Err
+		}
+	}
+	if len(calls) != 2 || calls[0] != "a" || calls[1] != "b" || streamErr == nil {
+		t.Fatalf("calls=%v error=%v", calls, streamErr)
+	}
+}
+
+func TestRestoredToolMessagesConvertToProviderProtocols(t *testing.T) {
+	request := modelruntime.Request{System: "system", Messages: []modelruntime.Message{
+		{Role: "user", Content: "read file"},
+		{Role: "assistant", Content: "reading", ToolCalls: []modelruntime.ToolCall{{ID: "read-1", Name: "read", Arguments: json.RawMessage(`{"file_path":"x"}`)}}},
+		{Role: "tool", ToolCallID: "read-1", Content: `{"content":"     1\thello"}`},
+	}}
+	openAI := openAIPayload(request)["messages"].([]map[string]any)
+	if openAI[3]["tool_call_id"] != "read-1" || openAI[3]["content"] != request.Messages[2].Content {
+		t.Fatalf("OpenAI payload=%#v", openAI)
+	}
+	anthropic := anthropicPayload(request, "")["messages"].([]map[string]any)
+	result := anthropic[2]["content"].([]any)[0].(map[string]any)
+	if result["tool_use_id"] != "read-1" || result["content"] != request.Messages[2].Content {
+		t.Fatalf("Anthropic payload=%#v", anthropic)
 	}
 }
 

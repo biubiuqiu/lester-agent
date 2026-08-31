@@ -67,6 +67,11 @@ Preserve these behaviors when changing the implementation:
 - Model-provider differences must stay behind the model abstraction instead of leaking into conversation handlers.
 - The selected persona is fixed for the lifetime of a conversation.
 - Messages, runs, and events are durable in PostgreSQL. Redis is used for live SSE fan-out, not as the source of truth.
+- Persist every complete model-visible assistant message (including intermediate text and tool calls) and every tool result before continuing execution. Restore `tool_calls` and `tool_call_id`, not only role/content. Events are not the transcript source of truth.
+- Message order is `messages.seq` within a conversation, allocated by the database trigger; never restore context by timestamps or random UUIDs. New messages carry `run_id`; runs link their input message and snapshot system/tools/model settings plus the initial history cursor.
+- Only one run may execute in a conversation at once. Use the PostgreSQL session advisory guard, return HTTP 409 for overlapping sends before storing their message, and release the guard on completion. Database connections must be direct or session-pooled, not transaction-pooled.
+- After acquiring a released guard, mark abandoned running records failed and fill missing tool results with explicit interrupted/unknown outcomes. Never automatically re-execute tools after a crash. Partial model streams are stored as incomplete audit records and excluded from model history.
+- Keep the default conversation GET response compatible with chat rendering (user/final assistant only); `include_internal=true` returns the full ordered transcript. Do not mistake display filtering for loss of stored context.
 - Tool-call fragments must be assembled before execution, and tool results must remain associated with the correct call ID.
 - Each user maps to one logical Computer and one persistent workspace volume.
 - Conversations are rooted at `/workspace/conversations/{conversationId}` inside that Computer; file APIs and terminal sessions must stay scoped to that directory.
@@ -76,6 +81,7 @@ Preserve these behaviors when changing the implementation:
 - Conversation attachments must be stored under `.agent/upload`; do not parse or inject attachment contents into model context automatically.
 - Skill package storage must remain behind the object-store interface so MinIO can be replaced with S3 or another implementation without changing application behavior.
 - Large tool results must be bounded and must tell the model when output was truncated and how to continue.
+- `read` content uses `%6d\t%s` (1-based line number, TAB, original text). Preserve indentation and blank lines. Page at complete line boundaries with `next_offset`; do not concatenate a head and tail and imply a contiguous range. Prefixes must never be included in edit/write input.
 
 ## Backend conventions
 

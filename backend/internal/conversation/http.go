@@ -69,6 +69,9 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		httpapi.Error(w, 404, errors.New("conversation not found"))
 		return
 	}
+	if r.URL.Query().Get("include_internal") != "true" {
+		messages = visibleMessages(messages)
+	}
 	httpapi.JSON(w, 200, map[string]any{"conversation": item, "messages": messages})
 }
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
@@ -104,6 +107,10 @@ func (h *Handler) Send(w http.ResponseWriter, r *http.Request) {
 	}
 	runID, err := h.service.Send(r.Context(), p.WorkspaceID, p.UserID, id, req.Content, req.AttachmentIDs)
 	if err != nil {
+		if errors.Is(err, ErrRunInProgress) {
+			httpapi.Error(w, http.StatusConflict, err)
+			return
+		}
 		httpapi.Error(w, 400, err)
 		return
 	}

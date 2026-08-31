@@ -81,13 +81,22 @@ func (c *httpClient) Stream(ctx context.Context, request modelruntime.Request) (
 		return nil, fmt.Errorf("model provider %s: %s", response.Status, string(data))
 	}
 	events := make(chan modelruntime.Event, 16)
-	go c.readSSE(response.Body, events)
+	go c.readSSE(ctx, response.Body, events)
 	return events, nil
 }
 
-func (c *httpClient) readSSE(body io.ReadCloser, output chan<- modelruntime.Event) {
+func (c *httpClient) readSSE(ctx context.Context, body io.ReadCloser, output chan<- modelruntime.Event) {
 	defer close(output)
 	defer body.Close()
+	emit := func(event modelruntime.Event) bool {
+		select {
+		case output <- event:
+			return true
+		case <-ctx.Done():
+			return false
+		}
+	}
+	finished := false
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 64*1024), 2<<20)
 	for scanner.Scan() {
@@ -97,7 +106,7 @@ func (c *httpClient) readSSE(body io.ReadCloser, output chan<- modelruntime.Even
 		}
 		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
 		if data == "[DONE]" {
-			output <- modelruntime.Event{Type: "MODEL_COMPLETED"}
+			emit(modelruntime.Event{Type: "MODEL_COMPLETED"})
 			return
 		}
 		var raw map[string]any
@@ -105,14 +114,60 @@ func (c *httpClient) readSSE(body io.ReadCloser, output chan<- modelruntime.Even
 			continue
 		}
 		if c.protocol == "anthropic" {
-			output <- parseAnthropic(raw)
+			if raw["type"] == "message_stop" {
+				emit(modelruntime.Event{Type: "MODEL_COMPLETED"})
+				return
+			}
+			if raw["type"] == "error" {
+				emit(modelruntime.Event{Err: fmt.Errorf("model provider stream error: %v", raw["error"])})
+				return
+			}
+			if !emit(parseAnthropic(raw)) {
+				return
+			}
 		} else {
-			output <- parseOpenAI(raw)
+			if providerError, ok := raw["error"]; ok {
+				emit(modelruntime.Event{Err: fmt.Errorf("model provider stream error: %v", providerError)})
+				return
+			}
+			choices, _ := raw["choices"].([]any)
+			if len(choices) > 0 {
+				choice, _ := choices[0].(map[string]any)
+				if valueString(choice["finish_reason"]) != "" {
+					finished = true
+				}
+			}
+			for _, event := range parseOpenAIEvents(raw) {
+				if !emit(event) {
+					return
+				}
+			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		output <- modelruntime.Event{Type: "RUN_FAILED", Err: err}
+		emit(modelruntime.Event{Type: "RUN_FAILED", Err: err})
+	} else if !finished {
+		emit(modelruntime.Event{Type: "RUN_FAILED", Err: io.ErrUnexpectedEOF})
 	}
+}
+
+// A single OpenAI SSE frame can contain deltas for multiple tool calls.
+func parseOpenAIEvents(raw map[string]any) []modelruntime.Event {
+	first := parseOpenAI(raw)
+	events := []modelruntime.Event{first}
+	choices, _ := raw["choices"].([]any)
+	if len(choices) == 0 {
+		return events
+	}
+	choice, _ := choices[0].(map[string]any)
+	delta, _ := choice["delta"].(map[string]any)
+	calls, _ := delta["tool_calls"].([]any)
+	for index := 1; index < len(calls); index++ {
+		call, _ := calls[index].(map[string]any)
+		function, _ := call["function"].(map[string]any)
+		events = append(events, modelruntime.Event{Type: "MODEL_DELTA", ToolCall: &modelruntime.ToolCall{ID: valueString(call["id"]), Name: valueString(function["name"]), Arguments: json.RawMessage(valueString(function["arguments"])), Index: valueInt(call["index"])}})
+	}
+	return events
 }
 
 func openAIPayload(request modelruntime.Request) map[string]any {
