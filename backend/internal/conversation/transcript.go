@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
+	"github.com/biubiuqiu/lester-agent/backend/internal/toolcontext"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
@@ -88,13 +89,18 @@ func modelHistory(messages []Message) []model.Message {
 		if len(calls) == 0 {
 			calls = nil
 		}
-		history = append(history, model.Message{Role: message.Role, Content: messageContentForModel(message), ToolCalls: calls, ToolCallID: message.ToolCallID})
+		item := model.Message{Role: message.Role, Content: messageContentForModel(message), ToolCalls: calls, ToolCallID: message.ToolCallID}
+		if message.RunID != nil {
+			item.RunID = message.RunID.String()
+		}
+		history = append(history, item)
 	}
 	return history
 }
 
 // Keep the existing chat UI contract. Full records are available with
-// GET /conversations/{id}?include_internal=true and are always used by the model.
+// GET /conversations/{id}?include_internal=true. Model requests separately project
+// this full transcript through the tool context policy.
 func visibleMessages(messages []Message) []Message {
 	visible := make([]Message, 0, len(messages))
 	for _, message := range messages {
@@ -187,7 +193,7 @@ func (s *Service) saveRunContext(ctx context.Context, runID uuid.UUID, messages 
 	}
 	// Record the dynamic prompt/tool snapshot once. Durable messages through the
 	// cursor reconstruct the initial history; this contains no provider credentials.
-	snapshot, err := json.Marshal(map[string]any{"model": request.Model, "system": request.System, "tools": request.Tools, "max_tokens": request.MaxTokens, "temperature": request.Temperature, "history_through_seq": through})
+	snapshot, err := json.Marshal(map[string]any{"model": request.Model, "system": request.System, "tools": request.Tools, "max_tokens": request.MaxTokens, "temperature": request.Temperature, "history_through_seq": through, "tool_context_policy": toolcontext.PolicyVersion, "recent_full_tool_exchanges": toolcontext.RecentFullToolExchanges})
 	if err != nil {
 		return err
 	}

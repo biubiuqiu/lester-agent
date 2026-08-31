@@ -9,6 +9,7 @@ type Message struct {
 	Role, Content string
 	ToolCallID    string     `json:"tool_call_id,omitempty"`
 	ToolCalls     []ToolCall `json:"tool_calls,omitempty"`
+	RunID         string     `json:"-"` // Local transcript provenance, never a provider wire field.
 }
 
 type Tool struct {

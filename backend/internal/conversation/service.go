@@ -15,6 +15,7 @@ import (
 	"github.com/biubiuqiu/lester-agent/backend/internal/agenttool"
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
 	"github.com/biubiuqiu/lester-agent/backend/internal/sandbox"
+	"github.com/biubiuqiu/lester-agent/backend/internal/toolcontext"
 	"github.com/biubiuqiu/lester-agent/backend/prompts"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -309,8 +310,17 @@ func (s *Service) execute(ctx context.Context, workspaceID, conversationID, runI
 
 func (s *Service) executeTurns(ctx context.Context, conversationID, runID uuid.UUID, computer *Computer, client model.ModelClient, request model.ModelRequest) {
 	for turn := 0; turn < 12; turn++ {
-		s.event(ctx, runID, conversationID, "MODEL_STARTED", map[string]any{"turn": turn + 1})
-		stream, err := client.Stream(ctx, request)
+		// request retains the complete transcript; only this iteration's copy is
+		// projected. Never append new messages to a previously pruned history.
+		projection, err := toolcontext.Build(request.Messages)
+		if err != nil {
+			s.fail(ctx, runID, conversationID, fmt.Errorf("build tool context: %w", err))
+			return
+		}
+		modelRequest := request
+		modelRequest.Messages = projection.Messages
+		s.event(ctx, runID, conversationID, "MODEL_STARTED", map[string]any{"turn": turn + 1, "tool_context": projection.Stats})
+		stream, err := client.Stream(ctx, modelRequest)
 		if err != nil {
 			s.fail(ctx, runID, conversationID, err)
 			return
@@ -355,7 +365,7 @@ func (s *Service) executeTurns(ctx context.Context, conversationID, runID uuid.U
 			s.fail(ctx, runID, conversationID, err)
 			return
 		}
-		assistant := model.Message{Role: "assistant", Content: text, ToolCalls: calls}
+		assistant := model.Message{Role: "assistant", Content: text, ToolCalls: calls, RunID: runID.String()}
 		if err = s.appendMessage(ctx, conversationID, runID, assistant, "", nil); err != nil {
 			s.fail(ctx, runID, conversationID, err)
 			return

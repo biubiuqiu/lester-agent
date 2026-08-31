@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,7 @@ import (
 	"github.com/biubiuqiu/lester-agent/backend/internal/agenttool"
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
 	"github.com/biubiuqiu/lester-agent/backend/internal/sandbox"
+	"github.com/biubiuqiu/lester-agent/backend/internal/toolcontext"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -245,6 +247,85 @@ func sameModelMessages(a, b []model.Message) bool {
 		return false
 	}
 	return reflect.DeepEqual(leftValue, rightValue)
+}
+
+func TestToolContextProjectsEveryIterationAndReloadWithoutPruningStorage(t *testing.T) {
+	f := newTranscriptFixture(t, false)
+	ctx := context.Background()
+	file := strings.Repeat("original code line\n", 200)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, file)
+	}))
+	defer server.Close()
+	f.service.sandboxes = sandbox.NewClient(server.URL)
+	runID := f.startRun(t, "inspect files")
+	computer := &Computer{SandboxID: "test", WorkDir: conversationWorkDir(f.conversationID)}
+	client := &scriptedModel{respond: func(step int, request model.ModelRequest) []model.ModelEvent {
+		switch step {
+		case 0:
+			var events []model.ModelEvent
+			for i := 0; i < 12; i++ {
+				events = append(events, model.ModelEvent{ToolCall: &model.ToolCall{ID: fmt.Sprintf("batch-%d", i), Name: "read", Index: i, Arguments: json.RawMessage(`{"file_path":"x.go"}`)}})
+			}
+			return events
+		case 1:
+			exchanges, err := toolcontext.Exchanges(request.Messages)
+			if err != nil || len(exchanges) != 12 {
+				t.Fatalf("unobserved 12-call batch was pruned: count=%d err=%v", len(exchanges), err)
+			}
+			return []model.ModelEvent{{ToolCall: &model.ToolCall{ID: "next-read", Name: "read", Arguments: json.RawMessage(`{"file_path":"y.go"}`)}}}
+		case 2:
+			stored := f.messages(t)
+			projection, err := toolcontext.Build(modelHistory(stored))
+			if err != nil || projection.Stats.Full != 10 || projection.Stats.Reference != 3 || !sameModelMessages(projection.Messages, request.Messages) {
+				t.Fatalf("live projection differs from stored history: stats=%+v err=%v", projection.Stats, err)
+			}
+			return []model.ModelEvent{{Delta: "inspection complete"}}
+		default:
+			t.Fatal("unexpected iteration")
+			return nil
+		}
+	}}
+	initial := f.messages(t)
+	request := model.ModelRequest{Messages: modelHistory(initial)}
+	if err := f.service.saveRunContext(ctx, runID, initial, request); err != nil {
+		t.Fatal(err)
+	}
+	f.service.executeTurns(ctx, f.conversationID, runID, computer, client, request)
+	stored := f.messages(t)
+	if client.step != 3 || len(stored) != 17 {
+		t.Fatalf("steps=%d messages=%d", client.step, len(stored))
+	}
+	for _, message := range stored {
+		if strings.Contains(message.Content, "Historical tool references") {
+			t.Fatal("projected references overwrote source history")
+		}
+		if message.Role == "tool" && !strings.Contains(message.Content, "original code line") {
+			t.Fatal("full tool result was lost")
+		}
+	}
+	var references int
+	var version string
+	if err := f.service.db.QueryRow(ctx, `SELECT (payload->'tool_context'->>'reference')::int FROM run_events WHERE run_id=$1 AND type='MODEL_STARTED' ORDER BY id DESC LIMIT 1`, runID).Scan(&references); err != nil || references != 3 {
+		t.Fatalf("context stats not recorded: references=%d err=%v", references, err)
+	}
+	if err := f.service.db.QueryRow(ctx, `SELECT context->>'tool_context_policy' FROM runs WHERE id=$1`, runID).Scan(&version); err != nil || version != toolcontext.PolicyVersion {
+		t.Fatalf("policy snapshot: %s err=%v", version, err)
+	}
+	// A later run reconstructs exactly the same policy from the unpruned DB.
+	f.service = New(f.service.db, nil, nil, nil, agenttool.NewDefaultRegistry(f.service.db))
+	nextRun := f.startRun(t, "continue")
+	client = &scriptedModel{respond: func(_ int, request model.ModelRequest) []model.ModelEvent {
+		projection, err := toolcontext.Build(modelHistory(f.messages(t)))
+		if err != nil || projection.Stats.Reference != 3 || !sameModelMessages(projection.Messages, request.Messages) {
+			t.Fatalf("reload projection changed: %+v err=%v", projection.Stats, err)
+		}
+		return []model.ModelEvent{{Delta: "continued"}}
+	}}
+	f.service.executeTurns(ctx, f.conversationID, nextRun, computer, client, model.ModelRequest{Messages: modelHistory(f.messages(t))})
+	if client.step != 1 {
+		t.Fatal("reload did not reach the model")
+	}
 }
 
 func TestTranscriptRecoveryClosesMissingResults(t *testing.T) {

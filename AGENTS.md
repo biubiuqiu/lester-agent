@@ -73,6 +73,10 @@ Preserve these behaviors when changing the implementation:
 - After acquiring a released guard, mark abandoned running records failed and fill missing tool results with explicit interrupted/unknown outcomes. Never automatically re-execute tools after a crash. Partial model streams are stored as incomplete audit records and excluded from model history.
 - Keep the default conversation GET response compatible with chat rendering (user/final assistant only); `include_internal=true` returns the full ordered transcript. Do not mistake display filtering for loss of stored context.
 - Tool-call fragments must be assembled before execution, and tool results must remain associated with the correct call ID.
+- Tool context is a request-time projection, not a storage policy. Keep the complete transcript in the execution loop and call `toolcontext.Build` before every model iteration; never persist projected references or append to pruned history.
+- Count individual ToolExchanges (call plus result), default to the latest 10 FULL, and preserve the entire latest unobserved batch. Downgrade/evict pairs atomically, including large call arguments, while keeping original assistant prose and valid mixed batches.
+- Pin unresolved tool failures, including nonzero bash exit codes; only later verified matching successes release pins. Use a strict allowlist for consumed low-value output. Keep load_skill/unknown result semantics conservative, and never replay side effects to reconstruct omitted output.
+- Reference metadata must be historical, bounded and factual. Do not fabricate edit line ranges, treat a background launch as test success, or claim character savings are exact token counts. No summary/Memory/RAG or total context budget is implied by tool-context projection.
 - Each user maps to one logical Computer and one persistent workspace volume.
 - Conversations are rooted at `/workspace/conversations/{conversationId}` inside that Computer; file APIs and terminal sessions must stay scoped to that directory.
 - User Computers default to no network access and retain CPU, memory, and PID limits.
