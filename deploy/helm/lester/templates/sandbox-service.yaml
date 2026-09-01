@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "lester.fullname" . }}-sandbox-service
+  labels:
+    {{- include "lester.labels" . | nindent 4 }}
+    app.kubernetes.io/component: sandbox-service
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels:
+      {{- include "lester.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: sandbox-service
+  template:
+    metadata:
+      {{- if or (not .Values.secrets.existingSecret) .Values.podAnnotations }}
+      annotations:
+        {{- if not .Values.secrets.existingSecret }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      labels:
+        {{- include "lester.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: sandbox-service
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      nodeSelector:
+        {{- toYaml .Values.sandbox.nodeSelector | nindent 8 }}
+      tolerations:
+        {{- toYaml .Values.sandbox.tolerations | nindent 8 }}
+      affinity:
+        {{- toYaml .Values.sandbox.affinity | nindent 8 }}
+      containers:
+        - name: sandbox-service
+          image: {{ include "lester.image" (list .Values.images.sandboxService .) }}
+          imagePullPolicy: {{ .Values.images.sandboxService.pullPolicy }}
+          env:
+            - name: HTTP_ADDR
+              value: :8090
+            - name: SANDBOX_IMAGE
+              value: {{ .Values.sandbox.image | quote }}
+            - name: SANDBOX_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "lester.secretName" . }}
+                  key: SANDBOX_SERVICE_TOKEN
+          ports:
+            - name: http
+              containerPort: 8090
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+          resources:
+            {{- toYaml .Values.resources.sandboxService | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            seccompProfile: {type: RuntimeDefault}
+          volumeMounts:
+            - name: docker-socket
+              mountPath: /var/run/docker.sock
+      volumes:
+        - name: docker-socket
+          hostPath:
+            path: {{ .Values.sandbox.dockerSocketPath | quote }}
+            type: Socket
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "lester.fullname" . }}-sandbox-service
+  labels:
+    {{- include "lester.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "lester.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: sandbox-service
+  ports:
+    - name: http
+      port: {{ .Values.service.sandboxService.port }}
+      targetPort: http

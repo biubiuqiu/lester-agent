@@ -15,7 +15,7 @@ The current implementation intentionally does not include:
 - Memory
 - browser automation
 - Artifact persistence or Computer snapshots
-- Kubernetes, Helm, or E2B sandbox providers
+- Kubernetes-native or E2B sandbox providers (the Helm deployment still uses DockerSandboxProvider)
 
 Do not implement, simulate, or silently scaffold these capabilities without an explicit request. A disabled UI placeholder must remain clearly disabled and must not imply that the feature works.
 
@@ -43,7 +43,7 @@ backend/
     model/integration/        Model provider registry and adapters
   prompts/                    embedded Agent prompts
   migrations/                 PostgreSQL migrations
-deploy/                       Docker Compose and environment templates
+deploy/                       Docker Compose, environment templates, and Helm chart
 ```
 
 This is a Monorepo with separate frontend and backend build contexts.
@@ -54,6 +54,7 @@ This is a Monorepo with separate frontend and backend build contexts.
 - `backend/internal/` contains non-exported backend implementation shared by the two Go executables.
 - Only Sandbox Service may mount the Docker Socket.
 - API and Sandbox Service must remain independently buildable and deployable.
+- Sandbox Service management, file, command, and terminal routes are private service APIs protected by `SANDBOX_SERVICE_TOKEN`; only `/healthz` is unauthenticated. Never expose Sandbox Service through Ingress or a public Service.
 
 Do not move backend implementation back to repository-root `internal/`, or frontend code back to `apps/web/`. Keep the `frontend/` and `backend/` boundary unless an explicit architecture decision changes it.
 
@@ -86,6 +87,7 @@ Preserve these behaviors when changing the implementation:
 - File browsing and previews must stay scoped to the conversation directory. Render HTML only through the authenticated preview endpoint in a sandboxed iframe; never inject workspace HTML into the Lester application DOM or grant it same-origin, form, popup, or top-navigation privileges.
 - Skill package storage must remain behind the object-store interface so MinIO can be replaced with S3 or another implementation without changing application behavior.
 - Large tool results must be bounded and must tell the model when output was truncated and how to continue.
+- Bound command stdout and stderr independently at the provider boundary. File reads must be streaming/ranged so a large file is not loaded in full merely to return a small line page.
 - `read` content uses `%6d\t%s` (1-based line number, TAB, original text). Preserve indentation and blank lines. Page at complete line boundaries with `next_offset`; do not concatenate a head and tail and imply a contiguous range. Prefixes must never be included in edit/write input.
 
 ## Backend conventions
@@ -111,6 +113,7 @@ Preserve these behaviors when changing the implementation:
 - Preserve the conversation-first interaction model and the three-panel desktop layout unless a product change explicitly replaces it.
 - Keep responsive behavior usable on mobile.
 - Do not present unavailable functionality as enabled.
+- Every asynchronous page load and mutation must surface a visible error state and prevent duplicate submission while pending. Clear conversation-scoped state before loading a different conversation.
 - Avoid introducing a state-management or UI framework unless the existing React structure is no longer sufficient and the dependency is justified.
 
 ## Local development
@@ -144,6 +147,15 @@ pnpm build
 
 Equivalent root commands are available through `make test` and `make web-check`.
 
+Validate the Helm chart with non-production test values:
+
+```bash
+helm lint deploy/helm/lester \
+  --set secrets.existingSecret=lester-test-secrets
+```
+
+The current Helm deployment requires a dedicated Kubernetes worker with Docker Engine and `/var/run/docker.sock`. Keep `sandbox-service` at one replica and pin it with `sandbox.nodeSelector`; user Computers and Docker volumes are node-local to that worker.
+
 ## Change discipline
 
 - Make the smallest coherent change that satisfies the request.
@@ -164,5 +176,6 @@ Before handing off a code change:
 3. Run `go test ./...` from `backend/` for backend changes.
 4. Run `pnpm lint` and `pnpm build` from `frontend/` for frontend changes.
 5. Validate Docker Compose paths when deployment files or repository layout changes.
-6. Update README and AGENTS guidance when the change makes either document inaccurate.
-7. Report what changed, what was verified, and any remaining limitation without overstating support.
+6. Run `helm lint` and render the chart when Helm deployment files change.
+7. Update README and AGENTS guidance when the change makes either document inaccurate.
+8. Report what changed, what was verified, and any remaining limitation without overstating support.

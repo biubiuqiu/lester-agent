@@ -1,0 +1,16 @@
+Lester has been installed.
+
+{{- if .Values.ingress.enabled }}
+Open {{ .Values.config.webOrigin }} after all pods are ready.
+{{- else }}
+Ingress is disabled. Port-forward the web and API services or enable ingress.
+For the supported same-origin setup, route /api to {{ include "lester.fullname" . }}-api
+and / to {{ include "lester.fullname" . }}-web.
+{{- end }}
+
+The chart expects PostgreSQL, Redis and S3-compatible object storage to exist,
+and all backend/migrations/*.up.sql files to have been applied in numeric order.
+
+SECURITY: sandbox-service mounts the host Docker socket. Pin it to a dedicated
+Docker Engine worker with sandbox.nodeSelector and keep its ClusterIP private.
+

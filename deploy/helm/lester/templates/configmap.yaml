@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "lester.fullname" . }}-config
+  labels:
+    {{- include "lester.labels" . | nindent 4 }}
+data:
+  WEB_ORIGIN: {{ required "config.webOrigin is required" .Values.config.webOrigin | trimSuffix "/" | quote }}
+  SESSION_COOKIE_SECURE: {{ .Values.config.sessionCookieSecure | quote }}
+  OBJECT_STORE_ENDPOINT: {{ required "config.objectStore.endpoint is required" .Values.config.objectStore.endpoint | quote }}
+  OBJECT_STORE_BUCKET: {{ required "config.objectStore.bucket is required" .Values.config.objectStore.bucket | quote }}
+  OBJECT_STORE_USE_SSL: {{ .Values.config.objectStore.useSSL | quote }}
+

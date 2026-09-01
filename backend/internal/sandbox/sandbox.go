@@ -24,10 +24,14 @@ type Command struct {
 	TimeoutSeconds int    `json:"timeout_seconds,omitempty"`
 }
 type CommandResult struct {
-	ExitCode   int    `json:"exit_code"`
-	Stdout     string `json:"stdout"`
-	Stderr     string `json:"stderr"`
-	DurationMS int64  `json:"duration_ms"`
+	ExitCode           int    `json:"exit_code"`
+	Stdout             string `json:"stdout"`
+	Stderr             string `json:"stderr"`
+	DurationMS         int64  `json:"duration_ms"`
+	StdoutTruncated    bool   `json:"stdout_truncated,omitempty"`
+	StderrTruncated    bool   `json:"stderr_truncated,omitempty"`
+	StdoutOmittedBytes int64  `json:"stdout_omitted_bytes,omitempty"`
+	StderrOmittedBytes int64  `json:"stderr_omitted_bytes,omitempty"`
 }
 type FileEntry struct {
 	Name       string    `json:"name"`
@@ -35,6 +39,15 @@ type FileEntry struct {
 	IsDir      bool      `json:"is_dir"`
 	Size       int64     `json:"size"`
 	ModifiedAt time.Time `json:"modified_at"`
+}
+type FileLine struct {
+	Text              string `json:"text"`
+	OmittedCharacters int    `json:"omitted_characters,omitempty"`
+}
+type FileLines struct {
+	Lines      []FileLine `json:"lines"`
+	StartLine  int        `json:"start_line"`
+	TotalLines int        `json:"total_lines"`
 }
 type Provider interface {
 	Create(context.Context, CreateOptions) (*Sandbox, error)
@@ -45,6 +58,7 @@ type Provider interface {
 	Destroy(context.Context, string) error
 	Exec(context.Context, string, Command) (*CommandResult, error)
 	ReadFile(context.Context, string, string, string) ([]byte, error)
+	ReadFileLines(context.Context, string, string, string, int, int) (*FileLines, error)
 	WriteFile(context.Context, string, string, string, []byte) error
 	ListFiles(context.Context, string, string, string) ([]FileEntry, error)
 }

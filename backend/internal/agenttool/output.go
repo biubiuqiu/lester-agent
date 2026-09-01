@@ -23,9 +23,11 @@ func truncateText(value string, limit int) (string, bool, int) {
 func limitCommandResult(result *sandbox.CommandResult) map[string]any {
 	stdout, stdoutTruncated, stdoutOmitted := truncateText(result.Stdout, outputCharacterLimit)
 	stderr, stderrTruncated, stderrOmitted := truncateText(result.Stderr, outputCharacterLimit)
-	limited := map[string]any{"exit_code": result.ExitCode, "stdout": stdout, "stderr": stderr, "duration_ms": result.DurationMS, "truncated": stdoutTruncated || stderrTruncated}
-	if stdoutTruncated || stderrTruncated {
+	providerTruncated := result.StdoutTruncated || result.StderrTruncated
+	limited := map[string]any{"exit_code": result.ExitCode, "stdout": stdout, "stderr": stderr, "duration_ms": result.DurationMS, "truncated": stdoutTruncated || stderrTruncated || providerTruncated}
+	if stdoutTruncated || stderrTruncated || providerTruncated {
 		limited["omitted_characters"] = stdoutOmitted + stderrOmitted
+		limited["omitted_bytes_before_tool_limit"] = result.StdoutOmittedBytes + result.StderrOmittedBytes
 		limited["notice"] = "Command output was truncated. Run a narrower command or redirect output to a file and read it in chunks."
 	}
 	return limited

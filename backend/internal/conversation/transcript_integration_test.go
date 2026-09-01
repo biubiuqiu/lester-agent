@@ -165,7 +165,7 @@ func TestTranscriptReadEditSurvivesReload(t *testing.T) {
 		w.WriteHeader(204)
 	}))
 	defer server.Close()
-	f.service.sandboxes = sandbox.NewClient(server.URL)
+	f.service.sandboxes = sandbox.NewClient(server.URL, "")
 	runID := f.startRun(t, "Read config.yaml and change port to 9090")
 	request := model.ModelRequest{Model: "test", System: "test system", Messages: modelHistory(f.messages(t)), Tools: f.service.tools.Definitions(), MaxTokens: 4096}
 	if err := f.service.saveRunContext(ctx, runID, f.messages(t), request); err != nil {
@@ -257,7 +257,7 @@ func TestToolContextProjectsEveryIterationAndReloadWithoutPruningStorage(t *test
 		_, _ = io.WriteString(w, file)
 	}))
 	defer server.Close()
-	f.service.sandboxes = sandbox.NewClient(server.URL)
+	f.service.sandboxes = sandbox.NewClient(server.URL, "")
 	runID := f.startRun(t, "inspect files")
 	computer := &Computer{SandboxID: "test", WorkDir: conversationWorkDir(f.conversationID)}
 	client := &scriptedModel{respond: func(step int, request model.ModelRequest) []model.ModelEvent {
@@ -368,7 +368,7 @@ func TestTranscriptRecoveryClosesMissingResults(t *testing.T) {
 func TestTranscriptToolFailureAndPartialStream(t *testing.T) {
 	f := newTranscriptFixture(t, false)
 	ctx := context.Background()
-	f.service.sandboxes = sandbox.NewClient("http://unused.invalid")
+	f.service.sandboxes = sandbox.NewClient("http://unused.invalid", "")
 	runID := f.startRun(t, "use a tool")
 	client := &scriptedModel{respond: func(step int, r model.ModelRequest) []model.ModelEvent {
 		if step == 0 {

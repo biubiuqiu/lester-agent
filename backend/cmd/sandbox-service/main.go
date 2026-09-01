@@ -14,7 +14,12 @@ func main() {
 		address = ":8090"
 	}
 	image := os.Getenv("SANDBOX_IMAGE")
-	handler := sandbox.NewServiceHandler(sandbox.NewDockerProvider(image))
+	token := os.Getenv("SANDBOX_SERVICE_TOKEN")
+	if len(token) < 32 {
+		slog.Error("SANDBOX_SERVICE_TOKEN must be at least 32 characters")
+		os.Exit(1)
+	}
+	handler := sandbox.NewServiceHandler(sandbox.NewDockerProvider(image), token)
 	server := &http.Server{Addr: address, Handler: handler.Router(), ReadHeaderTimeout: 10 * time.Second}
 	slog.Info("sandbox service listening", "address", address)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {

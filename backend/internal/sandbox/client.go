@@ -13,11 +13,12 @@ import (
 
 type Client struct {
 	BaseURL string
+	Token   string
 	HTTP    *http.Client
 }
 
-func NewClient(baseURL string) *Client {
-	return &Client{BaseURL: strings.TrimRight(baseURL, "/"), HTTP: http.DefaultClient}
+func NewClient(baseURL, token string) *Client {
+	return &Client{BaseURL: strings.TrimRight(baseURL, "/"), Token: token, HTTP: http.DefaultClient}
 }
 func (c *Client) Create(ctx context.Context, id string) (*Sandbox, error) {
 	var result Sandbox
@@ -26,7 +27,10 @@ func (c *Client) Create(ctx context.Context, id string) (*Sandbox, error) {
 }
 func (c *Client) Inspect(ctx context.Context, id string) (*Sandbox, error) {
 	var result Sandbox
-	request, _ := http.NewRequestWithContext(ctx, "GET", c.BaseURL+"/v1/sandboxes/"+id, nil)
+	request, err := c.request(ctx, "GET", c.BaseURL+"/v1/sandboxes/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
 	response, err := c.HTTP.Do(request)
 	if err != nil {
 		return nil, err
@@ -36,7 +40,7 @@ func (c *Client) Inspect(ctx context.Context, id string) (*Sandbox, error) {
 		return &Sandbox{ID: id, Status: "missing"}, nil
 	}
 	if response.StatusCode >= 300 {
-		data, _ := io.ReadAll(response.Body)
+		data, _ := io.ReadAll(io.LimitReader(response.Body, 1<<20))
 		return nil, fmt.Errorf("sandbox service %s: %s", response.Status, string(data))
 	}
 	err = json.NewDecoder(response.Body).Decode(&result)
@@ -53,7 +57,10 @@ func (c *Client) ListFiles(ctx context.Context, id, workDir, path string) ([]Fil
 	return result.Files, err
 }
 func (c *Client) ReadFile(ctx context.Context, id, workDir, path string) ([]byte, error) {
-	request, _ := http.NewRequestWithContext(ctx, "GET", c.BaseURL+"/v1/sandboxes/"+id+"/files/content?work_dir="+url.QueryEscape(workDir)+"&path="+url.QueryEscape(path), nil)
+	request, err := c.request(ctx, "GET", c.BaseURL+"/v1/sandboxes/"+id+"/files/content?work_dir="+url.QueryEscape(workDir)+"&path="+url.QueryEscape(path), nil)
+	if err != nil {
+		return nil, err
+	}
 	response, err := c.HTTP.Do(request)
 	if err != nil {
 		return nil, err
@@ -62,10 +69,25 @@ func (c *Client) ReadFile(ctx context.Context, id, workDir, path string) ([]byte
 	if response.StatusCode >= 300 {
 		return nil, fmt.Errorf("sandbox service: %s", response.Status)
 	}
-	return io.ReadAll(response.Body)
+	data, err := io.ReadAll(io.LimitReader(response.Body, (25<<20)+1))
+	if err == nil && len(data) > 25<<20 {
+		return nil, fmt.Errorf("sandbox file exceeds the 25 MiB read limit")
+	}
+	return data, err
+}
+func (c *Client) ReadFileLines(ctx context.Context, id, workDir, path string, offset, limit int) (*FileLines, error) {
+	var result FileLines
+	endpoint := "/v1/sandboxes/" + id + "/files/lines?work_dir=" + url.QueryEscape(workDir) + "&path=" + url.QueryEscape(path) + "&offset=" + fmt.Sprint(offset) + "&limit=" + fmt.Sprint(limit)
+	if err := c.json(ctx, "GET", endpoint, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 func (c *Client) WriteFile(ctx context.Context, id, workDir, path string, data []byte) error {
-	request, _ := http.NewRequestWithContext(ctx, "PUT", c.BaseURL+"/v1/sandboxes/"+id+"/files/content?work_dir="+url.QueryEscape(workDir)+"&path="+url.QueryEscape(path), bytes.NewReader(data))
+	request, err := c.request(ctx, "PUT", c.BaseURL+"/v1/sandboxes/"+id+"/files/content?work_dir="+url.QueryEscape(workDir)+"&path="+url.QueryEscape(path), bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
 	response, err := c.HTTP.Do(request)
 	if err != nil {
 		return err
@@ -85,7 +107,10 @@ func (c *Client) json(ctx context.Context, method, path string, input, output an
 		data, _ := json.Marshal(input)
 		body = bytes.NewReader(data)
 	}
-	request, _ := http.NewRequestWithContext(ctx, method, c.BaseURL+path, body)
+	request, err := c.request(ctx, method, c.BaseURL+path, body)
+	if err != nil {
+		return err
+	}
 	request.Header.Set("Content-Type", "application/json")
 	response, err := c.HTTP.Do(request)
 	if err != nil {
@@ -93,11 +118,19 @@ func (c *Client) json(ctx context.Context, method, path string, input, output an
 	}
 	defer response.Body.Close()
 	if response.StatusCode >= 300 {
-		data, _ := io.ReadAll(response.Body)
+		data, _ := io.ReadAll(io.LimitReader(response.Body, 1<<20))
 		return fmt.Errorf("sandbox service %s: %s", response.Status, string(data))
 	}
 	if output != nil {
 		return json.NewDecoder(response.Body).Decode(output)
 	}
 	return nil
+}
+
+func (c *Client) request(ctx context.Context, method, endpoint string, body io.Reader) (*http.Request, error) {
+	request, err := http.NewRequestWithContext(ctx, method, endpoint, body)
+	if err == nil && c.Token != "" {
+		request.Header.Set("Authorization", "Bearer "+c.Token)
+	}
+	return request, err
 }

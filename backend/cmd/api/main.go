@@ -52,10 +52,10 @@ func main() {
 		os.Exit(1)
 	}
 	modelStore := model.NewStore(db, secrets, integration.NewDefaultRegistry())
-	sandboxClient := sandbox.NewClient(cfg.SandboxURL)
+	sandboxClient := sandbox.NewClient(cfg.SandboxURL, cfg.SandboxToken)
 	toolRegistry := agenttool.NewDefaultRegistry(db)
 	conversationService := conversation.New(db, redisClient, modelStore, sandboxClient, toolRegistry)
-	conversationHandler := conversation.NewHandler(conversationService, db, redisClient, sandboxClient, cfg.SandboxURL)
+	conversationHandler := conversation.NewHandler(conversationService, db, redisClient, sandboxClient, cfg.SandboxURL, cfg.SandboxToken, cfg.WebOrigin)
 	objectStore, err := blob.NewMinIO(cfg.ObjectStoreEndpoint, cfg.ObjectStoreAccessKey, cfg.ObjectStoreSecretKey, cfg.ObjectStoreBucket, cfg.ObjectStoreUseSSL)
 	if err != nil {
 		logger.Error("object store", "error", err)
@@ -70,7 +70,7 @@ func main() {
 		logger.Error("seed skills", "error", err)
 		os.Exit(1)
 	}
-	authService := auth.New(db, cfg.SessionTTL, false)
+	authService := auth.New(db, redisClient, cfg.SessionTTL, cfg.SessionCookieSecure)
 	handler := server.Router(server.Dependencies{Logger: logger, WebOrigin: cfg.WebOrigin, Auth: authService, Models: model.NewHandler(modelStore), Conversations: conversationHandler, Skills: skill.NewHandler(skillService, conversationService)})
 	server := &http.Server{Addr: cfg.HTTPAddr, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 	go conversationService.SuspendIdle(ctx, cfg.SandboxIdleTTL)

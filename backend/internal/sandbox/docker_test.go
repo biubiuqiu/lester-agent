@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"bytes"
 	"testing"
 	"time"
 )
@@ -29,6 +30,21 @@ func TestSafeWorkDir(t *testing.T) {
 				t.Fatalf("safeWorkDir() = %q, want %q", got, test.want)
 			}
 		})
+	}
+}
+
+func TestBoundedCaptureKeepsHeadAndTail(t *testing.T) {
+	capture := newBoundedCapture(16)
+	input := []byte("0123456789abcdefghijklmnop")
+	written, err := capture.Write(input)
+	if err != nil || written != len(input) {
+		t.Fatalf("Write() = %d, %v", written, err)
+	}
+	if !capture.Truncated() || capture.OmittedBytes() != int64(len(input)-16) {
+		t.Fatalf("truncation = %v, omitted = %d", capture.Truncated(), capture.OmittedBytes())
+	}
+	if got, want := []byte(capture.String()), append(append([]byte(nil), input[:12]...), input[len(input)-4:]...); !bytes.Equal(got, want) {
+		t.Fatalf("String() = %q, want %q", got, want)
 	}
 }
 

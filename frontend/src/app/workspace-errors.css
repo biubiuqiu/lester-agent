@@ -1,0 +1,22 @@
+.workspace-error {
+  position: absolute;
+  z-index: 4;
+  top: 76px;
+  right: 20px;
+  left: 20px;
+  border: 1px solid #efd5d0;
+  border-radius: 9px;
+  background: #fff4f1;
+  padding: 9px 12px;
+  color: #96584f;
+  font-size: 10px;
+  box-shadow: 0 5px 18px rgba(82, 47, 42, 0.08);
+}
+
+.workspace-loading {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  color: var(--faint);
+  font-size: 11px;
+}

@@ -325,17 +325,46 @@ func (s *Service) executeTurns(ctx context.Context, conversationID, runID uuid.U
 			s.fail(ctx, runID, conversationID, err)
 			return
 		}
-		text := ""
+		var text, pendingDelta strings.Builder
+		flushDelta := func() {
+			if pendingDelta.Len() == 0 {
+				return
+			}
+			s.event(ctx, runID, conversationID, "MODEL_DELTA", map[string]any{"delta": pendingDelta.String()})
+			pendingDelta.Reset()
+		}
+		deltaTicker := time.NewTicker(75 * time.Millisecond)
 		callsByIndex := map[int]*model.ToolCall{}
-		for event := range stream {
+		streamOpen := true
+		for streamOpen {
+			var event model.ModelEvent
+			var ok bool
+			select {
+			case event, ok = <-stream:
+				if !ok {
+					streamOpen = false
+					continue
+				}
+			case <-deltaTicker.C:
+				flushDelta()
+				continue
+			case <-ctx.Done():
+				streamOpen = false
+				continue
+			}
 			if event.Err != nil {
-				s.savePartialResponse(runID, conversationID, text, callsByIndex)
+				deltaTicker.Stop()
+				flushDelta()
+				s.savePartialResponse(runID, conversationID, text.String(), callsByIndex)
 				s.fail(ctx, runID, conversationID, event.Err)
 				return
 			}
 			if event.Delta != "" {
-				text += event.Delta
-				s.event(ctx, runID, conversationID, "MODEL_DELTA", map[string]any{"delta": event.Delta})
+				text.WriteString(event.Delta)
+				pendingDelta.WriteString(event.Delta)
+				if pendingDelta.Len() >= 2048 {
+					flushDelta()
+				}
 			}
 			if event.ToolCall != nil {
 				call := callsByIndex[event.ToolCall.Index]
@@ -354,18 +383,20 @@ func (s *Service) executeTurns(ctx context.Context, conversationID, runID uuid.U
 				}
 			}
 		}
+		deltaTicker.Stop()
+		flushDelta()
 		if ctx.Err() != nil {
-			s.savePartialResponse(runID, conversationID, text, callsByIndex)
+			s.savePartialResponse(runID, conversationID, text.String(), callsByIndex)
 			s.fail(ctx, runID, conversationID, ctx.Err())
 			return
 		}
 		calls, err := assembledToolCalls(callsByIndex)
 		if err != nil {
-			s.savePartialResponse(runID, conversationID, text, callsByIndex)
+			s.savePartialResponse(runID, conversationID, text.String(), callsByIndex)
 			s.fail(ctx, runID, conversationID, err)
 			return
 		}
-		assistant := model.Message{Role: "assistant", Content: text, ToolCalls: calls, RunID: runID.String()}
+		assistant := model.Message{Role: "assistant", Content: text.String(), ToolCalls: calls, RunID: runID.String()}
 		if err = s.appendMessage(ctx, conversationID, runID, assistant, "", nil); err != nil {
 			s.fail(ctx, runID, conversationID, err)
 			return

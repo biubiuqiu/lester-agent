@@ -29,6 +29,9 @@ export default function Models() {
   const [deployments, setDeployments] = useState<Deployment[]>([]);
   const [provider, setProvider] = useState("openai");
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState<"connection" | "deployment" | "">("");
+  const [loading, setLoading] = useState(true);
 
   async function load() {
     const [c, d] = await Promise.all([
@@ -40,50 +43,73 @@ export default function Models() {
   }
 
   useEffect(() => {
+    let active = true;
     void Promise.all([
       api<{ connections: Connection[] }>("/api/v1/model-connections"),
       api<{ deployments: Deployment[] }>("/api/v1/model-deployments"),
     ]).then(([c, d]) => {
+      if (!active) return;
       setConnections(c.connections);
       setDeployments(d.deployments);
-    });
+    }).catch((reason: unknown) => {
+      if (active) setError(reason instanceof Error ? reason.message : "模型配置加载失败");
+    }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
 
   async function addConnection(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
-    await api("/api/v1/model-connections", {
-      method: "POST",
-      body: JSON.stringify({
-        name: data.get("name"),
-        provider,
-        endpoint: data.get("endpoint"),
-        credential: data.get("credential"),
-        config: parseJSON(String(data.get("config") || "{}")),
-      }),
-    });
-    form.reset();
-    setMessage("Provider Connection 已保存");
-    await load();
+    setBusy("connection");
+    setError("");
+    setMessage("");
+    try {
+      await api("/api/v1/model-connections", {
+        method: "POST",
+        body: JSON.stringify({
+          name: data.get("name"),
+          provider,
+          endpoint: data.get("endpoint"),
+          credential: data.get("credential"),
+          config: parseJSON(String(data.get("config") || "{}")),
+        }),
+      });
+      form.reset();
+      setMessage("Provider Connection 已保存");
+      await load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Provider Connection 保存失败");
+    } finally {
+      setBusy("");
+    }
   }
 
   async function addDeployment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
-    await api("/api/v1/model-deployments", {
-      method: "POST",
-      body: JSON.stringify({
-        connection_id: data.get("connection"),
-        name: data.get("name"),
-        model_id: data.get("model"),
-        is_default: data.get("default") === "on",
-      }),
-    });
-    form.reset();
-    setMessage("Model Deployment 已保存");
-    await load();
+    setBusy("deployment");
+    setError("");
+    setMessage("");
+    try {
+      await api("/api/v1/model-deployments", {
+        method: "POST",
+        body: JSON.stringify({
+          connection_id: data.get("connection"),
+          name: data.get("name"),
+          model_id: data.get("model"),
+          is_default: data.get("default") === "on",
+        }),
+      });
+      form.reset();
+      setMessage("Model Deployment 已保存");
+      await load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Model Deployment 保存失败");
+    } finally {
+      setBusy("");
+    }
   }
 
   return (
@@ -104,6 +130,7 @@ export default function Models() {
           {message}
         </p>
       )}
+      {error ? <p className="settings-error" role="alert">{error}</p> : null}
       <section className="settings-grid">
         <form className="settings-card" onSubmit={addConnection}>
           <header>
@@ -146,8 +173,8 @@ export default function Models() {
             Provider config JSON
             <textarea name="config" rows={3} defaultValue="{}" />
           </label>
-          <button className="primary-button">
-            <Plus />保存连接
+          <button className="primary-button" disabled={busy !== ""}>
+            <Plus />{busy === "connection" ? "保存中…" : "保存连接"}
           </button>
         </form>
         <form className="settings-card" onSubmit={addDeployment}>
@@ -182,8 +209,8 @@ export default function Models() {
           <label className="check-field">
             <input type="checkbox" name="default" />设为 Workspace 默认模型
           </label>
-          <button className="primary-button">
-            <Plus />保存 Deployment
+          <button className="primary-button" disabled={busy !== "" || connections.length === 0}>
+            <Plus />{busy === "deployment" ? "保存中…" : "保存 Deployment"}
           </button>
         </form>
       </section>
@@ -191,7 +218,7 @@ export default function Models() {
         <h2>已配置</h2>
         <div className="provider-list">
           {connections.length === 0 ? (
-            <p className="muted-block">还没有 Provider Connection。</p>
+            <p className="muted-block">{loading ? "正在载入…" : "还没有 Provider Connection。"}</p>
           ) : (
             connections.map((item) => (
               <article key={item.id}>

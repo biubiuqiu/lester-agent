@@ -43,6 +43,8 @@ export function Workspace({ conversationId }: { conversationId?: string }) {
   const [dialog, setDialog] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState("");
+  const [streamError, setStreamError] = useState({ conversationId: "", message: "" });
 
   useEffect(() => {
     Promise.all([
@@ -53,6 +55,8 @@ export function Workspace({ conversationId }: { conversationId?: string }) {
       setConversations(conversationResult.conversations);
       setDeployments(deploymentResult.deployments);
       setUser(userResult);
+    }).catch((reason: unknown) => {
+      setPageError(reason instanceof Error ? reason.message : "工作区加载失败");
     }).finally(() => setLoading(false));
   }, []);
 
@@ -64,11 +68,20 @@ export function Workspace({ conversationId }: { conversationId?: string }) {
       if (!active) return;
       setCurrent(data.conversation);
       setMessages(data.messages);
+      setPageError("");
+    }).catch((reason: unknown) => {
+      if (active) setPageError(reason instanceof Error ? reason.message : "对话加载失败");
     });
     void refresh();
     const stream = new EventSource(`${API}/api/v1/conversations/${conversationId}/events`, { withCredentials: true });
     stream.onmessage = (message) => {
-      const incoming = JSON.parse(message.data) as RunEvent;
+      let incoming: RunEvent;
+      try {
+        incoming = JSON.parse(message.data) as RunEvent;
+      } catch {
+        setStreamError({ conversationId, message: "收到无法解析的运行事件，正在等待重新连接" });
+        return;
+      }
       const event = { ...incoming, conversation_id: incoming.conversation_id || conversationId };
       if (seenEventIds.current.has(event.id)) return;
       seenEventIds.current.add(event.id);
@@ -83,13 +96,24 @@ export function Workspace({ conversationId }: { conversationId?: string }) {
         void refresh();
       }
     };
+    stream.onopen = () => {
+      if (active) setStreamError({ conversationId, message: "" });
+    };
+    stream.onerror = () => {
+      if (active) setStreamError({ conversationId, message: "实时连接暂时中断，浏览器正在自动重连" });
+    };
     return () => { active = false; stream.close(); };
   }, [conversationId]);
 
   async function chooseModel(id: string) {
     if (!conversationId) return;
-    await api(`/api/v1/conversations/${conversationId}`, { method: "PATCH", body: JSON.stringify({ model_deployment_id: id }) });
-    setCurrent((value) => value ? { ...value, model_deployment_id: id } : value);
+    setPageError("");
+    try {
+      await api(`/api/v1/conversations/${conversationId}`, { method: "PATCH", body: JSON.stringify({ model_deployment_id: id }) });
+      setCurrent((value) => value ? { ...value, model_deployment_id: id } : value);
+    } catch (reason) {
+      setPageError(reason instanceof Error ? reason.message : "模型切换失败");
+    }
   }
 
   async function sendMessage(content: string, attachments: Attachment[]) {
@@ -113,6 +137,8 @@ export function Workspace({ conversationId }: { conversationId?: string }) {
   }
 
   const runState = runStatus.conversationId === conversationId ? runStatus.state : "idle";
+  const displayedCurrent = current?.id === conversationId ? current : null;
+  const visibleError = pageError || (streamError.conversationId === conversationId ? streamError.message : "");
   const activeLabel = runState === "sending" ? "发送中" : runState === "running" ? "正在工作" : runState === "failed" ? "上次运行失败" : "在线";
   return <main className="workspace-shell">
     <aside className={`conversation-sidebar ${mobileMenu ? "mobile-open" : ""}`}>
@@ -120,11 +146,12 @@ export function Workspace({ conversationId }: { conversationId?: string }) {
       <div className="conversation-list">{loading ? <p className="muted-block">正在载入…</p> : conversations.map((item) => <button key={item.id} className={`conversation-item ${item.id === conversationId ? "active" : ""}`} onClick={() => router.push(`/app/c/${item.id}`)}><span className="mini-agent">{agentName(item.agent_slug)[0]}</span><span><strong>{item.title}</strong><small>{agentName(item.agent_slug)} · {relativeTime(item.updated_at)}</small></span></button>)}</div>
       <div className="sidebar-footer"><UserMenu user={user} /></div>
     </aside>
-    <section className={`conversation-main ${current ? "" : "empty-conversation"}`}>
-      <header className="conversation-header"><button className="icon-button mobile-menu" onClick={() => setMobileMenu(true)}><Menu /></button>{current ? <><div className="agent-heading"><span className="agent-avatar">{agentName(current.agent_slug)[0]}</span><span><strong>{agentName(current.agent_slug)}</strong><small className={`run-state ${runState}`}>{activeLabel}</small></span></div><label className="model-selector"><select value={current.model_deployment_id || ""} onChange={(event) => chooseModel(event.target.value)}>{deployments.length === 0 ? <option value="">请先配置模型</option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown /></label></> : <><Brand /><button className="new-button mobile-new" onClick={() => setDialog(true)}><Plus />新对话</button></>}</header>
-      {current ? <ConversationView conversation={current} messages={messages} events={events.filter((event) => event.conversation_id === current.id)} runState={runState} onSend={sendMessage} /> : <EmptyState onNew={() => setDialog(true)} />}
+    <section className={`conversation-main ${displayedCurrent ? "" : "empty-conversation"}`}>
+      <header className="conversation-header"><button className="icon-button mobile-menu" onClick={() => setMobileMenu(true)}><Menu /></button>{displayedCurrent ? <><div className="agent-heading"><span className="agent-avatar">{agentName(displayedCurrent.agent_slug)[0]}</span><span><strong>{agentName(displayedCurrent.agent_slug)}</strong><small className={`run-state ${runState}`}>{activeLabel}</small></span></div><label className="model-selector"><select value={displayedCurrent.model_deployment_id || ""} onChange={(event) => chooseModel(event.target.value)}>{deployments.length === 0 ? <option value="">请先配置模型</option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown /></label></> : <><Brand /><button className="new-button mobile-new" onClick={() => setDialog(true)}><Plus />新对话</button></>}</header>
+      {visibleError ? <div className="workspace-error" role="alert">{visibleError}</div> : null}
+      {displayedCurrent ? <ConversationView conversation={displayedCurrent} messages={messages} events={events.filter((event) => event.conversation_id === displayedCurrent.id)} runState={runState} onSend={sendMessage} /> : loading || conversationId ? <div className="workspace-loading">正在载入对话…</div> : <EmptyState onNew={() => setDialog(true)} />}
     </section>
-    {current ? <ComputerPanel conversationId={current.id} /> : null}
+    {displayedCurrent ? <ComputerPanel conversationId={displayedCurrent.id} /> : null}
     {dialog ? <NewConversation deployments={deployments} onClose={() => setDialog(false)} /> : null}
   </main>;
 }
@@ -173,15 +200,19 @@ function NewConversation({ deployments, onClose }: { deployments: Deployment[]; 
   const [selected, setSelected] = useState("lester");
   const [model, setModel] = useState(deployments.find((deployment) => deployment.is_default)?.id || deployments[0]?.id || "");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   async function create() {
     setBusy(true);
+    setError("");
     try {
       const item = await api<Conversation>("/api/v1/conversations", { method: "POST", body: JSON.stringify({ agent_slug: selected, model_deployment_id: model, title: "新对话" }) });
       router.push(`/app/c/${item.id}`);
       onClose();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "创建对话失败");
     } finally { setBusy(false); }
   }
-  return <div className="dialog-backdrop" role="presentation"><section className="dialog" role="dialog" aria-modal><header><div><p className="eyebrow">New mission</p><h2>选择这段对话的 Agent</h2></div><button className="icon-button" onClick={onClose}><X /></button></header><div className="agent-grid">{agents.map((agent) => <button key={agent.slug} className={`agent-option ${selected === agent.slug ? "selected" : ""}`} onClick={() => setSelected(agent.slug)}><span>{agent.initial}</span><strong>{agent.name}</strong><small>{agent.copy}</small></button>)}</div><label className="field">模型<select value={model} onChange={(event) => setModel(event.target.value)}>{deployments.length === 0 ? <option value="">先去设置模型</option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><footer><button className="secondary-button" onClick={onClose}>取消</button><button className="primary-button" onClick={create} disabled={busy || !model}>{busy ? "创建中…" : "创建对话"}</button></footer></section></div>;
+  return <div className="dialog-backdrop" role="presentation"><section className="dialog" role="dialog" aria-modal><header><div><p className="eyebrow">New mission</p><h2>选择这段对话的 Agent</h2></div><button className="icon-button" onClick={onClose}><X /></button></header><div className="agent-grid">{agents.map((agent) => <button key={agent.slug} className={`agent-option ${selected === agent.slug ? "selected" : ""}`} onClick={() => setSelected(agent.slug)}><span>{agent.initial}</span><strong>{agent.name}</strong><small>{agent.copy}</small></button>)}</div><label className="field">模型<select value={model} onChange={(event) => setModel(event.target.value)}>{deployments.length === 0 ? <option value="">先去设置模型</option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>{error ? <p className="settings-error" role="alert">{error}</p> : null}<footer><button className="secondary-button" onClick={onClose}>取消</button><button className="primary-button" onClick={create} disabled={busy || !model}>{busy ? "创建中…" : "创建对话"}</button></footer></section></div>;
 }
 
 const computerStatusLabel: Record<ComputerState["status"], string> = { not_created: "未创建", creating: "创建中", running: "运行中", suspended: "已暂停", stopped: "已停止", unhealthy: "异常", missing: "待恢复", error: "连接异常" };
@@ -238,7 +269,7 @@ function Terminal({ conversationId }: { conversationId: string }) {
       const instance = new Terminal({ cursorBlink: true, fontSize: 12, theme: { background: "#151a16", foreground: "#dce6dd" } });
       const fit = new FitAddon();
       instance.loadAddon(fit); instance.open(mount.current); fit.fit(); instance.write("Lester Computer\r\nConnecting…\r\n");
-      const endpoint = new URL(`${API}/api/v1/conversations/${conversationId}/terminal`);
+      const endpoint = new URL(`${API}/api/v1/conversations/${conversationId}/terminal`, window.location.origin);
       endpoint.protocol = endpoint.protocol === "https:" ? "wss:" : "ws:";
       socket = new WebSocket(endpoint);
       socket.onmessage = (event) => { const data = JSON.parse(event.data); if (data.Type === "output" || data.type === "output") instance.write(data.Data || data.data); };

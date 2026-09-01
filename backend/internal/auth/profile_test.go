@@ -1,8 +1,10 @@
 package auth
 
 import (
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNormalizeProfile(t *testing.T) {
@@ -28,5 +30,19 @@ func TestNormalizeProfile(t *testing.T) {
 				t.Fatalf("normalizeProfile() name = %q, want %q", name, test.wantName)
 			}
 		})
+	}
+}
+
+func TestSessionCookieSecureConfiguration(t *testing.T) {
+	service := New(nil, nil, time.Hour, true)
+	session, err := newSession(time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	service.setCookie(recorder, session)
+	cookies := recorder.Result().Cookies()
+	if len(cookies) != 1 || !cookies[0].Secure || !cookies[0].HttpOnly {
+		t.Fatalf("session cookie = %#v", cookies)
 	}
 }

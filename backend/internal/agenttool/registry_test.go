@@ -93,6 +93,17 @@ func (f *fakeSandbox) Exec(context.Context, string, sandbox.Command) (*sandbox.C
 func (f *fakeSandbox) ReadFile(_ context.Context, _, _, path string) ([]byte, error) {
 	return append([]byte(nil), f.files[path]...), nil
 }
+func (f *fakeSandbox) ReadFileLines(_ context.Context, _, _, path string, offset, limit int) (*sandbox.FileLines, error) {
+	content := string(f.files[path])
+	lines := fileLines(content)
+	start := min(offset-1, len(lines))
+	end := min(start+limit, len(lines))
+	result := &sandbox.FileLines{StartLine: offset, TotalLines: len(lines)}
+	for _, line := range lines[start:end] {
+		result.Lines = append(result.Lines, sandbox.FileLine{Text: line})
+	}
+	return result, nil
+}
 func (f *fakeSandbox) WriteFile(_ context.Context, _, _, path string, data []byte) error {
 	f.files[path] = append([]byte(nil), data...)
 	return nil

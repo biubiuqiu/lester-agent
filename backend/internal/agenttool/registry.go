@@ -17,6 +17,7 @@ type EventEmitter func(eventType string, payload map[string]any)
 type Sandbox interface {
 	Exec(context.Context, string, sandbox.Command) (*sandbox.CommandResult, error)
 	ReadFile(context.Context, string, string, string) ([]byte, error)
+	ReadFileLines(context.Context, string, string, string, int, int) (*sandbox.FileLines, error)
 	WriteFile(context.Context, string, string, string, []byte) error
 	ListFiles(context.Context, string, string, string) ([]sandbox.FileEntry, error)
 }

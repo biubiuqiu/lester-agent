@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
+	"github.com/biubiuqiu/lester-agent/backend/internal/sandbox"
 )
 
 type Read struct{}
@@ -51,11 +52,11 @@ func (Read) Execute(ctx context.Context, environment Environment, raw json.RawMe
 	if offset < 1 || limit < 1 || limit > 2000 {
 		return nil, errors.New("offset must be at least 1 and limit must be between 1 and 2000")
 	}
-	data, err := environment.Sandboxes.ReadFile(ctx, environment.SandboxID, environment.WorkDir, filePath)
+	data, err := environment.Sandboxes.ReadFileLines(ctx, environment.SandboxID, environment.WorkDir, filePath, offset, limit)
 	if err != nil {
 		return nil, err
 	}
-	return numberedReadResult(string(data), offset, limit), nil
+	return numberedLinesResult(data), nil
 }
 
 func sliceLines(content string, offset, limit int) (string, int, int) {
@@ -82,18 +83,29 @@ func numberedReadResult(content string, offset, limit int) map[string]any {
 	lines := fileLines(content)
 	start := min(offset-1, len(lines))
 	end := min(start+limit, len(lines))
+	chunk := &sandbox.FileLines{StartLine: offset, TotalLines: len(lines)}
+	for _, line := range lines[start:end] {
+		chunk.Lines = append(chunk.Lines, sandbox.FileLine{Text: line})
+	}
+	return numberedLinesResult(chunk)
+}
+
+func numberedLinesResult(chunk *sandbox.FileLines) map[string]any {
 	var output strings.Builder
 	count, characters, omitted := 0, 0, 0
 	longLines := []int{}
-	for index := start; index < end; index++ {
-		line := lines[index]
+	for index, item := range chunk.Lines {
+		line := item.Text
 		runes := []rune(line)
-		lineOmitted := 0
+		lineOmitted := item.OmittedCharacters
 		if len(runes) > 2000 {
-			lineOmitted = len(runes) - 2000
+			lineOmitted += len(runes) - 2000
 			line = string(runes[:2000]) + fmt.Sprintf(" [line truncated: %d characters omitted]", lineOmitted)
+		} else if lineOmitted > 0 {
+			line += fmt.Sprintf(" [line truncated: %d characters omitted]", lineOmitted)
 		}
-		formatted := fmt.Sprintf("%6d\t%s", index+1, line)
+		lineNumber := chunk.StartLine + index
+		formatted := fmt.Sprintf("%6d\t%s", lineNumber, line)
 		needed := utf8.RuneCountInString(formatted)
 		if count > 0 {
 			needed++
@@ -109,13 +121,13 @@ func numberedReadResult(content string, offset, limit int) map[string]any {
 		count++
 		omitted += lineOmitted
 		if lineOmitted > 0 {
-			longLines = append(longLines, index+1)
+			longLines = append(longLines, lineNumber)
 		}
 	}
-	hasMore := start+count < len(lines)
-	result := map[string]any{"content": output.String(), "start_line": offset, "line_count": count, "total_lines": len(lines), "truncated": hasMore || len(longLines) > 0}
+	hasMore := chunk.StartLine-1+count < chunk.TotalLines
+	result := map[string]any{"content": output.String(), "start_line": chunk.StartLine, "line_count": count, "total_lines": chunk.TotalLines, "truncated": hasMore || len(longLines) > 0}
 	if hasMore {
-		result["next_offset"] = start + count + 1
+		result["next_offset"] = chunk.StartLine + count
 		result["notice"] = "Partial file view. Continue with next_offset; line numbers and the separating TAB are not file content."
 	}
 	if len(longLines) > 0 {

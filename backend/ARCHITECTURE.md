@@ -33,7 +33,11 @@ One dedicated PostgreSQL session per active run holds a conversation advisory lo
 
 The default conversation HTTP response filters internal messages for compatibility with the existing timeline. `?include_internal=true` exposes all stored records after the same workspace authorization. Model-history reconstruction loads the complete ordered transcript, except explicitly incomplete streamed responses; each model request then applies the tool-context projection described below.
 
-`read` uses cat-n-style line prefixes and bounded contiguous pages, with an exact `next_offset`. Very long lines are individually marked truncated; their remainder requires a narrower inspection. File content/indentation is never rewritten by numbering.
+`read` uses the Sandbox Service's streaming line-range endpoint rather than loading an entire file into API memory. It uses cat-n-style line prefixes and bounded contiguous pages, with an exact `next_offset`. Very long lines are individually marked truncated; their remainder requires a narrower inspection. File content/indentation is never rewritten by numbering. Raw file access is capped at 25 MiB, directory listings at 500 entries, and command stdout/stderr at 256 KiB per stream before the model-facing character limit is applied.
+
+`MODEL_DELTA` events are coalesced by time/size before PostgreSQL insertion. SSE subscribes to Redis before reading durable history, sends numeric event IDs, honors `Last-Event-ID`, deduplicates the subscribe/query overlap, and bounds every history replay to the most recent 1,200 events. PostgreSQL remains authoritative; Redis only carries events that have already been inserted.
+
+Sandbox Service is an internal trust boundary. `/healthz` is public for probes, while every lifecycle, command, file, and terminal route requires the shared `SANDBOX_SERVICE_TOKEN`. The API adds this token to HTTP and WebSocket upstream requests. Deployment configuration must keep the service private even though the token provides defense in depth.
 
 ## Tool context projection
 

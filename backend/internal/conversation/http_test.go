@@ -37,3 +37,18 @@ func TestPreviewContentSecurityPolicyAllowsOnlyCurrentAssetOrigin(t *testing.T) 
 		}
 	}
 }
+
+func TestLastEventID(t *testing.T) {
+	request := httptest.NewRequest("GET", "http://localhost/events?last_event_id=17", nil)
+	if got := lastEventID(request); got != 17 {
+		t.Fatalf("query last event id = %d", got)
+	}
+	request.Header.Set("Last-Event-ID", "23")
+	if got := lastEventID(request); got != 23 {
+		t.Fatalf("header last event id = %d", got)
+	}
+	request.Header.Set("Last-Event-ID", "invalid")
+	if got := lastEventID(request); got != 0 {
+		t.Fatalf("invalid last event id = %d", got)
+	}
+}

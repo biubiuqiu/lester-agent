@@ -1,0 +1,79 @@
+nameOverride: ""
+fullnameOverride: ""
+
+imagePullSecrets: []
+
+images:
+  api:
+    repository: ghcr.io/biubiuqiu/lester-agent-api
+    tag: ""
+    pullPolicy: IfNotPresent
+  web:
+    repository: ghcr.io/biubiuqiu/lester-agent-web
+    tag: ""
+    pullPolicy: IfNotPresent
+  sandboxService:
+    repository: ghcr.io/biubiuqiu/lester-agent-sandbox-service
+    tag: ""
+    pullPolicy: IfNotPresent
+
+replicaCount:
+  api: 1
+  web: 1
+
+config:
+  # Must exactly match the public browser origin, without a trailing slash.
+  webOrigin: https://lester.example.com
+  sessionCookieSecure: true
+  objectStore:
+    endpoint: s3.example.com
+    bucket: lester-skills
+    useSSL: true
+
+secrets:
+  # If set, the chart does not create a Secret. The referenced Secret must
+  # contain DATABASE_URL, REDIS_URL, MASTER_KEY_BASE64,
+  # SANDBOX_SERVICE_TOKEN, OBJECT_STORE_ACCESS_KEY and OBJECT_STORE_SECRET_KEY.
+  existingSecret: ""
+  databaseURL: ""
+  redisURL: ""
+  masterKeyBase64: ""
+  sandboxServiceToken: ""
+  objectStoreAccessKey: ""
+  objectStoreSecretKey: ""
+
+service:
+  api:
+    port: 8080
+  web:
+    port: 3000
+  sandboxService:
+    port: 8090
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: lester.example.com
+  tls: []
+
+sandbox:
+  image: python:3.12-slim
+  # The current DockerSandboxProvider requires a Docker Engine Unix socket.
+  # Pin this pod to a dedicated worker that provides this socket.
+  dockerSocketPath: /var/run/docker.sock
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+networkPolicy:
+  enabled: false
+
+resources:
+  api: {}
+  web: {}
+  sandboxService: {}
+
+podAnnotations: {}
+podLabels: {}
+

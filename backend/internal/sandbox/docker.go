@@ -162,9 +162,9 @@ func (p *DockerProvider) Exec(ctx context.Context, id string, command Command) (
 	defer cancel()
 	start := time.Now()
 	cmd := exec.CommandContext(runCtx, "docker", "exec", "-w", workDir, name, "sh", "-lc", command.Command)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	stdout, stderr := newBoundedCapture(commandCaptureLimit), newBoundedCapture(commandCaptureLimit)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 	err = cmd.Run()
 	exitCode := 0
 	if err != nil {
@@ -175,7 +175,7 @@ func (p *DockerProvider) Exec(ctx context.Context, id string, command Command) (
 			return nil, err
 		}
 	}
-	return &CommandResult{ExitCode: exitCode, Stdout: stdout.String(), Stderr: stderr.String(), DurationMS: time.Since(start).Milliseconds()}, nil
+	return &CommandResult{ExitCode: exitCode, Stdout: stdout.String(), Stderr: stderr.String(), DurationMS: time.Since(start).Milliseconds(), StdoutTruncated: stdout.Truncated(), StderrTruncated: stderr.Truncated(), StdoutOmittedBytes: stdout.OmittedBytes(), StderrOmittedBytes: stderr.OmittedBytes()}, nil
 }
 
 func (p *DockerProvider) ListFiles(ctx context.Context, id, workDir, filePath string) ([]FileEntry, error) {
@@ -187,9 +187,11 @@ func (p *DockerProvider) ListFiles(ctx context.Context, id, workDir, filePath st
 base=os.path.realpath(sys.argv[1]); target=os.path.realpath(sys.argv[2])
 if os.path.commonpath([base,target]) != base: raise PermissionError("path escapes conversation")
 result=[]
-for name in os.listdir(target):
- item=os.path.join(target,name); stat=os.stat(item)
- result.append({"name":name,"path":os.path.relpath(item,base),"is_dir":os.path.isdir(item),"size":stat.st_size,"modified_at":datetime.datetime.fromtimestamp(stat.st_mtime,datetime.timezone.utc).isoformat()})
+with os.scandir(target) as entries:
+ for index,entry in enumerate(entries):
+  if index>=500: raise ValueError("directory contains more than 500 entries; use bash with a narrower path or filter")
+  stat=entry.stat(); item=entry.path
+  result.append({"name":entry.name,"path":os.path.relpath(item,base),"is_dir":entry.is_dir(),"size":stat.st_size,"modified_at":datetime.datetime.fromtimestamp(stat.st_mtime,datetime.timezone.utc).isoformat()})
 print(json.dumps(result))`
 	result, err := p.Exec(ctx, id, Command{WorkDir: "/workspace", Command: "python -c " + shellQuote(script) + " " + shellQuote(base) + " " + shellQuote(target)})
 	if err != nil {
@@ -197,6 +199,9 @@ print(json.dumps(result))`
 	}
 	if result.ExitCode != 0 {
 		return nil, errors.New(strings.TrimSpace(result.Stderr))
+	}
+	if result.StdoutTruncated {
+		return nil, errors.New("directory listing exceeds the 256 KiB response limit; use a narrower path")
 	}
 	var entries []FileEntry
 	if err = json.Unmarshal([]byte(result.Stdout), &entries); err != nil {
@@ -214,7 +219,10 @@ func (p *DockerProvider) ReadFile(ctx context.Context, id, workDir, filePath str
 	script := `import os,sys
 base=os.path.realpath(sys.argv[1]); target=os.path.realpath(sys.argv[2])
 if os.path.commonpath([base,target]) != base: raise PermissionError("path escapes conversation")
-with open(target,"rb") as handle: sys.stdout.buffer.write(handle.read())`
+with open(target,"rb") as handle:
+ data=handle.read(26214401)
+ if len(data)>26214400: raise ValueError("file exceeds the 25 MiB read limit")
+ sys.stdout.buffer.write(data)`
 	output, readErr := exec.CommandContext(ctx, "docker", "exec", name, "python", "-c", script, base, target).Output()
 	if readErr != nil {
 		return nil, fmt.Errorf("read sandbox file: %w", readErr)
@@ -222,7 +230,55 @@ with open(target,"rb") as handle: sys.stdout.buffer.write(handle.read())`
 	return output, nil
 }
 
+func (p *DockerProvider) ReadFileLines(ctx context.Context, id, workDir, filePath string, offset, limit int) (*FileLines, error) {
+	base, target, err := scopedPath(workDir, filePath)
+	if err != nil {
+		return nil, err
+	}
+	if offset < 1 || limit < 1 || limit > 2000 {
+		return nil, errors.New("invalid file line range")
+	}
+	name, _ := containerName(id)
+	script := `import codecs,json,os,sys
+base=os.path.realpath(sys.argv[1]); target=os.path.realpath(sys.argv[2]); offset=int(sys.argv[3]); limit=int(sys.argv[4])
+if os.path.commonpath([base,target]) != base: raise PermissionError("path escapes conversation")
+if os.path.getsize(target)>26214400: raise ValueError("file exceeds the 25 MiB read limit")
+lines=[]; total=0; kept=[]; chars=0; omitted=0
+def finish():
+ global total,kept,chars,omitted
+ total+=1
+ if offset <= total < offset+limit: lines.append({"text":"".join(kept),"omitted_characters":omitted})
+ kept=[]; chars=0; omitted=0
+decoder=codecs.getincrementaldecoder("utf-8")("replace")
+with open(target,"rb") as handle:
+ while True:
+  chunk=handle.read(65536)
+  text=decoder.decode(chunk,final=not chunk)
+  for char in text:
+   if char=="\n": finish()
+   else:
+    chars+=1
+    if offset <= total+1 < offset+limit:
+     if len(kept)<2000: kept.append(char)
+     else: omitted+=1
+  if not chunk: break
+if chars>0: finish()
+print(json.dumps({"lines":lines,"start_line":offset,"total_lines":total},ensure_ascii=False))`
+	output, readErr := exec.CommandContext(ctx, "docker", "exec", name, "python", "-c", script, base, target, fmt.Sprint(offset), fmt.Sprint(limit)).CombinedOutput()
+	if readErr != nil {
+		return nil, fmt.Errorf("read sandbox file lines: %w: %s", readErr, output)
+	}
+	var result FileLines
+	if err = json.Unmarshal(output, &result); err != nil {
+		return nil, fmt.Errorf("decode sandbox file lines: %w", err)
+	}
+	return &result, nil
+}
+
 func (p *DockerProvider) WriteFile(ctx context.Context, id, workDir, filePath string, data []byte) error {
+	if len(data) > 25<<20 {
+		return errors.New("file exceeds the 25 MiB write limit")
+	}
 	base, target, err := scopedPath(workDir, filePath)
 	if err != nil {
 		return err

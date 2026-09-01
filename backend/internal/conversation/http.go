@@ -1,7 +1,6 @@
 package conversation
 
 import (
-	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,7 +9,9 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/biubiuqiu/lester-agent/backend/internal/auth"
 	"github.com/biubiuqiu/lester-agent/backend/internal/httpapi"
@@ -23,16 +24,17 @@ import (
 )
 
 type Handler struct {
-	service    *Service
-	db         *pgxpool.Pool
-	redis      *redis.Client
-	sandboxes  *sandbox.Client
-	sandboxURL string
-	upgrader   websocket.Upgrader
+	service      *Service
+	db           *pgxpool.Pool
+	redis        *redis.Client
+	sandboxes    *sandbox.Client
+	sandboxURL   string
+	sandboxToken string
+	upgrader     websocket.Upgrader
 }
 
-func NewHandler(service *Service, db *pgxpool.Pool, redisClient *redis.Client, sandboxes *sandbox.Client, sandboxURL string) *Handler {
-	return &Handler{service: service, db: db, redis: redisClient, sandboxes: sandboxes, sandboxURL: strings.TrimRight(sandboxURL, "/"), upgrader: websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}}
+func NewHandler(service *Service, db *pgxpool.Pool, redisClient *redis.Client, sandboxes *sandbox.Client, sandboxURL, sandboxToken, webOrigin string) *Handler {
+	return &Handler{service: service, db: db, redis: redisClient, sandboxes: sandboxes, sandboxURL: strings.TrimRight(sandboxURL, "/"), sandboxToken: sandboxToken, upgrader: websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return r.Header.Get("Origin") == webOrigin }}}
 }
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.FromContext(r.Context())
@@ -168,33 +170,92 @@ func (h *Handler) Events(w http.ResponseWriter, r *http.Request) {
 		httpapi.Error(w, 500, errors.New("streaming unsupported"))
 		return
 	}
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("X-Accel-Buffering", "no")
-	rows, err := h.db.Query(r.Context(), `SELECT id,run_id,conversation_id,type,payload,created_at FROM run_events WHERE conversation_id=$1 ORDER BY id`, id)
-	if err == nil {
-		for rows.Next() {
-			var event RunEvent
-			var raw []byte
-			if rows.Scan(&event.ID, &event.RunID, &event.ConversationID, &event.Type, &raw, &event.CreatedAt) == nil {
-				_ = json.Unmarshal(raw, &event.Payload)
-				writeSSE(w, event)
-			}
-		}
-		rows.Close()
-		flusher.Flush()
+	if h.redis == nil {
+		httpapi.Error(w, http.StatusServiceUnavailable, errors.New("event stream unavailable"))
+		return
 	}
 	subscription := h.redis.Subscribe(r.Context(), "conversation:"+id.String())
 	defer subscription.Close()
+	if _, err := subscription.Receive(r.Context()); err != nil {
+		httpapi.Error(w, http.StatusServiceUnavailable, errors.New("event stream unavailable"))
+		return
+	}
+	lastID := lastEventID(r)
+	query := `SELECT id,run_id,conversation_id,type,payload,created_at FROM (
+		SELECT id,run_id,conversation_id,type,payload,created_at FROM run_events
+		WHERE conversation_id=$1 AND id>$2 ORDER BY id DESC LIMIT 1200
+	) recent ORDER BY id`
+	args := []any{id, lastID}
+	if lastID == 0 {
+		query = `SELECT id,run_id,conversation_id,type,payload,created_at FROM (
+			SELECT id,run_id,conversation_id,type,payload,created_at FROM run_events
+			WHERE conversation_id=$1 ORDER BY id DESC LIMIT 1200
+		) recent ORDER BY id`
+		args = []any{id}
+	}
+	rows, err := h.db.Query(r.Context(), query, args...)
+	if err != nil {
+		httpapi.Error(w, http.StatusServiceUnavailable, errors.New("event history unavailable"))
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+	sentID := lastID
+	for rows.Next() {
+		var event RunEvent
+		var raw []byte
+		if err = rows.Scan(&event.ID, &event.RunID, &event.ConversationID, &event.Type, &raw, &event.CreatedAt); err != nil {
+			rows.Close()
+			return
+		}
+		if json.Unmarshal(raw, &event.Payload) != nil {
+			continue
+		}
+		writeSSE(w, event)
+		sentID = event.ID
+	}
+	if rows.Err() != nil {
+		rows.Close()
+		return
+	}
+	rows.Close()
+	flusher.Flush()
+	heartbeat := time.NewTicker(15 * time.Second)
+	defer heartbeat.Stop()
+	channel := subscription.Channel()
 	for {
 		select {
 		case <-r.Context().Done():
 			return
-		case message := <-subscription.Channel():
-			fmt.Fprintf(w, "data: %s\n\n", message.Payload)
+		case <-heartbeat.C:
+			_, _ = io.WriteString(w, ": keepalive\n\n")
+			flusher.Flush()
+		case message, ok := <-channel:
+			if !ok {
+				return
+			}
+			var event RunEvent
+			if message == nil || json.Unmarshal([]byte(message.Payload), &event) != nil || event.ID <= sentID {
+				continue
+			}
+			writeSSE(w, event)
+			sentID = event.ID
 			flusher.Flush()
 		}
 	}
+}
+
+func lastEventID(r *http.Request) int64 {
+	value := strings.TrimSpace(r.Header.Get("Last-Event-ID"))
+	if value == "" {
+		value = strings.TrimSpace(r.URL.Query().Get("last_event_id"))
+	}
+	id, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || id < 0 {
+		return 0
+	}
+	return id
 }
 func writeSSE(w io.Writer, event RunEvent) {
 	data, _ := json.Marshal(event)
@@ -380,7 +441,9 @@ func (h *Handler) Terminal(w http.ResponseWriter, r *http.Request) {
 	defer client.Close()
 	target := strings.Replace(h.sandboxURL, "http://", "ws://", 1)
 	target = strings.Replace(target, "https://", "wss://", 1) + "/v1/sandboxes/" + computer.SandboxID + "/terminal?work_dir=" + url.QueryEscape(computer.WorkDir)
-	upstream, _, err := websocket.DefaultDialer.DialContext(r.Context(), target, nil)
+	headers := http.Header{}
+	headers.Set("Authorization", "Bearer "+h.sandboxToken)
+	upstream, _, err := websocket.DefaultDialer.DialContext(r.Context(), target, headers)
 	if err != nil {
 		_ = client.WriteJSON(map[string]string{"type": "error", "data": err.Error()})
 		return
@@ -403,5 +466,3 @@ func (h *Handler) Terminal(w http.ResponseWriter, r *http.Request) {
 	case <-r.Context().Done():
 	}
 }
-
-var _ = bufio.ErrInvalidUnreadByte

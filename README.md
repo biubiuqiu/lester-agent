@@ -33,7 +33,7 @@
 - Memory
 - 浏览器自动化
 - Artifact 持久化和 Computer 快照
-- Kubernetes、Helm 和 E2B Sandbox
+- Kubernetes-native Sandbox Provider 和 E2B Sandbox（Helm 部署仍使用 DockerSandboxProvider）
 
 ## 系统结构
 
@@ -48,7 +48,7 @@ flowchart TD
     Sandbox --> Docker["User Computers · Docker"]
 ```
 
-Web、API 和 Sandbox Service 分别构建和运行在独立容器中。只有 Sandbox Service 挂载 Docker Socket，并负责创建、监控和管理用户 Computer。Skill 安装包由 API 通过对象存储接口访问，当前 Compose 使用兼容 S3 API 的 MinIO。
+Web、API 和 Sandbox Service 分别构建和运行在独立容器中。只有 Sandbox Service 挂载 Docker Socket，并负责创建、监控和管理用户 Computer。它的管理、文件、命令和终端接口要求 API 使用内部 Bearer Token，只有健康检查无需认证；Compose 不再把它映射到宿主机端口。Skill 安装包由 API 通过对象存储接口访问，当前 Compose 使用兼容 S3 API 的 MinIO。
 
 ## 沙箱机制
 
@@ -89,7 +89,7 @@ User
 
 `bash` 支持 `run_in_background: true`。后台命令会立即返回任务 ID、PID 和 `.lester/tasks/{taskId}.log`，Agent 可以随后使用 `read` 查看日志。前台 Bash 默认超时 120 秒，最大可配置为 600 秒。
 
-`bash`、`read` 和 `load_skill` 的大段文本结果会按字符数截断，并明确返回省略字符数和继续读取提示，避免单次工具结果挤满模型上下文。
+`bash` 的 stdout/stderr 会在 Sandbox Provider 边界分别限制为 256 KiB，并保留开头与结尾及明确的省略字节数；返回模型前仍会应用约 30,000 字符的工具结果限制。`read` 使用流式按行读取，只返回所需范围，不会为了读取几行而把整个大文件载入内存。`load_skill` 同样受单次结果限制。
 
 `read` 返回带行号的文本，格式为“右对齐的行号 + Tab + 原始内容”，行号从 1 开始。例如 JSON 中的 `"     1\tport: 8080"`。读取范围仍使用 `offset` / `limit`；达到行数或字符限制时返回连续的一页与 `next_offset`，不会把开头和结尾拼成一段。单行超过 2000 字符会明确标记截断，需使用更精确的命令检查剩余部分。编辑时不要把行号和分隔 Tab 写入文件，原有缩进则需保留。
 
@@ -150,7 +150,7 @@ Skill 是会话级能力：安装后解包到 `/workspace/conversations/{convers
 | --- | ---: | --- |
 | Web | `13000 → 3000` | 用户界面 |
 | API | `18080 → 8080` | 登录、模型配置、对话和 Agent Runtime |
-| Sandbox Service | `18090 → 8090` | Computer 生命周期、命令、文件和终端 |
+| Sandbox Service | 仅 Compose 内网 `8090` | Computer 生命周期、命令、文件和终端 |
 | PostgreSQL | `5432` | 持久化业务数据 |
 | Redis | `6379` | SSE 事件分发 |
 | MinIO | `9000` / `9001` | Skill 安装包对象存储（S3 兼容） |
@@ -168,10 +168,13 @@ Skill 是会话级能力：安装后解包到 `/workspace/conversations/{convers
 cp deploy/.env.example deploy/.env
 ```
 
-`deploy/.env.example` 中的 `MASTER_KEY_BASE64` 仅供本地开发。非本地环境请生成新的 32 字节密钥：
+`deploy/.env.example` 不再内置任何密码或密钥。复制后必须填写 `POSTGRES_PASSWORD`、`MASTER_KEY_BASE64`、`SANDBOX_SERVICE_TOKEN` 和 `MINIO_ROOT_PASSWORD`，可以分别生成：
 
 ```bash
-openssl rand -base64 32
+openssl rand -hex 24       # POSTGRES_PASSWORD
+openssl rand -base64 32    # MASTER_KEY_BASE64
+openssl rand -hex 32       # SANDBOX_SERVICE_TOKEN
+openssl rand -hex 24       # MINIO_ROOT_PASSWORD
 ```
 
 ### 2. 启动 Lester
@@ -188,6 +191,52 @@ docker compose --env-file deploy/.env \
 2. 注册账号并登录
 3. 前往 **Settings → Models** 配置模型 Provider
 4. 创建对话并选择 Agent
+
+## Kubernetes / Helm 部署
+
+Helm Chart 位于 `deploy/helm/lester`，部署 Web、API、Sandbox Service、ClusterIP Service、可选 Ingress 和 NetworkPolicy。PostgreSQL、Redis、S3 兼容对象存储由集群外部提供；安装前需按编号执行 `backend/migrations/*.up.sql`。
+
+先构建并推送三个镜像，然后准备私有 values（不要提交真实密钥）：
+
+```yaml
+images:
+  api: {repository: registry.example.com/lester-api, tag: v0.1.0}
+  web: {repository: registry.example.com/lester-web, tag: v0.1.0}
+  sandboxService: {repository: registry.example.com/lester-sandbox-service, tag: v0.1.0}
+
+config:
+  webOrigin: https://lester.example.com
+  objectStore: {endpoint: s3.example.com, bucket: lester-skills, useSSL: true}
+
+secrets:
+  databaseURL: postgres://...
+  redisURL: redis://...
+  masterKeyBase64: ...
+  sandboxServiceToken: ...
+  objectStoreAccessKey: ...
+  objectStoreSecretKey: ...
+
+ingress:
+  enabled: true
+  className: nginx
+  host: lester.example.com
+  tls:
+    - secretName: lester-tls
+      hosts: [lester.example.com]
+
+sandbox:
+  nodeSelector: {lester.dev/docker-worker: "true"}
+```
+
+```bash
+helm upgrade --install lester deploy/helm/lester \
+  --namespace lester --create-namespace \
+  -f values.production.yaml
+```
+
+Ingress 使用同源路由：`/api` 转发到 API，其余请求转发到 Web，因此 Helm 镜像构建时无需设置 `NEXT_PUBLIC_API_URL`。若使用 `secrets.existingSecret`，Secret 必须包含 Chart 注释列出的六个键。
+
+当前 Computer Provider 仍通过宿主机 Docker Socket 创建 Docker 容器，并不是“Pod 作为沙盒”的 Kubernetes-native Provider。因此 Sandbox Service 固定一个副本，必须通过 `sandbox.nodeSelector` 放到提供 Docker Engine 和 `/var/run/docker.sock` 的专用 Worker。Docker Socket 等同于很高的节点权限，不符合 Restricted Pod Security；不要把该 Pod 放到承载不受信任业务的通用节点，也不要为 Sandbox Service 配置公网 Ingress。用户 Computer 和 Docker Volume 属于该节点，节点迁移不会自动搬迁数据。
 
 ## 仓库结构
 
@@ -206,7 +255,7 @@ lester-agent/
 │   ├── migrations/               PostgreSQL 迁移
 │   ├── Dockerfile.api
 │   └── Dockerfile.sandbox-service
-├── deploy/                       Docker Compose 与环境配置
+├── deploy/                       Docker Compose、环境配置与 Helm Chart
 ├── AGENTS.md                     编码 Agent 的开发约束
 ├── Makefile
 └── README.md
@@ -245,7 +294,9 @@ make web-check
 ## 安全提示
 
 - 不要在生产环境使用示例 `MASTER_KEY_BASE64`
+- 不要在生产环境使用示例 `SANDBOX_SERVICE_TOKEN`；Sandbox Service 不应公开暴露
 - Provider 密钥使用 AES-GCM 加密后存储
+- HTTPS 部署会默认使用 Secure 会话 Cookie；登录和注册按客户端 IP 做分钟级限流
 - Sandbox Service 拥有 Docker Socket 权限，生产部署时应运行在隔离的专用 Worker
 - User Computer 默认禁用网络，并限制 CPU、内存和 PID 数量
 - 文件 API 与终端默认进入 `/workspace/conversations/{conversationId}`，不会把其他会话目录展示为当前会话文件

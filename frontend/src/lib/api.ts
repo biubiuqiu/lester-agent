@@ -1,4 +1,6 @@
-export const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:18080";
+// An empty value keeps browser requests same-origin. This is the preferred
+// production/Ingress mode; Docker Compose injects its separate local API origin.
+export const API = process.env.NEXT_PUBLIC_API_URL || "";
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(API + path, {
@@ -30,7 +32,7 @@ async function fetchConversationFile(conversationId: string, path: string, signa
     signal,
   });
   if (response.status === 401 && typeof window !== "undefined" && !location.pathname.startsWith("/login")) {
-    location.href = "/login";
+    window.location.replace("/login");
     throw new Error("authentication required");
   }
   if (!response.ok) {
@@ -47,7 +49,7 @@ export function conversationFilePreviewURL(conversationId: string, path: string)
 
 async function parseResponse<T>(response: Response): Promise<T> {
   if (response.status === 401 && typeof window !== "undefined" && !location.pathname.startsWith("/login")) {
-    location.href = "/login";
+    window.location.replace("/login");
     throw new Error("authentication required");
   }
   if (!response.ok) {

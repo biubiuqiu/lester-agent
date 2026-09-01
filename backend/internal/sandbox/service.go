@@ -2,40 +2,74 @@ package sandbox
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
+	"io"
+	"net/http"
+	"os/exec"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/biubiuqiu/lester-agent/backend/internal/httpapi"
 	"github.com/creack/pty"
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
-	"io"
-	"net/http"
-	"os/exec"
-	"time"
 )
 
 type ServiceHandler struct {
 	provider Provider
 	upgrader websocket.Upgrader
+	token    string
 }
 
-func NewServiceHandler(provider Provider) *ServiceHandler {
-	return &ServiceHandler{provider: provider, upgrader: websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}}
+func NewServiceHandler(provider Provider, token string) *ServiceHandler {
+	return &ServiceHandler{provider: provider, token: token}
 }
 func (h *ServiceHandler) Router() http.Handler {
 	r := chi.NewRouter()
-	r.Post("/v1/sandboxes", h.create)
-	r.Get("/v1/sandboxes/{id}", h.inspect)
-	r.Post("/v1/sandboxes/{id}/start", h.action(h.provider.Start))
-	r.Post("/v1/sandboxes/{id}/suspend", h.action(h.provider.Suspend))
-	r.Post("/v1/sandboxes/{id}/resume", h.action(h.provider.Resume))
-	r.Delete("/v1/sandboxes/{id}", h.action(h.provider.Destroy))
-	r.Post("/v1/sandboxes/{id}/exec", h.exec)
-	r.Get("/v1/sandboxes/{id}/files", h.list)
-	r.Get("/v1/sandboxes/{id}/files/content", h.read)
-	r.Put("/v1/sandboxes/{id}/files/content", h.write)
-	r.Get("/v1/sandboxes/{id}/terminal", h.terminal)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { httpapi.JSON(w, 200, map[string]bool{"ok": true}) })
+	r.Group(func(private chi.Router) {
+		private.Use(h.authenticate)
+		private.Post("/v1/sandboxes", h.create)
+		private.Get("/v1/sandboxes/{id}", h.inspect)
+		private.Post("/v1/sandboxes/{id}/start", h.action(h.provider.Start))
+		private.Post("/v1/sandboxes/{id}/suspend", h.action(h.provider.Suspend))
+		private.Post("/v1/sandboxes/{id}/resume", h.action(h.provider.Resume))
+		private.Delete("/v1/sandboxes/{id}", h.action(h.provider.Destroy))
+		private.Post("/v1/sandboxes/{id}/exec", h.exec)
+		private.Get("/v1/sandboxes/{id}/files", h.list)
+		private.Get("/v1/sandboxes/{id}/files/content", h.read)
+		private.Get("/v1/sandboxes/{id}/files/lines", h.readLines)
+		private.Put("/v1/sandboxes/{id}/files/content", h.write)
+		private.Get("/v1/sandboxes/{id}/terminal", h.terminal)
+	})
 	return r
+}
+func (h *ServiceHandler) readLines(w http.ResponseWriter, r *http.Request) {
+	offset, err1 := strconv.Atoi(r.URL.Query().Get("offset"))
+	limit, err2 := strconv.Atoi(r.URL.Query().Get("limit"))
+	if err1 != nil || err2 != nil || offset < 1 || limit < 1 || limit > 2000 {
+		httpapi.Error(w, http.StatusBadRequest, errors.New("offset and limit must be valid positive integers; limit cannot exceed 2000"))
+		return
+	}
+	result, err := h.provider.ReadFileLines(r.Context(), chi.URLParam(r, "id"), r.URL.Query().Get("work_dir"), r.URL.Query().Get("path"), offset, limit)
+	if err != nil {
+		httpapi.Error(w, http.StatusNotFound, err)
+		return
+	}
+	httpapi.JSON(w, http.StatusOK, result)
+}
+
+func (h *ServiceHandler) authenticate(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		provided := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if len(provided) != len(h.token) || subtle.ConstantTimeCompare([]byte(provided), []byte(h.token)) != 1 {
+			httpapi.Error(w, http.StatusUnauthorized, errors.New("sandbox service authentication required"))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 func (h *ServiceHandler) inspect(w http.ResponseWriter, r *http.Request) {
 	item, err := h.provider.Inspect(r.Context(), chi.URLParam(r, "id"))
@@ -100,7 +134,7 @@ func (h *ServiceHandler) read(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(data)
 }
 func (h *ServiceHandler) write(w http.ResponseWriter, r *http.Request) {
-	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 20<<20))
+	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 25<<20))
 	if err != nil {
 		httpapi.Error(w, 400, err)
 		return
