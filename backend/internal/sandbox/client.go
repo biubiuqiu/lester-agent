@@ -98,6 +98,14 @@ func (c *Client) WriteFile(ctx context.Context, id, workDir, path string, data [
 	}
 	return nil
 }
+func (c *Client) EditFile(ctx context.Context, id, workDir, path string, input FileEditRequest) (*FileEditResult, error) {
+	var result FileEditResult
+	endpoint := "/v1/sandboxes/" + id + "/files/content?work_dir=" + url.QueryEscape(workDir) + "&path=" + url.QueryEscape(path)
+	if err := c.json(ctx, "PATCH", endpoint, input, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
 func (c *Client) Action(ctx context.Context, id, action string) error {
 	return c.json(ctx, "POST", "/v1/sandboxes/"+id+"/"+action, nil, nil)
 }

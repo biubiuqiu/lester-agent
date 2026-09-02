@@ -193,7 +193,11 @@ func (s *Service) saveRunContext(ctx context.Context, runID uuid.UUID, messages 
 	}
 	// Record the dynamic prompt/tool snapshot once. Durable messages through the
 	// cursor reconstruct the initial history; this contains no provider credentials.
-	snapshot, err := json.Marshal(map[string]any{"model": request.Model, "system": request.System, "tools": request.Tools, "max_tokens": request.MaxTokens, "temperature": request.Temperature, "history_through_seq": through, "tool_context_policy": toolcontext.PolicyVersion, "recent_full_tool_exchanges": toolcontext.RecentFullToolExchanges})
+	contextSnapshot := map[string]any{"model": request.Model, "system": request.System, "tools": request.Tools, "temperature": request.Temperature, "history_through_seq": through, "tool_context_policy": toolcontext.PolicyVersion, "recent_full_tool_exchanges": toolcontext.RecentFullToolExchanges}
+	if request.MaxTokens > 0 {
+		contextSnapshot["max_tokens"] = request.MaxTokens
+	}
+	snapshot, err := json.Marshal(contextSnapshot)
 	if err != nil {
 		return err
 	}

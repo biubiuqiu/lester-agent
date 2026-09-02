@@ -6,21 +6,33 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	pathpkg "path"
 	"strings"
+	"sync"
 	"time"
 )
 
 var ErrSandboxNotFound = errors.New("sandbox not found")
 
-type DockerProvider struct{ Image string }
+const (
+	defaultToolboxSourcePath = "/usr/local/libexec/lester-toolbox"
+	toolboxContainerPath     = "/usr/local/bin/lester-toolbox"
+)
+
+type DockerProvider struct {
+	Image             string
+	ToolboxSourcePath string
+	toolboxMu         sync.Mutex
+	toolboxInstalled  map[string]bool
+}
 
 func NewDockerProvider(image string) *DockerProvider {
 	if image == "" {
 		image = "python:3.12-slim"
 	}
-	return &DockerProvider{Image: image}
+	return &DockerProvider{Image: image, ToolboxSourcePath: defaultToolboxSourcePath, toolboxInstalled: map[string]bool{}}
 }
 
 func containerName(id string) (string, error) {
@@ -111,7 +123,7 @@ func (p *DockerProvider) Start(ctx context.Context, id string) error {
 	if output, startErr := exec.CommandContext(ctx, "docker", "start", name).CombinedOutput(); startErr != nil {
 		return fmt.Errorf("start docker sandbox: %w: %s", startErr, output)
 	}
-	return nil
+	return p.ensureToolbox(ctx, id)
 }
 
 func (p *DockerProvider) Suspend(ctx context.Context, id string) error {
@@ -135,6 +147,9 @@ func (p *DockerProvider) Destroy(ctx context.Context, id string) error {
 	if output, destroyErr := exec.CommandContext(ctx, "docker", "rm", "-f", name).CombinedOutput(); destroyErr != nil {
 		return fmt.Errorf("destroy docker sandbox: %w: %s", destroyErr, output)
 	}
+	p.toolboxMu.Lock()
+	delete(p.toolboxInstalled, id)
+	p.toolboxMu.Unlock()
 	return nil
 }
 
@@ -183,29 +198,13 @@ func (p *DockerProvider) ListFiles(ctx context.Context, id, workDir, filePath st
 	if err != nil {
 		return nil, err
 	}
-	script := `import datetime,json,os,sys
-base=os.path.realpath(sys.argv[1]); target=os.path.realpath(sys.argv[2])
-if os.path.commonpath([base,target]) != base: raise PermissionError("path escapes conversation")
-result=[]
-with os.scandir(target) as entries:
- for index,entry in enumerate(entries):
-  if index>=500: raise ValueError("directory contains more than 500 entries; use bash with a narrower path or filter")
-  stat=entry.stat(); item=entry.path
-  result.append({"name":entry.name,"path":os.path.relpath(item,base),"is_dir":entry.is_dir(),"size":stat.st_size,"modified_at":datetime.datetime.fromtimestamp(stat.st_mtime,datetime.timezone.utc).isoformat()})
-print(json.dumps(result))`
-	result, err := p.Exec(ctx, id, Command{WorkDir: "/workspace", Command: "python -c " + shellQuote(script) + " " + shellQuote(base) + " " + shellQuote(target)})
+	output, err := p.runToolbox(ctx, id, "list", base, target, nil)
 	if err != nil {
 		return nil, err
 	}
-	if result.ExitCode != 0 {
-		return nil, errors.New(strings.TrimSpace(result.Stderr))
-	}
-	if result.StdoutTruncated {
-		return nil, errors.New("directory listing exceeds the 256 KiB response limit; use a narrower path")
-	}
 	var entries []FileEntry
-	if err = json.Unmarshal([]byte(result.Stdout), &entries); err != nil {
-		return nil, err
+	if err = json.Unmarshal(output, &entries); err != nil {
+		return nil, fmt.Errorf("decode toolbox directory listing: %w", err)
 	}
 	return entries, nil
 }
@@ -215,19 +214,7 @@ func (p *DockerProvider) ReadFile(ctx context.Context, id, workDir, filePath str
 	if err != nil {
 		return nil, err
 	}
-	name, _ := containerName(id)
-	script := `import os,sys
-base=os.path.realpath(sys.argv[1]); target=os.path.realpath(sys.argv[2])
-if os.path.commonpath([base,target]) != base: raise PermissionError("path escapes conversation")
-with open(target,"rb") as handle:
- data=handle.read(26214401)
- if len(data)>26214400: raise ValueError("file exceeds the 25 MiB read limit")
- sys.stdout.buffer.write(data)`
-	output, readErr := exec.CommandContext(ctx, "docker", "exec", name, "python", "-c", script, base, target).Output()
-	if readErr != nil {
-		return nil, fmt.Errorf("read sandbox file: %w", readErr)
-	}
-	return output, nil
+	return p.runToolbox(ctx, id, "read", base, target, nil)
 }
 
 func (p *DockerProvider) ReadFileLines(ctx context.Context, id, workDir, filePath string, offset, limit int) (*FileLines, error) {
@@ -238,39 +225,13 @@ func (p *DockerProvider) ReadFileLines(ctx context.Context, id, workDir, filePat
 	if offset < 1 || limit < 1 || limit > 2000 {
 		return nil, errors.New("invalid file line range")
 	}
-	name, _ := containerName(id)
-	script := `import codecs,json,os,sys
-base=os.path.realpath(sys.argv[1]); target=os.path.realpath(sys.argv[2]); offset=int(sys.argv[3]); limit=int(sys.argv[4])
-if os.path.commonpath([base,target]) != base: raise PermissionError("path escapes conversation")
-if os.path.getsize(target)>26214400: raise ValueError("file exceeds the 25 MiB read limit")
-lines=[]; total=0; kept=[]; chars=0; omitted=0
-def finish():
- global total,kept,chars,omitted
- total+=1
- if offset <= total < offset+limit: lines.append({"text":"".join(kept),"omitted_characters":omitted})
- kept=[]; chars=0; omitted=0
-decoder=codecs.getincrementaldecoder("utf-8")("replace")
-with open(target,"rb") as handle:
- while True:
-  chunk=handle.read(65536)
-  text=decoder.decode(chunk,final=not chunk)
-  for char in text:
-   if char=="\n": finish()
-   else:
-    chars+=1
-    if offset <= total+1 < offset+limit:
-     if len(kept)<2000: kept.append(char)
-     else: omitted+=1
-  if not chunk: break
-if chars>0: finish()
-print(json.dumps({"lines":lines,"start_line":offset,"total_lines":total},ensure_ascii=False))`
-	output, readErr := exec.CommandContext(ctx, "docker", "exec", name, "python", "-c", script, base, target, fmt.Sprint(offset), fmt.Sprint(limit)).CombinedOutput()
-	if readErr != nil {
-		return nil, fmt.Errorf("read sandbox file lines: %w: %s", readErr, output)
+	output, err := p.runToolbox(ctx, id, "read-lines", base, target, nil, "--offset", fmt.Sprint(offset), "--limit", fmt.Sprint(limit))
+	if err != nil {
+		return nil, err
 	}
 	var result FileLines
 	if err = json.Unmarshal(output, &result); err != nil {
-		return nil, fmt.Errorf("decode sandbox file lines: %w", err)
+		return nil, fmt.Errorf("decode toolbox file lines: %w", err)
 	}
 	return &result, nil
 }
@@ -283,24 +244,121 @@ func (p *DockerProvider) WriteFile(ctx context.Context, id, workDir, filePath st
 	if err != nil {
 		return err
 	}
-	name, _ := containerName(id)
-	script := `import os,sys
-base=os.path.realpath(sys.argv[1]); target=os.path.normpath(sys.argv[2]); parent=os.path.dirname(target)
-probe=parent
-while not os.path.exists(probe):
- next_probe=os.path.dirname(probe)
- if next_probe == probe: break
- probe=next_probe
-if os.path.commonpath([base,os.path.realpath(probe)]) != base: raise PermissionError("path escapes conversation")
-os.makedirs(parent,exist_ok=True)
-if os.path.commonpath([base,os.path.realpath(parent)]) != base: raise PermissionError("path escapes conversation")
-with open(target,"wb") as handle: handle.write(sys.stdin.buffer.read())`
-	cmd := exec.CommandContext(ctx, "docker", "exec", "-i", name, "python", "-c", script, base, target)
-	cmd.Stdin = bytes.NewReader(data)
-	if output, writeErr := cmd.CombinedOutput(); writeErr != nil {
-		return fmt.Errorf("write sandbox file: %w: %s", writeErr, output)
+	_, err = p.runToolbox(ctx, id, "write", base, target, data)
+	return err
+}
+
+func (p *DockerProvider) EditFile(ctx context.Context, id, workDir, filePath string, request FileEditRequest) (*FileEditResult, error) {
+	base, target, err := scopedPath(workDir, filePath)
+	if err != nil {
+		return nil, err
 	}
+	input, err := json.Marshal(request)
+	if err != nil {
+		return nil, fmt.Errorf("encode toolbox edit request: %w", err)
+	}
+	output, err := p.runToolbox(ctx, id, "edit", base, target, input)
+	if err != nil {
+		return nil, err
+	}
+	var result FileEditResult
+	if err = json.Unmarshal(output, &result); err != nil {
+		return nil, fmt.Errorf("decode toolbox edit result: %w", err)
+	}
+	return &result, nil
+}
+
+func (p *DockerProvider) runToolbox(ctx context.Context, id, operation, root, target string, input []byte, extra ...string) ([]byte, error) {
+	if err := p.ensureToolbox(ctx, id); err != nil {
+		return nil, err
+	}
+	name, err := containerName(id)
+	if err != nil {
+		return nil, err
+	}
+	for attempt := 0; attempt < 2; attempt++ {
+		arguments := []string{"exec"}
+		if input != nil {
+			arguments = append(arguments, "-i")
+		}
+		arguments = append(arguments, name, toolboxContainerPath, operation, "--root", root, "--path", target)
+		arguments = append(arguments, extra...)
+		command := exec.CommandContext(ctx, "docker", arguments...)
+		if input != nil {
+			command.Stdin = bytes.NewReader(input)
+		}
+		stdoutLimit := commandCaptureLimit
+		if operation == "read" {
+			stdoutLimit = (25 << 20) + 1
+		}
+		stdout, stderr := newBoundedCapture(stdoutLimit), newBoundedCapture(commandCaptureLimit)
+		command.Stdout, command.Stderr = stdout, stderr
+		runErr := command.Run()
+		if runErr == nil {
+			if stdout.Truncated() {
+				return nil, fmt.Errorf("toolbox %s output exceeds the %d byte limit", operation, stdoutLimit)
+			}
+			return []byte(stdout.String()), nil
+		}
+		if attempt == 0 && toolboxUnavailable(runErr, stderr.String()) {
+			p.markToolboxMissing(id)
+			if installErr := p.ensureToolbox(ctx, id); installErr != nil {
+				return nil, installErr
+			}
+			continue
+		}
+		return nil, fmt.Errorf("toolbox %s: %w: %s", operation, runErr, strings.TrimSpace(stderr.String()))
+	}
+	return nil, fmt.Errorf("toolbox %s could not be started", operation)
+}
+
+func (p *DockerProvider) ensureToolbox(ctx context.Context, id string) error {
+	p.toolboxMu.Lock()
+	defer p.toolboxMu.Unlock()
+	if p.toolboxInstalled == nil {
+		p.toolboxInstalled = map[string]bool{}
+	}
+	if p.toolboxInstalled[id] {
+		return nil
+	}
+	name, err := containerName(id)
+	if err != nil {
+		return err
+	}
+	source := p.ToolboxSourcePath
+	if source == "" {
+		source = defaultToolboxSourcePath
+	}
+	if _, err = os.Stat(source); err != nil {
+		return fmt.Errorf("locate lester-toolbox: %w", err)
+	}
+	if output, mkdirErr := exec.CommandContext(ctx, "docker", "exec", "-u", "0", name, "mkdir", "-p", pathpkg.Dir(toolboxContainerPath)).CombinedOutput(); mkdirErr != nil {
+		return fmt.Errorf("prepare lester-toolbox directory: %w: %s", mkdirErr, output)
+	}
+	destination := name + ":" + toolboxContainerPath
+	if output, copyErr := exec.CommandContext(ctx, "docker", "cp", source, destination).CombinedOutput(); copyErr != nil {
+		return fmt.Errorf("install lester-toolbox: %w: %s", copyErr, output)
+	}
+	if output, chmodErr := exec.CommandContext(ctx, "docker", "exec", "-u", "0", name, "chmod", "0755", toolboxContainerPath).CombinedOutput(); chmodErr != nil {
+		return fmt.Errorf("prepare lester-toolbox: %w: %s", chmodErr, output)
+	}
+	p.toolboxInstalled[id] = true
 	return nil
+}
+
+func (p *DockerProvider) markToolboxMissing(id string) {
+	p.toolboxMu.Lock()
+	delete(p.toolboxInstalled, id)
+	p.toolboxMu.Unlock()
+}
+
+func toolboxUnavailable(err error, stderr string) bool {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && (exitErr.ExitCode() == 126 || exitErr.ExitCode() == 127) {
+		return true
+	}
+	message := strings.ToLower(stderr)
+	return strings.Contains(message, toolboxContainerPath) && (strings.Contains(message, "no such file") || strings.Contains(message, "executable file not found"))
 }
 
 func safeWorkDir(workDir string) (string, error) {
@@ -350,5 +408,3 @@ func scopedPath(workDir, filePath string) (string, string, error) {
 	}
 	return base, target, nil
 }
-
-func shellQuote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'" }

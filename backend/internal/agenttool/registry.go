@@ -19,6 +19,7 @@ type Sandbox interface {
 	ReadFile(context.Context, string, string, string) ([]byte, error)
 	ReadFileLines(context.Context, string, string, string, int, int) (*sandbox.FileLines, error)
 	WriteFile(context.Context, string, string, string, []byte) error
+	EditFile(context.Context, string, string, string, sandbox.FileEditRequest) (*sandbox.FileEditResult, error)
 	ListFiles(context.Context, string, string, string) ([]sandbox.FileEntry, error)
 }
 

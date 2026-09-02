@@ -49,6 +49,17 @@ type FileLines struct {
 	StartLine  int        `json:"start_line"`
 	TotalLines int        `json:"total_lines"`
 }
+type FileEditRequest struct {
+	OldString      string `json:"old_string"`
+	NewString      string `json:"new_string"`
+	ReplaceAll     bool   `json:"replace_all,omitempty"`
+	ExpectedSHA256 string `json:"expected_sha256,omitempty"`
+}
+type FileEditResult struct {
+	OK           bool   `json:"ok"`
+	Replacements int    `json:"replacements"`
+	SHA256       string `json:"sha256"`
+}
 type Provider interface {
 	Create(context.Context, CreateOptions) (*Sandbox, error)
 	Inspect(context.Context, string) (*Sandbox, error)
@@ -60,6 +71,7 @@ type Provider interface {
 	ReadFile(context.Context, string, string, string) ([]byte, error)
 	ReadFileLines(context.Context, string, string, string, int, int) (*FileLines, error)
 	WriteFile(context.Context, string, string, string, []byte) error
+	EditFile(context.Context, string, string, string, FileEditRequest) (*FileEditResult, error)
 	ListFiles(context.Context, string, string, string) ([]FileEntry, error)
 }
 

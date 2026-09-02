@@ -54,6 +54,18 @@ func TestOpenAICompatibleStream(t *testing.T) {
 	}
 }
 
+func TestOpenAIPayloadOmitsUnsetMaxTokens(t *testing.T) {
+	payload := openAIPayload(modelruntime.Request{Model: "test-model"})
+	if _, ok := payload["max_tokens"]; ok {
+		t.Fatalf("unset max_tokens must be omitted: %#v", payload)
+	}
+
+	payload = openAIPayload(modelruntime.Request{Model: "test-model", MaxTokens: 8192})
+	if payload["max_tokens"] != 8192 {
+		t.Fatalf("explicit max_tokens = %#v", payload["max_tokens"])
+	}
+}
+
 func TestStreamRetainsAllToolCallsAndDetectsInterruptedEOF(t *testing.T) {
 	body := "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"a\",\"function\":{\"name\":\"read\",\"arguments\":\"{}\"}},{\"index\":1,\"id\":\"b\",\"function\":{\"name\":\"read\",\"arguments\":\"{}\"}}]}}]}\n\n"
 	client := &httpClient{protocol: "openai"}

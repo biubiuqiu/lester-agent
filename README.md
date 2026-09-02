@@ -14,10 +14,11 @@
 - 支持 OpenAI、Anthropic、Azure OpenAI、OpenAI-compatible、AWS Bedrock、Google Vertex AI 和 Microsoft Foundry
 - 通过 SSE 实时输出 Agent 回复，并持久化对话、消息、运行记录和事件
 - 完整保存中间回复、工具调用与工具结果；模型请求按完整 ToolExchange 管理工作集，默认保留最近 10 次工具交互
+- 单次任务不限制模型/工具循环次数；运行会持续到模型完成、发生明确错误或运行上下文被取消
 - 创建对话时选择 Lester、Franklin、Michael 或 Trevor；同一对话内角色保持不变
 - 为每个用户分配一个持久化 Docker Computer，并以 `/workspace/conversations/{conversationId}` 隔离会话目录
 - Agent 可以在 Computer 中执行命令、读写文件和使用终端
-- 右侧 Files 提供类似 VS Code 的目录树与文件预览，支持代码/文本行号、图片、PDF，以及受限 iframe 中的 HTML 页面预览和源码切换
+- 右侧 Files 提供类似 VS Code 的目录树与文件预览，支持代码/文本行号、图片、PDF，以及受限 iframe 中的 HTML 页面预览、源码切换和独立页面打开；桌面端可拖动调整右侧面板宽度，并可收起左侧会话栏
 - Computer 工作目录使用用户级 Docker Volume 持久化，空闲后自动暂停并在下次访问时恢复；服务会持续校验其真实运行状态
 - 内置 Skill 广场，并支持把 Skill 安装到当前会话的 `.agent/skills` 后按需加载
 - 支持会话附件上传；文件只写入 `.agent/upload`，模型默认只接收文件路径提示，不会自动注入文件内容
@@ -45,10 +46,11 @@ flowchart TD
     API --> Redis
     API --> MinIO["Object Store · MinIO/S3"]
     API --> Sandbox["Sandbox Service · Go"]
-    Sandbox --> Docker["User Computers · Docker"]
+    Sandbox --> Toolbox["lester-toolbox · static Go helper"]
+    Toolbox --> Docker["User Computers · Docker"]
 ```
 
-Web、API 和 Sandbox Service 分别构建和运行在独立容器中。只有 Sandbox Service 挂载 Docker Socket，并负责创建、监控和管理用户 Computer。它的管理、文件、命令和终端接口要求 API 使用内部 Bearer Token，只有健康检查无需认证；Compose 不再把它映射到宿主机端口。Skill 安装包由 API 通过对象存储接口访问，当前 Compose 使用兼容 S3 API 的 MinIO。
+Web、API 和 Sandbox Service 分别构建和运行在独立容器中。只有 Sandbox Service 挂载 Docker Socket，并负责创建、监控和管理用户 Computer。Sandbox Service 镜像同时携带静态 Go 二进制 `lester-toolbox`，在 Computer 启动或首次执行文件操作时安装到容器内；文件 API 不再依赖临时 `python -c` 脚本。它的管理、文件、命令和终端接口要求 API 使用内部 Bearer Token，只有健康检查无需认证；Compose 不再把它映射到宿主机端口。Skill 安装包由 API 通过对象存储接口访问，当前 Compose 使用兼容 S3 API 的 MinIO。
 
 ## 沙箱机制
 
@@ -69,6 +71,7 @@ User
 - 每个会话固定使用 `/workspace/conversations/{conversationId}` 作为工作目录。
 - Agent 的 `bash`、`read`、`write`、`edit` 工具，以及右侧 Files 和 Terminal，都由服务端强制限定在当前会话目录。
 - 文件路径在服务端进行规范化和越界检查；其他会话目录和 `/tmp` 等容器路径不能通过文件工具访问。
+- `lester-toolbox` 会在容器内部再次验证真实路径和符号链接边界；`write` 使用同目录临时文件、同步和原子替换，`edit` 在文件所在容器内完成精确替换并返回内容 SHA-256，避免把整份文件先传到 API 再写回。
 - `computer_list_files` 不作为 Agent 工具暴露；Agent 使用 `bash` 配合 `ls`、`find` 或 `rg --files` 查找文件。
 
 ### 生命周期与故障恢复
@@ -85,7 +88,7 @@ User
 
 ### 资源与后台任务
 
-默认 Docker Sandbox 使用 `python:3.12-slim`，禁用容器网络，并限制为 2 CPU、4 GB 内存和 256 个 PID，同时启用 `no-new-privileges`。
+默认 Docker Sandbox 使用 `python:3.12-slim`，便于 Agent 执行用户要求的 Python 任务；Lester 自身的文件工具不依赖该解释器。Computer 默认禁用容器网络，并限制为 2 CPU、4 GB 内存和 256 个 PID，同时启用 `no-new-privileges`。
 
 `bash` 支持 `run_in_background: true`。后台命令会立即返回任务 ID、PID 和 `.lester/tasks/{taskId}.log`，Agent 可以随后使用 `read` 查看日志。前台 Bash 默认超时 120 秒，最大可配置为 600 秒。
 
@@ -248,8 +251,10 @@ lester-agent/
 ├── backend/                      Go 后端工程
 │   ├── cmd/api/                  API 服务入口
 │   ├── cmd/sandbox-service/      Sandbox 服务入口
+│   ├── cmd/lester-toolbox/       注入 Computer 的静态文件 Helper
 │   ├── internal/                 后端内部实现
 │   │   ├── agenttool/            工具注册表与独立工具 Handler
+│   │   ├── toolboxfs/            Helper 的安全文件操作与协议
 │   │   └── model/                模型存储、运行时契约与 Provider 集成
 │   ├── prompts/                  Agent 系统 Prompt
 │   ├── migrations/               PostgreSQL 迁移
@@ -264,6 +269,8 @@ lester-agent/
 这是一个 Monorepo，但前端和后端拥有独立的依赖、构建上下文与 Dockerfile。API 和 Sandbox Service 同属 Go 后端工程，但会编译成两个可执行程序并运行在两个容器中。
 
 Agent 工具通过注册表扩展，每个工具独立维护参数 Schema 和执行逻辑；模型 Provider 通过 `internal/model/integration.Provider` 注册，数据库 Store 与对话运行时不包含具体 Provider 分支。详细扩展约束见 [`backend/ARCHITECTURE.md`](backend/ARCHITECTURE.md)。
+
+Agent Runtime 默认不设置全局模型最大输出长度。OpenAI-compatible Provider（包括 DeepSeek 等）在未显式配置时不会发送 `max_tokens`，由模型服务按自身能力决定；Anthropic、Vertex Anthropic 和 Bedrock Anthropic 等协议强制要求输出上限的 Provider，会由各自适配器提供协议级兜底值。
 
 ## 开发检查
 

@@ -37,8 +37,10 @@ frontend/                     Next.js frontend
 backend/
   cmd/api/                    API executable
   cmd/sandbox-service/        Sandbox Service executable
+  cmd/lester-toolbox/         static filesystem helper injected into user Computers
   internal/                   backend implementation
     agenttool/                Agent tool registry and individual handlers
+    toolboxfs/                bounded and scoped filesystem helper implementation
     model/runtime/            Provider-neutral model contracts
     model/integration/        Model provider registry and adapters
   prompts/                    embedded Agent prompts
@@ -55,6 +57,7 @@ This is a Monorepo with separate frontend and backend build contexts.
 - Only Sandbox Service may mount the Docker Socket.
 - API and Sandbox Service must remain independently buildable and deployable.
 - Sandbox Service management, file, command, and terminal routes are private service APIs protected by `SANDBOX_SERVICE_TOKEN`; only `/healthz` is unauthenticated. Never expose Sandbox Service through Ingress or a public Service.
+- Sandbox Service owns installation of the versioned `lester-toolbox` binary into new and existing user Computers. File providers must use this helper or an equivalent native provider API; do not reintroduce ad-hoc Python/Shell snippets for file operations.
 
 Do not move backend implementation back to repository-root `internal/`, or frontend code back to `apps/web/`. Keep the `frontend/` and `backend/` boundary unless an explicit architecture decision changes it.
 
@@ -66,6 +69,8 @@ Preserve these behaviors when changing the implementation:
 - All workspace-owned reads and writes must be scoped by `workspace_id`.
 - Provider credentials must be encrypted at rest with the existing secret store and must never be returned or logged in plaintext.
 - Model-provider differences must stay behind the model abstraction instead of leaking into conversation handlers.
+- Do not impose a global model output-token cap. Omit optional output-limit fields when unset; only provider adapters whose protocols require a limit may supply a provider-specific fallback.
+- Do not impose a fixed model/tool-loop count. A run continues until the model completes, an operation fails, or its run context is cancelled.
 - The selected persona is fixed for the lifetime of a conversation.
 - Messages, runs, and events are durable in PostgreSQL. Redis is used for live SSE fan-out, not as the source of truth.
 - Persist every complete model-visible assistant message (including intermediate text and tool calls) and every tool result before continuing execution. Restore `tool_calls` and `tool_call_id`, not only role/content. Events are not the transcript source of truth.
@@ -89,6 +94,8 @@ Preserve these behaviors when changing the implementation:
 - Large tool results must be bounded and must tell the model when output was truncated and how to continue.
 - Bound command stdout and stderr independently at the provider boundary. File reads must be streaming/ranged so a large file is not loaded in full merely to return a small line page.
 - `read` content uses `%6d\t%s` (1-based line number, TAB, original text). Preserve indentation and blank lines. Page at complete line boundaries with `next_offset`; do not concatenate a head and tail and imply a contiguous range. Prefixes must never be included in edit/write input.
+- Keep `lester-toolbox` model-agnostic and versioned through its CLI protocol. Validate lexical and resolved paths inside the Computer, reject symbolic-link escapes, cap file operations at 25 MiB, and write through a synced same-directory temporary file followed by atomic replacement.
+- `edit` must execute next to the file through `Provider.EditFile`; do not restore the API-side read/replace/write round trip. Preserve exact-string, ambiguity, replacement-count, and replace-all semantics.
 
 ## Backend conventions
 
@@ -111,6 +118,8 @@ Preserve these behaviors when changing the implementation:
 - Use TypeScript and the existing Next.js App Router structure.
 - Keep API access in `frontend/src/lib/api.ts` or a focused module under `frontend/src/lib/`.
 - Preserve the conversation-first interaction model and the three-panel desktop layout unless a product change explicitly replaces it.
+- Keep the conversation rail fixed-width but collapsible, and keep the desktop Computer panel user-resizable with bounded, persisted sizing.
+- Grid and flex panes that own scroll containers must use bounded viewport tracks and `min-height: 0`; long file, terminal, or transcript content must scroll inside its pane and must never push the composer below the viewport.
 - Keep responsive behavior usable on mobile.
 - Do not present unavailable functionality as enabled.
 - Every asynchronous page load and mutation must surface a visible error state and prevent duplicate submission while pending. Clear conversation-scoped state before loading a different conversation.

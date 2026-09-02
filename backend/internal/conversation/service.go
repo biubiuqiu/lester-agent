@@ -300,7 +300,7 @@ func (s *Service) execute(ctx context.Context, workspaceID, conversationID, runI
 		return
 	}
 	history := modelHistory(messages)
-	request := model.ModelRequest{Model: deployment.ModelID, System: system, Messages: history, Tools: s.tools.Definitions(), MaxTokens: 4096}
+	request := model.ModelRequest{Model: deployment.ModelID, System: system, Messages: history, Tools: s.tools.Definitions()}
 	if err = s.saveRunContext(ctx, runID, messages, request); err != nil {
 		s.fail(ctx, runID, conversationID, err)
 		return
@@ -309,7 +309,7 @@ func (s *Service) execute(ctx context.Context, workspaceID, conversationID, runI
 }
 
 func (s *Service) executeTurns(ctx context.Context, conversationID, runID uuid.UUID, computer *Computer, client model.ModelClient, request model.ModelRequest) {
-	for turn := 0; turn < 12; turn++ {
+	for turn := 0; ; turn++ {
 		// request retains the complete transcript; only this iteration's copy is
 		// projected. Never append new messages to a previously pruned history.
 		projection, err := toolcontext.Build(request.Messages)
@@ -443,7 +443,6 @@ func (s *Service) executeTurns(ctx context.Context, conversationID, runID uuid.U
 			request.Messages = append(request.Messages, toolMessage)
 		}
 	}
-	s.fail(ctx, runID, conversationID, errors.New("tool loop limit reached"))
 }
 func conversationWorkDir(conversationID uuid.UUID) string {
 	return "/workspace/conversations/" + conversationID.String()

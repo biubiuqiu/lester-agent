@@ -42,6 +42,7 @@ func (h *ServiceHandler) Router() http.Handler {
 		private.Get("/v1/sandboxes/{id}/files/content", h.read)
 		private.Get("/v1/sandboxes/{id}/files/lines", h.readLines)
 		private.Put("/v1/sandboxes/{id}/files/content", h.write)
+		private.Patch("/v1/sandboxes/{id}/files/content", h.edit)
 		private.Get("/v1/sandboxes/{id}/terminal", h.terminal)
 	})
 	return r
@@ -144,6 +145,18 @@ func (h *ServiceHandler) write(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(204)
+}
+func (h *ServiceHandler) edit(w http.ResponseWriter, r *http.Request) {
+	var request FileEditRequest
+	if !httpapi.Decode(w, r, &request) {
+		return
+	}
+	result, err := h.provider.EditFile(r.Context(), chi.URLParam(r, "id"), r.URL.Query().Get("work_dir"), r.URL.Query().Get("path"), request)
+	if err != nil {
+		httpapi.Error(w, http.StatusInternalServerError, err)
+		return
+	}
+	httpapi.JSON(w, http.StatusOK, result)
 }
 
 type terminalMessage struct {

@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { CSSProperties, FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, FileText, Folder, Menu, Paperclip, Plus, Send, TerminalSquare, Wrench, X } from "lucide-react";
+import { Check, ChevronDown, FileText, Folder, GripVertical, Menu, PanelLeftClose, PanelLeftOpen, Paperclip, Plus, Send, TerminalSquare, Wrench, X } from "lucide-react";
 import { Brand } from "./brand";
 import { ConversationTimeline } from "./conversation-timeline";
 import { FileExplorer } from "./file-explorer";
@@ -18,6 +18,23 @@ const agents = [
 ];
 const agentName = (slug: string) => agents.find((agent) => agent.slug === slug)?.name || "Lester";
 type RunState = "idle" | "sending" | "running" | "failed";
+const sidebarPreferenceKey = "lester.workspace.sidebar-collapsed.v1";
+const panelWidthPreferenceKey = "lester.workspace.computer-panel-width.v1";
+const defaultPanelWidth = 420;
+const minPanelWidth = 320;
+const maxPanelWidth = 720;
+const conversationSidebarWidth = 252;
+const minConversationWidth = 420;
+const subscribeToHydration = () => () => {};
+const getClientSnapshot = () => true;
+const getServerSnapshot = () => false;
+
+function clampPanelWidth(width: number, sidebarCollapsed: boolean) {
+  if (typeof window === "undefined") return Math.min(maxPanelWidth, Math.max(minPanelWidth, width));
+  const available = window.innerWidth - (sidebarCollapsed ? 0 : conversationSidebarWidth) - minConversationWidth;
+  const upperBound = Math.max(minPanelWidth, Math.min(maxPanelWidth, available));
+  return Math.min(upperBound, Math.max(minPanelWidth, width));
+}
 
 function appendTimelineEvent(previous: RunEvent[], event: RunEvent) {
   if (event.type !== "MODEL_DELTA") return [...previous, event].slice(-1200);
@@ -42,9 +59,63 @@ export function Workspace({ conversationId }: { conversationId?: string }) {
   const seenEventIds = useRef(new Set<number>());
   const [dialog, setDialog] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => typeof window !== "undefined" && window.localStorage.getItem(sidebarPreferenceKey) === "true");
+  const [panelWidth, setPanelWidth] = useState(() => {
+    if (typeof window === "undefined") return defaultPanelWidth;
+    const storedWidth = Number(window.localStorage.getItem(panelWidthPreferenceKey));
+    const collapsed = window.localStorage.getItem(sidebarPreferenceKey) === "true";
+    return Number.isFinite(storedWidth) && storedWidth > 0 ? clampPanelWidth(storedWidth, collapsed) : defaultPanelWidth;
+  });
+  const [panelResize, setPanelResize] = useState<{ startX: number; startWidth: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState("");
   const [streamError, setStreamError] = useState({ conversationId: "", message: "" });
+  const panelWidthRef = useRef(panelWidth);
+  const layoutHydrated = useSyncExternalStore(subscribeToHydration, getClientSnapshot, getServerSnapshot);
+
+  useEffect(() => {
+    panelWidthRef.current = panelWidth;
+  }, [panelWidth]);
+
+  useEffect(() => {
+    if (!panelResize) return;
+    const resize = (event: PointerEvent) => {
+      const nextWidth = clampPanelWidth(panelResize.startWidth + panelResize.startX - event.clientX, sidebarCollapsed);
+      panelWidthRef.current = nextWidth;
+      setPanelWidth(nextWidth);
+    };
+    const finish = (event: PointerEvent) => {
+      const nextWidth = clampPanelWidth(panelResize.startWidth + panelResize.startX - event.clientX, sidebarCollapsed);
+      panelWidthRef.current = nextWidth;
+      setPanelWidth(nextWidth);
+      window.localStorage.setItem(panelWidthPreferenceKey, String(Math.round(nextWidth)));
+      setPanelResize(null);
+    };
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", resize);
+    window.addEventListener("pointerup", finish, { once: true });
+    return () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener("pointermove", resize);
+      window.removeEventListener("pointerup", finish);
+    };
+  }, [panelResize, sidebarCollapsed]);
+
+  function setConversationSidebar(collapsed: boolean) {
+    setSidebarCollapsed(collapsed);
+    window.localStorage.setItem(sidebarPreferenceKey, String(collapsed));
+    setPanelWidth((width) => clampPanelWidth(width, collapsed));
+  }
+
+  function updatePanelWidth(width: number) {
+    const nextWidth = clampPanelWidth(width, sidebarCollapsed);
+    setPanelWidth(nextWidth);
+    window.localStorage.setItem(panelWidthPreferenceKey, String(Math.round(nextWidth)));
+  }
 
   useEffect(() => {
     Promise.all([
@@ -140,18 +211,21 @@ export function Workspace({ conversationId }: { conversationId?: string }) {
   const displayedCurrent = current?.id === conversationId ? current : null;
   const visibleError = pageError || (streamError.conversationId === conversationId ? streamError.message : "");
   const activeLabel = runState === "sending" ? "发送中" : runState === "running" ? "正在工作" : runState === "failed" ? "上次运行失败" : "在线";
-  return <main className="workspace-shell">
+  const renderedSidebarCollapsed = layoutHydrated && sidebarCollapsed;
+  const renderedPanelWidth = layoutHydrated ? panelWidth : defaultPanelWidth;
+  const shellStyle = { "--computer-panel-width": `${renderedPanelWidth}px` } as CSSProperties;
+  return <main className={`workspace-shell ${renderedSidebarCollapsed ? "sidebar-collapsed" : ""} ${panelResize ? "panel-resizing" : ""}`} style={shellStyle}>
     <aside className={`conversation-sidebar ${mobileMenu ? "mobile-open" : ""}`}>
-      <div className="sidebar-top"><Brand /><button className="icon-button mobile-close" onClick={() => setMobileMenu(false)} aria-label="关闭"><X /></button><button className="new-button" onClick={() => setDialog(true)}><Plus />新对话</button></div>
+      <div className="sidebar-top"><div className="sidebar-brand-row"><Brand /><button type="button" className="sidebar-collapse-button" onClick={() => setConversationSidebar(true)} title="收起会话栏" aria-label="收起会话栏"><PanelLeftClose /></button></div><button className="icon-button mobile-close" onClick={() => setMobileMenu(false)} aria-label="关闭"><X /></button><button className="new-button" onClick={() => setDialog(true)}><Plus />新对话</button></div>
       <div className="conversation-list">{loading ? <p className="muted-block">正在载入…</p> : conversations.map((item) => <button key={item.id} className={`conversation-item ${item.id === conversationId ? "active" : ""}`} onClick={() => router.push(`/app/c/${item.id}`)}><span className="mini-agent">{agentName(item.agent_slug)[0]}</span><span><strong>{item.title}</strong><small>{agentName(item.agent_slug)} · {relativeTime(item.updated_at)}</small></span></button>)}</div>
       <div className="sidebar-footer"><UserMenu user={user} /></div>
     </aside>
     <section className={`conversation-main ${displayedCurrent ? "" : "empty-conversation"}`}>
-      <header className="conversation-header"><button className="icon-button mobile-menu" onClick={() => setMobileMenu(true)}><Menu /></button>{displayedCurrent ? <><div className="agent-heading"><span className="agent-avatar">{agentName(displayedCurrent.agent_slug)[0]}</span><span><strong>{agentName(displayedCurrent.agent_slug)}</strong><small className={`run-state ${runState}`}>{activeLabel}</small></span></div><label className="model-selector"><select value={displayedCurrent.model_deployment_id || ""} onChange={(event) => chooseModel(event.target.value)}>{deployments.length === 0 ? <option value="">请先配置模型</option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown /></label></> : <><Brand /><button className="new-button mobile-new" onClick={() => setDialog(true)}><Plus />新对话</button></>}</header>
+      <header className="conversation-header"><div className="conversation-header-leading"><button className="icon-button mobile-menu" onClick={() => setMobileMenu(true)} aria-label="打开会话栏"><Menu /></button><button type="button" className="sidebar-restore-button" onClick={() => setConversationSidebar(false)} title="展开会话栏" aria-label="展开会话栏"><PanelLeftOpen /></button>{displayedCurrent ? <div className="agent-heading"><span className="agent-avatar">{agentName(displayedCurrent.agent_slug)[0]}</span><span><strong>{agentName(displayedCurrent.agent_slug)}</strong><small className={`run-state ${runState}`}>{activeLabel}</small></span></div> : <Brand />}</div>{displayedCurrent ? <label className="model-selector"><select value={displayedCurrent.model_deployment_id || ""} onChange={(event) => chooseModel(event.target.value)}>{deployments.length === 0 ? <option value="">请先配置模型</option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown /></label> : <button className="new-button mobile-new" onClick={() => setDialog(true)}><Plus />新对话</button>}</header>
       {visibleError ? <div className="workspace-error" role="alert">{visibleError}</div> : null}
       {displayedCurrent ? <ConversationView conversation={displayedCurrent} messages={messages} events={events.filter((event) => event.conversation_id === displayedCurrent.id)} runState={runState} onSend={sendMessage} /> : loading || conversationId ? <div className="workspace-loading">正在载入对话…</div> : <EmptyState onNew={() => setDialog(true)} />}
     </section>
-    {displayedCurrent ? <ComputerPanel conversationId={displayedCurrent.id} /> : null}
+    {displayedCurrent ? <ComputerPanel conversationId={displayedCurrent.id} width={renderedPanelWidth} resizing={Boolean(panelResize)} onResizeStart={(clientX) => setPanelResize({ startX: clientX, startWidth: renderedPanelWidth })} onWidthChange={updatePanelWidth} /> : null}
     {dialog ? <NewConversation deployments={deployments} onClose={() => setDialog(false)} /> : null}
   </main>;
 }
@@ -217,7 +291,7 @@ function NewConversation({ deployments, onClose }: { deployments: Deployment[]; 
 
 const computerStatusLabel: Record<ComputerState["status"], string> = { not_created: "未创建", creating: "创建中", running: "运行中", suspended: "已暂停", stopped: "已停止", unhealthy: "异常", missing: "待恢复", error: "连接异常" };
 
-function ComputerPanel({ conversationId }: { conversationId: string }) {
+function ComputerPanel({ conversationId, width, resizing, onResizeStart, onWidthChange }: { conversationId: string; width: number; resizing: boolean; onResizeStart: (clientX: number) => void; onWidthChange: (width: number) => void }) {
   const [tab, setTab] = useState<"files" | "terminal" | "skills">("files");
   const [state, setState] = useState<ComputerState | null>(null);
   useEffect(() => {
@@ -228,7 +302,7 @@ function ComputerPanel({ conversationId }: { conversationId: string }) {
     return () => { active = false; window.clearInterval(timer); };
   }, [conversationId]);
   const status = state?.status || "not_created";
-  return <aside className="computer-panel"><header><span><i className={`computer-status ${status}`} />Computer</span><small title={state?.last_error || undefined}>Docker · 用户级 · {computerStatusLabel[status]}</small></header><nav className="computer-tabs"><button className={tab === "files" ? "active" : ""} onClick={() => setTab("files")}><Folder />Files</button><button className={tab === "terminal" ? "active" : ""} onClick={() => setTab("terminal")}><TerminalSquare />Terminal</button><button className={tab === "skills" ? "active" : ""} onClick={() => setTab("skills")}><Wrench />Skills</button></nav>{tab === "files" ? <FileExplorer key={conversationId} conversationId={conversationId} /> : null}{tab === "terminal" ? <Terminal conversationId={conversationId} /> : null}{tab === "skills" ? <ConversationSkills conversationId={conversationId} /> : null}</aside>;
+  return <aside className="computer-panel"><button type="button" className={`panel-resizer ${resizing ? "active" : ""}`} onPointerDown={(event) => { event.preventDefault(); onResizeStart(event.clientX); }} onKeyDown={(event) => { if (event.key === "ArrowLeft") onWidthChange(width + 24); if (event.key === "ArrowRight") onWidthChange(width - 24); }} role="separator" aria-label="调整 Computer 面板宽度" aria-orientation="vertical" aria-valuemin={minPanelWidth} aria-valuemax={maxPanelWidth} aria-valuenow={Math.round(width)} title="拖动调整面板宽度"><GripVertical /></button><header><span><i className={`computer-status ${status}`} />Computer</span><small title={state?.last_error || undefined}>Docker · 用户级 · {computerStatusLabel[status]}</small></header><nav className="computer-tabs"><button className={tab === "files" ? "active" : ""} onClick={() => setTab("files")}><Folder />Files</button><button className={tab === "terminal" ? "active" : ""} onClick={() => setTab("terminal")}><TerminalSquare />Terminal</button><button className={tab === "skills" ? "active" : ""} onClick={() => setTab("skills")}><Wrench />Skills</button></nav>{tab === "files" ? <FileExplorer key={conversationId} conversationId={conversationId} /> : null}{tab === "terminal" ? <Terminal conversationId={conversationId} /> : null}{tab === "skills" ? <ConversationSkills conversationId={conversationId} /> : null}</aside>;
 }
 
 function ConversationSkills({ conversationId }: { conversationId: string }) {

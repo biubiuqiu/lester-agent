@@ -4,10 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"strings"
 
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
+	"github.com/biubiuqiu/lester-agent/backend/internal/sandbox"
 )
 
 type Edit struct{}
@@ -40,31 +39,12 @@ func (Edit) Execute(ctx context.Context, environment Environment, raw json.RawMe
 	if input.OldString == "" {
 		return nil, errors.New("old_string cannot be empty")
 	}
-	data, err := environment.Sandboxes.ReadFile(ctx, environment.SandboxID, environment.WorkDir, filePath)
+	result, err := environment.Sandboxes.EditFile(ctx, environment.SandboxID, environment.WorkDir, filePath, sandbox.FileEditRequest{
+		OldString: input.OldString, NewString: input.NewString, ReplaceAll: input.ReplaceAll,
+	})
 	if err != nil {
 		return nil, err
 	}
-	updated, replacements, err := replaceExact(string(data), input.OldString, input.NewString, input.ReplaceAll)
-	if err != nil {
-		return nil, err
-	}
-	if err = environment.Sandboxes.WriteFile(ctx, environment.SandboxID, environment.WorkDir, filePath, []byte(updated)); err != nil {
-		return nil, err
-	}
-	environment.Emit("FILE_UPDATED", map[string]any{"path": filePath, "operation": "edit", "replacements": replacements})
-	return map[string]any{"ok": true, "replacements": replacements}, nil
-}
-
-func replaceExact(content, oldString, newString string, replaceAll bool) (string, int, error) {
-	matches := strings.Count(content, oldString)
-	if matches == 0 {
-		return "", 0, errors.New("old_string was not found in the file")
-	}
-	if matches > 1 && !replaceAll {
-		return "", 0, fmt.Errorf("old_string matched %d locations; include more context or set replace_all", matches)
-	}
-	if replaceAll {
-		return strings.ReplaceAll(content, oldString, newString), matches, nil
-	}
-	return strings.Replace(content, oldString, newString, 1), 1, nil
+	environment.Emit("FILE_UPDATED", map[string]any{"path": filePath, "operation": "edit", "replacements": result.Replacements})
+	return map[string]any{"ok": true, "replacements": result.Replacements, "sha256": result.SHA256}, nil
 }

@@ -36,16 +36,6 @@ func TestSliceLines(t *testing.T) {
 	}
 }
 
-func TestReplaceExact(t *testing.T) {
-	updated, replacements, err := replaceExact("color=red\n", "red", "green", false)
-	if err != nil || updated != "color=green\n" || replacements != 1 {
-		t.Fatalf("replaceExact() = %q, %d, %v", updated, replacements, err)
-	}
-	if _, _, err = replaceExact("x x", "x", "y", false); err == nil {
-		t.Fatal("ambiguous replacement was accepted")
-	}
-}
-
 func TestTruncateText(t *testing.T) {
 	value := "0123456789abcdefghijklmnop"
 	got, truncated, omitted := truncateText(value, 12)
@@ -107,6 +97,17 @@ func (f *fakeSandbox) ReadFileLines(_ context.Context, _, _, path string, offset
 func (f *fakeSandbox) WriteFile(_ context.Context, _, _, path string, data []byte) error {
 	f.files[path] = append([]byte(nil), data...)
 	return nil
+}
+func (f *fakeSandbox) EditFile(_ context.Context, _, _, path string, input sandbox.FileEditRequest) (*sandbox.FileEditResult, error) {
+	content := string(f.files[path])
+	replacements := strings.Count(content, input.OldString)
+	if input.ReplaceAll {
+		content = strings.ReplaceAll(content, input.OldString, input.NewString)
+	} else {
+		content = strings.Replace(content, input.OldString, input.NewString, 1)
+	}
+	f.files[path] = []byte(content)
+	return &sandbox.FileEditResult{OK: true, Replacements: replacements, SHA256: "test"}, nil
 }
 func (f *fakeSandbox) ListFiles(context.Context, string, string, string) ([]sandbox.FileEntry, error) {
 	return nil, nil

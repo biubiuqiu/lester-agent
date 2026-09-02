@@ -2,6 +2,8 @@ package sandbox
 
 import (
 	"bytes"
+	"errors"
+	"os/exec"
 	"testing"
 	"time"
 )
@@ -30,6 +32,16 @@ func TestSafeWorkDir(t *testing.T) {
 				t.Fatalf("safeWorkDir() = %q, want %q", got, test.want)
 			}
 		})
+	}
+}
+
+func TestToolboxUnavailable(t *testing.T) {
+	missing := &exec.ExitError{}
+	if !toolboxUnavailable(missing, `exec: "/usr/local/bin/lester-toolbox": stat /usr/local/bin/lester-toolbox: no such file or directory`) {
+		t.Fatal("missing toolbox was not detected")
+	}
+	if toolboxUnavailable(errors.New("boom"), "old_string was not found") {
+		t.Fatal("ordinary toolbox failure was treated as a missing binary")
 	}
 }
 

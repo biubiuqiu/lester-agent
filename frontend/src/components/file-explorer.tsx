@@ -2,12 +2,14 @@
 
 /* eslint-disable @next/next/no-img-element -- Workspace images use authenticated runtime URLs and unknown dimensions. */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import {
   ChevronDown,
   ChevronRight,
   Code2,
   Eye,
+  ExternalLink,
   File as FileIcon,
   FileCode2,
   FileImage,
@@ -49,7 +51,13 @@ const imageExtensions = new Set(["avif", "bmp", "gif", "ico", "jpeg", "jpg", "pn
 const codeExtensions = new Set(["c", "cc", "cpp", "css", "go", "h", "hpp", "java", "js", "jsx", "mjs", "php", "py", "rb", "rs", "scss", "sh", "sql", "ts", "tsx"]);
 const ignoredScriptAttributes = new Set(["src", "integrity", "crossorigin"]);
 const maxTextPreviewBytes = 768 * 1024;
-const maxRenderedLines = 3000;
+const SourcePreview = dynamic(
+  () => import("@/components/source-preview").then((module) => module.SourcePreview),
+  {
+    ssr: false,
+    loading: () => <div className="file-preview-state"><LoaderCircle />正在加载代码预览…</div>,
+  },
+);
 
 export function FileExplorer({ conversationId }: { conversationId: string }) {
   const [directories, setDirectories] = useState<Record<string, DirectoryState>>({ "": { entries: [], loading: true, error: "" } });
@@ -232,6 +240,7 @@ function FilePreview({
   return <section className="file-preview">
     <header className="file-preview-header">
       <div><FileGlyph file={file} /><span><strong>{file.name}</strong><small title={file.path}>{file.path}</small></span></div>
+      {kind === "html" ? <a href={url} target="_blank" rel="noopener noreferrer" title="在新页面打开 HTML 预览" aria-label={`在新页面预览 ${file.name}`}><ExternalLink /></a> : null}
     </header>
     {kind === "html" ? <nav className="file-preview-tabs" aria-label="HTML 查看方式">
       <button type="button" className={mode === "preview" ? "active" : ""} onClick={() => onModeChange("preview")}><Eye />Preview</button>
@@ -243,21 +252,10 @@ function FilePreview({
       {!preview.loading && !preview.error && kind === "html" && mode === "preview" ? <iframe title={`${file.name} preview`} srcDoc={preview.content} sandbox="allow-scripts" /> : null}
       {!preview.loading && !preview.error && kind === "image" ? <img src={url} alt={file.name} /> : null}
       {!preview.loading && !preview.error && kind === "pdf" ? <iframe title={`${file.name} PDF preview`} src={url} /> : null}
-      {!preview.loading && !preview.error && (kind === "text" || (kind === "html" && mode === "source")) ? <SourcePreview content={preview.content} /> : null}
+      {!preview.loading && !preview.error && (kind === "text" || (kind === "html" && mode === "source")) ? <SourcePreview content={preview.content} fileName={file.name} /> : null}
       {!preview.loading && !preview.error && kind === "unsupported" ? <div className="file-preview-state"><FileIcon /><strong>暂不支持预览</strong><span>{formatBytes(file.size)} · 可在 Terminal 中打开</span></div> : null}
     </div>
   </section>;
-}
-
-function SourcePreview({ content }: { content: string }) {
-  const lines = useMemo(() => content.split("\n"), [content]);
-  const visibleLines = lines.slice(0, maxRenderedLines);
-  return <div className="file-source-scroll">
-    <div className="file-source-code">
-      {visibleLines.map((line, index) => <div className="file-source-line" key={index}><span>{index + 1}</span><code>{line || " "}</code></div>)}
-    </div>
-    {lines.length > maxRenderedLines ? <p className="file-source-truncated">仅显示前 {maxRenderedLines} 行，共 {lines.length} 行。</p> : null}
-  </div>;
 }
 
 function FileGlyph({ file, open = false }: { file: Pick<FileEntry, "name" | "is_dir">; open?: boolean }) {

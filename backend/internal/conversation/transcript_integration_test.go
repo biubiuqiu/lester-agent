@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -151,20 +152,88 @@ func (*scriptedModel) Capabilities(context.Context, string) (model.ModelCapabili
 	return model.ModelCapabilities{Tools: true}, nil
 }
 
+type transcriptSandboxFixture struct {
+	mu    sync.Mutex
+	files map[string]string
+}
+
+func newTranscriptSandboxServer(t *testing.T, initial map[string]string) (*httptest.Server, *transcriptSandboxFixture) {
+	t.Helper()
+	fixture := &transcriptSandboxFixture{files: make(map[string]string, len(initial))}
+	for path, content := range initial {
+		fixture.files[path] = content
+	}
+	server := httptest.NewServer(http.HandlerFunc(fixture.serveHTTP))
+	t.Cleanup(server.Close)
+	return server, fixture
+}
+
+func (f *transcriptSandboxFixture) content(path string) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.files[path]
+}
+
+func (f *transcriptSandboxFixture) serveHTTP(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Query().Get("path")
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	switch {
+	case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/files/lines"):
+		lines := strings.Split(f.files[path], "\n")
+		if len(lines) > 0 && lines[len(lines)-1] == "" {
+			lines = lines[:len(lines)-1]
+		}
+		offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+		if offset < 1 {
+			offset = 1
+		}
+		if limit < 1 {
+			limit = len(lines)
+		}
+		start := min(offset-1, len(lines))
+		end := min(start+limit, len(lines))
+		result := sandbox.FileLines{StartLine: offset, TotalLines: len(lines)}
+		for _, line := range lines[start:end] {
+			result.Lines = append(result.Lines, sandbox.FileLine{Text: line})
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(result)
+	case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/files/content"):
+		_, _ = io.WriteString(w, f.files[path])
+	case r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/files/content"):
+		body, _ := io.ReadAll(r.Body)
+		f.files[path] = string(body)
+		w.WriteHeader(http.StatusNoContent)
+	case r.Method == http.MethodPatch && strings.HasSuffix(r.URL.Path, "/files/content"):
+		var input sandbox.FileEditRequest
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil || input.OldString == "" {
+			http.Error(w, "invalid edit request", http.StatusBadRequest)
+			return
+		}
+		matches := strings.Count(f.files[path], input.OldString)
+		if matches == 0 || (matches > 1 && !input.ReplaceAll) {
+			http.Error(w, "edit target is missing or ambiguous", http.StatusConflict)
+			return
+		}
+		count := 1
+		if input.ReplaceAll {
+			count = -1
+		}
+		f.files[path] = strings.Replace(f.files[path], input.OldString, input.NewString, count)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(sandbox.FileEditResult{OK: true, Replacements: matches, SHA256: "test-digest"})
+	default:
+		http.NotFound(w, r)
+	}
+}
+
 func TestTranscriptReadEditSurvivesReload(t *testing.T) {
 	f := newTranscriptFixture(t, false)
 	ctx := context.Background()
-	file := "port: 8080\nmode: development\n"
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet {
-			_, _ = io.WriteString(w, file)
-			return
-		}
-		body, _ := io.ReadAll(r.Body)
-		file = string(body)
-		w.WriteHeader(204)
-	}))
-	defer server.Close()
+	server, files := newTranscriptSandboxServer(t, map[string]string{"config.yaml": "port: 8080\nmode: development\n"})
 	f.service.sandboxes = sandbox.NewClient(server.URL, "")
 	runID := f.startRun(t, "Read config.yaml and change port to 9090")
 	request := model.ModelRequest{Model: "test", System: "test system", Messages: modelHistory(f.messages(t)), Tools: f.service.tools.Definitions(), MaxTokens: 4096}
@@ -198,8 +267,8 @@ func TestTranscriptReadEditSurvivesReload(t *testing.T) {
 	}}
 	f.service.executeTurns(ctx, f.conversationID, runID, &Computer{SandboxID: "test", WorkDir: conversationWorkDir(f.conversationID)}, client, request)
 	stored := f.messages(t)
-	if len(stored) != 6 || file != "port: 9090\nmode: development\n" {
-		t.Fatalf("messages=%d file=%q", len(stored), file)
+	if got := files.content("config.yaml"); len(stored) != 6 || got != "port: 9090\nmode: development\n" {
+		t.Fatalf("messages=%d file=%q", len(stored), got)
 	}
 	for i, m := range stored {
 		if m.Seq != int64(i+1) || m.RunID == nil || *m.RunID != runID {
@@ -233,6 +302,43 @@ func TestTranscriptReadEditSurvivesReload(t *testing.T) {
 	}
 }
 
+func TestExecuteTurnsAllowsMoreThanTwelveToolIterations(t *testing.T) {
+	f := newTranscriptFixture(t, false)
+	ctx := context.Background()
+	server, _ := newTranscriptSandboxServer(t, map[string]string{"progress.txt": "still working"})
+	f.service.sandboxes = sandbox.NewClient(server.URL, "")
+	runID := f.startRun(t, "keep going until the task is complete")
+	request := model.ModelRequest{Messages: modelHistory(f.messages(t)), Tools: f.service.tools.Definitions()}
+	client := &scriptedModel{respond: func(step int, _ model.ModelRequest) []model.ModelEvent {
+		if step < 13 {
+			return []model.ModelEvent{{ToolCall: &model.ToolCall{
+				ID:        fmt.Sprintf("read-%d", step),
+				Name:      "read",
+				Arguments: json.RawMessage(`{"file_path":"progress.txt"}`),
+			}}}
+		}
+		if step == 13 {
+			return []model.ModelEvent{{Delta: "task complete"}}
+		}
+		t.Fatal("unexpected model turn")
+		return nil
+	}}
+
+	f.service.executeTurns(ctx, f.conversationID, runID, &Computer{SandboxID: "test", WorkDir: conversationWorkDir(f.conversationID)}, client, request)
+
+	var status string
+	var invokedTools int
+	if err := f.service.db.QueryRow(ctx, `SELECT status FROM runs WHERE id=$1`, runID).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.service.db.QueryRow(ctx, `SELECT count(*) FROM run_events WHERE run_id=$1 AND type='TOOL_STARTED'`, runID).Scan(&invokedTools); err != nil {
+		t.Fatal(err)
+	}
+	if status != "completed" || invokedTools != 13 || client.step != 14 {
+		t.Fatalf("status=%s invoked_tools=%d model_turns=%d", status, invokedTools, client.step)
+	}
+}
+
 func sameModelMessages(a, b []model.Message) bool {
 	left, err := json.Marshal(a)
 	if err != nil {
@@ -253,10 +359,7 @@ func TestToolContextProjectsEveryIterationAndReloadWithoutPruningStorage(t *test
 	f := newTranscriptFixture(t, false)
 	ctx := context.Background()
 	file := strings.Repeat("original code line\n", 200)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = io.WriteString(w, file)
-	}))
-	defer server.Close()
+	server, _ := newTranscriptSandboxServer(t, map[string]string{"x.go": file, "y.go": file})
 	f.service.sandboxes = sandbox.NewClient(server.URL, "")
 	runID := f.startRun(t, "inspect files")
 	computer := &Computer{SandboxID: "test", WorkDir: conversationWorkDir(f.conversationID)}
