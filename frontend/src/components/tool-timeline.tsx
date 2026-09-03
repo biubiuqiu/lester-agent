@@ -1,4 +1,4 @@
-import { Check, ChevronDown, CircleX, FileText, LoaderCircle, TerminalSquare, Wrench } from "lucide-react";
+import { Check, ChevronDown, CircleX, FileText, LoaderCircle, Square, TerminalSquare, Wrench } from "lucide-react";
 import { MessageContent } from "./message-content";
 
 export type RunEvent = {
@@ -13,14 +13,15 @@ export type RunEvent = {
 type ToolActivity = {
   id: number;
   tool: string;
-  status: "running" | "completed" | "failed";
+  status: "running" | "completed" | "failed" | "cancelled";
   events: RunEvent[];
 };
 
 type NarrativeItem =
   | { kind: "text"; event: RunEvent }
   | { kind: "tool"; activity: ToolActivity }
-  | { kind: "failure"; event: RunEvent };
+  | { kind: "failure"; event: RunEvent }
+  | { kind: "cancellation"; event: RunEvent };
 
 export function RunNarrative({ events, hideFinalText = false }: { events: RunEvent[]; hideFinalText?: boolean }) {
   const status = runStatus(events);
@@ -39,6 +40,7 @@ export function RunNarrative({ events, hideFinalText = false }: { events: RunEve
           return text ? <div className="assistant-progress" key={`text-${item.event.id}`}><MessageContent content={text} /></div> : null;
         }
         if (item.kind === "failure") return <RunFailure event={item.event} key={`failure-${item.event.id}`} />;
+        if (item.kind === "cancellation") return <RunCancellation key={`cancellation-${item.event.id}`} />;
         return <ToolActivityRow activity={item.activity} key={`tool-${item.activity.id}`} />;
       })}
     </section>
@@ -72,6 +74,10 @@ function RunFailure({ event }: { event: RunEvent }) {
       <code>{error}</code>
     </details>
   );
+}
+
+function RunCancellation() {
+  return <div className="run-status-line cancelled"><Square /><span>已停止生成</span></div>;
 }
 
 function narrativeItems(events: RunEvent[]): NarrativeItem[] {
@@ -111,6 +117,15 @@ function narrativeItems(events: RunEvent[]): NarrativeItem[] {
         items.push({ kind: "failure", event });
       }
     }
+    if (event.type === "RUN_CANCELLED") {
+      if (current) {
+        current.status = "cancelled";
+        current.events.push(event);
+        items.push({ kind: "tool", activity: current });
+        current = null;
+      }
+      items.push({ kind: "cancellation", event });
+    }
   }
   if (current) items.push({ kind: "tool", activity: current });
   return items;
@@ -122,12 +137,13 @@ function isToolDetail(type: string) {
 
 function runStatus(events: RunEvent[]) {
   if (events.some((event) => event.type === "RUN_FAILED")) return "failed";
+  if (events.some((event) => event.type === "RUN_CANCELLED")) return "cancelled";
   if (events.some((event) => event.type === "RUN_COMPLETED")) return "completed";
   return "running";
 }
 
 function activityLabel(activity: ToolActivity) {
-  const verb = activity.status === "running" ? "正在" : activity.status === "failed" ? "未能" : "已";
+  const verb = activity.status === "running" ? "正在" : activity.status === "failed" ? "未能" : activity.status === "cancelled" ? "已停止" : "已";
   const action = ({
     bash: "运行命令",
     read: "读取文件",
@@ -144,6 +160,7 @@ function activityLabel(activity: ToolActivity) {
 
 function activityIcon(activity: ToolActivity) {
   if (activity.status === "failed") return <CircleX />;
+  if (activity.status === "cancelled") return <Square />;
   if (activity.tool === "bash" || activity.tool === "computer_exec") return <TerminalSquare />;
   if (activity.tool === "read" || activity.tool === "computer_read_file" || activity.tool === "computer_list_files") return <FileText />;
   if (activity.tool === "write" || activity.tool === "edit" || activity.tool === "computer_write_file") return <Wrench />;

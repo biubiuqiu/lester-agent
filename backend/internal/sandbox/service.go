@@ -6,13 +6,12 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/biubiuqiu/lester-agent/backend/internal/httpapi"
-	"github.com/creack/pty"
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 )
@@ -28,7 +27,9 @@ func NewServiceHandler(provider Provider, token string) *ServiceHandler {
 }
 func (h *ServiceHandler) Router() http.Handler {
 	r := chi.NewRouter()
-	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { httpapi.JSON(w, 200, map[string]bool{"ok": true}) })
+	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		httpapi.JSON(w, 200, map[string]any{"ok": true, "provider": h.provider.Name()})
+	})
 	r.Group(func(private chi.Router) {
 		private.Use(h.authenticate)
 		private.Post("/v1/sandboxes", h.create)
@@ -165,34 +166,24 @@ type terminalMessage struct {
 }
 
 func (h *ServiceHandler) terminal(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	workDir, err := safeWorkDir(r.URL.Query().Get("work_dir"))
-	if err != nil {
-		httpapi.Error(w, 400, err)
-		return
-	}
-	name, err := containerName(id)
-	if err != nil {
-		httpapi.Error(w, 400, err)
-		return
-	}
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return
 	}
 	defer conn.Close()
-	if err = exec.CommandContext(r.Context(), "docker", "exec", name, "mkdir", "-p", workDir).Run(); err != nil {
-		_ = conn.WriteJSON(terminalMessage{Type: "error", Data: err.Error()})
-		return
-	}
-	command := exec.CommandContext(r.Context(), "docker", "exec", "-it", "-w", workDir, name, "sh")
-	terminal, err := pty.Start(command)
+	terminal, err := h.provider.OpenTerminal(r.Context(), chi.URLParam(r, "id"), r.URL.Query().Get("work_dir"))
 	if err != nil {
 		_ = conn.WriteJSON(terminalMessage{Type: "error", Data: err.Error()})
 		return
 	}
 	defer terminal.Close()
-	_ = pty.Setsize(terminal, &pty.Winsize{Cols: 120, Rows: 32})
+	_ = terminal.Resize(r.Context(), 120, 32)
+	var writeMu sync.Mutex
+	writeJSON := func(message terminalMessage) error {
+		writeMu.Lock()
+		defer writeMu.Unlock()
+		return conn.WriteJSON(message)
+	}
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -200,7 +191,9 @@ func (h *ServiceHandler) terminal(w http.ResponseWriter, r *http.Request) {
 		for {
 			n, e := terminal.Read(buffer)
 			if n > 0 {
-				_ = conn.WriteJSON(terminalMessage{Type: "output", Data: string(buffer[:n])})
+				if writeJSON(terminalMessage{Type: "output", Data: string(buffer[:n])}) != nil {
+					return
+				}
 			}
 			if e != nil {
 				return
@@ -216,10 +209,13 @@ func (h *ServiceHandler) terminal(w http.ResponseWriter, r *http.Request) {
 			_, _ = terminal.Write([]byte(message.Data))
 		}
 		if message.Type == "resize" {
-			_ = pty.Setsize(terminal, &pty.Winsize{Cols: uint16(max(message.Cols, 1)), Rows: uint16(max(message.Rows, 1))})
+			resizeErr := terminal.Resize(r.Context(), max(message.Cols, 1), max(message.Rows, 1))
+			if resizeErr != nil && !errors.Is(resizeErr, ErrTerminalResizeUnsupported) {
+				_ = writeJSON(terminalMessage{Type: "error", Data: resizeErr.Error()})
+			}
 		}
 	}
-	_ = command.Process.Kill()
+	_ = terminal.Close()
 	select {
 	case <-done:
 	case <-time.After(time.Second):

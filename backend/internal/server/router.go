@@ -48,6 +48,7 @@ func Router(deps Dependencies) http.Handler {
 			private.Get("/conversations/{id}", deps.Conversations.Get)
 			private.Patch("/conversations/{id}", deps.Conversations.Update)
 			private.Post("/conversations/{id}/messages", deps.Conversations.Send)
+			private.Post("/conversations/{id}/runs/{runID}/cancel", deps.Conversations.CancelRun)
 			private.Post("/conversations/{id}/attachments", deps.Conversations.UploadAttachment)
 			private.Get("/conversations/{id}/skills", deps.Skills.Installed)
 			private.Post("/conversations/{id}/skills/{slug}/install", deps.Skills.Install)

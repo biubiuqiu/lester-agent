@@ -53,13 +53,14 @@ func (g *runGuard) Close() {
 	_ = g.conn.Close(ctx)
 }
 
-// Cancel the worker if ownership is lost. Stop joins the watchdog before Close.
-func (g *runGuard) Watch(ctx context.Context, cancelRun context.CancelFunc) func() {
+// Cancel the worker if ownership is lost or another API replica records a
+// cancellation. Stop joins the watchdog before Close.
+func (g *runGuard) Watch(ctx context.Context, runID uuid.UUID, cancelRun context.CancelCauseFunc) func() {
 	watchCtx, stop := context.WithCancel(ctx)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		ticker := time.NewTicker(5 * time.Second)
+		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
 		for {
 			select {
@@ -67,10 +68,19 @@ func (g *runGuard) Watch(ctx context.Context, cancelRun context.CancelFunc) func
 				return
 			case <-ticker.C:
 				checkCtx, cancel := context.WithTimeout(watchCtx, 5*time.Second)
-				err := g.conn.Ping(checkCtx)
+				var status string
+				err := g.conn.QueryRow(checkCtx, `SELECT status FROM runs WHERE id=$1`, runID).Scan(&status)
 				cancel()
 				if err != nil {
-					cancelRun()
+					cancelRun(fmt.Errorf("%w: %v", errRunOwnershipLost, err))
+					return
+				}
+				if status == "cancelling" || status == "cancelled" {
+					cancelRun(ErrRunCancelled)
+					return
+				}
+				if status != "running" {
+					cancelRun(fmt.Errorf("%w: run status is %s", errRunOwnershipLost, status))
 					return
 				}
 			}
@@ -228,26 +238,36 @@ func (s *Service) savePartialResponse(runID, conversationID uuid.UUID, text stri
 func (s *Service) recoverInterruptedRuns(ctx context.Context, conversationID uuid.UUID) error {
 	// Only call after acquiring the conversation guard. A running row without
 	// its guard is left over from an interrupted process; never replay its tools.
-	rows, err := s.db.Query(ctx, `SELECT id FROM runs WHERE conversation_id=$1 AND status='running' ORDER BY created_at,id`, conversationID)
+	rows, err := s.db.Query(ctx, `SELECT id,status FROM runs WHERE conversation_id=$1 AND status IN ('running','cancelling') ORDER BY created_at,id`, conversationID)
 	if err != nil {
 		return err
 	}
-	var ids []uuid.UUID
+	type interruptedRun struct {
+		id     uuid.UUID
+		status string
+	}
+	var runs []interruptedRun
 	for rows.Next() {
-		var id uuid.UUID
-		if err = rows.Scan(&id); err != nil {
+		var run interruptedRun
+		if err = rows.Scan(&run.id, &run.status); err != nil {
 			rows.Close()
 			return err
 		}
-		ids = append(ids, id)
+		runs = append(runs, run)
 	}
 	err = rows.Err()
 	rows.Close()
 	if err != nil {
 		return err
 	}
-	for _, id := range ids {
-		if err = s.finishFailedRun(ctx, id, conversationID, "Run interrupted before completion; tools were not automatically retried."); err != nil {
+	for _, run := range runs {
+		if run.status == "cancelling" {
+			if _, err = s.finishCancelledRun(ctx, run.id, conversationID); err != nil {
+				return err
+			}
+			continue
+		}
+		if err = s.finishFailedRun(ctx, run.id, conversationID, "Run interrupted before completion; tools were not automatically retried."); err != nil {
 			return err
 		}
 	}

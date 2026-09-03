@@ -76,7 +76,12 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("include_internal") != "true" {
 		messages = visibleMessages(messages)
 	}
-	httpapi.JSON(w, 200, map[string]any{"conversation": item, "messages": messages})
+	activeRun, err := h.service.ActiveRun(r.Context(), p.WorkspaceID, id)
+	if err != nil {
+		httpapi.Error(w, http.StatusInternalServerError, err)
+		return
+	}
+	httpapi.JSON(w, 200, map[string]any{"conversation": item, "messages": messages, "active_run": activeRun})
 }
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.FromContext(r.Context())
@@ -119,6 +124,31 @@ func (h *Handler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpapi.JSON(w, 202, map[string]any{"run_id": runID})
+}
+
+func (h *Handler) CancelRun(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	conversationID, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	runID, err := uuid.Parse(chi.URLParam(r, "runID"))
+	if err != nil {
+		httpapi.Error(w, http.StatusBadRequest, errors.New("invalid run id"))
+		return
+	}
+	if err = h.service.CancelRun(r.Context(), p.WorkspaceID, conversationID, runID); err != nil {
+		switch {
+		case errors.Is(err, ErrRunNotFound):
+			httpapi.Error(w, http.StatusNotFound, err)
+		case errors.Is(err, ErrRunNotActive):
+			httpapi.Error(w, http.StatusConflict, err)
+		default:
+			httpapi.Error(w, http.StatusInternalServerError, err)
+		}
+		return
+	}
+	httpapi.JSON(w, http.StatusAccepted, map[string]any{"run_id": runID, "status": "cancelling"})
 }
 
 func (h *Handler) UploadAttachment(w http.ResponseWriter, r *http.Request) {
@@ -440,7 +470,7 @@ func (h *Handler) Terminal(w http.ResponseWriter, r *http.Request) {
 	}
 	defer client.Close()
 	target := strings.Replace(h.sandboxURL, "http://", "ws://", 1)
-	target = strings.Replace(target, "https://", "wss://", 1) + "/v1/sandboxes/" + computer.SandboxID + "/terminal?work_dir=" + url.QueryEscape(computer.WorkDir)
+	target = strings.Replace(target, "https://", "wss://", 1) + "/v1/sandboxes/" + url.PathEscape(computer.SandboxID) + "/terminal?work_dir=" + url.QueryEscape(computer.WorkDir)
 	headers := http.Header{}
 	headers.Set("Authorization", "Bearer "+h.sandboxToken)
 	upstream, _, err := websocket.DefaultDialer.DialContext(r.Context(), target, headers)

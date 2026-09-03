@@ -68,12 +68,13 @@ type installedSkill struct {
 	Slug, Name, Description string
 }
 type Service struct {
-	db        *pgxpool.Pool
-	redis     *redis.Client
-	models    *model.Store
-	sandboxes *sandbox.Client
-	tools     *agenttool.Registry
-	locks     sync.Map
+	db         *pgxpool.Pool
+	redis      *redis.Client
+	models     *model.Store
+	sandboxes  *sandbox.Client
+	tools      *agenttool.Registry
+	locks      sync.Map
+	activeRuns sync.Map
 }
 
 type Computer struct {
@@ -227,11 +228,17 @@ func (s *Service) Send(ctx context.Context, workspaceID, userID, id uuid.UUID, c
 		return uuid.Nil, err
 	}
 	handedOff = true
+	runCtx, cancelRun := context.WithCancelCause(context.Background())
+	execution := &activeExecution{cancel: cancelRun, done: make(chan struct{})}
+	s.activeRuns.Store(runID, execution)
 	go func() {
-		defer guard.Close()
-		runCtx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		stop := guard.Watch(runCtx, cancel)
+		defer func() {
+			cancelRun(context.Canceled)
+			guard.Close()
+			s.activeRuns.Delete(runID)
+			close(execution.done)
+		}()
+		stop := guard.Watch(runCtx, runID, cancelRun)
 		defer stop()
 		s.execute(runCtx, workspaceID, id, runID)
 	}()
@@ -265,29 +272,33 @@ func (s *Service) UploadAttachment(ctx context.Context, workspaceID, userID, con
 }
 
 func (s *Service) execute(ctx context.Context, workspaceID, conversationID, runID uuid.UUID) {
+	if ctx.Err() != nil {
+		s.finishContext(ctx, runID, conversationID)
+		return
+	}
 	s.event(ctx, runID, conversationID, "RUN_STARTED", map[string]any{})
 	conversation, messages, err := s.Get(ctx, workspaceID, conversationID)
 	if err != nil {
-		s.fail(ctx, runID, conversationID, err)
+		s.finishExecutionError(ctx, runID, conversationID, err)
 		return
 	}
 	if conversation.ModelDeploymentID == uuid.Nil {
-		s.fail(ctx, runID, conversationID, errors.New("configure a default model deployment first"))
+		s.finishExecutionError(ctx, runID, conversationID, errors.New("configure a default model deployment first"))
 		return
 	}
 	client, deployment, err := s.models.Client(ctx, workspaceID, conversation.ModelDeploymentID)
 	if err != nil {
-		s.fail(ctx, runID, conversationID, err)
+		s.finishExecutionError(ctx, runID, conversationID, err)
 		return
 	}
 	computer, err := s.ensureComputer(ctx, conversation)
 	if err != nil {
-		s.fail(ctx, runID, conversationID, err)
+		s.finishExecutionError(ctx, runID, conversationID, err)
 		return
 	}
 	skills, err := s.installedSkills(ctx, workspaceID, conversationID)
 	if err != nil {
-		s.fail(ctx, runID, conversationID, err)
+		s.finishExecutionError(ctx, runID, conversationID, err)
 		return
 	}
 	promptSkills := make([]prompts.Skill, 0, len(skills))
@@ -296,13 +307,13 @@ func (s *Service) execute(ctx context.Context, workspaceID, conversationID, runI
 	}
 	system, err := prompts.Compose(conversation.AgentSlug, conversationID.String(), workspaceID.String(), deployment.Name, computer.Status, promptSkills)
 	if err != nil {
-		s.fail(ctx, runID, conversationID, err)
+		s.finishExecutionError(ctx, runID, conversationID, err)
 		return
 	}
 	history := modelHistory(messages)
 	request := model.ModelRequest{Model: deployment.ModelID, System: system, Messages: history, Tools: s.tools.Definitions()}
 	if err = s.saveRunContext(ctx, runID, messages, request); err != nil {
-		s.fail(ctx, runID, conversationID, err)
+		s.finishExecutionError(ctx, runID, conversationID, err)
 		return
 	}
 	s.executeTurns(ctx, conversationID, runID, computer, client, request)
@@ -310,11 +321,15 @@ func (s *Service) execute(ctx context.Context, workspaceID, conversationID, runI
 
 func (s *Service) executeTurns(ctx context.Context, conversationID, runID uuid.UUID, computer *Computer, client model.ModelClient, request model.ModelRequest) {
 	for turn := 0; ; turn++ {
+		if ctx.Err() != nil {
+			s.finishContext(ctx, runID, conversationID)
+			return
+		}
 		// request retains the complete transcript; only this iteration's copy is
 		// projected. Never append new messages to a previously pruned history.
 		projection, err := toolcontext.Build(request.Messages)
 		if err != nil {
-			s.fail(ctx, runID, conversationID, fmt.Errorf("build tool context: %w", err))
+			s.finishExecutionError(ctx, runID, conversationID, fmt.Errorf("build tool context: %w", err))
 			return
 		}
 		modelRequest := request
@@ -322,17 +337,18 @@ func (s *Service) executeTurns(ctx context.Context, conversationID, runID uuid.U
 		s.event(ctx, runID, conversationID, "MODEL_STARTED", map[string]any{"turn": turn + 1, "tool_context": projection.Stats})
 		stream, err := client.Stream(ctx, modelRequest)
 		if err != nil {
-			s.fail(ctx, runID, conversationID, err)
+			s.finishExecutionError(ctx, runID, conversationID, err)
 			return
 		}
 		var text, pendingDelta strings.Builder
-		flushDelta := func() {
+		flushDeltaWithContext := func(eventCtx context.Context) {
 			if pendingDelta.Len() == 0 {
 				return
 			}
-			s.event(ctx, runID, conversationID, "MODEL_DELTA", map[string]any{"delta": pendingDelta.String()})
+			s.event(eventCtx, runID, conversationID, "MODEL_DELTA", map[string]any{"delta": pendingDelta.String()})
 			pendingDelta.Reset()
 		}
+		flushDelta := func() { flushDeltaWithContext(ctx) }
 		deltaTicker := time.NewTicker(75 * time.Millisecond)
 		callsByIndex := map[int]*model.ToolCall{}
 		streamOpen := true
@@ -354,9 +370,16 @@ func (s *Service) executeTurns(ctx context.Context, conversationID, runID uuid.U
 			}
 			if event.Err != nil {
 				deltaTicker.Stop()
+				if ctx.Err() != nil {
+					cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					flushDeltaWithContext(cleanupCtx)
+					cancel()
+					s.finishContext(ctx, runID, conversationID)
+					return
+				}
 				flushDelta()
 				s.savePartialResponse(runID, conversationID, text.String(), callsByIndex)
-				s.fail(ctx, runID, conversationID, event.Err)
+				s.finishExecutionError(ctx, runID, conversationID, event.Err)
 				return
 			}
 			if event.Delta != "" {
@@ -384,40 +407,53 @@ func (s *Service) executeTurns(ctx context.Context, conversationID, runID uuid.U
 			}
 		}
 		deltaTicker.Stop()
-		flushDelta()
 		if ctx.Err() != nil {
-			s.savePartialResponse(runID, conversationID, text.String(), callsByIndex)
-			s.fail(ctx, runID, conversationID, ctx.Err())
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			flushDeltaWithContext(cleanupCtx)
+			cancel()
+			s.finishContext(ctx, runID, conversationID)
 			return
 		}
+		flushDelta()
 		calls, err := assembledToolCalls(callsByIndex)
 		if err != nil {
 			s.savePartialResponse(runID, conversationID, text.String(), callsByIndex)
-			s.fail(ctx, runID, conversationID, err)
+			s.finishExecutionError(ctx, runID, conversationID, err)
 			return
 		}
 		assistant := model.Message{Role: "assistant", Content: text.String(), ToolCalls: calls, RunID: runID.String()}
 		if err = s.appendMessage(ctx, conversationID, runID, assistant, "", nil); err != nil {
-			s.fail(ctx, runID, conversationID, err)
+			s.finishExecutionError(ctx, runID, conversationID, err)
 			return
 		}
 		s.event(ctx, runID, conversationID, "MODEL_COMPLETED", map[string]any{})
 		if len(calls) == 0 {
-			if _, err = s.db.Exec(ctx, `UPDATE runs SET status='completed',completed_at=now() WHERE id=$1 AND status='running'`, runID); err != nil {
-				s.fail(ctx, runID, conversationID, err)
+			tag, updateErr := s.db.Exec(ctx, `UPDATE runs SET status='completed',completed_at=now() WHERE id=$1 AND status='running'`, runID)
+			if updateErr != nil {
+				s.finishExecutionError(ctx, runID, conversationID, updateErr)
 				return
 			}
-			s.event(ctx, runID, conversationID, "RUN_COMPLETED", map[string]any{})
+			if tag.RowsAffected() != 1 {
+				s.finishExecutionError(ctx, runID, conversationID, errors.New("run is no longer active"))
+				return
+			}
+			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			s.event(cleanupCtx, runID, conversationID, "RUN_COMPLETED", map[string]any{})
+			cancel()
 			return
 		}
 		request.Messages = append(request.Messages, assistant)
 		for _, call := range calls {
 			if ctx.Err() != nil {
-				s.fail(ctx, runID, conversationID, ctx.Err())
+				s.finishContext(ctx, runID, conversationID)
 				return
 			}
 			s.event(ctx, runID, conversationID, "TOOL_STARTED", map[string]any{"tool": call.Name, "tool_call_id": call.ID, "arguments": string(call.Arguments)})
 			result, toolErr := s.runTool(ctx, runID, conversationID, computer, call)
+			if ctx.Err() != nil {
+				s.finishContext(ctx, runID, conversationID)
+				return
+			}
 			eventType := "TOOL_COMPLETED"
 			metadata := map[string]any{}
 			if toolErr != nil {
@@ -427,12 +463,12 @@ func (s *Service) executeTurns(ctx context.Context, conversationID, runID uuid.U
 			}
 			raw, err := json.Marshal(result)
 			if err != nil {
-				s.fail(ctx, runID, conversationID, fmt.Errorf("encode tool result: %w", err))
+				s.finishExecutionError(ctx, runID, conversationID, fmt.Errorf("encode tool result: %w", err))
 				return
 			}
 			toolMessage := model.Message{Role: "tool", Content: string(raw), ToolCallID: call.ID}
 			if err = s.appendMessage(ctx, conversationID, runID, toolMessage, call.Name, metadata); err != nil {
-				s.fail(ctx, runID, conversationID, err)
+				s.finishExecutionError(ctx, runID, conversationID, err)
 				return
 			}
 			payload := map[string]any{"tool": call.Name, "tool_call_id": call.ID, "result": json.RawMessage(raw)}
@@ -458,11 +494,23 @@ func (s *Service) ensureComputer(ctx context.Context, conversation Conversation)
 	lock.Lock()
 	defer lock.Unlock()
 
-	providerID := conversation.CreatedBy.String()
-	var status string
-	err := s.db.QueryRow(ctx, `SELECT provider_ref,status FROM sandboxes WHERE workspace_id=$1 AND user_id=$2`, conversation.WorkspaceID, conversation.CreatedBy).Scan(&providerID, &status)
+	// The process-local lock avoids needless contention in one API replica. The
+	// transaction advisory lock is the cross-replica creation/recovery fence.
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin user computer lease: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, conversation.CreatedBy.String()); err != nil {
+		return nil, fmt.Errorf("lock user computer: %w", err)
+	}
+
+	logicalID := conversation.CreatedBy.String()
+	providerID := logicalID
+	var providerName, status string
+	err = tx.QueryRow(ctx, `SELECT provider,provider_ref,status FROM sandboxes WHERE workspace_id=$1 AND user_id=$2 FOR UPDATE`, conversation.WorkspaceID, conversation.CreatedBy).Scan(&providerName, &providerID, &status)
 	if errors.Is(err, pgx.ErrNoRows) {
-		err = s.db.QueryRow(ctx, `INSERT INTO sandboxes(workspace_id,user_id,provider_ref,status) VALUES($1,$2,$3,'creating') ON CONFLICT(user_id) DO UPDATE SET last_active_at=now() RETURNING provider_ref,status`, conversation.WorkspaceID, conversation.CreatedBy, providerID).Scan(&providerID, &status)
+		err = tx.QueryRow(ctx, `INSERT INTO sandboxes(workspace_id,user_id,provider_ref,status) VALUES($1,$2,$3,'creating') ON CONFLICT(user_id) DO UPDATE SET last_active_at=now() RETURNING provider,provider_ref,status`, conversation.WorkspaceID, conversation.CreatedBy, logicalID).Scan(&providerName, &providerID, &status)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("load user computer: %w", err)
@@ -470,12 +518,14 @@ func (s *Service) ensureComputer(ctx context.Context, conversation Conversation)
 
 	actual, err := s.sandboxes.Inspect(ctx, providerID)
 	if err != nil {
-		s.recordComputerError(ctx, conversation.CreatedBy, err)
+		_, _ = tx.Exec(ctx, `UPDATE sandboxes SET status='error',last_error=$2,last_checked_at=now() WHERE user_id=$1`, conversation.CreatedBy, err.Error())
+		_ = tx.Commit(ctx)
 		return nil, fmt.Errorf("inspect user computer: %w", err)
 	}
 	switch actual.Status {
 	case "missing":
-		actual, err = s.sandboxes.Create(ctx, providerID)
+		_, _ = tx.Exec(ctx, `UPDATE sandboxes SET status='creating',last_error=NULL,last_checked_at=now() WHERE user_id=$1`, conversation.CreatedBy)
+		actual, err = s.sandboxes.Create(ctx, logicalID)
 	case "running":
 		// Already ready.
 	case "unhealthy":
@@ -483,7 +533,7 @@ func (s *Service) ensureComputer(ctx context.Context, conversation Conversation)
 			err = destroyErr
 			break
 		}
-		actual, err = s.sandboxes.Create(ctx, providerID)
+		actual, err = s.sandboxes.Create(ctx, logicalID)
 	default:
 		err = s.sandboxes.Action(ctx, providerID, "resume")
 		if err == nil {
@@ -491,20 +541,39 @@ func (s *Service) ensureComputer(ctx context.Context, conversation Conversation)
 		}
 	}
 	if err != nil {
-		s.recordComputerError(ctx, conversation.CreatedBy, err)
+		_, _ = tx.Exec(ctx, `UPDATE sandboxes SET status='error',last_error=$2,last_checked_at=now() WHERE user_id=$1`, conversation.CreatedBy, err.Error())
+		_ = tx.Commit(ctx)
 		return nil, fmt.Errorf("recover user computer: %w", err)
+	}
+	if actual.ProviderRef != "" {
+		providerID = actual.ProviderRef
+	}
+	if actual.Provider != "" {
+		providerName = actual.Provider
+	}
+	// Persist the generated ACS sandbox ID before any data-plane operation so a
+	// later retry reconnects to the same sandbox rather than creating another.
+	if _, err = tx.Exec(ctx, `UPDATE sandboxes SET provider=$2,provider_ref=$3,status=$4,last_error=NULL,last_checked_at=now() WHERE user_id=$1`, conversation.CreatedBy, providerName, providerID, actual.Status); err != nil {
+		return nil, fmt.Errorf("persist user computer reference: %w", err)
 	}
 	if actual.Status != "running" {
 		err = fmt.Errorf("user computer is %s after recovery", actual.Status)
-		s.recordComputerError(ctx, conversation.CreatedBy, err)
+		_, _ = tx.Exec(ctx, `UPDATE sandboxes SET status='error',last_error=$2,last_checked_at=now() WHERE user_id=$1`, conversation.CreatedBy, err.Error())
+		_ = tx.Commit(ctx)
 		return nil, err
 	}
 	workDir := conversationWorkDir(conversation.ID)
 	if _, err = s.sandboxes.Exec(ctx, providerID, sandbox.Command{Command: "true", WorkDir: workDir}); err != nil {
-		s.recordComputerError(ctx, conversation.CreatedBy, err)
+		_, _ = tx.Exec(ctx, `UPDATE sandboxes SET status='error',last_error=$2,last_checked_at=now() WHERE user_id=$1`, conversation.CreatedBy, err.Error())
+		_ = tx.Commit(ctx)
 		return nil, fmt.Errorf("prepare conversation directory: %w", err)
 	}
-	_, _ = s.db.Exec(ctx, `UPDATE sandboxes SET status='running',last_error=NULL,last_checked_at=now(),last_active_at=now() WHERE workspace_id=$1 AND user_id=$2`, conversation.WorkspaceID, conversation.CreatedBy)
+	if _, err = tx.Exec(ctx, `UPDATE sandboxes SET provider=$3,provider_ref=$4,status='running',last_error=NULL,last_checked_at=now(),last_active_at=now() WHERE workspace_id=$1 AND user_id=$2`, conversation.WorkspaceID, conversation.CreatedBy, providerName, providerID); err != nil {
+		return nil, fmt.Errorf("mark user computer ready: %w", err)
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit user computer lease: %w", err)
+	}
 	return &Computer{SandboxID: providerID, WorkDir: workDir, Status: "running"}, nil
 }
 

@@ -27,7 +27,7 @@ func (c *Client) Create(ctx context.Context, id string) (*Sandbox, error) {
 }
 func (c *Client) Inspect(ctx context.Context, id string) (*Sandbox, error) {
 	var result Sandbox
-	request, err := c.request(ctx, "GET", c.BaseURL+"/v1/sandboxes/"+id, nil)
+	request, err := c.request(ctx, "GET", c.BaseURL+"/v1/sandboxes/"+url.PathEscape(id), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -48,16 +48,16 @@ func (c *Client) Inspect(ctx context.Context, id string) (*Sandbox, error) {
 }
 func (c *Client) Exec(ctx context.Context, id string, cmd Command) (*CommandResult, error) {
 	var result CommandResult
-	err := c.json(ctx, "POST", "/v1/sandboxes/"+id+"/exec", cmd, &result)
+	err := c.json(ctx, "POST", "/v1/sandboxes/"+url.PathEscape(id)+"/exec", cmd, &result)
 	return &result, err
 }
 func (c *Client) ListFiles(ctx context.Context, id, workDir, path string) ([]FileEntry, error) {
 	var result struct{ Files []FileEntry }
-	err := c.json(ctx, "GET", "/v1/sandboxes/"+id+"/files?work_dir="+url.QueryEscape(workDir)+"&path="+url.QueryEscape(path), nil, &result)
+	err := c.json(ctx, "GET", "/v1/sandboxes/"+url.PathEscape(id)+"/files?work_dir="+url.QueryEscape(workDir)+"&path="+url.QueryEscape(path), nil, &result)
 	return result.Files, err
 }
 func (c *Client) ReadFile(ctx context.Context, id, workDir, path string) ([]byte, error) {
-	request, err := c.request(ctx, "GET", c.BaseURL+"/v1/sandboxes/"+id+"/files/content?work_dir="+url.QueryEscape(workDir)+"&path="+url.QueryEscape(path), nil)
+	request, err := c.request(ctx, "GET", c.BaseURL+"/v1/sandboxes/"+url.PathEscape(id)+"/files/content?work_dir="+url.QueryEscape(workDir)+"&path="+url.QueryEscape(path), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -77,14 +77,14 @@ func (c *Client) ReadFile(ctx context.Context, id, workDir, path string) ([]byte
 }
 func (c *Client) ReadFileLines(ctx context.Context, id, workDir, path string, offset, limit int) (*FileLines, error) {
 	var result FileLines
-	endpoint := "/v1/sandboxes/" + id + "/files/lines?work_dir=" + url.QueryEscape(workDir) + "&path=" + url.QueryEscape(path) + "&offset=" + fmt.Sprint(offset) + "&limit=" + fmt.Sprint(limit)
+	endpoint := "/v1/sandboxes/" + url.PathEscape(id) + "/files/lines?work_dir=" + url.QueryEscape(workDir) + "&path=" + url.QueryEscape(path) + "&offset=" + fmt.Sprint(offset) + "&limit=" + fmt.Sprint(limit)
 	if err := c.json(ctx, "GET", endpoint, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 func (c *Client) WriteFile(ctx context.Context, id, workDir, path string, data []byte) error {
-	request, err := c.request(ctx, "PUT", c.BaseURL+"/v1/sandboxes/"+id+"/files/content?work_dir="+url.QueryEscape(workDir)+"&path="+url.QueryEscape(path), bytes.NewReader(data))
+	request, err := c.request(ctx, "PUT", c.BaseURL+"/v1/sandboxes/"+url.PathEscape(id)+"/files/content?work_dir="+url.QueryEscape(workDir)+"&path="+url.QueryEscape(path), bytes.NewReader(data))
 	if err != nil {
 		return err
 	}
@@ -100,14 +100,14 @@ func (c *Client) WriteFile(ctx context.Context, id, workDir, path string, data [
 }
 func (c *Client) EditFile(ctx context.Context, id, workDir, path string, input FileEditRequest) (*FileEditResult, error) {
 	var result FileEditResult
-	endpoint := "/v1/sandboxes/" + id + "/files/content?work_dir=" + url.QueryEscape(workDir) + "&path=" + url.QueryEscape(path)
+	endpoint := "/v1/sandboxes/" + url.PathEscape(id) + "/files/content?work_dir=" + url.QueryEscape(workDir) + "&path=" + url.QueryEscape(path)
 	if err := c.json(ctx, "PATCH", endpoint, input, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 func (c *Client) Action(ctx context.Context, id, action string) error {
-	return c.json(ctx, "POST", "/v1/sandboxes/"+id+"/"+action, nil, nil)
+	return c.json(ctx, "POST", "/v1/sandboxes/"+url.PathEscape(id)+"/"+action, nil, nil)
 }
 func (c *Client) json(ctx context.Context, method, path string, input, output any) error {
 	var body io.Reader

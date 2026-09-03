@@ -1,3 +1,6 @@
+{{- if not (has .Values.sandbox.provider (list "docker" "acs")) }}
+{{- fail "sandbox.provider must be docker or acs" }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -6,23 +9,23 @@ metadata:
     {{- include "lester.labels" . | nindent 4 }}
     app.kubernetes.io/component: sandbox-service
 spec:
-  replicas: 1
-  strategy: {type: Recreate}
+  replicas: {{ if eq .Values.sandbox.provider "docker" }}1{{ else }}{{ .Values.sandbox.replicas }}{{ end }}
+  strategy:
+    type: {{ if eq .Values.sandbox.provider "docker" }}Recreate{{ else }}RollingUpdate{{ end }}
   selector:
     matchLabels:
       {{- include "lester.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: sandbox-service
   template:
     metadata:
-      {{- if or (not .Values.secrets.existingSecret) .Values.podAnnotations }}
       annotations:
+        checksum/sandbox-config: {{ toJson .Values.sandbox | sha256sum }}
         {{- if not .Values.secrets.existingSecret }}
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
         {{- end }}
       {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- end }}
       labels:
         {{- include "lester.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: sandbox-service
@@ -48,6 +51,8 @@ spec:
           env:
             - name: HTTP_ADDR
               value: :8090
+            - name: SANDBOX_PROVIDER
+              value: {{ .Values.sandbox.provider | quote }}
             - name: SANDBOX_IMAGE
               value: {{ .Values.sandbox.image | quote }}
             - name: SANDBOX_SERVICE_TOKEN
@@ -55,6 +60,35 @@ spec:
                 secretKeyRef:
                   name: {{ include "lester.secretName" . }}
                   key: SANDBOX_SERVICE_TOKEN
+            {{- if eq .Values.sandbox.provider "acs" }}
+            - name: ACS_SANDBOX_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "lester.secretName" . }}
+                  key: ACS_SANDBOX_API_KEY
+            - name: ACS_SANDBOX_DOMAIN
+              value: {{ .Values.sandbox.acs.domain | quote }}
+            - name: ACS_SANDBOX_SCHEME
+              value: {{ .Values.sandbox.acs.scheme | quote }}
+            - name: ACS_SANDBOX_PROTOCOL
+              value: {{ .Values.sandbox.acs.protocol | quote }}
+            - name: ACS_SANDBOX_API_URL
+              value: {{ .Values.sandbox.acs.apiURL | quote }}
+            - name: ACS_SANDBOX_BASE_URL
+              value: {{ .Values.sandbox.acs.sandboxBaseURL | quote }}
+            - name: ACS_SANDBOX_TEMPLATE
+              value: {{ .Values.sandbox.acs.template | quote }}
+            - name: ACS_SANDBOX_TIMEOUT_SECONDS
+              value: {{ .Values.sandbox.acs.timeoutSeconds | quote }}
+            - name: ACS_SANDBOX_REQUEST_TIMEOUT_SECONDS
+              value: {{ .Values.sandbox.acs.requestTimeoutSeconds | quote }}
+            - name: ACS_SANDBOX_RUNTIME_PORT
+              value: {{ .Values.sandbox.acs.runtimePort | quote }}
+            - name: ACS_SANDBOX_SECURE
+              value: {{ .Values.sandbox.acs.secure | quote }}
+            - name: ACS_SANDBOX_AUTO_PAUSE
+              value: {{ .Values.sandbox.acs.autoPause | quote }}
+            {{- end }}
           ports:
             - name: http
               containerPort: 8090
@@ -67,14 +101,18 @@ spec:
           securityContext:
             allowPrivilegeEscalation: false
             seccompProfile: {type: RuntimeDefault}
+          {{- if eq .Values.sandbox.provider "docker" }}
           volumeMounts:
             - name: docker-socket
               mountPath: /var/run/docker.sock
+          {{- end }}
+      {{- if eq .Values.sandbox.provider "docker" }}
       volumes:
         - name: docker-socket
           hostPath:
             path: {{ .Values.sandbox.dockerSocketPath | quote }}
             type: Socket
+      {{- end }}
 ---
 apiVersion: v1
 kind: Service

@@ -14,8 +14,7 @@ The current implementation intentionally does not include:
 - Knowledge Base/RAG products
 - Memory
 - browser automation
-- Artifact persistence or Computer snapshots
-- Kubernetes-native or E2B sandbox providers (the Helm deployment still uses DockerSandboxProvider)
+- Artifact persistence, Computer snapshots, or automatic cross-provider workspace migration
 
 Do not implement, simulate, or silently scaffold these capabilities without an explicit request. A disabled UI placeholder must remain clearly disabled and must not imply that the feature works.
 
@@ -54,10 +53,10 @@ This is a Monorepo with separate frontend and backend build contexts.
 - `backend/cmd/api/` is a thin composition root for authentication, workspaces, model configuration, conversations, the Agent runtime, and API transport.
 - `backend/cmd/sandbox-service/` is a separate executable and container. It owns Computer lifecycle, command execution, files, and terminal sessions.
 - `backend/internal/` contains non-exported backend implementation shared by the two Go executables.
-- Only Sandbox Service may mount the Docker Socket.
+- Only Sandbox Service may mount the Docker Socket, and only when the selected provider is `docker`. ACS deployments must not mount it.
 - API and Sandbox Service must remain independently buildable and deployable.
 - Sandbox Service management, file, command, and terminal routes are private service APIs protected by `SANDBOX_SERVICE_TOKEN`; only `/healthz` is unauthenticated. Never expose Sandbox Service through Ingress or a public Service.
-- Sandbox Service owns installation of the versioned `lester-toolbox` binary into new and existing user Computers. File providers must use this helper or an equivalent native provider API; do not reintroduce ad-hoc Python/Shell snippets for file operations.
+- Docker Sandbox Provider owns installation of the versioned `lester-toolbox` binary into new and existing user Computers. Cloud providers may use equivalent native runtime APIs; do not reintroduce ad-hoc Python/Shell snippets for file semantics.
 
 Do not move backend implementation back to repository-root `internal/`, or frontend code back to `apps/web/`. Keep the `frontend/` and `backend/` boundary unless an explicit architecture decision changes it.
 
@@ -71,6 +70,7 @@ Preserve these behaviors when changing the implementation:
 - Model-provider differences must stay behind the model abstraction instead of leaking into conversation handlers.
 - Do not impose a global model output-token cap. Omit optional output-limit fields when unset; only provider adapters whose protocols require a limit may supply a provider-specific fallback.
 - Do not impose a fixed model/tool-loop count. A run continues until the model completes, an operation fails, or its run context is cancelled.
+- User cancellation is a durable run transition (`running` → `cancelling` → `cancelled`). Propagate cancellation through model streams and foreground tool contexts, stop before any later tool or model iteration, close any persisted unresolved tool call with an explicit cancelled/unknown result, and emit `RUN_CANCELLED` exactly once instead of reporting completion or failure. Reloaded clients must recover the active run ID and status from PostgreSQL; Redis/SSE remains live delivery only.
 - The selected persona is fixed for the lifetime of a conversation.
 - Messages, runs, and events are durable in PostgreSQL. Redis is used for live SSE fan-out, not as the source of truth.
 - Persist every complete model-visible assistant message (including intermediate text and tool calls) and every tool result before continuing execution. Restore `tool_calls` and `tool_call_id`, not only role/content. Events are not the transcript source of truth.
@@ -83,7 +83,9 @@ Preserve these behaviors when changing the implementation:
 - Count individual ToolExchanges (call plus result), default to the latest 10 FULL, and preserve the entire latest unobserved batch. Downgrade/evict pairs atomically, including large call arguments, while keeping original assistant prose and valid mixed batches.
 - Pin unresolved tool failures, including nonzero bash exit codes; only later verified matching successes release pins. Use a strict allowlist for consumed low-value output. Keep load_skill/unknown result semantics conservative, and never replay side effects to reconstruct omitted output.
 - Reference metadata must be historical, bounded and factual. Do not fabricate edit line ranges, treat a background launch as test success, or claim character savings are exact token counts. No summary/Memory/RAG or total context budget is implied by tool-context projection.
-- Each user maps to one logical Computer and one persistent workspace volume.
+- Each user maps to one logical Computer and one provider-owned workspace; Docker uses a persistent volume while ACS preserves the workspace through pause/resume.
+- Treat `sandboxes.provider_ref` as an opaque, provider-generated identifier. Persist the value returned by `Provider.Create` before data-plane work, and use a PostgreSQL advisory transaction fence so multiple API replicas cannot create two Computers for one user.
+- Sandbox lifecycle, command, file, and interactive terminal behavior must stay behind `sandbox.Provider`. Provider-specific SDK types, URL rules, Docker commands, and PTY behavior must not leak into conversation or HTTP services.
 - Conversations are rooted at `/workspace/conversations/{conversationId}` inside that Computer; file APIs and terminal sessions must stay scoped to that directory.
 - User Computers default to no network access and retain CPU, memory, and PID limits.
 - Computer state must be reconciled with the sandbox provider; use should recover a stopped or missing Computer while idle suspend/resume preserves the user workspace.
@@ -99,7 +101,7 @@ Preserve these behaviors when changing the implementation:
 
 ## Backend conventions
 
-- Use Go `1.24` and keep the module rooted at `backend/`.
+- Use Go `1.25` and keep the module rooted at `backend/`.
 - Keep `cmd/*/main.go` focused on dependency wiring and process lifecycle.
 - Put application behavior in the appropriate `backend/internal/*` package.
 - Keep the HTTP transport on standard `net/http` with `chi`. Do not introduce Gin or another HTTP framework unless a measured requirement cannot be met by the current stack.
@@ -163,7 +165,7 @@ helm lint deploy/helm/lester \
   --set secrets.existingSecret=lester-test-secrets
 ```
 
-The current Helm deployment requires a dedicated Kubernetes worker with Docker Engine and `/var/run/docker.sock`. Keep `sandbox-service` at one replica and pin it with `sandbox.nodeSelector`; user Computers and Docker volumes are node-local to that worker.
+For `sandbox.provider=docker`, Helm keeps `sandbox-service` at one replica and requires a dedicated Docker worker with `/var/run/docker.sock`; user Computers and volumes are node-local. For `sandbox.provider=acs`, the service is stateless and may have multiple replicas, does not mount the Docker Socket, and uses the configured E2B-compatible Sandbox Manager endpoint. Native ACS protocol is the production default; Private protocol is for single-domain/internal or test setups.
 
 ## Change discipline
 
@@ -171,6 +173,7 @@ The current Helm deployment requires a dedicated Kubernetes worker with Docker E
 - Preserve unrelated user changes in a dirty worktree.
 - Do not expand the product scope while fixing or refactoring existing behavior.
 - Keep Docker build contexts limited to `frontend/` and `backend/`.
+- Keep `Dockerfile.sandbox-runtime` compatible with ACS Agent Runtime: `/bin/bash`, `cp`, `mv`, and `mkdir` are mandatory; preserve the common coding utilities and static `lester-toolbox` unless the runtime contract changes.
 - When changing service paths, ports, environment variables, or startup commands, update Dockerfiles, `deploy/docker-compose.yaml`, `Makefile`, CI, and documentation together.
 - When changing user-visible capabilities or setup steps, update `README.md`.
 - When changing architecture boundaries, invariants, conventions, or validation commands, update this `AGENTS.md` in the same change.

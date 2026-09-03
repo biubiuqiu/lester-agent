@@ -41,6 +41,9 @@ secrets:
   sandboxServiceToken: ""
   objectStoreAccessKey: ""
   objectStoreSecretKey: ""
+  # Required when sandbox.provider=acs. It must match the API key configured
+  # on ack-sandbox-manager.
+  acsSandboxAPIKey: ""
 
 service:
   api:
@@ -58,13 +61,45 @@ ingress:
   tls: []
 
 sandbox:
+  # docker keeps the self-hosted Docker Engine backend; acs uses Alibaba
+  # Cloud ACS Agent Sandbox through its E2B-compatible endpoint.
+  provider: docker
+  replicas: 2
   image: python:3.12-slim
-  # The current DockerSandboxProvider requires a Docker Engine Unix socket.
-  # Pin this pod to a dedicated worker that provides this socket.
+  # Used only by the Docker provider. Pin the service to a dedicated worker.
   dockerSocketPath: /var/run/docker.sock
   nodeSelector: {}
   tolerations: []
   affinity: {}
+  acs:
+    domain: ""
+    scheme: https
+    # native is recommended for production; private uses a single-domain
+    # /kruise path and is useful for internal/test deployments.
+    protocol: native
+    apiURL: ""
+    sandboxBaseURL: ""
+    template: lester-agent
+    timeoutSeconds: 3600
+    requestTimeoutSeconds: 60
+    runtimePort: 49983
+    secure: true
+    autoPause: true
+    sandboxSet:
+      # Enable only when this release should own the ACS warm-pool template.
+      enabled: false
+      replicas: 4
+      image: ""
+      imagePullPolicy: IfNotPresent
+      computeQoS: default
+      resources:
+        limits:
+          cpu: "1"
+          memory: 1Gi
+        requests:
+          cpu: "1"
+          memory: 1Gi
+          ephemeral-storage: 30Gi
 
 networkPolicy:
   enabled: false

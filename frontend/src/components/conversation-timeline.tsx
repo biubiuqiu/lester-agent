@@ -63,7 +63,7 @@ function buildTimeline(messages: Message[], events: RunEvent[]): TimelineItem[] 
 }
 
 function hasVisibleNarrative(events: RunEvent[], hideFinalText: boolean) {
-  if (events.some((event) => event.type === "RUN_FAILED" || event.type === "TOOL_STARTED")) return true;
+  if (events.some((event) => event.type === "RUN_FAILED" || event.type === "RUN_CANCELLED" || event.type === "TOOL_STARTED")) return true;
   const textCount = events.filter((event) => event.type === "MODEL_TEXT").length;
   const completed = events.some((event) => event.type === "RUN_COMPLETED");
   return completed && hideFinalText ? textCount > 1 : textCount > 0;

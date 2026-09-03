@@ -6,15 +6,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	pathpkg "path"
 	"strings"
 	"sync"
 	"time"
-)
 
-var ErrSandboxNotFound = errors.New("sandbox not found")
+	"github.com/creack/pty"
+)
 
 const (
 	defaultToolboxSourcePath = "/usr/local/libexec/lester-toolbox"
@@ -34,6 +35,8 @@ func NewDockerProvider(image string) *DockerProvider {
 	}
 	return &DockerProvider{Image: image, ToolboxSourcePath: defaultToolboxSourcePath, toolboxInstalled: map[string]bool{}}
 }
+
+func (p *DockerProvider) Name() string { return "docker" }
 
 func containerName(id string) (string, error) {
 	if id == "" || strings.ContainsAny(id, "/\\ ") {
@@ -112,7 +115,9 @@ func (p *DockerProvider) Inspect(ctx context.Context, id string) (*Sandbox, erro
 	if state.Health != nil && state.Health.Status == "unhealthy" {
 		status = "unhealthy"
 	}
-	return &Sandbox{ID: id, ProviderRef: name, Status: status, LastActiveAt: time.Now()}, nil
+	// The provider reference is deliberately opaque to callers. Docker keeps
+	// using the stable logical ID and derives its container name internally.
+	return &Sandbox{ID: id, Provider: p.Name(), ProviderRef: id, Status: status, LastActiveAt: time.Now()}, nil
 }
 
 func (p *DockerProvider) Start(ctx context.Context, id string) error {
@@ -350,6 +355,58 @@ func (p *DockerProvider) markToolboxMissing(id string) {
 	p.toolboxMu.Lock()
 	delete(p.toolboxInstalled, id)
 	p.toolboxMu.Unlock()
+}
+
+type dockerTerminal struct {
+	file    *os.File
+	command *exec.Cmd
+	once    sync.Once
+	err     error
+}
+
+func (p *DockerProvider) OpenTerminal(ctx context.Context, id, requestedWorkDir string) (TerminalSession, error) {
+	workDir, err := safeWorkDir(requestedWorkDir)
+	if err != nil {
+		return nil, err
+	}
+	name, err := containerName(id)
+	if err != nil {
+		return nil, err
+	}
+	if err = exec.CommandContext(ctx, "docker", "exec", name, "mkdir", "-p", workDir).Run(); err != nil {
+		return nil, fmt.Errorf("prepare terminal work directory: %w", err)
+	}
+	command := exec.CommandContext(ctx, "docker", "exec", "-it", "-w", workDir, name, "sh")
+	file, err := pty.Start(command)
+	if err != nil {
+		return nil, fmt.Errorf("start docker terminal: %w", err)
+	}
+	terminal := &dockerTerminal{file: file, command: command}
+	if err = terminal.Resize(ctx, 120, 32); err != nil {
+		_ = terminal.Close()
+		return nil, err
+	}
+	return terminal, nil
+}
+
+func (t *dockerTerminal) Read(data []byte) (int, error)  { return t.file.Read(data) }
+func (t *dockerTerminal) Write(data []byte) (int, error) { return t.file.Write(data) }
+func (t *dockerTerminal) Resize(_ context.Context, cols, rows int) error {
+	return pty.Setsize(t.file, &pty.Winsize{Cols: uint16(max(cols, 1)), Rows: uint16(max(rows, 1))})
+}
+func (t *dockerTerminal) Close() error {
+	t.once.Do(func() {
+		if t.command != nil && t.command.Process != nil {
+			_ = t.command.Process.Kill()
+		}
+		if t.file != nil {
+			t.err = t.file.Close()
+			if errors.Is(t.err, io.ErrClosedPipe) {
+				t.err = nil
+			}
+		}
+	})
+	return t.err
 }
 
 func toolboxUnavailable(err error, stderr string) bool {

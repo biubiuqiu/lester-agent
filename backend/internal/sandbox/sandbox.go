@@ -3,7 +3,14 @@ package sandbox
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"time"
+)
+
+var (
+	ErrSandboxNotFound           = errors.New("sandbox not found")
+	ErrTerminalResizeUnsupported = errors.New("terminal resize is not supported by this provider")
 )
 
 type CreateOptions struct {
@@ -14,6 +21,7 @@ type CreateOptions struct {
 }
 type Sandbox struct {
 	ID           string    `json:"id"`
+	Provider     string    `json:"provider"`
 	ProviderRef  string    `json:"provider_ref"`
 	Status       string    `json:"status"`
 	LastActiveAt time.Time `json:"last_active_at"`
@@ -60,7 +68,17 @@ type FileEditResult struct {
 	Replacements int    `json:"replacements"`
 	SHA256       string `json:"sha256"`
 }
+
+// TerminalSession is an interactive shell owned by a Provider. Provider
+// implementations may use a local PTY, a remote process stream, or another
+// transport without exposing those details to the HTTP service.
+type TerminalSession interface {
+	io.ReadWriteCloser
+	Resize(context.Context, int, int) error
+}
+
 type Provider interface {
+	Name() string
 	Create(context.Context, CreateOptions) (*Sandbox, error)
 	Inspect(context.Context, string) (*Sandbox, error)
 	Start(context.Context, string) error
@@ -73,6 +91,7 @@ type Provider interface {
 	WriteFile(context.Context, string, string, string, []byte) error
 	EditFile(context.Context, string, string, string, FileEditRequest) (*FileEditResult, error)
 	ListFiles(context.Context, string, string, string) ([]FileEntry, error)
+	OpenTerminal(context.Context, string, string) (TerminalSession, error)
 }
 
 func decodeEntries(data []byte) ([]FileEntry, error) {

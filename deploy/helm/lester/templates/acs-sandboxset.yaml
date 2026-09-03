@@ -1,0 +1,27 @@
+{{- if and (eq .Values.sandbox.provider "acs") .Values.sandbox.acs.sandboxSet.enabled }}
+apiVersion: agents.kruise.io/v1alpha1
+kind: SandboxSet
+metadata:
+  name: {{ required "sandbox.acs.template is required" .Values.sandbox.acs.template }}
+  labels:
+    {{- include "lester.labels" . | nindent 4 }}
+spec:
+  runtimes:
+    - name: agent-runtime
+  replicas: {{ .Values.sandbox.acs.sandboxSet.replicas }}
+  template:
+    metadata:
+      labels:
+        alibabacloud.com/acs: "true"
+        alibabacloud.com/compute-class: agent-sandbox
+        alibabacloud.com/compute-qos: {{ .Values.sandbox.acs.sandboxSet.computeQoS | quote }}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: sandbox
+          image: {{ required "sandbox.acs.sandboxSet.image is required when the SandboxSet is enabled" .Values.sandbox.acs.sandboxSet.image | quote }}
+          imagePullPolicy: {{ .Values.sandbox.acs.sandboxSet.imagePullPolicy }}
+          resources:
+            {{- toYaml .Values.sandbox.acs.sandboxSet.resources | nindent 12 }}
+      terminationGracePeriodSeconds: 30
+{{- end }}

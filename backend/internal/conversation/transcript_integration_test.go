@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/biubiuqiu/lester-agent/backend/internal/agenttool"
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
@@ -149,6 +150,26 @@ func (*scriptedModel) Generate(context.Context, model.ModelRequest) (*model.Mode
 	return nil, errors.New("not used")
 }
 func (*scriptedModel) Capabilities(context.Context, string) (model.ModelCapabilities, error) {
+	return model.ModelCapabilities{Tools: true}, nil
+}
+
+type cancellableModel struct {
+	started chan struct{}
+}
+
+func (m *cancellableModel) Stream(ctx context.Context, _ model.ModelRequest) (<-chan model.ModelEvent, error) {
+	ch := make(chan model.ModelEvent)
+	close(m.started)
+	go func() {
+		defer close(ch)
+		<-ctx.Done()
+	}()
+	return ch, nil
+}
+func (*cancellableModel) Generate(context.Context, model.ModelRequest) (*model.ModelResponse, error) {
+	return nil, errors.New("not used")
+}
+func (*cancellableModel) Capabilities(context.Context, string) (model.ModelCapabilities, error) {
 	return model.ModelCapabilities{Tools: true}, nil
 }
 
@@ -489,6 +510,86 @@ func TestTranscriptToolFailureAndPartialStream(t *testing.T) {
 	}
 	if len(modelHistory(stored)) != 3 {
 		t.Fatal("partial model response was replayed")
+	}
+}
+
+func TestCancelRunStopsModelAndPersistsCancelledState(t *testing.T) {
+	f := newTranscriptFixture(t, false)
+	runID := f.startRun(t, "keep working until I stop you")
+	runCtx, cancelRun := context.WithCancelCause(context.Background())
+	execution := &activeExecution{cancel: cancelRun, done: make(chan struct{})}
+	f.service.activeRuns.Store(runID, execution)
+	client := &cancellableModel{started: make(chan struct{})}
+	go func() {
+		defer func() {
+			f.service.activeRuns.Delete(runID)
+			close(execution.done)
+		}()
+		f.service.executeTurns(runCtx, f.conversationID, runID, &Computer{}, client, model.ModelRequest{Messages: modelHistory(f.messages(t))})
+	}()
+	select {
+	case <-client.started:
+	case <-time.After(3 * time.Second):
+		t.Fatal("model stream did not start")
+	}
+	active, err := f.service.ActiveRun(context.Background(), f.workspaceID, f.conversationID)
+	if err != nil || active == nil || active.ID != runID || active.Status != "running" {
+		t.Fatalf("active run=%#v err=%v", active, err)
+	}
+	if err := f.service.CancelRun(context.Background(), f.workspaceID, f.conversationID, runID); err != nil {
+		t.Fatal(err)
+	}
+	if !errors.Is(context.Cause(runCtx), ErrRunCancelled) {
+		t.Fatalf("cancellation cause=%v", context.Cause(runCtx))
+	}
+	var status string
+	if err := f.service.db.QueryRow(context.Background(), `SELECT status FROM runs WHERE id=$1`, runID).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != "cancelled" {
+		t.Fatalf("status=%s", status)
+	}
+	active, err = f.service.ActiveRun(context.Background(), f.workspaceID, f.conversationID)
+	if err != nil || active != nil {
+		t.Fatalf("active run after cancellation=%#v err=%v", active, err)
+	}
+	var cancelled, failed, completed int
+	if err := f.service.db.QueryRow(context.Background(), `SELECT
+		count(*) FILTER (WHERE type='RUN_CANCELLED'),
+		count(*) FILTER (WHERE type='RUN_FAILED'),
+		count(*) FILTER (WHERE type='RUN_COMPLETED')
+		FROM run_events WHERE run_id=$1`, runID).Scan(&cancelled, &failed, &completed); err != nil {
+		t.Fatal(err)
+	}
+	if cancelled != 1 || failed != 0 || completed != 0 {
+		t.Fatalf("events cancelled=%d failed=%d completed=%d", cancelled, failed, completed)
+	}
+	if err := f.service.CancelRun(context.Background(), f.workspaceID, f.conversationID, runID); err != nil {
+		t.Fatalf("idempotent cancellation failed: %v", err)
+	}
+}
+
+func TestCancelledRunClosesUnresolvedToolCalls(t *testing.T) {
+	f := newTranscriptFixture(t, false)
+	ctx := context.Background()
+	runID := f.startRun(t, "start a tool then stop")
+	assistant := model.Message{Role: "assistant", Content: "starting", ToolCalls: []model.ToolCall{{ID: "cancelled-tool", Name: "bash", Arguments: json.RawMessage(`{"command":"sleep 30"}`)}}}
+	if err := f.service.appendMessage(ctx, f.conversationID, runID, assistant, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.service.db.Exec(ctx, `UPDATE runs SET status='cancelling' WHERE id=$1`, runID); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := f.service.finishCancelledRun(ctx, runID, f.conversationID)
+	if err != nil || !changed {
+		t.Fatalf("finish cancelled changed=%v err=%v", changed, err)
+	}
+	stored := f.messages(t)
+	if len(stored) != 3 || stored[2].Role != "tool" || stored[2].ToolCallID != "cancelled-tool" || stored[2].Metadata["cancelled"] != true {
+		t.Fatalf("stored=%#v", stored)
+	}
+	if history := modelHistory(stored); len(history) != 3 || history[2].ToolCallID != "cancelled-tool" {
+		t.Fatalf("history=%#v", history)
 	}
 }
 
