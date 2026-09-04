@@ -64,15 +64,20 @@ function buildTimeline(messages: Message[], events: RunEvent[]): TimelineItem[] 
 
 function hasVisibleNarrative(events: RunEvent[], hideFinalText: boolean) {
   if (events.some((event) => event.type === "RUN_FAILED" || event.type === "RUN_CANCELLED" || event.type === "TOOL_STARTED")) return true;
-  const textCount = events.filter((event) => event.type === "MODEL_TEXT").length;
+  const textCount = events.filter((event) => event.type === "MODEL_TEXT" || event.type === "MODEL_DELTA").length;
   const completed = events.some((event) => event.type === "RUN_COMPLETED");
   return completed && hideFinalText ? textCount > 1 : textCount > 0;
 }
 
 function hasPersistedFinalMessage(events: RunEvent[], messages: Message[]) {
   if (!events.some((event) => event.type === "RUN_COMPLETED")) return false;
-  const finalText = events.findLast((event) => event.type === "MODEL_TEXT");
-  const content = String(finalText?.payload.text ?? "").trim();
+  let content = "";
+  for (const event of events) {
+    if (event.type === "MODEL_STARTED") content = "";
+    if (event.type === "MODEL_TEXT") content = String(event.payload.text ?? "");
+    if (event.type === "MODEL_DELTA") content += String(event.payload.delta ?? "");
+  }
+  content = content.trim();
   if (!content) return false;
   const startedAt = new Date(events[0]?.created_at ?? 0).getTime();
   return messages.some((message) => message.role === "assistant"

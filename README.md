@@ -12,7 +12,7 @@
 - 左下角账户菜单统一进入个人资料、模型、Computer 和 Skill 设置；称呼与内置头像主题可持久化修改
 - 在 Workspace 中配置自己的模型 Provider 和密钥
 - 支持 OpenAI、Anthropic、Azure OpenAI、OpenAI-compatible、AWS Bedrock、Google Vertex AI 和 Microsoft Foundry
-- 通过 SSE 实时输出 Agent 回复和当前思考/工具活动；发送键在运行期间变为停止键，可随时终止当前任务
+- 通过 Workspace 级 SSE 实时输出 Agent 回复和当前思考/工具活动；刷新后按持久化事件游标无重复续流，左侧会话栏仅在会话运行或正在停止时展示状态，并用一次性未读提示告知后台任务完成或失败；运行区展示当前动作和耗时，发送键在运行期间变为停止键，可随时终止当前任务
 - 完整保存中间回复、工具调用与工具结果；模型请求按完整 ToolExchange 管理工作集，默认保留最近 10 次工具交互
 - 单次任务不限制模型/工具循环次数；运行会持续到模型完成、发生明确错误或运行上下文被取消
 - 创建对话时选择 Lester、Franklin、Michael 或 Trevor；同一对话内角色保持不变
@@ -104,6 +104,7 @@ ACS Provider 支持 `native` 与 `private` 两种 E2B 路由。生产默认使�
 - 每个会话按数据库生成的递增 `seq` 恢复历史，不再依赖时间戳或随机 UUID 排序。
 - `runs` 记录触发消息，以及当次 System Prompt、工具定义、模型 ID、输出参数和历史起点快照信息（`history_through_seq` 为初始历史的末尾序号），不保存 Provider 密钥。
 - `run_events` 继续供界面展示执行过程。工具开始/完成/失败事件携带调用 ID，完成/失败事件包含工具结果；它们不替代消息历史。
+- 浏览器只保持一条 Workspace 级 SSE，后台会话通过 `conversation_id` 更新左侧运行摘要；打开会话时单独拉取最近 1,200 条持久化事件。浏览器在 `sessionStorage` 保存 Workspace 事件游标，刷新后只补缺失事件，前端始终按事件 ID 幂等合并。
 - 用户停止任务时，Run 会从 `running` 持久化进入 `cancelling`，执行进程取消模型流和前台工具后落为 `cancelled` 并产生 `RUN_CANCELLED`。已经开始但没有结果的工具调用会补一条“已取消、结果未知”的工具结果，避免破坏后续模型上下文；已发生的外部副作用不会自动回滚。页面刷新可从 PostgreSQL 恢复正在运行或正在停止的 Run；Redis/SSE 只负责实时通知。
 - 同一会话一次只执行一个 Run；重复发送返回 HTTP 409，且不会提前插入消息。不同会话仍可并行。每个运行使用一个额外的数据库会话持有锁，因此数据库需直连或使用 session pooling，不能使用 transaction pooling。
 - 进程中断后，下一次发送会将无主运行标记为失败，为尚未返回结果的工具补充“执行中断、结果未知”的记录，不会自动重跑工具。已发生的文件修改不会自动撤销。部分模型流会保留为不完整审计记录，但不作为完整消息传给后续模型。

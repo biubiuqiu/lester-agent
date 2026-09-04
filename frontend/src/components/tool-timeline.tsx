@@ -84,12 +84,19 @@ function narrativeItems(events: RunEvent[]): NarrativeItem[] {
   const items: NarrativeItem[] = [];
   let current: ToolActivity | null = null;
   for (const event of events) {
-    if (event.type === "MODEL_TEXT") {
+    if (event.type === "MODEL_TEXT" || event.type === "MODEL_DELTA") {
       if (current) {
         items.push({ kind: "tool", activity: current });
         current = null;
       }
-      items.push({ kind: "text", event });
+      const text = event.type === "MODEL_DELTA" ? String(event.payload.delta ?? "") : String(event.payload.text ?? "");
+      if (!text) continue;
+      const previous = items.at(-1);
+      if (previous?.kind === "text" && previous.event.run_id === event.run_id) {
+        previous.event = { ...event, type: "MODEL_TEXT", payload: { text: String(previous.event.payload.text ?? "") + text } };
+      } else {
+        items.push({ kind: "text", event: { ...event, type: "MODEL_TEXT", payload: { text } } });
+      }
       continue;
     }
     if (event.type === "TOOL_STARTED") {

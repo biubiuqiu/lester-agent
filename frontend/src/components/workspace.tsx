@@ -6,9 +6,10 @@ import { Check, ChevronDown, FileText, Folder, GripVertical, Menu, PanelLeftClos
 import { Brand } from "./brand";
 import { ConversationTimeline } from "./conversation-timeline";
 import { FileExplorer } from "./file-explorer";
+import { AgentActivityIndicator, ConversationRunMark, RunFailureRecovery, RunNotice, RunNoticeToast, UnreadRunResult } from "./run-awareness";
 import { RunEvent } from "./tool-timeline";
 import { UserMenu } from "./user-menu";
-import { API, api, Attachment, ComputerState, Conversation, Deployment, Message, Skill, upload, UserProfile } from "@/lib/api";
+import { API, api, Attachment, ComputerState, Conversation, ConversationRunStatus, Deployment, Message, Skill, upload, UserProfile } from "@/lib/api";
 
 const agents = [
   { slug: "lester", name: "Lester", initial: "L", copy: "冷静、聪明、务实" },
@@ -26,6 +27,9 @@ type ConversationData = {
 };
 const sidebarPreferenceKey = "lester.workspace.sidebar-collapsed.v1";
 const panelWidthPreferenceKey = "lester.workspace.computer-panel-width.v1";
+const eventCursorKey = (workspaceId: string) => `lester.workspace.event-cursor.v1.${workspaceId}`;
+const unreadRunResultsKey = (workspaceId: string) => `lester.workspace.unread-run-results.v2.${workspaceId}`;
+const runNoticeReplayToleranceMs = 30_000;
 const defaultPanelWidth = 420;
 const minPanelWidth = 320;
 const maxPanelWidth = 1600;
@@ -49,15 +53,35 @@ function currentPanelMaxWidth(sidebarCollapsed: boolean) {
   return clampPanelWidth(maxPanelWidth, sidebarCollapsed);
 }
 
-function appendTimelineEvent(previous: RunEvent[], event: RunEvent) {
-  if (event.type !== "MODEL_DELTA") return [...previous, event].slice(-1200);
-  const delta = String(event.payload.delta || "");
-  if (!delta) return previous;
-  const last = previous.at(-1);
-  if (last?.type === "MODEL_TEXT" && last.run_id === event.run_id) {
-    return [...previous.slice(0, -1), { ...last, payload: { text: String(last.payload.text || "") + delta } }];
+function mergeRunEvents(previous: RunEvent[], incoming: RunEvent[]) {
+  if (incoming.length === 0) return previous;
+  const byId = new Map(previous.map((event) => [event.id, event]));
+  for (const event of incoming) byId.set(event.id, event);
+  return Array.from(byId.values()).toSorted((a, b) => a.id - b.id).slice(-1200);
+}
+
+function eventRunStatus(type: string): ConversationRunStatus | null {
+  if (type === "RUN_COMPLETED") return "completed";
+  if (type === "RUN_CANCELLED") return "cancelled";
+  if (type === "RUN_FAILED") return "failed";
+  if (type === "RUN_STARTED" || type === "MODEL_STARTED" || type === "TOOL_STARTED") return "running";
+  return null;
+}
+
+const terminalRunStatuses = new Set<ConversationRunStatus>(["completed", "failed", "cancelled"]);
+
+function readUnreadRunResults(workspaceId: string) {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(unreadRunResultsKey(workspaceId)) ?? "{}") as Record<string, UnreadRunResult>;
+    return Object.fromEntries(Object.entries(value).filter(([, item]) => item && typeof item.runId === "string" && (item.kind === "completed" || item.kind === "failed")).slice(-100));
+  } catch {
+    return {};
   }
-  return [...previous, { ...event, type: "MODEL_TEXT", payload: { text: delta } }].slice(-1200);
+}
+
+function persistUnreadRunResults(workspaceId: string, value: Record<string, UnreadRunResult>) {
+  const bounded = Object.fromEntries(Object.entries(value).slice(-100));
+  window.localStorage.setItem(unreadRunResultsKey(workspaceId), JSON.stringify(bounded));
 }
 
 export function Workspace({ conversationId }: { conversationId?: string }) {
@@ -67,9 +91,13 @@ export function Workspace({ conversationId }: { conversationId?: string }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [current, setCurrent] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [events, setEvents] = useState<RunEvent[]>([]);
+  const [eventsByConversation, setEventsByConversation] = useState<Record<string, RunEvent[]>>({});
   const [runStatus, setRunStatus] = useState<RunStatus>({ state: "idle" });
-  const seenEventIds = useRef(new Set<number>());
+  const [unreadRunResults, setUnreadRunResults] = useState<Record<string, UnreadRunResult>>({});
+  const [runNotice, setRunNotice] = useState<RunNotice | null>(null);
+  const activeConversationIdRef = useRef(conversationId);
+  const conversationsRef = useRef(conversations);
+  const refreshConversationRef = useRef<((syncRunState?: boolean) => Promise<void>) | null>(null);
   const [dialog, setDialog] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => typeof window !== "undefined" && window.localStorage.getItem(sidebarPreferenceKey) === "true");
@@ -89,6 +117,20 @@ export function Workspace({ conversationId }: { conversationId?: string }) {
   useEffect(() => {
     panelWidthRef.current = panelWidth;
   }, [panelWidth]);
+
+  useEffect(() => {
+    activeConversationIdRef.current = conversationId;
+  }, [conversationId]);
+
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
+
+  useEffect(() => {
+    if (!runNotice) return;
+    const timer = window.setTimeout(() => setRunNotice(null), 7000);
+    return () => window.clearTimeout(timer);
+  }, [runNotice]);
 
   useEffect(() => {
     if (!panelResize) return;
@@ -139,6 +181,13 @@ export function Workspace({ conversationId }: { conversationId?: string }) {
       setConversations(conversationResult.conversations);
       setDeployments(deploymentResult.deployments);
       setUser(userResult);
+      const unread = readUnreadRunResults(userResult.workspace_id);
+      const activeConversationId = activeConversationIdRef.current;
+      if (activeConversationId && unread[activeConversationId]) {
+        delete unread[activeConversationId];
+        persistUnreadRunResults(userResult.workspace_id, unread);
+      }
+      setUnreadRunResults(unread);
     }).catch((reason: unknown) => {
       setPageError(reason instanceof Error ? reason.message : "工作区加载失败");
     }).finally(() => setLoading(false));
@@ -147,60 +196,110 @@ export function Workspace({ conversationId }: { conversationId?: string }) {
   useEffect(() => {
     if (!conversationId) return;
     let active = true;
-    seenEventIds.current = new Set<number>();
-    const refresh = (syncRunState = false) => api<ConversationData>(`/api/v1/conversations/${conversationId}`).then((data) => {
-      if (!active) return;
-      setCurrent(data.conversation);
-      setMessages(data.messages);
-      if (syncRunState) {
-        setRunStatus(data.active_run
-          ? { conversationId, runId: data.active_run.id, state: data.active_run.status === "cancelling" ? "stopping" : "running" }
-          : { conversationId, state: "idle" });
+    const refresh = async (syncRunState = false) => {
+      try {
+        const [data, history] = await Promise.all([
+          api<ConversationData>(`/api/v1/conversations/${conversationId}`),
+          api<{ events: RunEvent[] }>(`/api/v1/conversations/${conversationId}/events/history`),
+        ]);
+        if (!active) return;
+        setCurrent(data.conversation);
+        setMessages(data.messages);
+        setEventsByConversation((previous) => ({
+          ...previous,
+          [conversationId]: mergeRunEvents(previous[conversationId] ?? [], history.events),
+        }));
+        setConversations((previous) => previous.map((item) => item.id === conversationId ? data.conversation : item));
+        if (syncRunState) {
+          const inactiveState: RunState = data.conversation.run_status === "failed" ? "failed" : data.conversation.run_status === "cancelled" ? "cancelled" : "idle";
+          setRunStatus(data.active_run
+            ? { conversationId, runId: data.active_run.id, state: data.active_run.status === "cancelling" ? "stopping" : "running" }
+            : { conversationId, runId: data.conversation.run_id, state: inactiveState });
+        }
+        setPageError("");
+      } catch (reason: unknown) {
+        if (active) setPageError(reason instanceof Error ? reason.message : "对话加载失败");
       }
-      setPageError("");
-    }).catch((reason: unknown) => {
-      if (active) setPageError(reason instanceof Error ? reason.message : "对话加载失败");
-    });
+    };
+    refreshConversationRef.current = refresh;
     void refresh(true);
-    const stream = new EventSource(`${API}/api/v1/conversations/${conversationId}/events`, { withCredentials: true });
+    return () => {
+      active = false;
+      if (refreshConversationRef.current === refresh) refreshConversationRef.current = null;
+    };
+  }, [conversationId]);
+
+  useEffect(() => {
+    const workspaceId = user?.workspace_id;
+    if (!workspaceId) return;
+    const endpoint = new URL(`${API}/api/v1/events`, window.location.origin);
+    const streamStartedAt = Date.now();
+    const storedCursor = Number(window.sessionStorage.getItem(eventCursorKey(workspaceId)) ?? 0);
+    if (Number.isSafeInteger(storedCursor) && storedCursor > 0) endpoint.searchParams.set("last_event_id", String(storedCursor));
+    const stream = new EventSource(endpoint.toString(), { withCredentials: true });
     stream.onmessage = (message) => {
       let incoming: RunEvent;
       try {
         incoming = JSON.parse(message.data) as RunEvent;
       } catch {
-        setStreamError({ conversationId, message: "收到无法解析的运行事件，正在等待重新连接" });
+        setStreamError({ conversationId: "*", message: "收到无法解析的运行事件，正在等待重新连接" });
         return;
       }
-      const event = { ...incoming, conversation_id: incoming.conversation_id || conversationId };
-      if (seenEventIds.current.has(event.id)) return;
-      seenEventIds.current.add(event.id);
-      setEvents((previous) => appendTimelineEvent(previous, event));
-      if (event.type === "RUN_STARTED" || event.type === "MODEL_STARTED" || event.type === "TOOL_STARTED") {
-        setRunStatus((previous) => previous.conversationId === conversationId && previous.runId === event.run_id && previous.state === "stopping"
+      const conversation = incoming.conversation_id;
+      if (!conversation) return;
+      const event = { ...incoming, conversation_id: conversation };
+      if (activeConversationIdRef.current === conversation) {
+        setEventsByConversation((previous) => ({
+          ...previous,
+          [conversation]: mergeRunEvents(previous[conversation] ?? [], [event]),
+        }));
+      }
+      const nextStatus = eventRunStatus(event.type);
+      if (nextStatus) {
+        setConversations((previous) => previous.map((item) => item.id === conversation
+          ? { ...item, run_id: event.run_id, run_status: nextStatus, updated_at: terminalRunStatuses.has(nextStatus) ? event.created_at : item.updated_at }
+          : item));
+      }
+      const currentCursor = Number(window.sessionStorage.getItem(eventCursorKey(workspaceId)) ?? 0);
+      if (!Number.isSafeInteger(currentCursor) || event.id > currentCursor) {
+        window.sessionStorage.setItem(eventCursorKey(workspaceId), String(event.id));
+      }
+      if (activeConversationIdRef.current !== conversation) {
+        const eventCreatedAt = Date.parse(event.created_at);
+        const happenedDuringThisSession = Number.isFinite(eventCreatedAt) && eventCreatedAt >= streamStartedAt - runNoticeReplayToleranceMs;
+        if (happenedDuringThisSession && (nextStatus === "completed" || nextStatus === "failed")) {
+          const kind = nextStatus;
+          const unread = { runId: event.run_id, kind } satisfies UnreadRunResult;
+          setUnreadRunResults((previous) => {
+            const next = { ...previous, [conversation]: unread };
+            persistUnreadRunResults(workspaceId, next);
+            return next;
+          });
+          const title = conversationsRef.current.find((item) => item.id === conversation)?.title || "后台任务";
+          setRunNotice({ conversationId: conversation, title, ...unread });
+        }
+        return;
+      }
+      if (nextStatus === "running") {
+        setRunStatus((previous) => previous.conversationId === conversation && previous.runId === event.run_id && previous.state === "stopping"
           ? previous
-          : { conversationId, runId: event.run_id, state: "running" });
+          : { conversationId: conversation, runId: event.run_id, state: "running" });
       }
-      if (event.type === "RUN_COMPLETED") {
-        setRunStatus({ conversationId, state: "idle" });
-        void refresh();
-      }
-      if (event.type === "RUN_CANCELLED") {
-        setRunStatus({ conversationId, runId: event.run_id, state: "cancelled" });
-        void refresh();
-      }
-      if (event.type === "RUN_FAILED") {
-        setRunStatus({ conversationId, runId: event.run_id, state: "failed" });
-        void refresh();
+      if (nextStatus === "completed") setRunStatus({ conversationId: conversation, runId: event.run_id, state: "idle" });
+      if (nextStatus === "cancelled") setRunStatus({ conversationId: conversation, runId: event.run_id, state: "cancelled" });
+      if (nextStatus === "failed") setRunStatus({ conversationId: conversation, runId: event.run_id, state: "failed" });
+      if (nextStatus === "completed" || nextStatus === "cancelled" || nextStatus === "failed") {
+        void refreshConversationRef.current?.();
       }
     };
     stream.onopen = () => {
-      if (active) setStreamError({ conversationId, message: "" });
+      setStreamError({ conversationId: "*", message: "" });
     };
     stream.onerror = () => {
-      if (active) setStreamError({ conversationId, message: "实时连接暂时中断，浏览器正在自动重连" });
+      setStreamError({ conversationId: "*", message: "实时连接暂时中断，浏览器正在自动重连" });
     };
-    return () => { active = false; stream.close(); };
-  }, [conversationId]);
+    return () => stream.close();
+  }, [user?.workspace_id]);
 
   async function chooseModel(id: string) {
     if (!conversationId) return;
@@ -220,14 +319,18 @@ export function Workspace({ conversationId }: { conversationId?: string }) {
     const optimisticMessage: Message = { id: optimisticId, role: "user", content: visibleContent, metadata: { attachments }, created_at: new Date().toISOString() };
     setMessages((previous) => [...previous, optimisticMessage]);
     setRunStatus({ conversationId, state: "sending" });
+    setConversations((previous) => previous.map((item) => item.id === conversationId ? { ...item, run_status: "running" } : item));
     try {
       const started = await api<{ run_id: string }>(`/api/v1/conversations/${conversationId}/messages`, { method: "POST", body: JSON.stringify({ content, attachment_ids: attachments.map((item) => item.id) }) });
       setRunStatus({ conversationId, runId: started.run_id, state: "running" });
+      setConversations((previous) => previous.map((item) => item.id === conversationId ? { ...item, run_id: started.run_id, run_status: "running" } : item));
       const data = await api<ConversationData>(`/api/v1/conversations/${conversationId}`);
       setCurrent(data.conversation);
       setMessages(data.messages);
+      setConversations((previous) => previous.map((item) => item.id === conversationId ? data.conversation : item));
     } catch (error) {
       setRunStatus({ conversationId, state: "failed" });
+      setConversations((previous) => previous.map((item) => item.id === conversationId ? { ...item, run_status: "failed" } : item));
       setMessages((previous) => previous.filter((message) => message.id !== optimisticId));
       throw error;
     }
@@ -238,6 +341,7 @@ export function Workspace({ conversationId }: { conversationId?: string }) {
     const runId = runStatus.runId;
     setPageError("");
     setRunStatus({ conversationId, runId, state: "stopping" });
+    setConversations((previous) => previous.map((item) => item.id === conversationId ? { ...item, run_id: runId, run_status: "cancelling" } : item));
     try {
       await api(`/api/v1/conversations/${conversationId}/runs/${runId}/cancel`, { method: "POST" });
       const data = await api<ConversationData>(`/api/v1/conversations/${conversationId}`);
@@ -246,15 +350,33 @@ export function Workspace({ conversationId }: { conversationId?: string }) {
       setRunStatus(data.active_run
         ? { conversationId, runId: data.active_run.id, state: data.active_run.status === "cancelling" ? "stopping" : "running" }
         : { conversationId, runId, state: "cancelled" });
+      setConversations((previous) => previous.map((item) => item.id === conversationId ? data.conversation : item));
     } catch (reason) {
       setRunStatus({ conversationId, runId, state: "running" });
+      setConversations((previous) => previous.map((item) => item.id === conversationId ? { ...item, run_id: runId, run_status: "running" } : item));
       setPageError(reason instanceof Error ? reason.message : "停止任务失败");
     }
   }
 
+  function openConversation(id: string) {
+    const workspaceId = user?.workspace_id;
+    if (workspaceId) {
+      setUnreadRunResults((previous) => {
+        if (!previous[id]) return previous;
+        const next = { ...previous };
+        delete next[id];
+        persistUnreadRunResults(workspaceId, next);
+        return next;
+      });
+    }
+    setRunNotice((previous) => previous?.conversationId === id ? null : previous);
+    setMobileMenu(false);
+    router.push(`/app/c/${id}`);
+  }
+
   const runState = runStatus.conversationId === conversationId ? runStatus.state : "idle";
   const displayedCurrent = current?.id === conversationId ? current : null;
-  const visibleError = pageError || (streamError.conversationId === conversationId ? streamError.message : "");
+  const visibleError = pageError || (streamError.conversationId === "*" || streamError.conversationId === conversationId ? streamError.message : "");
   const activeLabel = runState === "sending" ? "发送中" : runState === "running" ? "正在工作" : runState === "stopping" ? "正在停止" : runState === "cancelled" ? "已停止" : runState === "failed" ? "上次运行失败" : "在线";
   const renderedSidebarCollapsed = layoutHydrated && sidebarCollapsed;
   const renderedPanelWidth = layoutHydrated ? panelWidth : defaultPanelWidth;
@@ -263,17 +385,26 @@ export function Workspace({ conversationId }: { conversationId?: string }) {
   return <main className={`workspace-shell ${renderedSidebarCollapsed ? "sidebar-collapsed" : ""} ${panelResize ? "panel-resizing" : ""}`} style={shellStyle}>
     <aside className={`conversation-sidebar ${mobileMenu ? "mobile-open" : ""}`}>
       <div className="sidebar-top"><div className="sidebar-brand-row"><Brand /><button type="button" className="sidebar-collapse-button" onClick={() => setConversationSidebar(true)} title="收起会话栏" aria-label="收起会话栏"><PanelLeftClose /></button></div><button className="icon-button mobile-close" onClick={() => setMobileMenu(false)} aria-label="关闭"><X /></button><button className="new-button" onClick={() => setDialog(true)}><Plus />新对话</button></div>
-      <div className="conversation-list">{loading ? <p className="muted-block">正在载入…</p> : conversations.map((item) => <button key={item.id} className={`conversation-item ${item.id === conversationId ? "active" : ""}`} onClick={() => router.push(`/app/c/${item.id}`)}><span className="mini-agent">{agentName(item.agent_slug)[0]}</span><span><strong>{item.title}</strong><small>{agentName(item.agent_slug)} · {relativeTime(item.updated_at)}</small></span></button>)}</div>
+      <div className="conversation-list">{loading ? <p className="muted-block">正在载入…</p> : conversations.map((item) => <button key={item.id} className={`conversation-item ${item.id === conversationId ? "active" : ""}`} onClick={() => openConversation(item.id)}><span className="mini-agent">{agentName(item.agent_slug)[0]}</span><span className="conversation-item-copy"><strong>{item.title}</strong><small>{agentName(item.agent_slug)} · {conversationStatusLabel(item)}</small></span><ConversationRunMark status={item.run_status} unread={unreadRunResults[item.id]} /></button>)}</div>
       <div className="sidebar-footer"><UserMenu user={user} /></div>
     </aside>
     <section className={`conversation-main ${displayedCurrent ? "" : "empty-conversation"}`}>
       <header className="conversation-header"><div className="conversation-header-leading"><button className="icon-button mobile-menu" onClick={() => setMobileMenu(true)} aria-label="打开会话栏"><Menu /></button><button type="button" className="sidebar-restore-button" onClick={() => setConversationSidebar(false)} title="展开会话栏" aria-label="展开会话栏"><PanelLeftOpen /></button>{displayedCurrent ? <div className="agent-heading"><span className="agent-avatar">{agentName(displayedCurrent.agent_slug)[0]}</span><span><strong>{agentName(displayedCurrent.agent_slug)}</strong><small className={`run-state ${runState}`}>{activeLabel}</small></span></div> : <Brand />}</div>{displayedCurrent ? <label className="model-selector"><select value={displayedCurrent.model_deployment_id || ""} onChange={(event) => chooseModel(event.target.value)}>{deployments.length === 0 ? <option value="">请先配置模型</option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown /></label> : <button className="new-button mobile-new" onClick={() => setDialog(true)}><Plus />新对话</button>}</header>
       {visibleError ? <div className="workspace-error" role="alert">{visibleError}</div> : null}
-      {displayedCurrent ? <ConversationView conversation={displayedCurrent} messages={messages} events={events.filter((event) => event.conversation_id === displayedCurrent.id)} runState={runState} runId={runStatus.conversationId === conversationId ? runStatus.runId : undefined} onSend={sendMessage} onStop={stopRun} /> : loading || conversationId ? <div className="workspace-loading">正在载入对话…</div> : <EmptyState onNew={() => setDialog(true)} />}
+      {displayedCurrent ? <ConversationView key={displayedCurrent.id} conversation={displayedCurrent} messages={messages} events={eventsByConversation[displayedCurrent.id] ?? []} runState={runState} runId={runStatus.conversationId === conversationId ? runStatus.runId : undefined} onSend={sendMessage} onStop={stopRun} /> : loading || conversationId ? <div className="workspace-loading">正在载入对话…</div> : <EmptyState onNew={() => setDialog(true)} />}
     </section>
     {displayedCurrent ? <ComputerPanel conversationId={displayedCurrent.id} width={renderedPanelWidth} maxWidth={renderedPanelMaxWidth} resizing={Boolean(panelResize)} onResizeStart={(clientX) => setPanelResize({ startX: clientX, startWidth: renderedPanelWidth })} onWidthChange={updatePanelWidth} /> : null}
     {dialog ? <NewConversation deployments={deployments} onClose={() => setDialog(false)} /> : null}
+    {runNotice ? <RunNoticeToast notice={runNotice} onOpen={() => openConversation(runNotice.conversationId)} onDismiss={() => setRunNotice(null)} /> : null}
   </main>;
+}
+
+function conversationStatusLabel(conversation: Conversation) {
+  const labels: Partial<Record<ConversationRunStatus, string>> = {
+    running: "正在工作",
+    cancelling: "正在停止",
+  };
+  return labels[conversation.run_status] ?? relativeTime(conversation.updated_at);
 }
 
 function EmptyState({ onNew }: { onNew: () => void }) {
@@ -287,6 +418,7 @@ function ConversationView({ conversation, messages, events, runState, runId, onS
   const [error, setError] = useState("");
   const thread = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const textInput = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { thread.current?.scrollTo({ top: thread.current.scrollHeight, behavior: "smooth" }); }, [messages, events, runState]);
 
   async function submit(event: FormEvent) {
@@ -312,22 +444,14 @@ function ConversationView({ conversation, messages, events, runState, runId, onS
 
   const runActive = runState === "sending" || runState === "running" || runState === "stopping";
   const busy = uploading || runActive;
+  const failure = events.findLast((event) => (!runId || event.run_id === runId) && event.type === "RUN_FAILED");
+  const lastPrompt = messages.findLast((message) => message.role === "user")?.content;
+  const prepareRecovery = (content: string) => {
+    setText(content);
+    window.requestAnimationFrame(() => textInput.current?.focus());
+  };
   const helper = uploading ? `正在上传 ${files.length} 个附件…` : runState === "sending" ? "消息已发送，正在创建任务…" : runState === "running" ? `${agentName(conversation.agent_slug)} 正在工作，可随时停止` : runState === "stopping" ? "正在安全停止当前任务…" : runState === "cancelled" ? "任务已停止，可以继续发送消息" : "附件只保存到当前会话的 .agent/upload，不会自动解析进上下文";
-  return <><div className="thread" ref={thread}><ConversationTimeline messages={messages} events={events} />{runActive ? <AgentActivityIndicator agent={agentName(conversation.agent_slug)} state={runState} runId={runId} events={events} /> : null}</div><form className="composer" onSubmit={submit}><p className={busy ? "composer-status active" : "composer-status"}>{helper}</p><div className="compose-box">{files.length > 0 ? <div className="pending-attachments">{files.map((file, index) => <span key={`${file.name}-${file.lastModified}`}><FileText />{file.name}<button type="button" onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`移除 ${file.name}`}><X /></button></span>)}</div> : null}<textarea rows={2} value={text} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} placeholder={`给 ${agentName(conversation.agent_slug)} 一个目标…`} disabled={busy} /><div className="compose-actions"><input ref={fileInput} type="file" multiple hidden onChange={(event) => setFiles((current) => [...current, ...Array.from(event.target.files || [])])} /><button type="button" className="icon-button upload-button" onClick={() => fileInput.current?.click()} disabled={busy} title="添加附件"><Paperclip /></button>{runActive ? <button type="button" className={`send-button stop-button ${runState === "stopping" ? "stopping" : ""}`} onClick={() => void onStop()} disabled={!runId || runState === "sending" || runState === "stopping"} title={runState === "stopping" ? "正在停止" : "停止生成"} aria-label={runState === "stopping" ? "正在停止任务" : "停止生成"}><Square /></button> : <button className="send-button" disabled={busy || (!text.trim() && files.length === 0)} aria-label="发送消息"><Send /></button>}</div>{error ? <p className="compose-error">{error}</p> : null}</div></form></>;
-}
-
-function AgentActivityIndicator({ agent, state, runId, events }: { agent: string; state: RunState; runId?: string; events: RunEvent[] }) {
-  const latest = events.findLast((event) => (!runId || event.run_id === runId) && (event.type === "TOOL_STARTED" || event.type === "COMMAND_STARTED" || event.type === "FILE_UPDATED" || event.type === "MODEL_STARTED" || event.type === "MODEL_TEXT"));
-  let label = state === "sending" ? "正在准备任务" : state === "stopping" ? "正在停止当前任务" : "正在思考";
-  if (state === "running" && latest?.type === "TOOL_STARTED") label = toolActivityText(String(latest.payload.tool ?? ""));
-  if (state === "running" && latest?.type === "COMMAND_STARTED") label = "正在运行命令";
-  if (state === "running" && latest?.type === "FILE_UPDATED") label = "正在更新文件";
-  if (state === "running" && latest?.type === "MODEL_TEXT") label = "正在生成回复";
-  return <div className={`agent-activity-indicator ${state}`} role="status" aria-live="polite"><span className="activity-pulse" aria-hidden><i /><i /><i /></span><span><strong>{agent}</strong>{label}</span></div>;
-}
-
-function toolActivityText(tool: string) {
-  return ({ bash: "正在运行命令", read: "正在读取文件", write: "正在写入文件", edit: "正在编辑文件", load_skill: "正在加载 Skill" } as Record<string, string>)[tool] ?? "正在使用工具";
+  return <><div className="thread" ref={thread}><ConversationTimeline messages={messages} events={events} />{runActive ? <AgentActivityIndicator agent={agentName(conversation.agent_slug)} state={runState} runId={runId} events={events} /> : null}</div><form className="composer" onSubmit={submit}>{runState === "failed" && failure ? <RunFailureRecovery reason={String(failure.payload.error ?? "任务执行失败")} lastPrompt={lastPrompt} onPrepare={prepareRecovery} /> : null}<p className={busy ? "composer-status active" : "composer-status"}>{helper}</p><div className="compose-box">{files.length > 0 ? <div className="pending-attachments">{files.map((file, index) => <span key={`${file.name}-${file.lastModified}`}><FileText />{file.name}<button type="button" onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`移除 ${file.name}`}><X /></button></span>)}</div> : null}<textarea ref={textInput} rows={2} value={text} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} placeholder={`给 ${agentName(conversation.agent_slug)} 一个目标…`} disabled={busy} /><div className="compose-actions"><input ref={fileInput} type="file" multiple hidden onChange={(event) => setFiles((current) => [...current, ...Array.from(event.target.files || [])])} /><button type="button" className="icon-button upload-button" onClick={() => fileInput.current?.click()} disabled={busy} title="添加附件"><Paperclip /></button>{runActive ? <button type="button" className={`send-button stop-button ${runState === "stopping" ? "stopping" : ""}`} onClick={() => void onStop()} disabled={!runId || runState === "sending" || runState === "stopping"} title={runState === "stopping" ? "正在停止" : "停止生成"} aria-label={runState === "stopping" ? "正在停止任务" : "停止生成"}><Square /></button> : <button className="send-button" disabled={busy || (!text.trim() && files.length === 0)} aria-label="发送消息"><Send /></button>}</div>{error ? <p className="compose-error">{error}</p> : null}</div></form></>;
 }
 
 function NewConversation({ deployments, onClose }: { deployments: Deployment[]; onClose: () => void }) {

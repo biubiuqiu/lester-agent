@@ -195,6 +195,80 @@ func (h *Handler) Events(w http.ResponseWriter, r *http.Request) {
 		httpapi.Error(w, 404, errors.New("conversation not found"))
 		return
 	}
+	h.streamEvents(w, r, "conversation:"+id.String(), `SELECT id,run_id,conversation_id,type,payload,created_at FROM (
+		SELECT id,run_id,conversation_id,type,payload,created_at FROM run_events
+		WHERE conversation_id=$1 AND id>$2 ORDER BY id DESC LIMIT 1200
+	) recent ORDER BY id`, id, lastEventID(r))
+}
+
+// WorkspaceEvents is the single browser-level live feed. Every event remains
+// scoped by the authenticated workspace, while conversation history can be
+// loaded independently when a user opens a thread.
+func (h *Handler) WorkspaceEvents(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	h.streamEvents(w, r, "workspace:"+p.WorkspaceID.String(), `SELECT id,run_id,conversation_id,type,payload,created_at FROM (
+		SELECT re.id,re.run_id,re.conversation_id,re.type,re.payload,re.created_at
+		FROM run_events re JOIN conversations c ON c.id=re.conversation_id
+		WHERE c.workspace_id=$1 AND re.id>$2 ORDER BY re.id DESC LIMIT 1200
+	) recent ORDER BY id`, p.WorkspaceID, lastEventID(r))
+}
+
+func (h *Handler) EventHistory(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var exists bool
+	if err := h.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM conversations WHERE workspace_id=$1 AND id=$2)`, p.WorkspaceID, id).Scan(&exists); err != nil {
+		httpapi.Error(w, http.StatusServiceUnavailable, errors.New("event history unavailable"))
+		return
+	}
+	if !exists {
+		httpapi.Error(w, http.StatusNotFound, errors.New("conversation not found"))
+		return
+	}
+	rows, err := h.db.Query(r.Context(), `SELECT id,run_id,conversation_id,type,payload,created_at FROM (
+		SELECT re.id,re.run_id,re.conversation_id,re.type,re.payload,re.created_at
+		FROM run_events re JOIN conversations c ON c.id=re.conversation_id
+		WHERE c.workspace_id=$1 AND c.id=$2 ORDER BY re.id DESC LIMIT 1200
+	) recent ORDER BY id`, p.WorkspaceID, id)
+	if err != nil {
+		httpapi.Error(w, http.StatusServiceUnavailable, errors.New("event history unavailable"))
+		return
+	}
+	defer rows.Close()
+	events := []RunEvent{}
+	for rows.Next() {
+		event, scanErr := scanRunEvent(rows.Scan)
+		if scanErr != nil {
+			httpapi.Error(w, http.StatusServiceUnavailable, errors.New("event history unavailable"))
+			return
+		}
+		events = append(events, event)
+	}
+	if rows.Err() != nil {
+		httpapi.Error(w, http.StatusServiceUnavailable, errors.New("event history unavailable"))
+		return
+	}
+	httpapi.JSON(w, http.StatusOK, map[string]any{"events": events})
+}
+
+type eventScanner func(...any) error
+
+func scanRunEvent(scan eventScanner) (RunEvent, error) {
+	var event RunEvent
+	var raw []byte
+	if err := scan(&event.ID, &event.RunID, &event.ConversationID, &event.Type, &raw, &event.CreatedAt); err != nil {
+		return RunEvent{}, err
+	}
+	if err := json.Unmarshal(raw, &event.Payload); err != nil {
+		return RunEvent{}, err
+	}
+	return event, nil
+}
+
+func (h *Handler) streamEvents(w http.ResponseWriter, r *http.Request, channelName, historyQuery string, historyArgs ...any) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		httpapi.Error(w, 500, errors.New("streaming unsupported"))
@@ -204,26 +278,14 @@ func (h *Handler) Events(w http.ResponseWriter, r *http.Request) {
 		httpapi.Error(w, http.StatusServiceUnavailable, errors.New("event stream unavailable"))
 		return
 	}
-	subscription := h.redis.Subscribe(r.Context(), "conversation:"+id.String())
+	subscription := h.redis.Subscribe(r.Context(), channelName)
 	defer subscription.Close()
 	if _, err := subscription.Receive(r.Context()); err != nil {
 		httpapi.Error(w, http.StatusServiceUnavailable, errors.New("event stream unavailable"))
 		return
 	}
 	lastID := lastEventID(r)
-	query := `SELECT id,run_id,conversation_id,type,payload,created_at FROM (
-		SELECT id,run_id,conversation_id,type,payload,created_at FROM run_events
-		WHERE conversation_id=$1 AND id>$2 ORDER BY id DESC LIMIT 1200
-	) recent ORDER BY id`
-	args := []any{id, lastID}
-	if lastID == 0 {
-		query = `SELECT id,run_id,conversation_id,type,payload,created_at FROM (
-			SELECT id,run_id,conversation_id,type,payload,created_at FROM run_events
-			WHERE conversation_id=$1 ORDER BY id DESC LIMIT 1200
-		) recent ORDER BY id`
-		args = []any{id}
-	}
-	rows, err := h.db.Query(r.Context(), query, args...)
+	rows, err := h.db.Query(r.Context(), historyQuery, historyArgs...)
 	if err != nil {
 		httpapi.Error(w, http.StatusServiceUnavailable, errors.New("event history unavailable"))
 		return
@@ -233,14 +295,10 @@ func (h *Handler) Events(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Accel-Buffering", "no")
 	sentID := lastID
 	for rows.Next() {
-		var event RunEvent
-		var raw []byte
-		if err = rows.Scan(&event.ID, &event.RunID, &event.ConversationID, &event.Type, &raw, &event.CreatedAt); err != nil {
+		event, scanErr := scanRunEvent(rows.Scan)
+		if scanErr != nil {
 			rows.Close()
 			return
-		}
-		if json.Unmarshal(raw, &event.Payload) != nil {
-			continue
 		}
 		writeSSE(w, event)
 		sentID = event.ID

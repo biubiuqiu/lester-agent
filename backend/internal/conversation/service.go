@@ -24,14 +24,16 @@ import (
 )
 
 type Conversation struct {
-	ID                uuid.UUID `json:"id"`
-	WorkspaceID       uuid.UUID `json:"workspace_id"`
-	CreatedBy         uuid.UUID `json:"created_by"`
-	AgentSlug         string    `json:"agent_slug"`
-	ModelDeploymentID uuid.UUID `json:"model_deployment_id"`
-	Title             string    `json:"title"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
+	ID                uuid.UUID  `json:"id"`
+	WorkspaceID       uuid.UUID  `json:"workspace_id"`
+	CreatedBy         uuid.UUID  `json:"created_by"`
+	AgentSlug         string     `json:"agent_slug"`
+	ModelDeploymentID uuid.UUID  `json:"model_deployment_id"`
+	Title             string     `json:"title"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+	RunID             *uuid.UUID `json:"run_id,omitempty"`
+	RunStatus         string     `json:"run_status"`
 }
 type Message struct {
 	ID             uuid.UUID        `json:"id"`
@@ -106,10 +108,14 @@ func (s *Service) Create(ctx context.Context, workspaceID, userID uuid.UUID, age
 	}
 	var c Conversation
 	err := s.db.QueryRow(ctx, `INSERT INTO conversations(workspace_id,created_by,agent_slug,title,model_deployment_id) VALUES($1,$2,$3,$4,COALESCE(NULLIF($5,'00000000-0000-0000-0000-000000000000'::uuid),(SELECT id FROM model_deployments WHERE workspace_id=$1 AND is_default LIMIT 1))) RETURNING id,workspace_id,created_by,agent_slug,COALESCE(model_deployment_id,'00000000-0000-0000-0000-000000000000'),title,created_at,updated_at`, workspaceID, userID, agent, title, modelID).Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt)
+	c.RunStatus = "idle"
 	return c, err
 }
 func (s *Service) List(ctx context.Context, workspaceID uuid.UUID) ([]Conversation, error) {
-	rows, err := s.db.Query(ctx, `SELECT id,workspace_id,created_by,agent_slug,COALESCE(model_deployment_id,'00000000-0000-0000-0000-000000000000'),title,created_at,updated_at FROM conversations WHERE workspace_id=$1 ORDER BY updated_at DESC`, workspaceID)
+	rows, err := s.db.Query(ctx, `SELECT c.id,c.workspace_id,c.created_by,c.agent_slug,COALESCE(c.model_deployment_id,'00000000-0000-0000-0000-000000000000'),c.title,c.created_at,c.updated_at,latest.id,COALESCE(latest.status,'idle')
+		FROM conversations c
+		LEFT JOIN LATERAL (SELECT r.id,r.status FROM runs r WHERE r.conversation_id=c.id ORDER BY r.created_at DESC,r.id DESC LIMIT 1) latest ON true
+		WHERE c.workspace_id=$1 ORDER BY c.updated_at DESC`, workspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +123,7 @@ func (s *Service) List(ctx context.Context, workspaceID uuid.UUID) ([]Conversati
 	items := []Conversation{}
 	for rows.Next() {
 		var c Conversation
-		if err = rows.Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		if err = rows.Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.RunID, &c.RunStatus); err != nil {
 			return nil, err
 		}
 		items = append(items, c)
@@ -126,7 +132,10 @@ func (s *Service) List(ctx context.Context, workspaceID uuid.UUID) ([]Conversati
 }
 func (s *Service) Get(ctx context.Context, workspaceID, id uuid.UUID) (Conversation, []Message, error) {
 	var c Conversation
-	err := s.db.QueryRow(ctx, `SELECT id,workspace_id,created_by,agent_slug,COALESCE(model_deployment_id,'00000000-0000-0000-0000-000000000000'),title,created_at,updated_at FROM conversations WHERE id=$2 AND workspace_id=$1`, workspaceID, id).Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt)
+	err := s.db.QueryRow(ctx, `SELECT c.id,c.workspace_id,c.created_by,c.agent_slug,COALESCE(c.model_deployment_id,'00000000-0000-0000-0000-000000000000'),c.title,c.created_at,c.updated_at,latest.id,COALESCE(latest.status,'idle')
+		FROM conversations c
+		LEFT JOIN LATERAL (SELECT r.id,r.status FROM runs r WHERE r.conversation_id=c.id ORDER BY r.created_at DESC,r.id DESC LIMIT 1) latest ON true
+		WHERE c.id=$2 AND c.workspace_id=$1`, workspaceID, id).Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.RunID, &c.RunStatus)
 	if err != nil {
 		return c, nil, err
 	}
@@ -721,10 +730,13 @@ func (s *Service) event(ctx context.Context, runID, conversationID uuid.UUID, ev
 	event.ConversationID = conversationID
 	event.Type = eventType
 	event.Payload = payload
-	if err := s.db.QueryRow(ctx, `INSERT INTO run_events(run_id,conversation_id,type,payload) VALUES($1,$2,$3,$4) RETURNING id,created_at`, runID, conversationID, eventType, raw).Scan(&event.ID, &event.CreatedAt); err == nil {
+	var workspaceID uuid.UUID
+	if err := s.db.QueryRow(ctx, `INSERT INTO run_events(run_id,conversation_id,type,payload) VALUES($1,$2,$3,$4)
+		RETURNING id,created_at,(SELECT workspace_id FROM conversations WHERE id=$2)`, runID, conversationID, eventType, raw).Scan(&event.ID, &event.CreatedAt, &workspaceID); err == nil {
 		encoded, _ := json.Marshal(event)
 		if s.redis != nil {
 			_ = s.redis.Publish(ctx, "conversation:"+conversationID.String(), encoded).Err()
+			_ = s.redis.Publish(ctx, "workspace:"+workspaceID.String(), encoded).Err()
 		}
 	}
 }
