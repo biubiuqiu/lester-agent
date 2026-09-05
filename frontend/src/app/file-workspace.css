@@ -1,0 +1,85 @@
+/* File-centered workspace: compact chrome, generous preview, bounded scroll areas. */
+.file-explorer { min-height: 0; overflow: hidden; }
+.file-tree-pane, .file-tree-pane.has-preview { flex: 0 1 auto; height: auto; min-height: 0; max-height: min(28vh, 250px); background: var(--workspace-surface, #f7f8f5); }
+.file-tree-pane.collapsed { flex: 0 0 auto; height: auto; }
+.file-tree-scroll { padding: 0 8px 8px; }
+.file-tree-row { height: 34px; border-radius: 6px; padding-right: 8px; }
+.file-tree-name { font-size: 13px; }
+.file-tree-row small { color: #69766d; font-size: 11px; }
+.file-tree-status, .file-preview.empty p { font-size: 13px; color: #647268; }
+.file-preview.empty strong { font-size: 15px; color: #384b3e; }
+.file-explorer-toolbar { position: relative; height: 44px; gap: 4px; padding: 0 8px; border-bottom: 0; }
+.file-explorer-toolbar > button:first-child { display: flex; width: auto; gap: 5px; padding: 0 6px; align-items: center; }
+.file-explorer-toolbar strong { font-size: 12px; letter-spacing: 0; }
+.file-explorer-toolbar > button { width: 32px; height: 32px; }
+.file-explorer-toolbar > .file-sync-label { margin-left: auto; font-size: 11px; line-height: 1.4; color: #68786d; }
+.file-sync-error { margin: 4px 12px; font-size: 12px; color: #a53f35; overflow-wrap: anywhere; }
+.file-changes { margin-right: auto; color: #607065; font-size: 12px; }
+.file-changes summary { list-style: none; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
+.file-changes summary::-webkit-details-marker { display: none; }
+.file-changes summary:hover, .file-changes[open] summary { background: #e7ede6; color: #354e3b; }
+.file-changes-popover { position: absolute; z-index: 30; top: calc(100% - 2px); left: 8px; right: 8px; max-height: min(380px, 60vh); overflow: auto; padding: 16px; border: 1px solid #d9e1d7; border-radius: 12px; background: #fff; box-shadow: 0 12px 36px #20322520; }
+.file-changes-popover > strong { font-size: 14px; }
+.file-changes-popover p { color: #67746b; line-height: 1.65; margin: 8px 0 12px; }
+.file-changes-popover button { display: flex; align-items: center; gap: 10px; width: 100%; height: auto; padding: 8px 0; border: 0; background: transparent; text-align: left; }
+.file-changes-popover button > span { font: inherit; color: inherit; }
+.file-changes-popover button > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-changes-popover [data-kind] { flex-shrink: 0; color: #42744f; }
+.file-changes-popover [data-kind=deleted] { color: #a7483f; }
+.open-file-tabs { display: flex; flex: 0 0 auto; overflow-x: auto; min-height: 42px; padding: 4px 8px 0; border-bottom: 1px solid #e4e9e1; background: #f7f8f5; }
+.open-file-tabs > div { display: flex; align-items: center; flex-shrink: 0; border-bottom: 2px solid transparent; border-radius: 8px 8px 0 0; }
+.open-file-tabs > div.active { background: #fff; border-bottom-color: #56775e; }
+.open-file-tabs button { background: transparent; border: 0; padding: 9px 8px; font-size: 13px; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #546459; }
+.open-file-tabs > div.active > button:first-child { color: #253c2c; font-weight: 600; }
+.open-file-tabs svg { width: 14px; height: 14px; }
+.open-file-tabs button:last-child { opacity: .65; }
+.open-file-tabs button:last-child:hover { opacity: 1; }
+.file-preview-header { min-height: 48px; height: auto; padding: 6px 8px; gap: 4px; border-bottom: 1px solid #e7ebe4; }
+.file-preview-format { display: flex!important; align-items: center; gap: 7px; font-size: 12px; color: #5c6c61; min-width: 0; }
+.file-preview-format small { font-size: 11px; color: #68766e; margin: 0; }
+.file-preview-tabs { border: 0; height: 32px; padding: 0; gap: 2px; align-items: center; min-width: 0; }
+.file-preview-tabs button { height: 32px; padding: 0 8px; border: 0; border-radius: 6px; font-size: 12px; color: #647367; white-space: nowrap; }
+.file-preview-tabs button.active { background: #edf2eb; color: #34533d; }
+.file-preview-tabs svg { width: 14px; height: 14px; }
+.file-preview-header .file-preview-actions { flex: 0 0 auto; display: flex; gap: 2px; align-items: center; margin-left: auto; }
+.file-preview-actions button, .file-download button, .file-preview-actions a { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: #55685b; }
+.file-preview-actions .file-ask-agent { width: auto; gap: 5px; padding: 0 8px; font-size: 12px; background: #eef3eb; color: #36573e; }
+.file-preview-actions button:hover, .file-download button:hover, .file-preview-actions a:hover { background: #e3ebdf; color: #294332; }
+.file-preview-actions svg, .file-download svg { width: 16px; height: 16px; flex-shrink: 0; }
+.file-download { position: relative; display: inline-flex; }
+.file-download > span { position: absolute; top: 100%; right: 0; z-index: 10; width: 220px; border: 1px solid #e7d6d0; border-radius: 8px; background: #fff7f4; padding: 8px; color: #a14436; font-size: 12px; overflow-wrap: anywhere; white-space: normal; }
+.file-markdown { padding: 24px; overflow-wrap: anywhere; font-size: 15px; line-height: 1.8; }
+.file-preview-body.markdown { overflow: auto; }
+.artifact-cards { display: grid; gap: 8px; width: min(100%, 780px); margin: 12px auto 16px; }
+.artifact-cards > small { color: #647367; font-size: 12px; }
+.artifact-card { display: flex; align-items: center; width: min(100%, 640px); border: 1px solid #dce5d7; border-radius: 12px; padding: 6px 10px; background: #f8faf5; }
+.artifact-card:hover { border-color: #afc3a8; background: #f2f6ee; }
+.artifact-card > button { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; border: 0; background: transparent; padding: 8px 0; text-align: left; cursor: pointer; }
+.artifact-card > button > svg { width: 22px; height: 22px; color: #5b7b61; flex-shrink: 0; }
+.artifact-card > button > span:first-of-type { flex: 1; min-width: 0; }
+.artifact-card strong, .artifact-card small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.artifact-card strong { font-weight: 600; font-size: 14px; color: #304937; }
+.artifact-card small { margin-top: 3px; font-size: 12px; color: #607367; }
+.artifact-card > button > span:last-child { font-size: 12px; color: #47664d; padding: 0 8px; }
+.file-reference { display: flex; align-items: center; gap: 7px; padding: 6px 8px; margin: 2px 0 10px; border: 1px solid #dce6d6; border-radius: 7px; background: #f0f5eb; color: #38563f; width: fit-content; max-width: 100%; font-size: 13px; }
+.file-reference > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-reference svg { width: 15px; height: 15px; flex-shrink: 0; }
+.file-reference button { display: flex; border: 0; background: transparent; padding: 3px; }
+.open-files-button { display: none; }
+.close-files-panel { display: none; align-items: center; justify-content: center; width: 32px; height: 32px; flex: 0 0 32px; border: 0; border-radius: 7px; background: transparent; color: #586b5e; }
+.close-files-panel:hover { background: #e4ebdf; }
+.close-files-panel svg { width: 18px; height: 18px; }
+.computer-panel { container-type: inline-size; }
+.computer-panel.preview-expanded { display: flex; position: fixed; inset: 20px; z-index: 80; width: auto; height: auto; min-height: 0; box-shadow: 0 0 0 30px #20282066, 0 16px 50px #20282033; border: 1px solid #dce3db; border-radius: 14px; }
+.computer-panel.preview-expanded .panel-resizer { display: none; }
+.computer-panel.preview-expanded .close-files-panel { display: inline-flex; }
+@container (max-width: 430px) {
+  .file-explorer-toolbar > .file-sync-label { display: none; }
+}
+@media (max-width: 1000px) {
+  .open-files-button { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #dde4dc; border-radius: 8px; padding: 7px 9px; background: #fff; font-size: 13px; }
+  .open-files-button svg { width: 16px; height: 16px; }
+  .computer-panel.files-open { display: flex; position: fixed; inset: 8px; z-index: 80; width: auto; height: auto; min-height: 0; box-shadow: 0 0 0 10px #20282055; border-radius: 12px; }
+  .computer-panel.files-open .close-files-panel { display: inline-flex; }
+  .computer-panel.files-open .panel-resizer { display: none; }
+}

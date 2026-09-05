@@ -123,7 +123,10 @@ Preserve these behaviors when changing the implementation:
 - Preserve the conversation-first interaction model and the three-panel desktop layout unless a product change explicitly replaces it.
 - Keep the conversation rail fixed-width but collapsible, and keep the desktop Computer panel user-resizable with bounded, persisted sizing.
 - Grid and flex panes that own scroll containers must use bounded viewport tracks and `min-height: 0`; long file, terminal, or transcript content must scroll inside its pane and must never push the composer below the viewport.
+- Keep the right panel file-centered and read-only: bounded open tabs, preview/source, download and explicit file references to the Agent, not a heavyweight editor or Checkpoint system. File cards must resolve to verified conversation files; references carry paths, not automatically injected file contents.
+- Share conversation-scoped file inventory through `FileWorkspaceProvider`. Invalidate after file/tool/run events and use bounded, visibility-aware polling for bash/background writes; preserve selections and avoid refetching unchanged previews. Mark partial scans visibly and never infer deletions from incomplete listings. Observed metadata changes are not a durable complete audit trail or content diff.
 - Keep responsive behavior usable on mobile.
+- Keep workspace chrome compact: the file tree takes only the space its rows need, changes are available on demand, and preview actions share one toolbar. Preserve readable typography, keyboard focus, and a visible composer on desktop and mobile. Conversation search filters titles locally without rewriting persisted titles.
 - Do not present unavailable functionality as enabled.
 - Every asynchronous page load and mutation must surface a visible error state and prevent duplicate submission while pending. Clear conversation-scoped state before loading a different conversation.
 - Avoid introducing a state-management or UI framework unless the existing React structure is no longer sufficient and the dependency is justified.
