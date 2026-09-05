@@ -4,11 +4,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Download, FileText, FolderOpen, X } from "lucide-react";
 import { type FileEntry, readConversationFileBytes } from "@/lib/api";
 import { listDirectory, relativeFilePath, scanFiles, wasPathCovered, type FileState } from "@/lib/file-inventory";
+import { readView, updateView } from "@/lib/conversation-view-state";
 import type { RunEvent } from "./tool-timeline";
 
 type Change = { path: string; kind: "added" | "updated" | "deleted" };
 type FileWorkspaceValue = FileState & {
   conversationId: string;
+  storageKey: string;
   loading: boolean;
   changes: Change[];
   tabs: FileEntry[];
@@ -37,20 +39,21 @@ export function useFileWorkspace() {
   return context;
 }
 
-export function FileWorkspaceProvider({ conversationId, events, runId, running, children }: {
-  conversationId?: string; events: RunEvent[]; runId?: string; running: boolean; children: React.ReactNode;
+export function FileWorkspaceProvider({ conversationId, storageKey, events, runId, running, children }: {
+  conversationId?: string; storageKey: string; events: RunEvent[]; runId?: string; running: boolean; children: React.ReactNode;
 }) {
   const [state, setState] = useState<FileState>(emptyState);
   const [loading, setLoading] = useState(true);
-  const [tabs, setTabs] = useState<FileEntry[]>([]);
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const [reference, setReference] = useState<string | null>(null);
+  const [tabs, setTabs] = useState<FileEntry[]>(() => readView(storageKey).tabs.map((path) => ({ path, name: path.split("/").at(-1) ?? path, is_dir: false, size: 0, modified_at: "" })));
+  const [selectedPath, setSelectedPath] = useState<string | null>(() => readView(storageKey).selected);
+  const [reference, setReferenceState] = useState<string | null>(() => readView(storageKey).reference);
+  const setReference = useCallback((value: string | null) => { updateView(storageKey, { reference: value }); setReferenceState(value); }, [storageKey]);
   const [expanded, setExpanded] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelTab, setPanelTab] = useState<"files" | "terminal" | "skills">("files");
   const [observed, setObserved] = useState<{ runId?: string; changes: Change[] }>({ changes: [] });
   const refreshRef = useRef<() => void>(() => {});
-  const watchedDirectories = useRef(new Set<string>());
+  const watchedDirectories = useRef(new Set<string>([...readView(storageKey).directories, ...readView(storageKey).tabs.map((path) => path.split("/").slice(0, -1).join("/"))]));
   const runRef = useRef(runId);
   const runningRef = useRef(running);
   useEffect(() => { runRef.current = runId; runningRef.current = running; }, [runId, running]);
@@ -135,12 +138,15 @@ export function FileWorkspaceProvider({ conversationId, events, runId, running, 
     }
   }, [conversationId]);
   const open = useCallback((file: FileEntry) => {
+    const paths = [...readView(storageKey).tabs.filter((path) => path !== file.path), file.path].slice(-8);
+    updateView(storageKey, { tabs: paths, selected: file.path });
     setTabs((value) => value.some((item) => item.path === file.path) ? value : [...value, file].slice(-8));
     setSelectedPath(file.path); setPanelTab("files"); setPanelOpen(true);
-  }, []);
+  }, [storageKey]);
   const close = (path: string) => {
     const next = tabs.filter((file) => file.path !== path);
     setTabs(next);
+    updateView(storageKey, { tabs: next.map((file) => file.path), selected: selectedPath === path ? next.at(-1)?.path ?? null : selectedPath });
     if (selectedPath === path) setSelectedPath(next.at(-1)?.path ?? null);
   };
   const changes = useMemo(() => {
@@ -156,7 +162,7 @@ export function FileWorkspaceProvider({ conversationId, events, runId, running, 
   const selected = state.files.find((file) => file.path === selectedPath)
     ?? Object.values(state.directories).flatMap((directory) => directory.entries).find((file) => !file.is_dir && file.path === selectedPath)
     ?? null;
-  return <Context.Provider value={{ ...state, conversationId: conversationId ?? "", loading, tabs, selected, changes, reference, expanded, panelOpen, panelTab, setPanelTab, open, close, refresh, loadDirectory, setExpanded, setPanelOpen, setReference }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ ...state, storageKey, conversationId: conversationId ?? "", loading, tabs, selected, changes, reference, expanded, panelOpen, panelTab, setPanelTab, open, close, refresh, loadDirectory, setExpanded, setPanelOpen, setReference }}>{children}</Context.Provider>;
 }
 
 export function OpenFilesButton() {

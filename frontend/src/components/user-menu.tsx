@@ -5,6 +5,7 @@ import { Boxes, Cpu, LogOut, MonitorCog, MoreHorizontal, UserRound } from "lucid
 import { useRouter } from "next/navigation";
 import { api, UserProfile } from "@/lib/api";
 import { UserAvatar } from "./user-avatar";
+import { clearViewState } from "@/lib/conversation-view-state";
 
 const menuItems = [
   { label: "个人资料", path: "/app/settings/profile", icon: UserRound },
@@ -46,6 +47,7 @@ export function UserMenu({ user }: { user: UserProfile | null }) {
     setError("");
     try {
       await api("/api/v1/auth/logout", { method: "POST" });
+      clearViewState();
       router.replace("/login");
       router.refresh();
     } catch (reason) {

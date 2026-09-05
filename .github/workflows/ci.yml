@@ -8,6 +8,21 @@ permissions:
   contents: read
 
 jobs:
+  gateway:
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_PASSWORD: test-only
+      MASTER_KEY_BASE64: test-only
+      SANDBOX_SERVICE_TOKEN: test-only
+      MINIO_ROOT_PASSWORD: test-only
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose -f deploy/docker-compose.yaml config --quiet
+      - run: docker compose -f deploy/docker-compose.yaml -f deploy/docker-compose.debug.yaml config --quiet
+      - run: docker compose -p lester-gateway-test -f deploy/gateway/compose.test.yaml up --abort-on-container-exit --exit-code-from checks
+      - if: always()
+        run: docker compose -p lester-gateway-test -f deploy/gateway/compose.test.yaml down
+
   go:
     runs-on: ubuntu-latest
     defaults:

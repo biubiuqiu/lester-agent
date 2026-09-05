@@ -3,6 +3,7 @@
 import { startTransition, useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { ThemedToken } from "@shikijs/core";
 import { highlightSource, type SyntaxLanguage } from "@/lib/syntax-highlighter";
+import { usePreviewScroll } from "./use-preview-scroll";
 
 const maxRenderedLines = 3000;
 const languageByExtension: Record<string, SyntaxLanguage> = {
@@ -40,7 +41,8 @@ const languageByExtension: Record<string, SyntaxLanguage> = {
   yml: "yaml",
 };
 
-export function SourcePreview({ content, fileName }: { content: string; fileName: string }) {
+export function SourcePreview({ content, fileName, storageKey = "", filePath = fileName }: { content: string; fileName: string; storageKey?: string; filePath?: string }) {
+  const scroll = usePreviewScroll(storageKey, `source:${filePath}`);
   const lines = useMemo(() => content.split("\n"), [content]);
   const source = useMemo(() => lines.slice(0, maxRenderedLines).join("\n"), [lines]);
   const fallbackLines = useMemo<ThemedToken[][]>(() => source.split("\n").map((line) => [{ content: line, offset: 0 }]), [source]);
@@ -68,7 +70,7 @@ export function SourcePreview({ content, fileName }: { content: string; fileName
   }, [language, source]);
 
   const renderedLines = highlighted?.language === language && highlighted.source === source ? highlighted.lines : fallbackLines;
-  return <div className="file-source-scroll" aria-label={`${fileName} 源代码`}>
+  return <div ref={scroll} className="file-source-scroll" aria-label={`${fileName} 源代码`}>
     <div className="file-source-code">
       {renderedLines.map((tokens, lineIndex) => <div className="file-source-line" key={lineIndex}>
         <span>{lineIndex + 1}</span>

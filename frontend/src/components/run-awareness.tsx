@@ -1,8 +1,9 @@
 "use client";
 
 import { AlertCircle, ArrowRight, Bell, LoaderCircle, RotateCcw, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ConversationRunStatus } from "@/lib/api";
+import { activityLabel } from "@/lib/activity-label";
 import { RunEvent } from "./tool-timeline";
 
 export type UnreadRunResult = {
@@ -50,17 +51,17 @@ export function AgentActivityIndicator({ agent, state, runId, events }: { agent:
     return () => window.clearInterval(timer);
   }, []);
 
-  const runEvents = events.filter((event) => !runId || event.run_id === runId);
+  const runEvents = useMemo(() => events.filter((event) => runId ? event.run_id === runId : false), [events, runId]);
   const started = runEvents.find((event) => event.type === "RUN_STARTED") ?? runEvents[0];
   const startedAt = started ? Date.parse(started.created_at) : now;
   const elapsed = formatElapsed(Number.isFinite(startedAt) ? Math.max(0, now - startedAt) : 0);
   const latest = runEvents.findLast((event) => activityEventTypes.has(event.type));
-  const label = activityLabel(state, latest);
+  const label = useMemo(() => activityLabel(state, latest), [state, latest]);
 
   return (
-    <div className={`agent-activity-indicator ${state}`} role="status" aria-live="polite">
+    <div className={`agent-activity-indicator ${state}`} >
       <span className="activity-pulse" aria-hidden><i /><i /><i /></span>
-      <span className="agent-activity-copy"><strong>{label}</strong><small>{agent} · {elapsed}</small></span>
+      <span className="agent-activity-copy"><strong role="status" aria-live="polite">{label}</strong><small aria-label={`${agent} 任务耗时`} aria-live="off">· {elapsed}</small></span>
     </div>
   );
 }
@@ -72,7 +73,7 @@ export function RunFailureRecovery({ reason, lastPrompt, onPrepare }: { reason: 
     <section className="run-recovery" aria-label="任务恢复选项">
       <span className="run-recovery-icon"><AlertCircle /></span>
       <div className="run-recovery-copy">
-        <strong>这次任务没有完成</strong>
+        <strong>这次任务没有完成</strong><p>先检查现有结果，再决定是否继续；重试可能重复已执行的操作。</p>
         <details><summary>查看原因</summary><code>{reason}</code></details>
       </div>
       <div className="run-recovery-actions">
@@ -94,29 +95,6 @@ const activityEventTypes = new Set([
   "COMMAND_STARTED",
   "FILE_UPDATED",
 ]);
-
-function activityLabel(state: ActivityState, latest?: RunEvent) {
-  if (state === "sending") return "正在准备任务";
-  if (state === "stopping") return "正在安全停止";
-  if (!latest) return "正在思考下一步";
-  if (latest.type === "TOOL_STARTED") return toolActivityText(String(latest.payload.tool ?? ""));
-  if (latest.type === "TOOL_COMPLETED") return "工具已完成，正在继续";
-  if (latest.type === "TOOL_FAILED") return "工具遇到问题，正在处理";
-  if (latest.type === "COMMAND_STARTED") return "正在运行命令";
-  if (latest.type === "FILE_UPDATED") return `正在更新 ${shortPath(String(latest.payload.path ?? "文件"))}`;
-  if (latest.type === "MODEL_STARTED") return "正在组织下一步";
-  if (latest.type === "MODEL_DELTA" || latest.type === "MODEL_TEXT") return "正在生成回复";
-  return "正在分析任务";
-}
-
-function toolActivityText(tool: string) {
-  return ({ bash: "正在运行命令", read: "正在读取文件", write: "正在写入文件", edit: "正在编辑文件", load_skill: "正在加载 Skill" } as Record<string, string>)[tool] ?? "正在使用工具";
-}
-
-function shortPath(path: string) {
-  const parts = path.replaceAll("\\", "/").split("/").filter(Boolean);
-  return parts.at(-1) || "文件";
-}
 
 function formatElapsed(milliseconds: number) {
   const totalSeconds = Math.floor(milliseconds / 1000);

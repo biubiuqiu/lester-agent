@@ -55,6 +55,8 @@ This is a Monorepo with separate frontend and backend build contexts.
 - `backend/internal/` contains non-exported backend implementation shared by the two Go executables.
 - Only Sandbox Service may mount the Docker Socket, and only when the selected provider is `docker`. ACS deployments must not mount it.
 - API and Sandbox Service must remain independently buildable and deployable.
+- Compose exposes only the Nginx gateway by default: `/api` and `/api/*` proxy unchanged to API, other paths to Web. Build Web with an empty `NEXT_PUBLIC_API_URL`, keep `WEB_ORIGIN` aligned with the public gateway origin, and expose API/MinIO only via the loopback-bound debug override when requested. Kubernetes uses Ingress directly, not an additional gateway pod.
+- Gateway changes must preserve unbuffered SSE, Last-Event-ID, WebSocket Upgrade, cookies, authenticated preview CSP, escaped paths, and the 25 MiB attachment allowance. Do not retry API mutations automatically or serve sandbox files directly. Trust forwarded scheme/client identity only from explicitly trusted ingress hops; the default HTTP gateway overwrites incoming forwarding headers.
 - Sandbox Service management, file, command, and terminal routes are private service APIs protected by `SANDBOX_SERVICE_TOKEN`; only `/healthz` is unauthenticated. Never expose Sandbox Service through Ingress or a public Service.
 - Docker Sandbox Provider owns installation of the versioned `lester-toolbox` binary into new and existing user Computers. Cloud providers may use equivalent native runtime APIs; do not reintroduce ad-hoc Python/Shell snippets for file semantics.
 
@@ -127,6 +129,9 @@ Preserve these behaviors when changing the implementation:
 - Share conversation-scoped file inventory through `FileWorkspaceProvider`. Invalidate after file/tool/run events and use bounded, visibility-aware polling for bash/background writes; preserve selections and avoid refetching unchanged previews. Mark partial scans visibly and never infer deletions from incomplete listings. Observed metadata changes are not a durable complete audit trail or content diff.
 - Keep responsive behavior usable on mobile.
 - Keep workspace chrome compact: the file tree takes only the space its rows need, changes are available on demand, and preview actions share one toolbar. Preserve readable typography, keyboard focus, and a visible composer on desktop and mobile. Conversation search filters titles locally without rewriting persisted titles.
+- Conversation view state is tab-local and keyed by user/workspace/conversation. Preserve drafts, file references/tabs/modes, expanded directories and transcript/source reading positions across navigation; never put view state in the model transcript. Bound sessionStorage (50 conversations; 100,000 draft characters), clear it on logout, and store only attachment names there: browser File objects survive client navigation in memory, not reloads. A reload must explicitly disclose missing local attachments.
+- Follow streaming content only while the user is at the bottom; show a jump-to-new-content control while reading history. File updates must not steal selected tabs. Refresh source content in place and retain its scroll position. Sandboxed HTML must not gain same-origin access to restore internal page state.
+- Progress labels must reflect actual events, not inferred thinking, fabricated percentages, or unverified success. Keep tool details collapsed until requested; keep elapsed timers out of live announcements. Recovery fills a prompt for explicit confirmation and must not silently replay tools.
 - Do not present unavailable functionality as enabled.
 - Every asynchronous page load and mutation must surface a visible error state and prevent duplicate submission while pending. Clear conversation-scoped state before loading a different conversation.
 - Avoid introducing a state-management or UI framework unless the existing React structure is no longer sufficient and the dependency is justified.
@@ -161,6 +166,8 @@ pnpm build
 ```
 
 Equivalent root commands are available through `make test` and `make web-check`.
+
+Compose starts at `http://localhost:13000`; change both `GATEWAY_PORT` and `WEB_ORIGIN` in `deploy/.env` to use another port. `make dev-debug` additionally exposes API and MinIO on loopback only. Run `make gateway-check` after proxy/deployment changes; its isolated fixture stack verifies route/header/preview preservation, upload limits, unbuffered SSE and bidirectional WebSocket. If it fails, clean up with `docker compose -p lester-gateway-test -f deploy/gateway/compose.test.yaml down`. No application credentials or data volumes are used by these tests.
 
 Validate the Helm chart with non-production test values:
 

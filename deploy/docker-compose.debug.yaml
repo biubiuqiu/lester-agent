@@ -1,0 +1,7 @@
+# Optional host access for diagnostics; browser traffic still uses the gateway.
+# Never expose Sandbox Service or the Docker socket through this override.
+services:
+  api:
+    ports: ["127.0.0.1:18080:8080"]
+  minio:
+    ports: ["127.0.0.1:9000:9000", "127.0.0.1:9001:9001"]

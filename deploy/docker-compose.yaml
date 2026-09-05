@@ -35,7 +35,7 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-lester}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set in deploy/.env}
     volumes: [minio-data:/data]
-    ports: ["9000:9000", "9001:9001"]
+    expose: ["9000", "9001"]
 
   sandbox-service:
     build:
@@ -73,18 +73,32 @@ services:
       redis: {condition: service_healthy}
       sandbox-service: {condition: service_started}
       minio: {condition: service_started}
-    ports: ["18080:8080"]
+    expose: ["8080"]
 
   web:
     build:
       context: ../frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:18080}
-    environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:18080}
+        # Build-time setting: keep all browser traffic on the gateway origin,
+        # even if an older deploy/.env still defines NEXT_PUBLIC_API_URL.
+        NEXT_PUBLIC_API_URL: ""
     depends_on: [api]
-    ports: ["13000:3000"]
+    expose: ["3000"]
+
+  gateway:
+    image: nginx:1.28-alpine
+    volumes:
+      - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports: ["${GATEWAY_PORT:-13000}:8080"]
+    depends_on: [api, web]
+    restart: unless-stopped
+    healthcheck:
+      # Gateway liveness only; upstream readiness is checked separately.
+      test: [CMD, wget, -q, -O, /dev/null, "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
 
 volumes:
   postgres-data:

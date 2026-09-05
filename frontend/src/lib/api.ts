@@ -1,5 +1,5 @@
 // An empty value keeps browser requests same-origin. This is the preferred
-// production/Ingress mode; Docker Compose injects its separate local API origin.
+// Compose gateway/Ingress mode; direct development may supply an API origin.
 export const API = process.env.NEXT_PUBLIC_API_URL || "";
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {

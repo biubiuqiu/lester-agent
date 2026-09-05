@@ -29,6 +29,9 @@ import {
 } from "@/lib/api";
 
 import { useFileWorkspace, FileDownload } from "./file-workspace";
+import { readView, updateView } from "@/lib/conversation-view-state";
+import { usePreviewScroll } from "./use-preview-scroll";
+import { FileError } from "./file-error";
 import { MessageContent } from "./message-content";
 
 type DirectoryState = {
@@ -39,6 +42,8 @@ type DirectoryState = {
 
 type PreviewState = {
   key: string;
+  identity?: string;
+  updatedAt?: number;
   content: string;
   error: string;
 };
@@ -63,16 +68,24 @@ const SourcePreview = dynamic(
 );
 
 export function FileExplorer({ conversationId }: { conversationId: string }) {
-  const { directories, signature, selected, tabs, changes, files, loading, error, limited, open, close, refresh, loadDirectory, expanded: enlarged, setExpanded, setReference, setPanelOpen } = useFileWorkspace();
-  const [expanded, setTreeExpanded] = useState<Set<string>>(() => new Set([""]));
-  const [treeOpen, setTreeOpen] = useState(true);
+  const { storageKey, directories, signature, selected, tabs, changes, files, loading, error, limited, open, close, refresh, loadDirectory, expanded: enlarged, setExpanded, setReference, setPanelOpen } = useFileWorkspace();
+  const [expanded, setTreeExpanded] = useState<Set<string>>(() => new Set(readView(storageKey).directories));
+  const [treeOpen, setTreeOpenState] = useState(() => readView(storageKey).treeOpen);
+  const setTreeOpen = (value: boolean) => { updateView(storageKey, { treeOpen: value }); setTreeOpenState(value); };
   const changesMenu = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
     const closeOutside = (event: PointerEvent) => { if (changesMenu.current && !changesMenu.current.contains(event.target as Node)) changesMenu.current.open = false; };
     document.addEventListener("pointerdown", closeOutside);
     return () => document.removeEventListener("pointerdown", closeOutside);
   }, []);
-  const [previewMode, setPreviewMode] = useState<"preview" | "source">("preview");
+  const [modes, setModes] = useState(() => readView(storageKey).modes);
+  const previewMode = selected ? modes[selected.path] ?? "preview" : "preview";
+  const setPreviewMode = (mode: "preview" | "source") => {
+    if (!selected) return;
+    const next = Object.fromEntries(Object.entries({ ...modes, [selected.path]: mode }).slice(-16));
+    updateView(storageKey, { modes: next }); setModes(next);
+  };
+  const [previewAttempt, setPreviewAttempt] = useState(0);
   const [preview, setPreview] = useState<PreviewState>({ key: "", content: "", error: "" });
 
   const selectedKind = selected ? previewKind(selected.path) : "unsupported";
@@ -82,11 +95,12 @@ export function FileExplorer({ conversationId }: { conversationId: string }) {
   const assetRevision = selectedKind === "html" && previewMode === "preview" ? signature : "";
   const previewKey = selected ? `${selected.path}:${selected.modified_at}:${selected.size}:${previewMode}:${assetRevision}` : "";
   const previewTooLarge = Boolean(selected && needsTextContent && selected.size > maxTextPreviewBytes);
+  const identity = JSON.stringify([selectedPath, previewMode]);
   const activePreview: PreviewState & { loading: boolean } = previewTooLarge
     ? { key: previewKey, content: "", error: `文件超过 ${formatBytes(maxTextPreviewBytes)}，请在 Terminal 中查看。`, loading: false }
     : preview.key === previewKey
       ? { ...preview, loading: false }
-      : { key: previewKey, content: "", error: "", loading: needsTextContent };
+      : { key: previewKey, content: preview.identity === identity ? preview.content : "", error: "", loading: needsTextContent };
 
   useEffect(() => {
     if (!selectedPath || !needsTextContent || previewTooLarge) return;
@@ -95,26 +109,26 @@ export function FileExplorer({ conversationId }: { conversationId: string }) {
       .then(async (content) => selectedKind === "html" && previewMode === "preview"
         ? buildHTMLPreview(conversationId, selectedPath, content, controller.signal)
         : content)
-      .then((content) => setPreview({ key: previewKey, content, error: "" }))
+      .then((content) => { if (!controller.signal.aborted) setPreview((previous) => ({ key: previewKey, identity, content, error: "", updatedAt: previous.identity === identity && previous.key !== previewKey ? Date.now() : undefined })); })
       .catch((reason: Error) => {
         if (reason.name !== "AbortError") setPreview({ key: previewKey, content: "", error: reason.message });
       });
     return () => controller.abort();
-  }, [conversationId, needsTextContent, previewKey, previewMode, previewTooLarge, selectedPath, selectedKind]);
+  }, [conversationId, identity, needsTextContent, previewAttempt, previewKey, previewMode, previewTooLarge, selectedPath, selectedKind]);
 
   const toggleDirectory = useCallback((path: string) => {
     setTreeExpanded((current) => {
       const next = new Set(current);
       if (next.has(path)) next.delete(path);
       else next.add(path);
+      updateView(storageKey, { directories: [...next].slice(-64) });
       return next;
     });
     if (!directories[path]) void loadDirectory(path);
-  }, [directories, loadDirectory]);
+  }, [directories, loadDirectory, storageKey]);
 
   const selectFile = useCallback((file: FileEntry) => {
     open(file);
-    setPreviewMode("preview");
   }, [open]);
 
   return <div className="file-explorer">
@@ -129,13 +143,13 @@ export function FileExplorer({ conversationId }: { conversationId: string }) {
         <button type="button" onClick={refresh} title="刷新文件" aria-label="刷新文件"><RefreshCw /></button>
         <button type="button" onClick={() => { setExpanded(!enlarged); if (!enlarged) setTreeOpen(false); }} title={enlarged ? "还原布局" : "专注预览"} aria-label={enlarged ? "还原布局" : "专注预览"}>{enlarged ? <Minimize2 /> : <Maximize2 />}</button>
       </header>
-      {error ? <p className="file-sync-error" role="alert">{error} <button onClick={refresh}>重试</button></p> : null}
+      {error ? <FileError detail={error} onRetry={refresh} /> : null}
       {treeOpen ? <div className="file-tree-scroll" role="tree" aria-label="Files">
         {loading ? <div className="file-tree-status">正在同步文件…</div> : <FileTreeItems directoryPath="" depth={0} directories={directories} expanded={expanded} selectedPath={selected?.path || ""} onToggle={toggleDirectory} onSelect={selectFile} />}
       </div> : null}
     </section>
     {tabs.length ? <nav className="open-file-tabs" aria-label="已打开文件">{tabs.map((file) => <div key={file.path} className={selected?.path === file.path ? "active" : ""}><button type="button" onClick={() => selectFile(file)} title={file.path} aria-pressed={selected?.path === file.path}>{file.name}</button><button type="button" onClick={() => close(file.path)} aria-label={`关闭 ${file.name}`}><X /></button></div>)}</nav> : null}
-    <FilePreview conversationId={conversationId} file={selected} kind={selectedKind} mode={previewMode} preview={activePreview} onModeChange={setPreviewMode} onReference={() => { if (selected) setReference(selected.path); setExpanded(false); setPanelOpen(false); }} />
+    <FilePreview key={`${selected?.path ?? "empty"}:${previewMode}`} onRetry={() => { setPreview((value) => ({ ...value, key: "", error: "" })); setPreviewAttempt((value) => value + 1); }} storageKey={storageKey} conversationId={conversationId} file={selected} kind={selectedKind} mode={previewMode} preview={activePreview} onModeChange={setPreviewMode} onReference={() => { if (selected) setReference(selected.path); setExpanded(false); setPanelOpen(false); }} />
   </div>;
 }
 
@@ -194,6 +208,8 @@ function FileTreeItems({
 }
 
 function FilePreview({
+  onRetry,
+  storageKey,
   conversationId,
   file,
   kind,
@@ -202,6 +218,8 @@ function FilePreview({
   onModeChange,
   onReference,
 }: {
+  onRetry: () => void;
+  storageKey: string;
   conversationId: string;
   file: FileEntry | null;
   kind: PreviewKind;
@@ -210,6 +228,7 @@ function FilePreview({
   onModeChange: (mode: "preview" | "source") => void;
   onReference: () => void;
 }) {
+  const markdownScroll = usePreviewScroll(storageKey, `markdown:${file?.path}`);
   if (!file) return <section className="file-preview empty"><Eye /><strong>选择文件进行预览</strong><p>支持代码、文本、图片、PDF 和 HTML 页面。</p></section>;
   const url = `${conversationFilePreviewURL(conversationId, file.path)}?v=${encodeURIComponent(file.modified_at + ":" + file.size)}`;
   return <section className="file-preview">
@@ -218,17 +237,18 @@ function FilePreview({
         <button type="button" aria-pressed={mode === "preview"} className={mode === "preview" ? "active" : ""} onClick={() => onModeChange("preview")}><Eye />预览</button>
         <button type="button" aria-pressed={mode === "source"} className={mode === "source" ? "active" : ""} onClick={() => onModeChange("source")}><Code2 />源码</button>
       </nav> : <span className="file-preview-format"><FileGlyph file={file} />{fileExtension(file.name).toUpperCase() || "文本"}<small>{formatBytes(file.size)}</small></span>}
-      <div className="file-preview-actions"><button type="button" className="file-ask-agent" onClick={onReference} title="让 Agent 修改此文件" aria-label="让 Agent 修改此文件"><MessageSquare /><span>修改</span></button><FileDownload conversationId={conversationId} file={file} />{kind === "html" ? <a href={url} target="_blank" rel="noopener noreferrer" title="在新页面打开 HTML 预览" aria-label={`在新页面预览 ${file.name}`}><ExternalLink /></a> : null}</div>
+      <div className="file-preview-actions">{preview.updatedAt ? <RecentFileUpdate key={preview.updatedAt} /> : null}<button type="button" className="file-ask-agent" onClick={onReference} title="让 Agent 修改此文件" aria-label="让 Agent 修改此文件"><MessageSquare /><span>修改</span></button><FileDownload conversationId={conversationId} file={file} />{kind === "html" ? <a href={url} target="_blank" rel="noopener noreferrer" title="在新页面打开 HTML 预览" aria-label={`在新页面预览 ${file.name}`}><ExternalLink /></a> : null}</div>
     </header>
-    <div className={`file-preview-body ${kind}`}>
-      {preview.loading ? <div className="file-preview-state"><LoaderCircle />正在读取文件…</div> : null}
-      {preview.error ? <div className="file-preview-state error">{preview.error}</div> : null}
-      {!preview.loading && !preview.error && kind === "html" && mode === "preview" ? <iframe title={`${file.name} preview`} srcDoc={preview.content} sandbox="allow-scripts" /> : null}
-      {!preview.loading && !preview.error && kind === "image" ? <img src={url} alt={file.name} /> : null}
-      {!preview.loading && !preview.error && kind === "pdf" ? <iframe title={`${file.name} PDF preview`} src={url} /> : null}
-      {!preview.loading && !preview.error && (kind === "text" || ((kind === "html" || kind === "markdown") && mode === "source")) ? <SourcePreview content={preview.content} fileName={file.name} /> : null}
-      {!preview.loading && !preview.error && kind === "markdown" && mode === "preview" ? <div className="file-markdown"><MessageContent content={preview.content} /></div> : null}
-      {!preview.loading && !preview.error && kind === "unsupported" ? <div className="file-preview-state"><FileIcon /><strong>暂不支持预览</strong><span>{formatBytes(file.size)} · 可在 Terminal 中打开</span></div> : null}
+    <div ref={kind === "markdown" && mode === "preview" ? markdownScroll : undefined} className={`file-preview-body ${kind}`}>
+      {preview.loading && preview.content ? <span className="preview-syncing" role="status">正在同步最新版本…</span> : null}
+      {preview.loading && !preview.content ? <div className="file-preview-state"><LoaderCircle />正在读取文件…</div> : null}
+      {preview.error ? <FileError detail={preview.error} onRetry={onRetry} /> : null}
+      {(!preview.loading || Boolean(preview.content)) && !preview.error && kind === "html" && mode === "preview" ? <iframe title={`${file.name} preview`} srcDoc={preview.content} sandbox="allow-scripts" /> : null}
+      {(!preview.loading || Boolean(preview.content)) && !preview.error && kind === "image" ? <img src={url} alt={file.name} /> : null}
+      {(!preview.loading || Boolean(preview.content)) && !preview.error && kind === "pdf" ? <iframe title={`${file.name} PDF preview`} src={url} /> : null}
+      {(!preview.loading || Boolean(preview.content)) && !preview.error && (kind === "text" || ((kind === "html" || kind === "markdown") && mode === "source")) ? <SourcePreview key={file.path} content={preview.content} fileName={file.name} filePath={file.path} storageKey={storageKey} /> : null}
+      {(!preview.loading || Boolean(preview.content)) && !preview.error && kind === "markdown" && mode === "preview" ? <div className="file-markdown"><MessageContent content={preview.content} /></div> : null}
+      {(!preview.loading || Boolean(preview.content)) && !preview.error && kind === "unsupported" ? <div className="file-preview-state"><FileIcon /><strong>暂不支持预览</strong><span>{formatBytes(file.size)} · 可在 Terminal 中打开</span></div> : null}
     </div>
   </section>;
 }
@@ -356,4 +376,10 @@ function bytesToDataURL(bytes: Uint8Array, mimeType: string) {
     binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
   }
   return `data:${mimeType};base64,${btoa(binary)}`;
+}
+
+function RecentFileUpdate() {
+  const [visible, setVisible] = useState(true);
+  useEffect(() => { const timer = setTimeout(() => setVisible(false), 3000); return () => clearTimeout(timer); }, []);
+  return visible ? <span className="file-updated-notice" role="status">已更新</span> : null;
 }

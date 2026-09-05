@@ -51,7 +51,7 @@ function ToolActivityRow({ activity }: { activity: ToolActivity }) {
   const label = activityLabel(activity);
   const details = activityDetails(activity);
   return (
-    <details className={`tool-activity ${activity.status}`} open={activity.status === "running"}>
+    <details className={`tool-activity ${activity.status}`}>
       <summary>
         <span className="tool-activity-icon">{activityIcon(activity)}</span>
         <span>{label}</span>

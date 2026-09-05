@@ -21,6 +21,8 @@
 - 右侧 Files 提供类似 VS Code 的目录树与文件预览，支持代码/文本行号、图片、PDF，以及受限 iframe 中的 HTML 页面预览、源码切换和独立页面打开；桌面端可拖动调整右侧面板宽度，并可收起左侧会话栏
 - 文件工作区支持最多 8 个打开标签、Markdown 预览/源码、下载、放大预览和窄屏文件面板。聊天下方的任务文件卡片只展示已确认存在的当前文件；“让 Agent 修改此文件”会给输入框添加可移除的文件引用，发送时只附相对路径提示，不自动注入文件内容。
 - 会话栏支持按标题搜索；文件目录按内容占用高度，变化列表按需展开。专注预览可暂时收起目录，预览/源码与文件操作集中在同一工具栏，为内容留出更多空间。
+- 切换会话和刷新页面会恢复草稿、文件引用、打开标签、预览/源码模式、目录展开状态及聊天/源码阅读位置。状态按用户、工作区和会话保存在当前浏览器标签页中，最多保留 50 个会话，持久化草稿最多 100,000 字符；退出登录会清除。尚未上传的本地附件仅在页面内切换时保留，刷新后明确提示重新选择，不会保存文件内容到浏览器存储。
+- 阅读历史时不会被流式输出强制拉到底部，有新输出时可一键跳转。运行状态使用真实工具事件和耗时，工具参数/输出默认折叠；运行中可以先写下一条草稿，但不会并发发送。源码更新保留阅读位置，文件更新不抢走当前预览；HTML 自动刷新仍可能重置页面内部交互状态，不放宽 iframe 安全限制。
 - 文件列表在文件操作及工具/任务结束事件后自动同步；页面可见时，运行中每 5 秒、空闲每 15 秒检查文件元数据，覆盖 bash 和后台脚本的变更。扫描最多 64 个目录、2000 个文件、5 层子目录，默认跳过依赖、缓存和 `.agent` 目录（仍可手动展开）；超出或读取不完整时显示提示。轻量变化列表合并本轮持久化文件事件与本次打开期间检测到的增删改，不是完整文件历史、内容 Diff 或 Checkpoint；同大小且同修改时间的内容变化无法靠元数据识别。
 - Computer 空闲后自动暂停并在下次访问时恢复；服务会持续校验真实状态，Docker 使用用户级 Volume，ACS 使用云端 Sandbox 暂停/唤醒
 - 内置 Skill 广场，并支持把 Skill 安装到当前会话的 `.agent/skills` 后按需加载
@@ -158,12 +160,13 @@ Skill 是会话级能力：安装后解包到 `/workspace/conversations/{convers
 
 | 服务 | 本地端口 → 容器端口 | 用途 |
 | --- | ---: | --- |
-| Web | `13000 → 3000` | 用户界面 |
-| API | `18080 → 8080` | 登录、模型配置、对话和 Agent Runtime |
+| Nginx Gateway | `13000 → 8080`（可配置） | 唯一默认入口，页面与 API 同源 |
+| Web | 仅 Compose 内网 `3000` | 用户界面 |
+| API | 仅 Compose 内网 `8080` | 登录、模型配置、对话和 Agent Runtime |
 | Sandbox Service | 仅 Compose 内网 `8090` | Computer 生命周期、命令、文件和终端 |
-| PostgreSQL | `5432` | 持久化业务数据 |
-| Redis | `6379` | SSE 事件分发 |
-| MinIO | `9000` / `9001` | Skill 安装包对象存储（S3 兼容） |
+| PostgreSQL | 仅 Compose 内网 `5432` | 持久化业务数据 |
+| Redis | 仅 Compose 内网 `6379` | SSE 事件分发 |
+| MinIO | 仅 Compose 内网 `9000` / `9001` | Skill 安装包对象存储（S3 兼容） |
 
 ## 快速启动
 
@@ -201,6 +204,29 @@ docker compose --env-file deploy/.env \
 2. 注册账号并登录
 3. 前往 **Settings → Models** 配置模型 Provider
 4. 创建对话并选择 Agent
+
+### 统一网关与部署配置
+
+Compose 使用轻量 Nginx 网关：`/api` 和 `/api/*` 保留原路径转发到 API，其余请求转发到 Web。浏览器只访问一个地址，登录 Cookie、SSE、终端 WebSocket、附件和 HTML 预览均经过该入口。网关不实现业务鉴权、不直接读取用户文件，也不公开 Sandbox Service；预览仍由 API 鉴权并返回原有 CSP。
+
+- 默认入口为 `http://localhost:13000`。如果端口被占用或被 Windows 保留，可在 `deploy/.env` 同时设置 `GATEWAY_PORT=13080` 和 `WEB_ORIGIN=http://localhost:13080`。远程访问时将 `WEB_ORIGIN` 改为用户实际访问的源（协议、域名、端口），否则终端的 Origin 校验会拒绝连接。
+- Web 镜像在构建时固定使用空 `NEXT_PUBLIC_API_URL`（同源）；旧 `.env` 中该变量不再影响 Compose。升级必须重新构建 Web，单改运行时环境变量不能修改已经打包的浏览器代码。独立前端开发仍可自行设置该构建变量。
+- SSE 禁用代理缓冲和缓存；终端支持 WebSocket Upgrade。API 代理读超时为 **1 小时空闲时间**，不是 Agent 的运行时限，SSE 心跳会保持连接。请求失败时网关不会自动重放 API 请求。
+- 网关允许最多 26 MiB 请求体；API 继续限制单文件 25 MiB（余量用于 multipart 封装）。`/healthz` 只检查网关存活，不代表数据库或上游服务就绪。
+- 默认仅公开网关端口。临时排查可追加 `-f deploy/docker-compose.debug.yaml`（或 `make dev-debug`），将 API `18080`、MinIO `9000/9001` 仅绑定到 `127.0.0.1`；浏览器仍走网关。排查结束用默认 Compose 重新 `up -d` 收回这些端口。
+- 默认入口为 HTTP，未内置证书申请。公网部署应配置 HTTPS 并设置 `SESSION_COOKIE_SECURE=true`。可在 Nginx 配置中增加 TLS listener、挂载证书并发布对应端口；如果由外层负载均衡终止 TLS，应让网关只接受该可信代理的访问，再配置正确的外部协议转发，不能直接信任公网传入的 `X-Forwarded-Proto`。当前配置主动覆盖该头为本层协议。
+
+已有部署升级网关无需新数据库迁移；保留原 `.env` 密钥和数据卷，更新 `WEB_ORIGIN` 后运行完整的 `docker compose ... up -d --build`，不要只重启 API，也不要删除数据卷。移除旧覆盖文件中 Web/API 的端口映射；自定义入口端口应配置在 gateway，而不是 web。
+
+代理回归测试使用独立 Compose 项目，不访问应用数据、不开宿主机端口：
+
+```bash
+make gateway-check
+# 如果测试失败，清理测试容器（不涉及 Lester 的数据卷）：
+docker compose -p lester-gateway-test -f deploy/gateway/compose.test.yaml down
+```
+
+测试覆盖路由与转义路径、Cookie/请求头、私有预览 CSP、25 MiB 上传、SSE 首帧和双向 WebSocket；CI 自动执行同一测试。
 
 ## Kubernetes / Helm 部署
 
@@ -254,7 +280,7 @@ helm upgrade --install lester deploy/helm/lester \
   -f values.production.yaml
 ```
 
-Ingress 使用同源路由：`/api` 转发到 API，其余请求转发到 Web，因此 Helm 镜像构建时无需设置 `NEXT_PUBLIC_API_URL`。
+Ingress 使用同源路由：`/api` 转发到 API，其余请求转发到 Web，因此 Helm 镜像构建时无需设置 `NEXT_PUBLIC_API_URL`。Kubernetes 继续直接使用 Ingress，不重复部署 Compose 的 Nginx。按所选 Ingress Controller 的配置方式关闭 SSE 缓冲、支持 WebSocket、放宽空闲超时和上传大小，并正确转发外部协议；具体参数不跨 Controller 通用。
 
 Docker 是默认 Provider。Sandbox Service 固定一个副本，并通过 `sandbox.nodeSelector` 放到提供 Docker Engine 和 `/var/run/docker.sock` 的专用 Worker；Docker Socket 等同于很高的节点权限，不符合 Restricted Pod Security，且用户 Volume 属于该节点。
 

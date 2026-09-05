@@ -44,7 +44,9 @@
 .tool-activity summary, .run-status-line summary { min-height: 28px; }
 .tool-activity-details code, .tool-activity-details pre { font-size: 12px; line-height: 1.6; }
 .tool-disclosure { opacity: .65; }
-.composer { padding: 12px clamp(24px, 4vw, 56px) 20px; }
+.thread { min-height: 0; }
+.composer { position: relative; flex: 0 0 auto; max-height: 55dvh; overflow: visible; padding: 12px clamp(24px, 4vw, 56px) 20px; background: #fff; }
+.compose-box { max-height: 42dvh; overflow-y: auto; }
 .composer > p { font-size: 12px; text-align: left; color: #526e4f; margin-bottom: 8px; }
 .compose-box { padding: 14px 14px 10px; border-radius: 16px; border-color: #d4dfcc; box-shadow: 0 3px 16px #293e2210; }
 .compose-box:focus-within { border-color: #8ea580; box-shadow: 0 0 0 3px #80986712; }
@@ -52,6 +54,16 @@
 .compose-box textarea::placeholder { color: #687761; }
 .compose-actions { align-items: center; gap: 10px; }
 .composer-keyboard-hint { margin-left: auto; color: #65765f; font-size: 11px; }
+.new-content-button { display: flex; align-items: center; gap: 5px; margin: -44px auto 12px; position: relative; z-index: 3; min-height: 32px; padding: 5px 12px; border: 1px solid #d8e1d2; border-radius: 20px; background: #fff; color: #45603e; box-shadow: 0 2px 12px #23362312; font-size: 12px; }
+.new-content-button svg { width: 14px; height: 14px; }
+.draft-attachment-notice { color: #806331; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.draft-attachment-notice button { margin-left: 8px; border: 0; background: transparent; text-decoration: underline; color: inherit; }
+.file-updated-notice { font-size: 11px; color: #4d7146; white-space: nowrap; }
+.preview-syncing { position: absolute; z-index: 2; top: 8px; right: 8px; padding: 5px 9px; border-radius: 6px; background: #f1f5ed; color: #426239; font-size: 12px; }
+.run-recovery-copy p { margin: 6px 0; color: #6d725f; font-size: 12px; line-height: 1.6; }
+.agent-activity-copy { min-width: 0; }
+.agent-activity-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.agent-activity-copy small { flex-shrink: 0; }
 .send-button { width: 36px; height: 36px; border-radius: 11px; background: #42653c; }
 .send-button:disabled { opacity: 1; background: #e7eddf; color: #7d9170; cursor: default; }
 .send-button.stop-button { background: #42653c; }
