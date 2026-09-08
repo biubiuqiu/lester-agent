@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, FileText, Paperclip, Send, X } from "lucide-react";
 import type { Conversation, Deployment, UserProfile } from "@/lib/api";
+import { pastedImageFiles } from "@/lib/clipboard";
 import { readView, updateView, viewKey } from "@/lib/conversation-view-state";
 import { startConversation } from "@/lib/start-conversation";
 
@@ -64,17 +65,17 @@ export function NewConversationComposer({ deployments, user }: { deployments: De
       <div className="compose-box">
         {missing.length ? <p className="draft-attachment-notice" role="status">请重新选择刷新前的附件：{missing.join("、")}<button type="button" onClick={() => { setMissing([]); updateView(storageKey, { missingFiles: [] }); }}>知道了</button></p> : null}
         {files.length ? <div className="pending-attachments">{files.map((file, index) => <span key={`${file.name}-${index}`}><FileText />{file.name}<button type="button" disabled={busy} aria-label={`移除 ${file.name}`} onClick={() => changeFiles(files.filter((_, i) => i !== index))}><X /></button></span>)}</div> : null}
-        <textarea rows={3} autoFocus aria-label="消息输入框" placeholder="描述你的目标，或上传文件…" value={text} disabled={busy} onChange={(event) => { setText(event.target.value); updateView(storageKey, { text: event.target.value }); }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
+        <textarea rows={3} autoFocus aria-label="消息输入框" placeholder="描述你的目标，上传文件或粘贴图片…" value={text} disabled={busy} onChange={(event) => { setText(event.target.value); updateView(storageKey, { text: event.target.value }); }} onPaste={(event) => { const images = pastedImageFiles(event); if (images.length) { event.preventDefault(); changeFiles([...files, ...images]); } }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
         <div className="compose-actions">
           <input ref={input} type="file" multiple hidden onChange={(event) => { changeFiles([...files, ...Array.from(event.target.files || [])]); event.target.value = ""; }} />
-          <button type="button" className="icon-button upload-button" aria-label="添加附件" disabled={busy} onClick={() => input.current?.click()}><Paperclip /></button>
+          <button type="button" className="icon-button upload-button" aria-label="添加附件" title="添加附件或直接粘贴图片" disabled={busy} onClick={() => input.current?.click()}><Paperclip /></button>
           <label className="model-selector"><select aria-label="当前模型" value={model} disabled={busy || !deployments.length} onChange={(event) => setModel(event.target.value)}>{!deployments.length ? <option value="">请先配置模型</option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown /></label>
           <button className="send-button" aria-label="发送消息" disabled={busy || !model || (!text.trim() && !files.length)}><Send /></button>
         </div>
       </div>
       {busy ? <p role="status" className="composer-status active">正在创建会话并发送消息…</p> : null}
       {error ? <p role="alert" className="compose-error">{error}</p> : null}
-      {!deployments.length ? <p className="new-chat-hint">还没有可用模型，<a href="/app/settings/models">前往配置模型</a>后即可开始。你的草稿会保留。</p> : <p className="new-chat-hint">发送后开始新会话 · Enter 发送，Shift + Enter 换行</p>}
+      {!deployments.length ? <p className="new-chat-hint">还没有可用模型，<a href="/app/settings/models">前往配置模型</a>后即可开始。你的草稿会保留。</p> : <p className="new-chat-hint">发送后开始新会话 · 可直接粘贴图片 · Enter 发送，Shift + Enter 换行</p>}
     </form>
   </div></div>;
 }
