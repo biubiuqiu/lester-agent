@@ -5,6 +5,7 @@ import { Download, FileText, FolderOpen, X } from "lucide-react";
 import { type FileEntry, readConversationFileBytes } from "@/lib/api";
 import { listDirectory, relativeFilePath, scanFiles, wasPathCovered, type FileState } from "@/lib/file-inventory";
 import { readView, updateView } from "@/lib/conversation-view-state";
+import { artifactFiles } from "@/lib/artifact-files";
 import type { RunEvent } from "./tool-timeline";
 
 type Change = { path: string; kind: "added" | "updated" | "deleted" };
@@ -12,6 +13,7 @@ type FileWorkspaceValue = FileState & {
   conversationId: string;
   storageKey: string;
   loading: boolean;
+  running: boolean;
   changes: Change[];
   tabs: FileEntry[];
   selected: FileEntry | null;
@@ -162,7 +164,7 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, runI
   const selected = state.files.find((file) => file.path === selectedPath)
     ?? Object.values(state.directories).flatMap((directory) => directory.entries).find((file) => !file.is_dir && file.path === selectedPath)
     ?? null;
-  return <Context.Provider value={{ ...state, storageKey, conversationId: conversationId ?? "", loading, tabs, selected, changes, reference, expanded, panelOpen, panelTab, setPanelTab, open, close, refresh, loadDirectory, setExpanded, setPanelOpen, setReference }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ ...state, storageKey, conversationId: conversationId ?? "", loading, running, tabs, selected, changes, reference, expanded, panelOpen, panelTab, setPanelTab, open, close, refresh, loadDirectory, setExpanded, setPanelOpen, setReference }}>{children}</Context.Provider>;
 }
 
 export function OpenFilesButton() {
@@ -176,11 +178,8 @@ export function FileReferenceChip() {
 }
 
 export function ArtifactCards() {
-  const { files, changes, open, conversationId } = useFileWorkspace();
-  const verified = changes.filter((change) => change.kind !== "deleted").flatMap((change) => {
-    const file = files.find((item) => item.path === change.path);
-    return file ? [file] : [];
-  }).slice(0, 12);
+  const { files, changes, open, conversationId, running } = useFileWorkspace();
+  const verified = artifactFiles(files, changes, running);
   if (!verified.length) return null;
   return <section className="artifact-cards" aria-label="任务文件"><small title="本轮任务涉及的文件，打开查看当前版本">相关文件</small>{verified.map((file) => <div className="artifact-card" key={file.path}>
     <button type="button" onClick={() => open(file)} title={file.path} aria-label={`查看 ${file.name}`}><FileText /><span><strong>{file.name}</strong><small>{file.name.includes(".") ? file.name.split(".").at(-1)?.toUpperCase() : "文件"} · {file.size < 1024 ? `${file.size} B` : file.size < 1048576 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / 1048576).toFixed(1)} MB`}</small></span><span>查看</span></button>
