@@ -1,11 +1,40 @@
 package agenttool
 
 import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
 	"unicode/utf8"
 )
+
+func TestReadImageReturnsBase64Attachment(t *testing.T) {
+	data := []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a}
+	computer := &fakeSandbox{files: map[string][]byte{"photo.png": data}}
+	result, err := (Read{}).Execute(context.Background(), Environment{
+		SandboxID: "sandbox", WorkDir: "/workspace/conversations/test", Sandboxes: computer,
+	}, json.RawMessage(`{"file_path":"photo.png"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	envelope, ok := result.(map[string]any)
+	if !ok || envelope["content"] == nil {
+		t.Fatalf("result = %#v", result)
+	}
+	images, ok := envelope["images"].([]map[string]any)
+	if !ok || len(images) != 1 {
+		t.Fatalf("images = %#v", envelope["images"])
+	}
+	if images[0]["media_type"] != "image/png" || images[0]["encoding"] != "base64" || images[0]["path"] != "photo.png" {
+		t.Fatalf("image metadata = %#v", images[0])
+	}
+	decoded, err := base64.StdEncoding.DecodeString(images[0]["data"].(string))
+	if err != nil || string(decoded) != string(data) {
+		t.Fatalf("decoded image = %v, error = %v", decoded, err)
+	}
+}
 
 func TestNumberedRead(t *testing.T) {
 	tests := []struct {

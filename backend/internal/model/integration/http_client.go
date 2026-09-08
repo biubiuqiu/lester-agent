@@ -172,13 +172,36 @@ func parseOpenAIEvents(raw map[string]any) []modelruntime.Event {
 
 func openAIPayload(request modelruntime.Request) map[string]any {
 	messages := make([]map[string]any, 0, len(request.Messages)+1)
+	var pendingImages []toolImage
+	flushImages := func() {
+		if len(pendingImages) == 0 {
+			return
+		}
+		parts := make([]any, 0, len(pendingImages)+1)
+		parts = append(parts, map[string]any{"type": "text", "text": "The read tool returned the following image attachment(s)."})
+		for _, image := range pendingImages {
+			parts = append(parts, map[string]any{"type": "image_url", "image_url": map[string]any{"url": imageDataURL(image)}})
+		}
+		messages = append(messages, map[string]any{"role": "user", "content": parts})
+		pendingImages = nil
+	}
 	if request.System != "" {
 		messages = append(messages, map[string]any{"role": "system", "content": request.System})
 	}
 	for _, message := range request.Messages {
+		if message.Role != "tool" {
+			flushImages()
+		}
 		item := map[string]any{"role": message.Role, "content": message.Content}
 		if message.ToolCallID != "" {
 			item["tool_call_id"] = message.ToolCallID
+		}
+		if message.Role == "tool" {
+			text, images := decodeToolResult(message.Content)
+			if len(images) > 0 {
+				item["content"] = text
+				pendingImages = append(pendingImages, images...)
+			}
 		}
 		if len(message.ToolCalls) > 0 {
 			calls := make([]any, 0, len(message.ToolCalls))
@@ -189,6 +212,7 @@ func openAIPayload(request modelruntime.Request) map[string]any {
 		}
 		messages = append(messages, item)
 	}
+	flushImages()
 	payload := map[string]any{"model": request.Model, "messages": messages, "stream": true, "stream_options": map[string]bool{"include_usage": true}}
 	if request.MaxTokens > 0 {
 		payload["max_tokens"] = request.MaxTokens
@@ -207,7 +231,7 @@ func anthropicPayload(request modelruntime.Request, mode string) map[string]any 
 	messages := make([]map[string]any, 0, len(request.Messages))
 	for _, message := range request.Messages {
 		if message.Role == "tool" {
-			messages = append(messages, map[string]any{"role": "user", "content": []any{map[string]any{"type": "tool_result", "tool_use_id": message.ToolCallID, "content": message.Content}}})
+			messages = append(messages, map[string]any{"role": "user", "content": []any{map[string]any{"type": "tool_result", "tool_use_id": message.ToolCallID, "content": anthropicToolResultContent(message.Content)}}})
 			continue
 		}
 		if len(message.ToolCalls) > 0 {

@@ -103,6 +103,37 @@ func TestRestoredToolMessagesConvertToProviderProtocols(t *testing.T) {
 	}
 }
 
+func TestImageToolResultUsesVisionContentParts(t *testing.T) {
+	raw := `{"content":"Read image file \"photo.png\" (image/png, 3 bytes).","images":[{"path":"photo.png","media_type":"image/png","encoding":"base64","data":"iVBORw=="}]}`
+	request := modelruntime.Request{Messages: []modelruntime.Message{
+		{Role: "assistant", Content: "", ToolCalls: []modelruntime.ToolCall{{ID: "read-image", Name: "read", Arguments: json.RawMessage(`{"file_path":"photo.png"}`)}}},
+		{Role: "tool", ToolCallID: "read-image", Content: raw},
+	}}
+	openAI := openAIPayload(request)["messages"].([]map[string]any)
+	if len(openAI) != 3 || openAI[1]["role"] != "tool" || openAI[1]["content"] != `Read image file "photo.png" (image/png, 3 bytes).` {
+		t.Fatalf("OpenAI image payload = %#v", openAI)
+	}
+	imageMessage := openAI[2]
+	parts := imageMessage["content"].([]any)
+	imagePart := parts[1].(map[string]any)
+	imageURL := imagePart["image_url"].(map[string]any)["url"]
+	if imageMessage["role"] != "user" || imageURL != "data:image/png;base64,iVBORw==" {
+		t.Fatalf("OpenAI image part = %#v", imageMessage)
+	}
+	anthropic := anthropicPayload(request, "")["messages"].([]map[string]any)
+	result := anthropic[1]["content"].([]any)[0].(map[string]any)
+	blocks := result["content"].([]any)
+	textBlock := blocks[0].(map[string]any)
+	imageBlock := blocks[1].(map[string]any)
+	if result["type"] != "tool_result" || textBlock["type"] != "text" || imageBlock["type"] != "image" {
+		t.Fatalf("Anthropic image payload = %#v", result)
+	}
+	source := imageBlock["source"].(map[string]any)
+	if source["type"] != "base64" || source["media_type"] != "image/png" || source["data"] != "iVBORw==" {
+		t.Fatalf("Anthropic image source = %#v", source)
+	}
+}
+
 func TestProjectedToolContextConvertsToProviderProtocols(t *testing.T) {
 	history := []modelruntime.Message{{Role: "user", Content: "inspect"}}
 	for i := 0; i < 12; i++ {

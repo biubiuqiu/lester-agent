@@ -83,7 +83,7 @@ func (c *bedrockClient) Generate(ctx context.Context, request modelruntime.Reque
 	messages := make([]map[string]any, 0, len(request.Messages))
 	for _, message := range request.Messages {
 		if message.Role == "tool" {
-			messages = append(messages, map[string]any{"role": "user", "content": []any{map[string]any{"type": "tool_result", "tool_use_id": message.ToolCallID, "content": message.Content}}})
+			messages = append(messages, map[string]any{"role": "user", "content": []any{map[string]any{"type": "tool_result", "tool_use_id": message.ToolCallID, "content": anthropicToolResultContent(message.Content)}}})
 			continue
 		}
 		content := []any{map[string]any{"type": "text", "text": message.Content}}

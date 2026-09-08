@@ -2,9 +2,12 @@ package agenttool
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"mime"
+	"path/filepath"
 	"strings"
 	"unicode/utf8"
 
@@ -21,8 +24,10 @@ type readInput struct {
 	Limit    int    `json:"limit,omitempty"`
 }
 
+const maxImageBytes = 8 << 20
+
 func (Read) Definition() model.Tool {
-	return model.Tool{Name: "read", Description: "Read a text file from the current conversation directory by line range. Each content line is formatted as a right-aligned line number, a TAB, then the original text (cat -n style). Numbers are 1-based. The number and separator are display-only: never include them in edit/write input; preserve any indentation after the separator. Returns at most 2000 lines and 30000 characters per page. Use next_offset to continue. Individual lines longer than 2000 characters are explicitly truncated; inspect those with a narrower bash command.", InputSchema: map[string]any{"type": "object", "properties": map[string]any{
+	return model.Tool{Name: "read", Description: "Read a file from the current conversation directory. Text files are returned by line range with each content line formatted as a right-aligned line number, a TAB, then the original text (cat -n style). Numbers are 1-based. The number and separator are display-only: never include them in edit/write input; preserve any indentation after the separator. Returns at most 2000 lines and 30000 characters per text page; use next_offset to continue. Individual lines longer than 2000 characters are explicitly truncated; inspect those with a narrower bash command. Image files are returned as a vision-compatible base64 image attachment in the tool result; image reads are capped at 8 MiB.", InputSchema: map[string]any{"type": "object", "properties": map[string]any{
 		"file_path": pathProperty(),
 		"offset":    map[string]any{"type": "integer", "minimum": 1, "description": "One-based first line to return. Defaults to 1."},
 		"limit":     map[string]any{"type": "integer", "minimum": 1, "maximum": 2000, "description": "Maximum number of lines to return. Defaults to 2000."},
@@ -52,11 +57,48 @@ func (Read) Execute(ctx context.Context, environment Environment, raw json.RawMe
 	if offset < 1 || limit < 1 || limit > 2000 {
 		return nil, errors.New("offset must be at least 1 and limit must be between 1 and 2000")
 	}
+	if mediaType := imageMediaType(filePath); mediaType != "" {
+		data, err := environment.Sandboxes.ReadFile(ctx, environment.SandboxID, environment.WorkDir, filePath)
+		if err != nil {
+			return nil, err
+		}
+		if len(data) == 0 {
+			return nil, errors.New("image file is empty")
+		}
+		if len(data) > maxImageBytes {
+			return nil, fmt.Errorf("image file exceeds the %d MiB read limit", maxImageBytes>>20)
+		}
+		return map[string]any{
+			"content": fmt.Sprintf("Read image file %q (%s, %d bytes). The image is attached in the images field.", filePath, mediaType, len(data)),
+			"images": []map[string]any{{
+				"path":       filePath,
+				"media_type": mediaType,
+				"encoding":   "base64",
+				"data":       base64.StdEncoding.EncodeToString(data),
+			}},
+		}, nil
+	}
 	data, err := environment.Sandboxes.ReadFileLines(ctx, environment.SandboxID, environment.WorkDir, filePath, offset, limit)
 	if err != nil {
 		return nil, err
 	}
 	return numberedLinesResult(data), nil
+}
+
+func imageMediaType(filePath string) string {
+	extension := strings.ToLower(filepath.Ext(filePath))
+	mediaType := mime.TypeByExtension(extension)
+	if mediaType == "" {
+		mediaType = map[string]string{
+			".avif": "image/avif", ".bmp": "image/bmp", ".gif": "image/gif", ".ico": "image/x-icon",
+			".jpeg": "image/jpeg", ".jpg": "image/jpeg", ".png": "image/png", ".svg": "image/svg+xml",
+			".tif": "image/tiff", ".tiff": "image/tiff", ".webp": "image/webp",
+		}[extension]
+	}
+	if strings.HasPrefix(mediaType, "image/") {
+		return mediaType
+	}
+	return ""
 }
 
 func sliceLines(content string, offset, limit int) (string, int, int) {
