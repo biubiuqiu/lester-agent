@@ -69,7 +69,13 @@ export function SourcePreview({ content, fileName, storageKey = "", filePath = f
     };
   }, [language, source]);
 
-  const renderedLines = highlighted?.language === language && highlighted.source === source ? highlighted.lines : fallbackLines;
+  // A file may not have a registered syntax language. In that case `language`
+  // is undefined while the highlighter state is still empty; keep rendering
+  // the plain-text fallback instead of dereferencing `highlighted.source`.
+  const renderedLines =
+    highlighted && language && highlighted.language === language && highlighted.source === source
+      ? highlighted.lines
+      : fallbackLines;
   return <div ref={scroll} className="file-source-scroll" aria-label={`${fileName} 源代码`}>
     <div className="file-source-code">
       {renderedLines.map((tokens, lineIndex) => <div className="file-source-line" key={lineIndex}>
