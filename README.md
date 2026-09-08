@@ -2,7 +2,7 @@
 
 **Lester 是一个开源、可自部署的 AI Agent Workspace。**
 
-它以对话为主要入口：用户创建对话、选择 Agent 和模型，然后让 Agent 在用户专属 Computer 的独立会话目录中完成任务。
+它以对话为主要入口：首页居中展示输入框，发送第一条消息时创建会话，默认由 Lester 在用户专属 Computer 的独立会话目录中完成任务。
 
 > Lester 不是 Workflow/DAG 编排平台，不提供拖拽节点、条件分支或流程画布。
 
@@ -15,7 +15,7 @@
 - 通过 Workspace 级 SSE 实时输出 Agent 回复和当前思考/工具活动；刷新后按持久化事件游标无重复续流，左侧会话栏仅在会话运行或正在停止时展示状态，并用一次性未读提示告知后台任务完成或失败；运行区展示当前动作和耗时，发送键在运行期间变为停止键，可随时终止当前任务
 - 完整保存中间回复、工具调用与工具结果；模型请求按完整 ToolExchange 管理工作集，默认保留最近 10 次工具交互
 - 单次任务不限制模型/工具循环次数；运行会持续到模型完成、发生明确错误或运行上下文被取消
-- 创建对话时选择 Lester、Franklin、Michael 或 Trevor；同一对话内角色保持不变
+- 无需选择 Agent，首页直接输入目标即可开始；默认使用 Lester 和已配置的默认模型，也可切换模型、添加附件。点击“新对话”只返回输入页，不提前创建空会话。旧会话保留原角色以兼容已有历史。
 - 为每个用户分配一个 Computer（本地 Docker 或阿里云 ACS Agent Sandbox），并以 `/workspace/conversations/{conversationId}` 隔离会话目录
 - Agent 可以在 Computer 中执行命令、读写文件和使用终端
 - 右侧 Files 提供类似 VS Code 的目录树与文件预览，支持代码/文本行号、图片、PDF，以及受限 iframe 中的 HTML 页面预览、源码切换和独立页面打开；桌面端可拖动调整右侧面板宽度，并可收起左侧会话栏
@@ -203,7 +203,7 @@ docker compose --env-file deploy/.env \
 1. 打开 <http://localhost:13000>
 2. 注册账号并登录
 3. 前往 **Settings → Models** 配置模型 Provider
-4. 创建对话并选择 Agent
+4. 在首页输入目标，发送第一条消息即可开始与 Lester 的会话
 
 ### 统一网关与部署配置
 

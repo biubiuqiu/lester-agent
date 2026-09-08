@@ -4,7 +4,7 @@ This file defines the working agreement for coding agents in the Lester reposito
 
 ## Product contract
 
-Lester is an open-source, self-hostable AI Agent Workspace. The primary experience is conversation-first: a user starts a conversation, selects an Agent and model, and the Agent works in that conversation's directory inside the user's Computer.
+Lester is an open-source, self-hostable AI Agent Workspace. The primary experience is conversation-first: the home screen centers a composer, and submitting the first message creates a conversation with Lester and starts the task in that conversation's directory inside the user's Computer. New conversations do not expose a persona picker; existing conversations retain their original persona for compatibility.
 
 Lester is not a Workflow/DAG orchestration product. Do not add a workflow editor, node canvas, conditional branches, DAG runtime, or workflow-oriented product language unless the product direction is explicitly changed.
 
@@ -128,6 +128,7 @@ Preserve these behaviors when changing the implementation:
 - Keep the right panel file-centered and read-only: bounded open tabs, preview/source, download and explicit file references to the Agent, not a heavyweight editor or Checkpoint system. File cards must resolve to verified conversation files; references carry paths, not automatically injected file contents.
 - Share conversation-scoped file inventory through `FileWorkspaceProvider`. Invalidate after file/tool/run events and use bounded, visibility-aware polling for bash/background writes; preserve selections and avoid refetching unchanged previews. Mark partial scans visibly and never infer deletions from incomplete listings. Observed metadata changes are not a durable complete audit trail or content diff.
 - Keep responsive behavior usable on mobile.
+- New-chat navigation must not create an empty server conversation. Create with `agent_slug=lester` only on explicit submit, preserve first-message drafts on failure, prevent duplicate submits, and never auto-send through mount effects. Keep model selection and attachment upload available in the centered home composer.
 - Keep reply-footer artifact cards hidden while sending, running or stopping (including recovered active runs). Show verified files only after the run settles; right-panel inventory and previews must continue updating during execution.
 - Keep workspace chrome compact: the file tree takes only the space its rows need, changes are available on demand, and preview actions share one toolbar. Preserve readable typography, keyboard focus, and a visible composer on desktop and mobile. Conversation search filters titles locally without rewriting persisted titles.
 - Conversation view state is tab-local and keyed by user/workspace/conversation. Preserve drafts, file references/tabs/modes, expanded directories and transcript/source reading positions across navigation; never put view state in the model transcript. Bound sessionStorage (50 conversations; 100,000 draft characters), clear it on logout, and store only attachment names there: browser File objects survive client navigation in memory, not reloads. A reload must explicitly disclose missing local attachments.
@@ -190,6 +191,7 @@ For `sandbox.provider=docker`, Helm keeps `sandbox-service` at one replica and r
 - When changing user-visible capabilities or setup steps, update `README.md`.
 - When changing architecture boundaries, invariants, conventions, or validation commands, update this `AGENTS.md` in the same change.
 - Never commit real credentials, generated secrets, local `.env` files, build output, or dependency directories.
+- After completing and validating a requested code change in this repository, commit the task-scoped changes and push to the current branch's configured upstream without requiring another reminder, unless the user explicitly asks otherwise. Preserve unrelated work, never force-push, and report the commit ID and push result. If validation or pushing is blocked, explain the blocker rather than claiming completion.
 
 ## Definition of done
 

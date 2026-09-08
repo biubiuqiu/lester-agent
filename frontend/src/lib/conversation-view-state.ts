@@ -1,5 +1,6 @@
 // Tab-local UI state, never part of the model transcript or shared across accounts.
 export type ViewState = {
+  sendNotice: string;
   text: string;
   files: File[];
   missingFiles: string[];
@@ -16,7 +17,7 @@ const prefix = "lester.view.v1.";
 const cache = new Map<string, ViewState>();
 let writeScope: string | null = "";
 export function resumeViewState(scope: string) { writeScope = scope; }
-const defaults = (): ViewState => ({ text: "", files: [], missingFiles: [], reference: null, tabs: [], selected: null, treeOpen: true, directories: [""], modes: {}, positions: {}, thread: { top: 0, following: true } });
+const defaults = (): ViewState => ({ sendNotice: "", text: "", files: [], missingFiles: [], reference: null, tabs: [], selected: null, treeOpen: true, directories: [""], modes: {}, positions: {}, thread: { top: 0, following: true } });
 export const viewKey = (userId: string, workspaceId: string, conversationId: string) => `${userId}.${workspaceId}.${conversationId}`;
 
 export function readView(key: string): ViewState {
@@ -27,6 +28,7 @@ export function readView(key: string): ViewState {
   try {
     const saved = JSON.parse(window.sessionStorage.getItem(prefix + key) ?? "null");
     if (saved && saved.version === 1) {
+      value.sendNotice = typeof saved.sendNotice === "string" ? saved.sendNotice.slice(0, 2000) : "";
       value.text = typeof saved.text === "string" ? saved.text.slice(0, 100_000) : "";
       value.reference = typeof saved.reference === "string" ? saved.reference : null;
       value.tabs = Array.isArray(saved.tabs) ? saved.tabs.filter((p: unknown) => typeof p === "string").slice(-8) : [];

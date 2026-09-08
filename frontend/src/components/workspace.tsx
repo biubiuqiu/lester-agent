@@ -6,6 +6,7 @@ import { Check, ChevronDown, FileText, Folder, GripVertical, Menu, PanelLeftClos
 import { readView, updateView, viewKey, resumeViewState } from "@/lib/conversation-view-state";
 import { useConversationScroll } from "./use-conversation-scroll";
 import { Brand } from "./brand";
+import { NewConversationComposer } from "./new-conversation-composer";
 import { ArtifactCards, FileReferenceChip, FileWorkspaceProvider, OpenFilesButton, useFileWorkspace } from "./file-workspace";
 import { ConversationTimeline } from "./conversation-timeline";
 import { FileExplorer } from "./file-explorer";
@@ -101,7 +102,6 @@ export function Workspace({ conversationId }: { conversationId?: string }) {
   const activeConversationIdRef = useRef(conversationId);
   const conversationsRef = useRef(conversations);
   const refreshConversationRef = useRef<((syncRunState?: boolean) => Promise<void>) | null>(null);
-  const [dialog, setDialog] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => typeof window !== "undefined" && window.localStorage.getItem(sidebarPreferenceKey) === "true");
   const [panelWidth, setPanelWidth] = useState(() => {
@@ -393,18 +393,17 @@ export function Workspace({ conversationId }: { conversationId?: string }) {
   const shellStyle = { "--computer-panel-width": `${renderedPanelWidth}px` } as CSSProperties;
   return <FileWorkspaceProvider key={`${user?.user_id ?? "pending"}:${displayedCurrent?.id ?? "empty"}`} conversationId={displayedCurrent?.id} storageKey={user && displayedCurrent ? viewKey(user.user_id, user.workspace_id, displayedCurrent.id) : ""} events={eventsByConversation[displayedCurrent?.id ?? ""] ?? []} runId={runStatus.conversationId === conversationId ? runStatus.runId : undefined} running={runState === "running" || runState === "sending" || runState === "stopping"}><main className={`workspace-shell ${renderedSidebarCollapsed ? "sidebar-collapsed" : ""} ${panelResize ? "panel-resizing" : ""}`} style={shellStyle}>
     <aside className={`conversation-sidebar ${mobileMenu ? "mobile-open" : ""}`}>
-      <div className="sidebar-top"><div className="sidebar-brand-row"><Brand /><button type="button" className="sidebar-collapse-button" onClick={() => setConversationSidebar(true)} title="收起会话栏" aria-label="收起会话栏"><PanelLeftClose /></button></div><button className="icon-button mobile-close" onClick={() => setMobileMenu(false)} aria-label="关闭"><X /></button><button className="new-button" onClick={() => setDialog(true)}><Plus />新对话</button></div>
+      <div className="sidebar-top"><div className="sidebar-brand-row"><Brand /><button type="button" className="sidebar-collapse-button" onClick={() => setConversationSidebar(true)} title="收起会话栏" aria-label="收起会话栏"><PanelLeftClose /></button></div><button className="icon-button mobile-close" onClick={() => setMobileMenu(false)} aria-label="关闭"><X /></button><button className="new-button" onClick={() => { setMobileMenu(false); router.push("/app"); }}><Plus />新对话</button></div>
       <label className="conversation-search"><Search /><input value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="搜索会话" aria-label="搜索会话" />{conversationSearch ? <button type="button" onClick={() => setConversationSearch("")} aria-label="清空会话搜索"><X /></button> : null}</label>
       <div className="conversation-list">{loading ? <p className="muted-block">正在载入…</p> : visibleConversations.map((item) => <button key={item.id} className={`conversation-item ${item.id === conversationId ? "active" : ""}`} title={item.title} aria-current={item.id === conversationId ? "page" : undefined} onClick={() => openConversation(item.id)}><span className="conversation-item-copy"><strong>{item.title}</strong><small>{item.agent_slug !== "lester" ? `${agentName(item.agent_slug)} · ` : ""}{conversationStatusLabel(item)}</small></span><ConversationRunMark status={item.run_status} unread={unreadRunResults[item.id]} /></button>)}{!loading && visibleConversations.length === 0 ? <p className="muted-block">{conversationSearch ? "没有找到匹配的会话" : "从一个新对话开始"}</p> : null}</div>
       <div className="sidebar-footer"><UserMenu user={user} /></div>
     </aside>
     <section className={`conversation-main ${displayedCurrent ? "" : "empty-conversation"}`}>
-      <header className="conversation-header"><div className="conversation-header-leading"><button className="icon-button mobile-menu" onClick={() => setMobileMenu(true)} aria-label="打开会话栏"><Menu /></button><button type="button" className="sidebar-restore-button" onClick={() => setConversationSidebar(false)} title="展开会话栏" aria-label="展开会话栏"><PanelLeftOpen /></button>{displayedCurrent ? <div className="agent-heading"><span className="agent-avatar">{agentName(displayedCurrent.agent_slug)[0]}</span><span><strong>{agentName(displayedCurrent.agent_slug)}</strong><small className={`run-state ${runState}`}>{activeLabel}</small></span></div> : <Brand />}</div>{displayedCurrent ? <label className="model-selector"><select aria-label="当前模型" value={displayedCurrent.model_deployment_id || ""} onChange={(event) => chooseModel(event.target.value)}>{deployments.length === 0 ? <option value="">请先配置模型</option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown /></label> : <button className="new-button mobile-new" onClick={() => setDialog(true)}><Plus />新对话</button>}{displayedCurrent ? <OpenFilesButton /> : null}</header>
+      <header className="conversation-header"><div className="conversation-header-leading"><button className="icon-button mobile-menu" onClick={() => setMobileMenu(true)} aria-label="打开会话栏"><Menu /></button><button type="button" className="sidebar-restore-button" onClick={() => setConversationSidebar(false)} title="展开会话栏" aria-label="展开会话栏"><PanelLeftOpen /></button>{displayedCurrent ? <div className="agent-heading"><span className="agent-avatar">{agentName(displayedCurrent.agent_slug)[0]}</span><span><strong>{agentName(displayedCurrent.agent_slug)}</strong><small className={`run-state ${runState}`}>{activeLabel}</small></span></div> : <Brand />}</div>{displayedCurrent ? <label className="model-selector"><select aria-label="当前模型" value={displayedCurrent.model_deployment_id || ""} onChange={(event) => chooseModel(event.target.value)}>{deployments.length === 0 ? <option value="">请先配置模型</option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown /></label> : <button className="new-button mobile-new" onClick={() => { setMobileMenu(false); router.push("/app"); }}><Plus />新对话</button>}{displayedCurrent ? <OpenFilesButton /> : null}</header>
       {visibleError ? <div className="workspace-error" role="alert">{visibleError}</div> : null}
-      {displayedCurrent ? <ConversationView key={displayedCurrent.id} conversation={displayedCurrent} messages={messages} events={eventsByConversation[displayedCurrent.id] ?? []} runState={runState} runId={runStatus.conversationId === conversationId ? runStatus.runId : undefined} onSend={sendMessage} onStop={stopRun} /> : loading || conversationId ? <div className="workspace-loading">正在载入对话…</div> : <EmptyState onNew={() => setDialog(true)} />}
+      {displayedCurrent ? <ConversationView key={displayedCurrent.id} conversation={displayedCurrent} messages={messages} events={eventsByConversation[displayedCurrent.id] ?? []} runState={runState} runId={runStatus.conversationId === conversationId ? runStatus.runId : undefined} onSend={sendMessage} onStop={stopRun} /> : loading || conversationId ? <div className="workspace-loading">正在载入对话…</div> : user ? <NewConversationComposer deployments={deployments} user={user} /> : null}
     </section>
     {displayedCurrent ? <ComputerPanel conversationId={displayedCurrent.id} width={renderedPanelWidth} maxWidth={renderedPanelMaxWidth} resizing={Boolean(panelResize)} onResizeStart={(clientX) => setPanelResize({ startX: clientX, startWidth: renderedPanelWidth })} onWidthChange={updatePanelWidth} /> : null}
-    {dialog ? <NewConversation deployments={deployments} onClose={() => setDialog(false)} /> : null}
     {runNotice ? <RunNoticeToast notice={runNotice} onOpen={() => openConversation(runNotice.conversationId)} onDismiss={() => setRunNotice(null)} /> : null}
   </main></FileWorkspaceProvider>;
 }
@@ -415,10 +414,6 @@ function conversationStatusLabel(conversation: Conversation) {
     cancelling: "正在停止",
   };
   return labels[conversation.run_status] ?? relativeTime(conversation.updated_at);
-}
-
-function EmptyState({ onNew }: { onNew: () => void }) {
-  return <div className="empty-hero"><span className="agent-orbit">L</span><p className="eyebrow">A private directory for every mission</p><h1>把目标交给 Lester</h1><p>选择 Agent 与模型，开始一段拥有独立文件目录、终端和运行历史的对话。</p><button className="primary-button" onClick={onNew}><Plus />开始新任务</button></div>;
 }
 
 function ConversationView({ conversation, messages, events, runState, runId, onSend, onStop }: { conversation: Conversation; messages: Message[]; events: RunEvent[]; runState: RunState; runId?: string; onSend: (content: string, attachments: Attachment[]) => Promise<void>; onStop: () => Promise<void> }) {
@@ -432,7 +427,7 @@ function ConversationView({ conversation, messages, events, runState, runId, onS
     updateView(storageKey, { files: next }); setFilesState(next);
   };
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(() => readView(storageKey).sendNotice);
   const { thread, content: threadContent, unseen, jump } = useConversationScroll(storageKey, `${messages.at(-1)?.id}:${messages.length}:${events.at(-1)?.id}:${runState}`);
   const fileInput = useRef<HTMLInputElement>(null);
   const textInput = useRef<HTMLTextAreaElement>(null);
@@ -443,6 +438,7 @@ function ConversationView({ conversation, messages, events, runState, runId, onS
     event.preventDefault();
     if ((!text.trim() && files.length === 0) || uploading || runState === "sending" || runState === "running" || runState === "stopping") return;
     setError("");
+    updateView(storageKey, { sendNotice: "" });
     jump();
     setUploading(files.length > 0);
     try {
@@ -475,26 +471,6 @@ function ConversationView({ conversation, messages, events, runState, runId, onS
   };
   const helper = uploading ? `正在上传 ${files.length} 个附件…` : runState === "sending" ? "消息已发送，正在创建任务…" : runState === "running" ? `${agentName(conversation.agent_slug)} 正在工作，可随时停止` : runState === "stopping" ? "正在安全停止当前任务…" : runState === "cancelled" ? "已停止；已产生的文件修改不会撤销" : reference ? "围绕已引用的文件继续修改" : "";
   return <><div className="thread" ref={thread}><div ref={threadContent} className="thread-content"><ConversationTimeline messages={messages} events={events} /><ArtifactCards />{runActive ? <AgentActivityIndicator agent={agentName(conversation.agent_slug)} state={runState} runId={runId} events={events} /> : null}</div></div><form className="composer" onSubmit={submit}>{unseen ? <button type="button" className="new-content-button" onClick={jump}><ChevronDown />有新内容 · 回到底部</button> : null}{runState === "failed" && failure ? <RunFailureRecovery reason={String(failure.payload.error ?? "任务执行失败")} lastPrompt={lastPrompt} onPrepare={prepareRecovery} /> : null}{helper ? <p className={busy ? "composer-status active" : "composer-status"}>{helper}</p> : null}<div className="compose-box"><FileReferenceChip />{missingFiles.length ? <p className="draft-attachment-notice" role="status">草稿已恢复；刷新前的本地附件需要重新选择：{missingFiles.join("、")}<button type="button" onClick={() => { setMissingFiles([]); updateView(storageKey, { missingFiles: [] }); }}>知道了</button></p> : null}{files.length > 0 ? <div className="pending-attachments">{files.map((file, index) => <span key={`${file.name}-${file.lastModified}`}><FileText />{file.name}<button type="button" onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`移除 ${file.name}`}><X /></button></span>)}</div> : null}<textarea ref={textInput} rows={2} value={text} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} aria-label="消息输入框" placeholder={reference ? "描述要如何修改这个文件…" : `给 ${agentName(conversation.agent_slug)} 一个目标…`} disabled={uploading || runState === "sending"} /><div className="compose-actions"><input ref={fileInput} type="file" multiple hidden onChange={(event) => setFiles((current) => [...current, ...Array.from(event.target.files || [])])} /><button type="button" className="icon-button upload-button" onClick={() => fileInput.current?.click()} disabled={busy} aria-label="添加附件" title="添加附件：文件保存在当前会话，Agent 按需读取，不会自动解析进上下文"><Paperclip /></button><span className="composer-keyboard-hint">Shift + Enter 换行</span>{runActive ? <button type="button" className={`send-button stop-button ${runState === "stopping" ? "stopping" : ""}`} onClick={() => void onStop()} disabled={!runId || runState === "sending" || runState === "stopping"} title={runState === "stopping" ? "正在停止" : "停止生成"} aria-label={runState === "stopping" ? "正在停止任务" : "停止生成"}><Square /></button> : <button className="send-button" disabled={busy || (!text.trim() && files.length === 0)} aria-label="发送消息"><Send /></button>}</div>{error ? <p className="compose-error">{error}</p> : null}</div></form></>;
-}
-
-function NewConversation({ deployments, onClose }: { deployments: Deployment[]; onClose: () => void }) {
-  const router = useRouter();
-  const [selected, setSelected] = useState("lester");
-  const [model, setModel] = useState(deployments.find((deployment) => deployment.is_default)?.id || deployments[0]?.id || "");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  async function create() {
-    setBusy(true);
-    setError("");
-    try {
-      const item = await api<Conversation>("/api/v1/conversations", { method: "POST", body: JSON.stringify({ agent_slug: selected, model_deployment_id: model, title: "新对话" }) });
-      router.push(`/app/c/${item.id}`);
-      onClose();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "创建对话失败");
-    } finally { setBusy(false); }
-  }
-  return <div className="dialog-backdrop" role="presentation"><section className="dialog" role="dialog" aria-modal><header><div><p className="eyebrow">New mission</p><h2>选择这段对话的 Agent</h2></div><button className="icon-button" onClick={onClose}><X /></button></header><div className="agent-grid">{agents.map((agent) => <button key={agent.slug} className={`agent-option ${selected === agent.slug ? "selected" : ""}`} onClick={() => setSelected(agent.slug)}><span>{agent.initial}</span><strong>{agent.name}</strong><small>{agent.copy}</small></button>)}</div><label className="field">模型<select value={model} onChange={(event) => setModel(event.target.value)}>{deployments.length === 0 ? <option value="">先去设置模型</option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>{error ? <p className="settings-error" role="alert">{error}</p> : null}<footer><button className="secondary-button" onClick={onClose}>取消</button><button className="primary-button" onClick={create} disabled={busy || !model}>{busy ? "创建中…" : "创建对话"}</button></footer></section></div>;
 }
 
 const computerStatusLabel: Record<ComputerState["status"], string> = { not_created: "未创建", creating: "创建中", running: "运行中", suspended: "已暂停", stopped: "已停止", unhealthy: "异常", missing: "待恢复", error: "连接异常" };
