@@ -139,7 +139,22 @@ Preserve these behaviors when changing the implementation:
 - Every asynchronous page load and mutation must surface a visible error state and prevent duplicate submission while pending. Clear conversation-scoped state before loading a different conversation.
 - Avoid introducing a state-management or UI framework unless the existing React structure is no longer sufficient and the dependency is justified.
 
+### Preview regression checks
+
+- Source previews must render plain text when the extension has no registered syntax grammar (including `.txt` and extensionless files), while highlighting is pending, or when grammar loading fails. Check that the highlight state exists before reading its fields: `highlighted?.language === language` can be true when both sides are undefined and does not guard a subsequent `highlighted.source` access.
+- When changing previews, exercise a plain-text file, a supported source language, and switching between them. Preserve the visible composer and bounded scrolling with long files.
+- Distinguish errors from generated HTML inside the sandboxed preview iframe from Lester application errors. An artifact's JavaScript syntax error is not evidence of a failure in the application's preview component; report it separately and do not silently edit user artifacts during application debugging.
+
 ## Local development
+
+### Existing Windows checkout and startup
+
+- The established checkout on the current development machine is `G:\codespace\lester-agent`. A desktop task may start in `C:\Users\deniswen\Documents\ChatGPT\lester`; verify the Git root before running repository commands.
+- As of 2026-09-09, this machine's deployment uses `http://localhost:13180/app` through the gateway. Windows reserved `13000–13099`, preventing the former `13080` binding. Treat this as local context, not the repository default: verify `GATEWAY_PORT` and `WEB_ORIGIN` in the ignored `deploy/.env` without printing secrets. For a Docker port-binding permission error, inspect `netsh interface ipv4 show excludedportrange protocol=tcp` and listening ports; choose an available port and update both settings together.
+- Preserve the existing `deploy/.env` and persistent volumes. Copy the example only for a fresh setup. Routine startup from the repository root is `docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d`; verify Docker is available, service status, the app route, and API readiness before reporting success.
+- After frontend changes, use `docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --no-deps --build web` to deploy the new bundle. Reload the browser before checking the fix; a successful local build alone does not update the running container.
+- PostgreSQL entrypoint migration mounts initialize a new data directory only. For an existing volume, inspect migration requirements after pulling changes and apply missing migrations explicitly using the repository's documented procedure; never delete the volume to upgrade the schema.
+- Runtime status is transient: recheck Docker and HTTP readiness on each startup request rather than assuming the previous session's containers are still running.
 
 Start the full stack:
 
