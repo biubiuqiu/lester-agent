@@ -1,0 +1,31 @@
+{{- if .Values.artifactIngress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "lester.fullname" . }}-artifacts
+  labels:
+    {{- include "lester.labels" . | nindent 4 }}
+  {{- with .Values.artifactIngress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.artifactIngress.className }}
+  ingressClassName: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.artifactIngress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ required "artifactIngress.host is required" .Values.artifactIngress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "lester.fullname" . }}-artifact-host
+                port:
+                  number: {{ .Values.service.artifactHost.port }}
+{{- end }}

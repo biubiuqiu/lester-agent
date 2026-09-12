@@ -5,7 +5,7 @@ import (
 	"io"
 )
 
-// Store is the object-storage boundary used by the skill catalog. Implementations
+// Store is the object-storage boundary used by skills and artifact publication. Implementations
 // can target MinIO, AWS S3, or any other durable blob service.
 type Store interface {
 	Ensure(context.Context) error

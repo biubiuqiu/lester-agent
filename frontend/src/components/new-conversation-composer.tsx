@@ -8,9 +8,9 @@ import { pastedImageFiles } from "@/lib/clipboard";
 import { readView, updateView, viewKey } from "@/lib/conversation-view-state";
 import { startConversation } from "@/lib/start-conversation";
 
-export function NewConversationComposer({ deployments, user }: { deployments: Deployment[]; user: UserProfile }) {
+export function NewConversationComposer({ deployments, user, projectId, projectName }: { deployments: Deployment[]; user: UserProfile; projectId?:string; projectName?:string }) {
   const router = useRouter();
-  const storageKey = viewKey(user.user_id, user.workspace_id, "new");
+  const storageKey = viewKey(user.user_id, user.workspace_id, `new.${projectId || "default"}`);
   const [text, setText] = useState(() => readView(storageKey).text);
   const [files, setFiles] = useState<File[]>(() => readView(storageKey).files);
   const [missing, setMissing] = useState(() => readView(storageKey).missingFiles);
@@ -41,7 +41,7 @@ export function NewConversationComposer({ deployments, user }: { deployments: De
         created = item;
         // Preserve the submitted draft before uploads/send; never auto-resend on reload.
         updateView(viewKey(user.user_id, user.workspace_id, item.id), { text, files, missingFiles: missing });
-      });
+      },projectId);
       updateView(viewKey(user.user_id, user.workspace_id, conversation.id), { text: "", files: [], missingFiles: [], sendNotice: "" });
       clear();
       if (mounted.current) router.push(`/app/c/${conversation.id}`);
@@ -59,6 +59,7 @@ export function NewConversationComposer({ deployments, user }: { deployments: De
   }
 
   return <div className="new-chat-home"><div className="new-chat-content">
+    {projectName?<p className="new-project-context">{projectName}</p>:null}
     <h1>有什么想交给 Lester？</h1>
     <p className="new-chat-intro">从一个想法开始，把它变成看得见的成果。</p>
     <form className="composer new-chat-composer" onSubmit={submit} aria-label="开始新对话" aria-busy={busy}>

@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "lester.fullname" . }}-artifact-host
+  labels:
+    {{- include "lester.labels" . | nindent 4 }}
+    app.kubernetes.io/component: artifact-host
+spec:
+  replicas: {{ .Values.replicaCount.artifactHost }}
+  selector:
+    matchLabels:
+      {{- include "lester.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: artifact-host
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- if not .Values.secrets.existingSecret }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "lester.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: artifact-host
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: artifact-host
+          image: {{ include "lester.image" (list .Values.images.artifactHost .) }}
+          imagePullPolicy: {{ .Values.images.artifactHost.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "lester.fullname" . }}-config
+          env:
+            - name: HTTP_ADDR
+              value: :8082
+            {{- range $key := list "DATABASE_URL" "OBJECT_STORE_ACCESS_KEY" "OBJECT_STORE_SECRET_KEY" }}
+            - name: {{ $key }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "lester.secretName" $ }}
+                  key: {{ $key }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 8082
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+          resources:
+            {{- toYaml .Values.resources.artifactHost | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: ["ALL"]}
+            runAsNonRoot: true
+            runAsUser: 65532
+            seccompProfile: {type: RuntimeDefault}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "lester.fullname" . }}-artifact-host
+  labels:
+    {{- include "lester.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "lester.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: artifact-host
+  ports:
+    - name: http
+      port: {{ .Values.service.artifactHost.port }}
+      targetPort: http

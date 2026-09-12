@@ -48,6 +48,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.FromContext(r.Context())
 	var req struct {
+		ProjectID         uuid.UUID `json:"project_id"`
 		AgentSlug         string    `json:"agent_slug"`
 		Title             string    `json:"title"`
 		ModelDeploymentID uuid.UUID `json:"model_deployment_id"`
@@ -55,7 +56,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	if !httpapi.Decode(w, r, &req) {
 		return
 	}
-	item, err := h.service.Create(r.Context(), p.WorkspaceID, p.UserID, req.AgentSlug, req.Title, req.ModelDeploymentID)
+	item, err := h.service.Create(r.Context(), p.WorkspaceID, p.UserID, req.AgentSlug, req.Title, req.ModelDeploymentID, req.ProjectID)
 	if err != nil {
 		httpapi.Error(w, 400, err)
 		return

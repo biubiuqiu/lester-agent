@@ -25,6 +25,19 @@ jobs:
 
   go:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: lester_test
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_DB: lester_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U lester_test -d lester_test"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      LESTER_TEST_DATABASE_URL: postgres://lester_test:test-only@localhost:5432/lester_test?sslmode=disable
     defaults:
       run:
         working-directory: backend
@@ -56,3 +69,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm build
+
+  helm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4.3.0
+      - run: helm lint deploy/helm/lester --set secrets.existingSecret=lester-test-secrets
+      - run: helm template lester deploy/helm/lester --set secrets.existingSecret=lester-test-secrets --set artifactIngress.enabled=true > /dev/null

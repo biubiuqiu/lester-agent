@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/biubiuqiu/lester-agent/backend/internal/agenttool"
+	"github.com/biubiuqiu/lester-agent/backend/internal/artifact"
 	"github.com/biubiuqiu/lester-agent/backend/internal/auth"
 	"github.com/biubiuqiu/lester-agent/backend/internal/blob"
 	"github.com/biubiuqiu/lester-agent/backend/internal/config"
@@ -17,10 +18,12 @@ import (
 	"github.com/biubiuqiu/lester-agent/backend/internal/database"
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
 	"github.com/biubiuqiu/lester-agent/backend/internal/model/integration"
+	"github.com/biubiuqiu/lester-agent/backend/internal/project"
 	"github.com/biubiuqiu/lester-agent/backend/internal/sandbox"
 	"github.com/biubiuqiu/lester-agent/backend/internal/secret"
 	"github.com/biubiuqiu/lester-agent/backend/internal/server"
 	"github.com/biubiuqiu/lester-agent/backend/internal/skill"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -66,12 +69,28 @@ func main() {
 		os.Exit(1)
 	}
 	skillService := skill.New(db, objectStore, sandboxClient)
+	artifactURL := os.Getenv("ARTIFACT_PUBLIC_URL")
+	if artifactURL == "" {
+		artifactURL = "http://127.0.0.1:13181"
+	}
+	if err = artifact.ValidateOrigin(artifactURL, cfg.WebOrigin); err != nil {
+		logger.Error("artifact origin", "error", err)
+		os.Exit(1)
+	}
+	artifactService := &artifact.Service{DB: db, Store: objectStore, Files: sandboxClient, BaseURL: artifactURL, Prepare: func(ctx context.Context, workspaceID, conversationID uuid.UUID) (string, string, error) {
+		computer, err := conversationService.ComputerForConversation(ctx, workspaceID, conversationID)
+		if err != nil {
+			return "", "", err
+		}
+		return computer.SandboxID, computer.WorkDir, nil
+	}}
+	toolRegistry.Register(agenttool.DeployHTML{Service: artifactService})
 	if err = skillService.SeedDefaults(ctx); err != nil {
 		logger.Error("seed skills", "error", err)
 		os.Exit(1)
 	}
 	authService := auth.New(db, redisClient, cfg.SessionTTL, cfg.SessionCookieSecure)
-	handler := server.Router(server.Dependencies{Logger: logger, WebOrigin: cfg.WebOrigin, Auth: authService, Models: model.NewHandler(modelStore), Conversations: conversationHandler, Skills: skill.NewHandler(skillService, conversationService)})
+	handler := server.Router(server.Dependencies{Logger: logger, WebOrigin: cfg.WebOrigin, Auth: authService, Models: model.NewHandler(modelStore), Conversations: conversationHandler, Skills: skill.NewHandler(skillService, conversationService), Projects: &project.Handler{Service: &project.Service{DB: db}}, Artifacts: &artifact.Handler{Service: artifactService}})
 	server := &http.Server{Addr: cfg.HTTPAddr, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 	go conversationService.SuspendIdle(ctx, cfg.SandboxIdleTTL)
 	go conversationService.MonitorSandboxes(ctx, cfg.SandboxMonitorInterval)

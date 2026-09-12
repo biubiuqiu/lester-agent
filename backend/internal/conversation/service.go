@@ -24,6 +24,8 @@ import (
 )
 
 type Conversation struct {
+	ProjectID         uuid.UUID  `json:"project_id"`
+	Pinned            bool       `json:"pinned"`
 	ID                uuid.UUID  `json:"id"`
 	WorkspaceID       uuid.UUID  `json:"workspace_id"`
 	CreatedBy         uuid.UUID  `json:"created_by"`
@@ -99,20 +101,24 @@ func New(db *pgxpool.Pool, redisClient *redis.Client, models *model.Store, sandb
 	return &Service{db: db, redis: redisClient, models: models, sandboxes: sandboxes, tools: tools}
 }
 
-func (s *Service) Create(ctx context.Context, workspaceID, userID uuid.UUID, agent, title string, modelID uuid.UUID) (Conversation, error) {
+func (s *Service) Create(ctx context.Context, workspaceID, userID uuid.UUID, agent, title string, modelID uuid.UUID, projectIDs ...uuid.UUID) (Conversation, error) {
 	if agent == "" {
 		agent = "lester"
 	}
 	if title == "" {
 		title = "新对话"
 	}
+	var projectID *uuid.UUID
+	if len(projectIDs) > 0 && projectIDs[0] != uuid.Nil {
+		projectID = &projectIDs[0]
+	}
 	var c Conversation
-	err := s.db.QueryRow(ctx, `INSERT INTO conversations(workspace_id,created_by,agent_slug,title,model_deployment_id) VALUES($1,$2,$3,$4,COALESCE(NULLIF($5,'00000000-0000-0000-0000-000000000000'::uuid),(SELECT id FROM model_deployments WHERE workspace_id=$1 AND is_default LIMIT 1))) RETURNING id,workspace_id,created_by,agent_slug,COALESCE(model_deployment_id,'00000000-0000-0000-0000-000000000000'),title,created_at,updated_at`, workspaceID, userID, agent, title, modelID).Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt)
+	err := s.db.QueryRow(ctx, `INSERT INTO conversations(workspace_id,created_by,agent_slug,title,project_id,model_deployment_id) VALUES($1,$2,$3,$4,$6,COALESCE(NULLIF($5,'00000000-0000-0000-0000-000000000000'::uuid),(SELECT id FROM model_deployments WHERE workspace_id=$1 AND is_default LIMIT 1))) RETURNING id,workspace_id,created_by,agent_slug,COALESCE(model_deployment_id,'00000000-0000-0000-0000-000000000000'),title,created_at,updated_at,project_id,pinned`, workspaceID, userID, agent, title, modelID, projectID).Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.ProjectID, &c.Pinned)
 	c.RunStatus = "idle"
 	return c, err
 }
 func (s *Service) List(ctx context.Context, workspaceID uuid.UUID) ([]Conversation, error) {
-	rows, err := s.db.Query(ctx, `SELECT c.id,c.workspace_id,c.created_by,c.agent_slug,COALESCE(c.model_deployment_id,'00000000-0000-0000-0000-000000000000'),c.title,c.created_at,c.updated_at,latest.id,COALESCE(latest.status,'idle')
+	rows, err := s.db.Query(ctx, `SELECT c.id,c.workspace_id,c.created_by,c.agent_slug,COALESCE(c.model_deployment_id,'00000000-0000-0000-0000-000000000000'),c.title,c.created_at,c.updated_at,latest.id,COALESCE(latest.status,'idle'),c.project_id,c.pinned
 		FROM conversations c
 		LEFT JOIN LATERAL (SELECT r.id,r.status FROM runs r WHERE r.conversation_id=c.id ORDER BY r.created_at DESC,r.id DESC LIMIT 1) latest ON true
 		WHERE c.workspace_id=$1 ORDER BY c.updated_at DESC`, workspaceID)
@@ -123,7 +129,7 @@ func (s *Service) List(ctx context.Context, workspaceID uuid.UUID) ([]Conversati
 	items := []Conversation{}
 	for rows.Next() {
 		var c Conversation
-		if err = rows.Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.RunID, &c.RunStatus); err != nil {
+		if err = rows.Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.RunID, &c.RunStatus, &c.ProjectID, &c.Pinned); err != nil {
 			return nil, err
 		}
 		items = append(items, c)
@@ -132,10 +138,10 @@ func (s *Service) List(ctx context.Context, workspaceID uuid.UUID) ([]Conversati
 }
 func (s *Service) Get(ctx context.Context, workspaceID, id uuid.UUID) (Conversation, []Message, error) {
 	var c Conversation
-	err := s.db.QueryRow(ctx, `SELECT c.id,c.workspace_id,c.created_by,c.agent_slug,COALESCE(c.model_deployment_id,'00000000-0000-0000-0000-000000000000'),c.title,c.created_at,c.updated_at,latest.id,COALESCE(latest.status,'idle')
+	err := s.db.QueryRow(ctx, `SELECT c.id,c.workspace_id,c.created_by,c.agent_slug,COALESCE(c.model_deployment_id,'00000000-0000-0000-0000-000000000000'),c.title,c.created_at,c.updated_at,latest.id,COALESCE(latest.status,'idle'),c.project_id,c.pinned
 		FROM conversations c
 		LEFT JOIN LATERAL (SELECT r.id,r.status FROM runs r WHERE r.conversation_id=c.id ORDER BY r.created_at DESC,r.id DESC LIMIT 1) latest ON true
-		WHERE c.id=$2 AND c.workspace_id=$1`, workspaceID, id).Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.RunID, &c.RunStatus)
+		WHERE c.id=$2 AND c.workspace_id=$1`, workspaceID, id).Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.RunID, &c.RunStatus, &c.ProjectID, &c.Pinned)
 	if err != nil {
 		return c, nil, err
 	}

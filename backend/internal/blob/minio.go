@@ -52,6 +52,19 @@ func (s *MinIOStore) Get(ctx context.Context, key string) (io.ReadCloser, error)
 	return object, nil
 }
 
+// Open returns an S3-backed seekable reader for range-aware media delivery.
+func (s *MinIOStore) Open(ctx context.Context, key string) (io.ReadSeekCloser, error) {
+	object, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, err
+	}
+	if _, err = object.Stat(); err != nil {
+		_ = object.Close()
+		return nil, err
+	}
+	return object, nil
+}
+
 func (s *MinIOStore) Delete(ctx context.Context, key string) error {
 	return s.client.RemoveObject(ctx, s.bucket, key, minio.RemoveObjectOptions{})
 }

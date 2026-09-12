@@ -12,18 +12,24 @@ images:
     repository: ghcr.io/biubiuqiu/lester-agent-web
     tag: ""
     pullPolicy: IfNotPresent
+  artifactHost:
+    repository: ghcr.io/biubiuqiu/lester-agent-artifact-host
+    tag: ""
+    pullPolicy: IfNotPresent
   sandboxService:
     repository: ghcr.io/biubiuqiu/lester-agent-sandbox-service
     tag: ""
     pullPolicy: IfNotPresent
 
 replicaCount:
+  artifactHost: 1
   api: 1
   web: 1
 
 config:
   # Must exactly match the public browser origin, without a trailing slash.
   webOrigin: https://lester.example.com
+  artifactPublicURL: https://sites.example.net
   sessionCookieSecure: true
   objectStore:
     endpoint: s3.example.com
@@ -46,6 +52,8 @@ secrets:
   acsSandboxAPIKey: ""
 
 service:
+  artifactHost:
+    port: 8082
   api:
     port: 8080
   web:
@@ -105,6 +113,7 @@ networkPolicy:
   enabled: false
 
 resources:
+  artifactHost: {}
   api: {}
   web: {}
   sandboxService: {}
@@ -112,3 +121,10 @@ resources:
 podAnnotations: {}
 podLabels: {}
 
+
+artifactIngress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: sites.example.net
+  tls: []

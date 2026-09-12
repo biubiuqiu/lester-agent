@@ -4,6 +4,7 @@ import "./account.css";
 import "./workspace-errors.css";
 import "./file-workspace.css";
 import "./workspace-ui.css";
+import "./artifacts-projects.css";
 import "@xterm/xterm/css/xterm.css";
 export const metadata:Metadata={title:"Lester",description:"Open-source AI Agent Workspace"};
 export default function RootLayout({children}:{children:React.ReactNode}){return <html lang="zh-CN"><body>{children}</body></html>}

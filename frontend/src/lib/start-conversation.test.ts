@@ -48,3 +48,15 @@ test("attachments upload into the new conversation before sending only their IDs
   await startConversation("", [new File(["not injected"], "notes.txt")], "model", () => {});
   assert.deepEqual(paths, ["/api/v1/conversations", "/api/v1/conversations/c/attachments", "/api/v1/conversations/c/messages"]);
 });
+
+
+test("project selection is sent when creating the conversation", async (t) => {
+  const calls: {path: string; body: Record<string, unknown>}[] = [];
+  t.mock.method(globalThis, "fetch", async (path: string, init: RequestInit) => {
+    calls.push({path, body: JSON.parse(String(init.body))});
+    return Response.json(path.endsWith("/messages") ? {run_id:"r"} : {id:"c"});
+  });
+  await startConversation("project draft", [], "model", () => {}, "selected-project");
+  assert.equal(calls[0].body.project_id, "selected-project");
+  assert.equal(calls.length, 2);
+});

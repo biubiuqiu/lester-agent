@@ -31,6 +31,7 @@ import {
 import { useFileWorkspace, FileDownload } from "./file-workspace";
 import { readView, updateView } from "@/lib/conversation-view-state";
 import { usePreviewScroll } from "./use-preview-scroll";
+import { PublishFileButton } from "./artifact-manager";
 import { FileError } from "./file-error";
 import { MessageContent } from "./message-content";
 
@@ -237,7 +238,7 @@ function FilePreview({
         <button type="button" aria-pressed={mode === "preview"} className={mode === "preview" ? "active" : ""} onClick={() => onModeChange("preview")}><Eye />预览</button>
         <button type="button" aria-pressed={mode === "source"} className={mode === "source" ? "active" : ""} onClick={() => onModeChange("source")}><Code2 />源码</button>
       </nav> : <span className="file-preview-format"><FileGlyph file={file} />{fileExtension(file.name).toUpperCase() || "文本"}<small>{formatBytes(file.size)}</small></span>}
-      <div className="file-preview-actions">{preview.updatedAt ? <RecentFileUpdate key={preview.updatedAt} /> : null}<button type="button" className="file-ask-agent" onClick={onReference} title="让 Agent 修改此文件" aria-label="让 Agent 修改此文件"><MessageSquare /><span>修改</span></button><FileDownload conversationId={conversationId} file={file} />{kind === "html" ? <a href={url} target="_blank" rel="noopener noreferrer" title="在新页面打开 HTML 预览" aria-label={`在新页面预览 ${file.name}`}><ExternalLink /></a> : null}</div>
+      <div className="file-preview-actions">{preview.updatedAt ? <RecentFileUpdate key={preview.updatedAt} /> : null}<button type="button" className="file-ask-agent" onClick={onReference} title="让 Agent 修改此文件" aria-label="让 Agent 修改此文件"><MessageSquare /><span>修改</span></button>{kind === "html" ? <PublishFileButton conversationId={conversationId} path={file.path}/> : null}<FileDownload conversationId={conversationId} file={file} />{kind === "html" ? <a href={url} target="_blank" rel="noopener noreferrer" title="在新页面打开 HTML 预览" aria-label={`在新页面预览 ${file.name}`}><ExternalLink /></a> : null}</div>
     </header>
     <div ref={kind === "markdown" && mode === "preview" ? markdownScroll : undefined} className={`file-preview-body ${kind}`}>
       {preview.loading && preview.content ? <span className="preview-syncing" role="status">正在同步最新版本…</span> : null}

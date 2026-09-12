@@ -4,10 +4,12 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/biubiuqiu/lester-agent/backend/internal/artifact"
 	"github.com/biubiuqiu/lester-agent/backend/internal/auth"
 	"github.com/biubiuqiu/lester-agent/backend/internal/conversation"
 	"github.com/biubiuqiu/lester-agent/backend/internal/httpapi"
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
+	"github.com/biubiuqiu/lester-agent/backend/internal/project"
 	"github.com/biubiuqiu/lester-agent/backend/internal/skill"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -20,6 +22,8 @@ type Dependencies struct {
 	Models        *model.Handler
 	Conversations *conversation.Handler
 	Skills        *skill.Handler
+	Projects      *project.Handler
+	Artifacts     *artifact.Handler
 }
 
 func Router(deps Dependencies) http.Handler {
@@ -33,6 +37,16 @@ func Router(deps Dependencies) http.Handler {
 		api.Group(func(private chi.Router) {
 			private.Use(deps.Auth.Middleware)
 			private.Get("/me", deps.Auth.Me)
+			if deps.Projects != nil {
+				private.Get("/projects", deps.Projects.List)
+				private.Post("/projects", deps.Projects.Create)
+				private.Patch("/projects/{id}", deps.Projects.Update)
+			}
+			if deps.Artifacts != nil {
+				private.Get("/artifacts", deps.Artifacts.List)
+				private.Post("/conversations/{id}/artifacts", deps.Artifacts.Publish)
+				private.Post("/artifacts/{id}/unpublish", deps.Artifacts.Unpublish)
+			}
 			private.Patch("/me", deps.Auth.UpdateProfile)
 			private.Get("/agents", func(w http.ResponseWriter, _ *http.Request) {
 				httpapi.JSON(w, 200, map[string]any{"agents": []map[string]string{{"slug": "lester", "name": "Lester"}, {"slug": "franklin", "name": "Franklin"}, {"slug": "michael", "name": "Michael"}, {"slug": "trevor", "name": "Trevor"}}})
@@ -48,6 +62,7 @@ func Router(deps Dependencies) http.Handler {
 			private.Post("/conversations", deps.Conversations.Create)
 			private.Get("/conversations/{id}", deps.Conversations.Get)
 			private.Patch("/conversations/{id}", deps.Conversations.Update)
+			private.Patch("/conversations/{id}/organization", deps.Conversations.Organize)
 			private.Post("/conversations/{id}/messages", deps.Conversations.Send)
 			private.Post("/conversations/{id}/runs/{runID}/cancel", deps.Conversations.CancelRun)
 			private.Post("/conversations/{id}/attachments", deps.Conversations.UploadAttachment)

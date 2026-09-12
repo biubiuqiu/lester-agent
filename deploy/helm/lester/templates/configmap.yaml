@@ -6,6 +6,7 @@ metadata:
     {{- include "lester.labels" . | nindent 4 }}
 data:
   WEB_ORIGIN: {{ required "config.webOrigin is required" .Values.config.webOrigin | trimSuffix "/" | quote }}
+  ARTIFACT_PUBLIC_URL: {{ required "config.artifactPublicURL is required" .Values.config.artifactPublicURL | trimSuffix "/" | quote }}
   SESSION_COOKIE_SECURE: {{ .Values.config.sessionCookieSecure | quote }}
   OBJECT_STORE_ENDPOINT: {{ required "config.objectStore.endpoint is required" .Values.config.objectStore.endpoint | quote }}
   OBJECT_STORE_BUCKET: {{ required "config.objectStore.bucket is required" .Values.config.objectStore.bucket | quote }}

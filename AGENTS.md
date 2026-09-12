@@ -14,7 +14,7 @@ The current implementation intentionally does not include:
 - Knowledge Base/RAG products
 - Memory
 - browser automation
-- Artifact persistence, Computer snapshots, or automatic cross-provider workspace migration
+- Computer snapshots, or automatic cross-provider workspace migration
 
 Do not implement, simulate, or silently scaffold these capabilities without an explicit request. A disabled UI placeholder must remain clearly disabled and must not imply that the feature works.
 
@@ -35,6 +35,7 @@ Never describe GitHub Actions CI as a Lester product capability.
 frontend/                     Next.js frontend
 backend/
   cmd/api/                    API executable
+  cmd/artifact-host/          independent public static-site host
   cmd/sandbox-service/        Sandbox Service executable
   cmd/lester-toolbox/         static filesystem helper injected into user Computers
   internal/                   backend implementation
@@ -52,10 +53,10 @@ This is a Monorepo with separate frontend and backend build contexts.
 - `frontend/` contains all browser-facing code. It communicates through the API and must not access PostgreSQL, Redis, or Docker directly.
 - `backend/cmd/api/` is a thin composition root for authentication, workspaces, model configuration, conversations, the Agent runtime, and API transport.
 - `backend/cmd/sandbox-service/` is a separate executable and container. It owns Computer lifecycle, command execution, files, and terminal sessions.
-- `backend/internal/` contains non-exported backend implementation shared by the two Go executables.
+- `backend/internal/` contains non-exported backend implementation shared by the Go executables.
 - Only Sandbox Service may mount the Docker Socket, and only when the selected provider is `docker`. ACS deployments must not mount it.
 - API and Sandbox Service must remain independently buildable and deployable.
-- Compose exposes only the Nginx gateway by default: `/api` and `/api/*` proxy unchanged to API, other paths to Web. Build Web with an empty `NEXT_PUBLIC_API_URL`, keep `WEB_ORIGIN` aligned with the public gateway origin, and expose API/MinIO only via the loopback-bound debug override when requested. Kubernetes uses Ingress directly, not an additional gateway pod.
+- Compose exposes the Nginx gateway and a separate Artifact Host by default: `/api` and `/api/*` proxy unchanged to API, other paths to Web. Build Web with an empty `NEXT_PUBLIC_API_URL`, keep `WEB_ORIGIN` aligned with the public gateway origin, and expose API/MinIO only via the loopback-bound debug override when requested. Kubernetes uses Ingress directly, not an additional gateway pod.
 - Gateway changes must preserve unbuffered SSE, Last-Event-ID, WebSocket Upgrade, cookies, authenticated preview CSP, escaped paths, and the 25 MiB attachment allowance. Do not retry API mutations automatically or serve sandbox files directly. Trust forwarded scheme/client identity only from explicitly trusted ingress hops; the default HTTP gateway overwrites incoming forwarding headers.
 - Sandbox Service management, file, command, and terminal routes are private service APIs protected by `SANDBOX_SERVICE_TOKEN`; only `/healthz` is unauthenticated. Never expose Sandbox Service through Ingress or a public Service.
 - Docker Sandbox Provider owns installation of the versioned `lester-toolbox` binary into new and existing user Computers. Cloud providers may use equivalent native runtime APIs; do not reintroduce ad-hoc Python/Shell snippets for file semantics.
@@ -66,7 +67,10 @@ Do not move backend implementation back to repository-root `internal/`, or front
 
 Preserve these behaviors when changing the implementation:
 
-- Every user belongs to a Personal Workspace created during registration.
+- Every user belongs to a Personal Workspace created during registration, with exactly one default project. Conversations belong to a project in the same workspace; project/conversation pins are durable. Moving a conversation must not move its Computer directory or change artifact URLs.
+- Published artifacts are explicit immutable object snapshots switched through a transactional manifest. Keep management scoped by workspace and source conversation. Never publish automatically merely because HTML was generated. `deploy_html` and the UI share the same service and validation.
+- Artifact Host must remain a separate executable/container and hostname from the application. Serve only published manifest members, never live sandbox paths or arbitrary object keys. Preserve opaque sandbox origins, no-store, CORS for media/modules, byte-range/HEAD support and revocation for all resources. Do not give it sandbox tokens, model encryption keys, or Docker access.
+- Bundle only supported static files within the current conversation, enforce file/count/size limits, reject missing dependencies and path escapes, and retain the old deployment if bundling/uploading fails. Keep object storage behind the blob boundary.
 - All workspace-owned reads and writes must be scoped by `workspace_id`.
 - Provider credentials must be encrypted at rest with the existing secret store and must never be returned or logged in plaintext.
 - Model-provider differences must stay behind the model abstraction instead of leaking into conversation handlers.
@@ -95,7 +99,7 @@ Preserve these behaviors when changing the implementation:
 - Conversation Skills must be installed under `.agent/skills/{slug}` and only installed Skills may be exposed to or loaded by the Agent runtime.
 - Conversation attachments must be stored under `.agent/upload`; do not parse or inject attachment contents into model context automatically.
 - Images pasted into a conversation composer are ordinary attachments: upload the browser `File` unchanged to `.agent/upload`, keep it out of browser persistence, and expose only attachment metadata/path hints to the model until it explicitly reads the file.
-- File browsing and previews must stay scoped to the conversation directory. Render HTML only through the authenticated preview endpoint in a sandboxed iframe; never inject workspace HTML into the Lester application DOM or grant it same-origin, form, popup, or top-navigation privileges.
+- File browsing and previews must stay scoped to the conversation directory. Render private HTML only through the authenticated preview endpoint in a sandboxed iframe; explicit public deployments use the isolated Artifact Host; never inject workspace HTML into the Lester application DOM or grant it same-origin, form, popup, or top-navigation privileges.
 - Skill package storage must remain behind the object-store interface so MinIO can be replaced with S3 or another implementation without changing application behavior.
 - Large tool results must be bounded and must tell the model when output was truncated and how to continue.
 - Bound command stdout and stderr independently at the provider boundary. File reads must be streaming/ranged so a large file is not loaded in full merely to return a small line page.
@@ -185,7 +189,7 @@ pnpm build
 
 Equivalent root commands are available through `make test` and `make web-check`.
 
-Compose starts at `http://localhost:13000`; change both `GATEWAY_PORT` and `WEB_ORIGIN` in `deploy/.env` to use another port. `make dev-debug` additionally exposes API and MinIO on loopback only. Run `make gateway-check` after proxy/deployment changes; its isolated fixture stack verifies route/header/preview preservation, upload limits, unbuffered SSE and bidirectional WebSocket. If it fails, clean up with `docker compose -p lester-gateway-test -f deploy/gateway/compose.test.yaml down`. No application credentials or data volumes are used by these tests.
+Compose starts the application at `http://localhost:13000` and Artifact Host at `http://127.0.0.1:13181`; change both `GATEWAY_PORT` and `WEB_ORIGIN` in `deploy/.env` to use another port. `make dev-debug` additionally exposes API and MinIO on loopback only. Run `make gateway-check` after proxy/deployment changes; its isolated fixture stack verifies route/header/preview preservation, upload limits, unbuffered SSE and bidirectional WebSocket. If it fails, clean up with `docker compose -p lester-gateway-test -f deploy/gateway/compose.test.yaml down`. No application credentials or data volumes are used by these tests.
 
 Validate the Helm chart with non-production test values:
 

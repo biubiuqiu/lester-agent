@@ -101,9 +101,63 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml ps
 - **Keep your place.** Resize the desktop Computer panel, collapse the conversation rail, search conversation titles, and focus previews. Narrow screens have a dedicated file panel. Reading history does not force-scroll to new output; a jump control takes you back when ready.
 - **Continue across navigation.** Drafts, file references, tabs, preview modes, expanded directories, and transcript/source reading positions are restored within the current browser tab. File updates do not steal selected tabs or reset source reading positions.
 - **Add conversation Skills.** Install packages from the Skill marketplace into a conversation, then let the agent load their instructions when needed.
+- **Organize projects.** Every workspace starts with a default project. Create and rename projects, pin projects and conversations, and move conversations between projects without moving their Computer files.
+- **Publish HTML artifacts.** Deploy a single HTML file or a static directory, including local images and videos, to durable S3-compatible storage. Share a public URL and manage deployments on the dedicated Artifacts page.
 - **Manage your profile.** The account menu groups profile, model, Computer, and Skill settings. Display names and built-in avatar themes persist.
 
 Task-file cards appear after a run finishes, fails, or stops, and only reference files confirmed to exist. The right-hand file inventory and previews keep updating during execution. You can draft the next message during a run, but cannot send overlapping runs in the same conversation.
+
+### Projects and published artifacts
+
+The sidebar groups conversations by project. Use **+** beside Projects to create one; each project menu supports rename and pin. Each conversation menu supports pin and move. Existing conversations migrate into the default project. Selecting a project opens its new-conversation composer; a conversation is created only when you send a message.
+
+Open **Artifacts** in the sidebar to search deployments, filter by project, copy a link, update a deployment, open its source conversation, or take it offline. You can also deploy directly from an HTML file's preview toolbar. Moving a conversation changes the project shown for its artifacts without changing their public URLs.
+
+The agent has a built-in `deploy_html` tool, so no Skill installation is necessary. Ask it to publish explicitly, for example:
+
+> Publish `website/` with `index.html` as the entry and give me a shareable link.
+
+```json
+{"name":"My website","source_path":"website","entry":"index.html"}
+```
+
+Pass the returned `artifact_id` as `artifact_id` on a later deployment to keep the same URL (the tool result's UUID field is `id`). A successful deployment is a snapshot: it survives Computer suspension and later file edits. Updating it is explicit. An upload or validation failure leaves the previous deployment available. Taking a deployment offline makes its entry and every asset return 404; it cannot recall copies already downloaded by viewers.
+
+| Source | Deployment behavior |
+| --- | --- |
+| `report.html` | Collects the HTML and statically referenced local files |
+| `website/` | Includes supported static files recursively; defaults to `index.html` |
+| HTML with local media | Copies images, video, audio, fonts, CSS and JS into object storage and rewrites discovered paths |
+| Sandbox absolute paths | Current conversation paths and explicitly referenced `.agent/upload` files are supported; other conversations and escaping paths are rejected |
+| Inline / external media | Ordinary `data:` image/media URLs stay embedded; HTTP(S) URLs remain external and produce a warning |
+
+Limits are **256 files, 256 directories, 12 directory levels, 25 MiB per file, and 100 MiB per deployment**. Missing local dependencies fail the deployment. Hidden files, dependency directories and executable/server files are excluded. Build React/Vue/framework projects into a static output directory first; the host does not execute backends or perform SPA fallback routing. Remove existing `<base>` tags. Use separate files instead of `data:` entries in `srcset`. Dynamic JavaScript URLs cannot be completely discovered; publish the complete directory and use relative paths. Static hosting uses a sandboxed document origin: cookies, localStorage, service workers and same-origin-only APIs are unavailable. Ordinary DOM interaction, scripts, images and range-based video playback are supported; external APIs must permit CORS.
+
+#### Hosting configuration
+
+Compose uses `ARTIFACT_PUBLIC_URL=http://127.0.0.1:13181` and `ARTIFACT_PORT=13181`. This loopback URL works on the host computer. For access from other devices or the Internet, configure a reachable hostname and TLS reverse proxy to Artifact Host, then set the same public origin on API and Artifact Host:
+
+```dotenv
+WEB_ORIGIN=https://lester.example.com
+ARTIFACT_PUBLIC_URL=https://sites.example.net
+ARTIFACT_PORT=13181
+```
+
+**Use a different hostname from the application**, preferably a separate registrable domain. A different port on the same hostname is rejected because cookies are not port-scoped. Do not proxy artifacts under the application origin or expose MinIO/Sandbox Service. Anyone with a published link can access it; deployment management remains authenticated and workspace-scoped. Artifact Host reads only published manifest entries, streams media with byte-range/HEAD support, sets `no-store`, and sends no authentication cookies. Keep reverse proxies/CDNs from overriding its cache and security headers.
+
+The existing `OBJECT_STORE_*` configuration works with MinIO or an S3-compatible endpoint. Back up both PostgreSQL and the object bucket. Superseded object versions are retained to allow in-flight reads; there is currently no automatic storage garbage collection or version-restore UI. Unpublishing revokes access without deleting stored objects. Do not apply an age-only bucket expiration rule to `artifacts/`, as an old object may still belong to a live deployment.
+
+For an existing installation, back up the database and apply migration 006 once before starting the updated API:
+
+```bash
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
+cat backend/migrations/000006_projects_artifacts.up.sql | \
+  docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
+  sh -c 'psql -v ON_ERROR_STOP=1 -1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build
+```
+
+In PowerShell, replace `cat` with `Get-Content -Raw` and use a single line for the pipeline. Earlier migrations must already be applied. Fresh Compose volumes apply all migrations automatically. Do not delete volumes to upgrade.
 
 ### File synchronization and view state
 
@@ -115,7 +169,7 @@ View state is scoped by user, workspace, and conversation in tab-local `sessionS
 
 ### Product scope
 
-Lester focuses on conversation-driven work. The current version does not include a Workflow/DAG editor or engine, visual orchestration, a multi-agent orchestration UI, Knowledge Base/RAG products, Memory, browser automation, Artifact persistence, Computer snapshots, or automatic Docker/ACS workspace migration.
+Lester focuses on conversation-driven work. The current version does not include a Workflow/DAG editor or engine, visual orchestration, a multi-agent orchestration UI, Knowledge Base/RAG products, Memory, browser automation, Computer snapshots, or automatic Docker/ACS workspace migration.
 
 ## Architecture
 
@@ -126,13 +180,16 @@ flowchart TD
     API --> PostgreSQL
     API --> Redis
     API --> MinIO["Object Store · MinIO/S3"]
+    Visitor["Public site visitor"] --> Host["Artifact Host · Go · separate hostname"]
+    Host --> MinIO
+    Host --> PostgreSQL
     API --> Sandbox["Sandbox Service · Go"]
     Sandbox --> Provider{"Sandbox Provider"}
     Provider --> Toolbox["Docker + lester-toolbox"]
     Provider --> ACS["Alibaba Cloud ACS · E2B"]
 ```
 
-Web, API, and Sandbox Service build and run separately. Sandbox Service owns Computer lifecycle, commands, files, and interactive terminals behind a common provider interface. Higher layers store an opaque `provider_ref` without depending on Docker container names or ACS Sandbox IDs.
+Web, API, Sandbox Service, and Artifact Host build and run separately. Sandbox Service owns Computer lifecycle, commands, files, and interactive terminals behind a common provider interface. Higher layers store an opaque `provider_ref` without depending on Docker container names or ACS Sandbox IDs.
 
 Only Sandbox Service mounts the Docker socket in Docker mode and installs the static Go `lester-toolbox` helper into Computers. ACS uses the official OpenKruise Go E2B SDK without mounting the Docker socket. Private Sandbox Service endpoints require an internal bearer token; only its health check is unauthenticated. API accesses Skill packages through an object-store interface backed by S3-compatible MinIO in Compose.
 
@@ -141,10 +198,11 @@ Only Sandbox Service mounts the Docker socket in Docker mode and installs the st
 | Nginx gateway | `13000 → 8080`, configurable | Single same-origin entry point |
 | Web | Internal `3000` only | User interface |
 | API | Internal `8080` only | Authentication, models, conversations, agent runtime |
+| Artifact Host | `13181 → 8082`, configurable | Public, manifest-scoped static sites and media |
 | Sandbox Service | Internal `8090` only | Computer lifecycle, commands, files, terminals |
 | PostgreSQL | Internal `5432` only | Durable business data |
 | Redis | Internal `6379` only | Live SSE distribution |
-| MinIO | Internal `9000` / `9001` only | S3-compatible Skill package storage |
+| MinIO | Internal `9000` / `9001` only | S3-compatible Skill package and artifact storage |
 
 ## Computers and sandboxes
 

@@ -38,3 +38,11 @@ ACS deployments additionally require:
 
 - `ACS_SANDBOX_API_KEY`
 
+
+## Public HTML artifacts
+
+Build and publish `backend/Dockerfile.artifact-host`, then configure `images.artifactHost` alongside the API/Web images. The chart creates a separate Deployment and ClusterIP Service on port 8082. Set `config.artifactPublicURL` to the public HTTPS origin and enable `artifactIngress` with a matching host/TLS configuration. Use a different hostname from `config.webOrigin`, preferably a separate registrable domain. Never route this service under the application's origin.
+
+Artifact Host receives database and object-store credentials only. In production, use dedicated read-only database/object-store credentials by adapting its Secret references. The bucket stays private; only published manifest entries are served. Preserve the service's CSP, CORS and no-store headers at the ingress/CDN. NetworkPolicy continues to allow only API to reach Sandbox Service.
+
+Apply `000006_projects_artifacts.up.sql` once to existing databases after earlier migrations and before upgrading API. Back up PostgreSQL and the bucket together. Superseded deployment objects are retained; automatic garbage collection is not implemented.
