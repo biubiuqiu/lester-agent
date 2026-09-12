@@ -6,7 +6,6 @@ import { Check, Globe, ChevronDown, FileText, Folder, GripVertical, Menu, PanelL
 import { readView, updateView, viewKey, resumeViewState } from "@/lib/conversation-view-state";
 import { useConversationScroll } from "./use-conversation-scroll";
 import { ProjectRail } from "./project-rail";
-import { ArtifactManager } from "./artifact-manager";
 import type { Project } from "@/lib/api";
 import { Brand } from "./brand";
 import { NewConversationComposer } from "./new-conversation-composer";
@@ -92,7 +91,7 @@ function persistUnreadRunResults(workspaceId: string, value: Record<string, Unre
   window.localStorage.setItem(unreadRunResultsKey(workspaceId), JSON.stringify(bounded));
 }
 
-export function Workspace({ conversationId, projectId, view = "chat" }: { conversationId?: string; projectId?:string; view?:"chat"|"artifacts" }) {
+export function Workspace({ conversationId, projectId }: { conversationId?: string; projectId?:string }) {
   const router = useRouter();
   const [projects,setProjects] = useState<Project[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -416,14 +415,14 @@ export function Workspace({ conversationId, projectId, view = "chat" }: { conver
     <aside className={`conversation-sidebar ${mobileMenu ? "mobile-open" : ""}`}>
       <div className="sidebar-top"><div className="sidebar-brand-row"><Brand /><button type="button" className="sidebar-collapse-button" onClick={() => setConversationSidebar(true)} title="收起会话栏" aria-label="收起会话栏"><PanelLeftClose /></button></div><button className="icon-button mobile-close" onClick={() => setMobileMenu(false)} aria-label="关闭"><X /></button><button className="new-button" onClick={() => { setMobileMenu(false); router.push(newConversationPath); }}><Plus />新对话</button></div>
       <label className="conversation-search"><Search /><input value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="搜索会话" aria-label="搜索会话" />{conversationSearch ? <button type="button" onClick={() => setConversationSearch("")} aria-label="清空会话搜索"><X /></button> : null}</label>
-      <button className={`artifacts-nav ${view === "artifacts" ? "active" : ""}`} onClick={() => {setMobileMenu(false);router.push("/app/artifacts");}}><Globe size={16}/>产物管理</button>
+      <button className="artifacts-nav" onClick={() => {setMobileMenu(false);router.push("/app/artifacts");}}><Globe size={16}/>产物管理</button>
       <div className="conversation-list">{loading ? <p className="muted-block">正在载入…</p> : <ProjectRail projects={projects} conversations={visibleConversations} currentId={conversationId} selectedProject={selectedProject} unread={unreadRunResults} onOpen={openConversation} onProject={id=>{setMobileMenu(false);router.push(`/app/p/${id}`);}} onProjects={setProjects} onConversation={updateOrganizedConversation}/>}</div>
       <div className="sidebar-footer"><UserMenu user={user} /></div>
     </aside>
     <section className={`conversation-main ${displayedCurrent ? "" : "empty-conversation"}`}>
       <header className="conversation-header"><div className="conversation-header-leading"><button className="icon-button mobile-menu" onClick={() => setMobileMenu(true)} aria-label="打开会话栏"><Menu /></button><button type="button" className="sidebar-restore-button" onClick={() => setConversationSidebar(false)} title="展开会话栏" aria-label="展开会话栏"><PanelLeftOpen /></button>{displayedCurrent ? <div className="agent-heading"><span className="agent-avatar">{agentName(displayedCurrent.agent_slug)[0]}</span><span><strong>{agentName(displayedCurrent.agent_slug)}</strong><small className={`run-state ${runState}`}>{activeLabel}</small></span></div> : <Brand />}</div>{displayedCurrent ? <label className="model-selector"><select aria-label="当前模型" value={displayedCurrent.model_deployment_id || ""} onChange={(event) => chooseModel(event.target.value)}>{deployments.length === 0 ? <option value="">请先配置模型</option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown /></label> : <button className="new-button mobile-new" onClick={() => { setMobileMenu(false); router.push(newConversationPath); }}><Plus />新对话</button>}{displayedCurrent ? <OpenFilesButton /> : null}</header>
       {visibleError ? <div className="workspace-error" role="alert">{visibleError}</div> : null}
-      {view === "artifacts" ? <ArtifactManager projects={projects} conversations={conversations}/> : displayedCurrent ? <ConversationView key={displayedCurrent.id} conversation={displayedCurrent} messages={messages} events={eventsByConversation[displayedCurrent.id] ?? []} runState={runState} runId={runStatus.conversationId === conversationId ? runStatus.runId : undefined} onSend={sendMessage} onStop={stopRun} /> : loading || conversationId ? <div className="workspace-loading">正在载入对话…</div> : user ? <NewConversationComposer key={selectedProject} deployments={deployments} user={user} projectId={selectedProject} projectName={projects.find(p=>p.id===selectedProject)?.name} /> : null}
+      {displayedCurrent ? <ConversationView key={displayedCurrent.id} conversation={displayedCurrent} messages={messages} events={eventsByConversation[displayedCurrent.id] ?? []} runState={runState} runId={runStatus.conversationId === conversationId ? runStatus.runId : undefined} onSend={sendMessage} onStop={stopRun} /> : loading || conversationId ? <div className="workspace-loading">正在载入对话…</div> : user ? <NewConversationComposer key={selectedProject} deployments={deployments} user={user} projectId={selectedProject} projectName={projects.find(p=>p.id===selectedProject)?.name} /> : null}
     </section>
     {displayedCurrent ? <ComputerPanel conversationId={displayedCurrent.id} width={renderedPanelWidth} maxWidth={renderedPanelMaxWidth} resizing={Boolean(panelResize)} onResizeStart={(clientX) => setPanelResize({ startX: clientX, startWidth: renderedPanelWidth })} onWidthChange={updatePanelWidth} /> : null}
     {runNotice ? <RunNoticeToast notice={runNotice} onOpen={() => openConversation(runNotice.conversationId)} onDismiss={() => setRunNotice(null)} /> : null}

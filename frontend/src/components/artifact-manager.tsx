@@ -325,7 +325,7 @@ export function ArtifactManager({
       <header className="artifact-heading">
         <div>
           <p className="eyebrow">YOUR PUBLISHED WORK</p>
-          <h1>产物</h1>
+          <h1>产物管理</h1>
           <p>把对话中的成果变成可分享的页面。</p>
         </div>
         <button

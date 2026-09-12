@@ -1,4 +1,4 @@
-import { Workspace } from "@/components/workspace";
+import { ArtifactPage } from "@/components/artifact-page";
 export default function ArtifactsPage() {
-  return <Workspace view="artifacts" />;
+  return <ArtifactPage />;
 }
