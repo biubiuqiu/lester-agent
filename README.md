@@ -121,7 +121,7 @@ The agent has a built-in `deploy_html` tool, so no Skill installation is necessa
 {"name":"My website","source_path":"website","entry":"index.html"}
 ```
 
-Pass the returned `artifact_id` as `artifact_id` on a later deployment to keep the same URL (the tool result's UUID field is `id`). A successful deployment is a snapshot: it survives Computer suspension and later file edits. Updating it is explicit. An upload or validation failure leaves the previous deployment available. Taking a deployment offline makes its entry and every asset return 404; it cannot recall copies already downloaded by viewers.
+The tool returns both `artifact_id` and the legacy `id` alias. Pass the returned `artifact_id` as `artifact_id` on a later deployment to update the same deployment and keep its URL. A successful deployment is a snapshot: it survives Computer suspension and later file edits. Updating it is explicit. An upload or validation failure leaves the previous deployment available. Taking a deployment offline makes its entry and every asset return 404; it cannot recall copies already downloaded by viewers.
 
 | Source | Deployment behavior |
 | --- | --- |

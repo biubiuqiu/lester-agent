@@ -120,7 +120,7 @@ func TestPublicationAtomicityIsolationAndRevocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a.FileCount != 1 || a.Status != "published" || !strings.HasSuffix(a.URL, a.ID.String()+"/") {
+	if a.FileCount != 1 || a.Status != "published" || a.ArtifactID != a.ID || !strings.HasSuffix(a.URL, a.ID.String()+"/") {
 		t.Fatalf("publication: %+v", a)
 	}
 	pub, err := s.Published(ctx, a.ID)

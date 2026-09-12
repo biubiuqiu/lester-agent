@@ -28,6 +28,7 @@ type Asset struct {
 }
 type Artifact struct {
 	ID             uuid.UUID `json:"id"`
+	ArtifactID     uuid.UUID `json:"artifact_id"`
 	ConversationID uuid.UUID `json:"conversation_id"`
 	ProjectID      uuid.UUID `json:"project_id"`
 	Name           string    `json:"name"`
@@ -193,6 +194,7 @@ func (s *Service) Publish(ctx context.Context, workspace, conversation uuid.UUID
 	}
 	committed = true
 	result.ID = id
+	result.ArtifactID = id
 	result.ConversationID = conversation
 	result.ProjectID = project
 	result.Name = in.Name
