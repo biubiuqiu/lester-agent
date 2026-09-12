@@ -1,14 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  ChevronDown,
-  ChevronRight,
-  Folder,
-  MoreHorizontal,
-  Pin,
-  Plus,
-} from "lucide-react";
+import { Folder, FolderOpen, MoreHorizontal, Pin, Plus } from "lucide-react";
 import { api, type Conversation, type Project } from "@/lib/api";
 import { ConversationRunMark, type UnreadRunResult } from "./run-awareness";
 
@@ -33,7 +26,6 @@ export function ProjectRail({
   onProjects: (projects: Project[]) => void;
   onConversation: (id: string, patch: Partial<Conversation>) => void;
 }) {
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState("");
@@ -108,10 +100,27 @@ export function ProjectRail({
       Number(b.is_default) - Number(a.is_default) ||
       a.created_at.localeCompare(b.created_at),
   );
+  const activeProject =
+    sorted.find((project) => project.id === selectedProject) ??
+    sorted.find((project) => project.is_default) ??
+    sorted[0];
+  const activeConversations = activeProject
+    ? conversations
+        .filter((conversation) => conversation.project_id === activeProject.id)
+        .sort(
+          (a, b) =>
+            Number(b.pinned) - Number(a.pinned) ||
+            b.updated_at.localeCompare(a.updated_at),
+        )
+    : [];
+
   return (
     <div className="project-rail">
       <div className="project-rail-heading">
-        <span>项目</span>
+        <div>
+          <span className="section-kicker">项目</span>
+          <span className="section-count">{sorted.length}</span>
+        </div>
         <button
           type="button"
           className="rail-icon"
@@ -160,52 +169,40 @@ export function ProjectRail({
           </div>
         </form>
       ) : null}
-      {sorted.map((project) => {
-        const items = conversations
-          .filter((c) => c.project_id === project.id)
-          .sort(
-            (a, b) =>
-              Number(b.pinned) - Number(a.pinned) ||
-              b.updated_at.localeCompare(a.updated_at),
-          );
-        const closed = collapsed.has(project.id);
-        return (
-          <section key={project.id} className="rail-project">
+      <div className="project-list" aria-label="项目列表">
+        {sorted.map((project) => {
+          const selected = activeProject?.id === project.id;
+          return (
             <div
-              className={`project-heading ${selectedProject === project.id ? "selected" : ""}`}
+              key={project.id}
+              className={`project-heading ${selected ? "selected" : ""}`}
             >
               <button
-                className="rail-icon"
-                aria-label={`${closed ? "展开" : "收起"}项目 ${project.name}`}
-                aria-expanded={!closed}
-                onClick={() =>
-                  setCollapsed((previous) => {
-                    const next = new Set(previous);
-                    if (next.has(project.id)) next.delete(project.id);
-                    else next.add(project.id);
-                    return next;
-                  })
-                }
-              >
-                {closed ? (
-                  <ChevronRight size={14} />
-                ) : (
-                  <ChevronDown size={14} />
-                )}
-              </button>
-              <button
-                className="project-name"
-                title={project.name}
+                className="project-select"
+                aria-current={selected ? "page" : undefined}
                 onClick={() => onProject(project.id)}
               >
-                <Folder size={15} />
-                <span>{project.name}</span>
+                {selected ? <FolderOpen size={15} /> : <Folder size={15} />}
+                <span className="project-name-text" title={project.name}>
+                  {project.name}
+                </span>
+                <span className="project-count">
+                  {project.conversation_count}
+                </span>
                 {project.pinned ? <Pin size={12} /> : null}
               </button>
-              <details className="rail-menu" name="rail-actions"
-              onClick={(event) => { if ((event.target as Element).closest("button")) event.currentTarget.open = false; }}
-              onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false; }}
-            >
+              <details
+                className="rail-menu"
+                name="rail-actions"
+                onClick={(event) => {
+                  if ((event.target as Element).closest("button"))
+                    event.currentTarget.open = false;
+                }}
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget))
+                    event.currentTarget.open = false;
+                }}
+              >
                 <summary aria-label={`项目 ${project.name} 的操作`}>
                   <MoreHorizontal size={15} />
                 </summary>
@@ -230,82 +227,112 @@ export function ProjectRail({
                 </div>
               </details>
             </div>
-            {!closed ? (
-              <div className="project-conversations">
-                {items.map((c) => (
-                  <div
-                    key={c.id}
-                    className={`project-conversation-row ${c.id === currentId ? "active" : ""}`}
-                  >
-                    <button
-                      className="conversation-item"
-                      title={c.title}
-                      aria-current={c.id === currentId ? "page" : undefined}
-                      onClick={() => onOpen(c.id)}
-                    >
-                      <span className="conversation-item-copy">
-                        <strong>
-                          {c.pinned ? <Pin size={11} /> : null}
-                          {c.title}
-                        </strong>
-                        <small>
-                          {c.run_status === "running"
-                            ? "正在工作"
-                            : c.run_status === "cancelling"
-                              ? "正在停止"
-                              : new Date(c.updated_at).toLocaleDateString()}
-                        </small>
-                      </span>
-                      <ConversationRunMark
-                        status={c.run_status}
-                        unread={unread[c.id]}
-                      />
-                    </button>
-                    <details className="rail-menu" name="rail-actions"
-              onClick={(event) => { if ((event.target as Element).closest("button")) event.currentTarget.open = false; }}
-              onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false; }}
+          );
+        })}
+      </div>
+
+      {activeProject ? (
+        <section className="project-conversation-section">
+          <header className="project-conversation-header">
+            <div>
+              <span className="section-kicker">当前项目</span>
+              <strong>{activeProject.name}</strong>
+            </div>
+            <button
+              type="button"
+              className="project-new-conversation"
+              onClick={() => onProject(activeProject.id)}
             >
-                      <summary aria-label={`会话 ${c.title} 的操作`}>
-                        <MoreHorizontal size={15} />
-                      </summary>
-                      <div>
-                        <button
-                          disabled={!!busy}
-                          onClick={() =>
-                            void organize(c, { pinned: !c.pinned })
-                          }
-                        >
-                          {c.pinned ? "取消会话置顶" : "置顶会话"}
-                        </button>
-                        <label>
-                          移动到项目
-                          <select
-                            aria-label={`移动会话 ${c.title}`}
-                            disabled={!!busy}
-                            value={c.project_id}
-                            onChange={(e) =>
-                              void organize(c, { project_id: e.target.value })
-                            }
-                          >
-                            {sorted.map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      </div>
-                    </details>
+              <Plus size={14} />
+              新会话
+            </button>
+          </header>
+          <div
+            className="project-conversations"
+            aria-label={`${activeProject.name}中的会话`}
+          >
+            {activeConversations.map((c) => (
+              <div
+                key={c.id}
+                className={`project-conversation-row ${c.id === currentId ? "active" : ""}`}
+              >
+                <button
+                  className="conversation-item"
+                  title={c.title}
+                  aria-current={c.id === currentId ? "page" : undefined}
+                  onClick={() => onOpen(c.id)}
+                >
+                  <span className="conversation-item-copy">
+                    <strong>
+                      {c.pinned ? <Pin size={11} /> : null}
+                      {c.title}
+                    </strong>
+                    <small>
+                      {c.run_status === "running"
+                        ? "正在工作"
+                        : c.run_status === "cancelling"
+                          ? "正在停止"
+                          : new Date(c.updated_at).toLocaleDateString()}
+                    </small>
+                  </span>
+                  <ConversationRunMark
+                    status={c.run_status}
+                    unread={unread[c.id]}
+                  />
+                </button>
+                <details
+                  className="rail-menu"
+                  name="rail-actions"
+                  onClick={(event) => {
+                    if ((event.target as Element).closest("button"))
+                      event.currentTarget.open = false;
+                  }}
+                  onBlur={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget))
+                      event.currentTarget.open = false;
+                  }}
+                >
+                  <summary aria-label={`会话 ${c.title} 的操作`}>
+                    <MoreHorizontal size={15} />
+                  </summary>
+                  <div>
+                    <button
+                      disabled={!!busy}
+                      onClick={() => void organize(c, { pinned: !c.pinned })}
+                    >
+                      {c.pinned ? "取消会话置顶" : "置顶会话"}
+                    </button>
+                    <label>
+                      移动到项目
+                      <select
+                        aria-label={`移动会话 ${c.title}`}
+                        disabled={!!busy}
+                        value={c.project_id}
+                        onChange={(e) =>
+                          void organize(c, { project_id: e.target.value })
+                        }
+                      >
+                        {sorted.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                   </div>
-                ))}
-                {!items.length ? (
-                  <p className="project-empty">暂无会话</p>
-                ) : null}
+                </details>
+              </div>
+            ))}
+            {!activeConversations.length ? (
+              <div className="project-empty-state">
+                <Folder size={18} />
+                <strong>这个项目还没有会话</strong>
+                <span>从上方新建会话开始</span>
               </div>
             ) : null}
-          </section>
-        );
-      })}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }

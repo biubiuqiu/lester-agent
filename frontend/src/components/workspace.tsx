@@ -394,6 +394,18 @@ export function Workspace({ conversationId, projectId, view = "chat" }: { conver
   const displayedCurrent = current?.id === conversationId ? current : null;
   const selectedProject = displayedCurrent?.project_id || projectId || projects.find(p=>p.is_default)?.id;
   const newConversationPath = selectedProject ? `/app/p/${selectedProject}` : "/app";
+  function updateOrganizedConversation(id: string, patch: Partial<Conversation>) {
+    const currentConversation = conversations.find(item => item.id === id);
+    setConversations(prev => prev.map(item => item.id === id ? {...item, ...patch} : item));
+    if (patch.project_id && currentConversation && patch.project_id !== currentConversation.project_id) {
+      setProjects(prev => prev.map(project => project.id === currentConversation.project_id
+        ? {...project, conversation_count: Math.max(0, project.conversation_count - 1)}
+        : project.id === patch.project_id
+          ? {...project, conversation_count: project.conversation_count + 1}
+          : project));
+    }
+    setCurrent(prev => prev?.id === id ? {...prev, ...patch} : prev);
+  }
   const visibleError = pageError || (streamError.conversationId === "*" || streamError.conversationId === conversationId ? streamError.message : "");
   const activeLabel = runState === "sending" ? "发送中" : runState === "running" ? "正在工作" : runState === "stopping" ? "正在停止" : runState === "cancelled" ? "已停止" : runState === "failed" ? "上次运行失败" : "在线";
   const renderedSidebarCollapsed = layoutHydrated && sidebarCollapsed;
@@ -405,7 +417,7 @@ export function Workspace({ conversationId, projectId, view = "chat" }: { conver
       <div className="sidebar-top"><div className="sidebar-brand-row"><Brand /><button type="button" className="sidebar-collapse-button" onClick={() => setConversationSidebar(true)} title="收起会话栏" aria-label="收起会话栏"><PanelLeftClose /></button></div><button className="icon-button mobile-close" onClick={() => setMobileMenu(false)} aria-label="关闭"><X /></button><button className="new-button" onClick={() => { setMobileMenu(false); router.push(newConversationPath); }}><Plus />新对话</button></div>
       <label className="conversation-search"><Search /><input value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="搜索会话" aria-label="搜索会话" />{conversationSearch ? <button type="button" onClick={() => setConversationSearch("")} aria-label="清空会话搜索"><X /></button> : null}</label>
       <button className={`artifacts-nav ${view === "artifacts" ? "active" : ""}`} onClick={() => {setMobileMenu(false);router.push("/app/artifacts");}}><Globe size={16}/>产物管理</button>
-      <div className="conversation-list">{loading ? <p className="muted-block">正在载入…</p> : <ProjectRail projects={projects} conversations={visibleConversations} currentId={conversationId} selectedProject={selectedProject} unread={unreadRunResults} onOpen={openConversation} onProject={id=>{setMobileMenu(false);router.push(`/app/p/${id}`);}} onProjects={setProjects} onConversation={(id,patch)=>{setConversations(prev=>prev.map(c=>c.id===id?{...c,...patch}:c));setCurrent(prev=>prev?.id===id?{...prev,...patch}:prev);}}/>}</div>
+      <div className="conversation-list">{loading ? <p className="muted-block">正在载入…</p> : <ProjectRail projects={projects} conversations={visibleConversations} currentId={conversationId} selectedProject={selectedProject} unread={unreadRunResults} onOpen={openConversation} onProject={id=>{setMobileMenu(false);router.push(`/app/p/${id}`);}} onProjects={setProjects} onConversation={updateOrganizedConversation}/>}</div>
       <div className="sidebar-footer"><UserMenu user={user} /></div>
     </aside>
     <section className={`conversation-main ${displayedCurrent ? "" : "empty-conversation"}`}>
