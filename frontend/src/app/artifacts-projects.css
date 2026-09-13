@@ -752,12 +752,6 @@
 .artifact-preview-dialog header a { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #49643f; text-decoration: none; white-space: nowrap; }
 .artifact-preview-dialog iframe { display: block; width: 100%; height: calc(100% - 58px); border: 0; background: white; }
 /* Project/conversation disclosure tree with a separate primary navigation. */
-.workspace-primary-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin: 4px 16px 18px; padding: 4px; border: 1px solid #e0e6dc; border-radius: 11px; background: #edf0e9; }
-.workspace-nav-item { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; border: 0; border-radius: 7px; background: transparent; color: #6b7866; font-size: 12px; text-decoration: none; }
-button.workspace-nav-item { cursor: pointer; }
-.workspace-nav-item.active { color: #2e4c35; background: #fff; box-shadow: 0 1px 4px #22331b0d; font-weight: 600; }
-.workspace-nav-item:hover { color: #304f37; }
-.workspace-nav-item svg { flex-shrink: 0; }
 .project-tree-rail { gap: 0; }
 .tree-section-heading { display: flex; align-items: center; justify-content: space-between; padding: 6px 9px 9px; color: #7c8776; font-size: 11px; }
 .project-tree-scroll { flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; }
@@ -790,3 +784,8 @@ button.workspace-nav-item { cursor: pointer; }
 .tree-empty { padding: 4px 6px; color: #829177; font-size: 12px; }
 .project-tree-rail .project-name-form { flex-shrink: 0; }
 @media (prefers-reduced-motion: reduce) { .tree-chevron { transition: none; } }
+
+.workspace-artifacts-link { display: inline-flex; align-items: center; justify-content: center; gap: 7px; flex-shrink: 0; margin-left: auto; padding: 8px 11px; border: 1px solid #dfe5da; border-radius: 8px; color: #62745a; background: #fafbf8; font-size: 12px; text-decoration: none; }
+.workspace-artifacts-link:hover { color: #365631; background: #edf3e7; border-color: #d1ddc8; }
+@media (max-width: 700px) { .workspace-artifacts-link { padding: 7px; } .workspace-artifacts-link span { display: none; } }
+.conversation-main > .conversation-header { width: 100%; }
