@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useRef, useState, type ReactNode } from "react";
-import { Folder, FolderOpen, MoreHorizontal, Pin, Plus } from "lucide-react";
+import { Folder, MoreHorizontal, Pin, Plus, Search, X } from "lucide-react";
 import { api, type Conversation, type Project } from "@/lib/api";
 import { ConversationRunMark, type UnreadRunResult } from "./run-awareness";
 
@@ -15,6 +15,7 @@ export function ProjectRail({
   onProject,
   onNew,
   search,
+  onSearch,
   onProjects,
   onConversation,
 }: {
@@ -27,6 +28,7 @@ export function ProjectRail({
   onProject: (id: string) => void;
   onNew: (id: string) => void;
   search: string;
+  onSearch: (value: string) => void;
   onProjects: (projects: Project[]) => void;
   onConversation: (id: string, patch: Partial<Conversation>) => void;
 }) {
@@ -120,24 +122,23 @@ export function ProjectRail({
 
   return (
     <div className="project-rail">
-      <div className="project-rail-heading">
-        <div>
-          <span className="section-kicker">项目</span>
-          <span className="section-count">{sorted.length}</span>
-        </div>
-        <button
-          type="button"
-          className="rail-icon"
-          aria-label="新建项目"
-          onClick={() => {
-            setEditing("");
-            setName("");
-            setError("");
-          }}
-        >
-          <Plus size={15} />
-        </button>
+      <div className="project-switcher-row">
+        <label className="project-switcher">
+          <Folder size={16} />
+          <select aria-label="切换项目" value={activeProject?.id || ""} onChange={e => onProject(e.target.value)}>
+            {sorted.map(p => <option key={p.id} value={p.id}>{p.pinned ? "★ " : ""}{p.name}</option>)}
+          </select>
+        </label>
+        {activeProject ? <RailActions label={`项目 ${activeProject.name} 的操作`}>
+          <button disabled={!!busy} onClick={() => void pinProject(activeProject)}>{activeProject.pinned ? "取消项目置顶" : "置顶项目"}</button>
+          <button disabled={!!busy} onClick={() => { setEditing(activeProject.id); setName(activeProject.name); }}>重命名项目</button>
+          <button disabled={!!busy} onClick={() => { setEditing(""); setName(""); setError(""); }}>新建项目</button>
+        </RailActions> : null}
       </div>
+      <button className="project-compose-button" disabled={!activeProject} onClick={() => activeProject && onNew(activeProject.id)} title={`在${activeProject?.name || "项目"}中新建会话`}>
+        <Plus size={16} />新会话
+      </button>
+      <label className="conversation-search"><Search /><input value={search} onChange={e => onSearch(e.target.value)} placeholder="搜索所有会话" aria-label="搜索会话" />{search ? <button type="button" onClick={() => onSearch("")} aria-label="清空会话搜索"><X /></button> : null}</label>
       {error ? (
         <p className="rail-error" role="alert">
           {error}
@@ -173,58 +174,12 @@ export function ProjectRail({
           </div>
         </form>
       ) : null}
-      <div className="project-list" aria-label="项目列表">
-        {sorted.map((project) => {
-          const selected = activeProject?.id === project.id;
-          return (
-            <div
-              key={project.id}
-              className={`project-heading ${selected ? "selected" : ""}`}
-            >
-              <button
-                className="project-select"
-                aria-current={selected ? "page" : undefined}
-                onClick={() => onProject(project.id)}
-              >
-                {selected ? <FolderOpen size={15} /> : <Folder size={15} />}
-                <span className="project-name-text" title={project.name}>
-                  {project.name}
-                </span>
-                <span className="project-count">
-                  {project.conversation_count}
-                </span>
-                {project.pinned ? <Pin size={12} /> : null}
-              </button>
-              <RailActions label={`项目 ${project.name} 的操作`}>
-                  <button
-                    disabled={!!busy}
-                    onClick={() => void pinProject(project)}
-                  >
-                    {project.pinned ? "取消项目置顶" : "置顶项目"}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setEditing(project.id);
-                      setName(project.name);
-                    }}
-                  >
-                    重命名项目
-                  </button>
-                  <button onClick={() => onNew(project.id)}>
-                    在此项目新建会话
-                  </button>
-              </RailActions>
-            </div>
-          );
-        })}
-      </div>
-
       {activeProject ? (
         <section className="project-conversation-section">
           <header className="project-conversation-header">
             <div>
-              <span className="section-kicker">{search.trim() ? "搜索会话" : "会话"}</span>
-              <strong>{search.trim() ? `所有项目 · ${activeConversations.length} 条结果` : activeProject.name}</strong>
+              <span className="section-kicker">{search.trim() ? "搜索结果 · 所有项目" : "最近会话"}</span>
+              <span className="section-count">{activeConversations.length}</span>
             </div>
 
           </header>

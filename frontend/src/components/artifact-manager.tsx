@@ -8,6 +8,9 @@ import {
   ExternalLink,
   Globe,
   LoaderCircle,
+  MoreHorizontal,
+  Eye,
+  Folder,
   Plus,
   RefreshCw,
   X,
@@ -281,6 +284,7 @@ export function ArtifactManager({
   const [project, setProject] = useState("");
   const [choice, setChoice] = useState<PublishChoice | null>(null);
   const [copied, setCopied] = useState("");
+  const [preview, setPreview] = useState<Artifact | null>(null);
   const refresh = useCallback(async () => {
     try {
       const data = await api<{ artifacts: Artifact[] }>("/api/v1/artifacts");
@@ -343,6 +347,11 @@ export function ArtifactManager({
           部署站点
         </button>
       </header>
+      <div className="artifact-summary" aria-label="部署概况">
+        <span><strong>{items.length}</strong> 全部产物</span>
+        <span><i /> <strong>{items.filter(a => a.status === "published").length}</strong> 已发布</span>
+        <span><strong>{items.filter(a => a.status === "unpublished").length}</strong> 已下线</span>
+      </div>
       <div className="artifact-filters">
         <input
           aria-label="搜索产物"
@@ -393,28 +402,20 @@ export function ArtifactManager({
         <div className="artifact-grid">
           {filtered.map((a) => (
             <article className="published-site-card" key={a.id}>
-              <div className="published-site-card-top">
-                <span className="site-icon">
-                  <Globe />
-                </span>
-                <span className={`site-status ${a.status}`}>
-                  {a.status === "published" ? "已发布" : "已下线"}
-                </span>
+              <div className={`artifact-cover ${a.status}`}>
+                <span className="artifact-cover-icon"><Globe size={30} /></span>
+                <span className={`site-status ${a.status}`}>{a.status === "published" ? "已发布" : "已下线"}</span>
+                {a.status === "published" ? <button className="artifact-preview-button" onClick={() => setPreview(a)} aria-label={`预览 ${a.name}`}><Eye size={15} />预览页面</button> : <span className="artifact-offline-note">站点已下线</span>}
               </div>
+              <div className="artifact-card-body">
+              <p className="artifact-project"><Folder size={13} />{projects.find(p => p.id === a.project_id)?.name || "项目"}</p>
               <h2>{a.name}</h2>
-              <p className="artifact-project">
-                {projects.find((p) => p.id === a.project_id)?.name || "项目"} ·{" "}
-                {a.file_count} 个文件 · {formatSize(a.size_bytes)}
-              </p>
-              <code className="artifact-source">{a.source_path}</code>
-              <p className="artifact-date">
-                更新于 {new Date(a.updated_at).toLocaleString()}
-              </p>
+              <p className="artifact-date">更新于 {new Date(a.updated_at).toLocaleDateString()}</p>
               <div className="artifact-actions">
                 {a.status === "published" ? (
                   <>
                     <a href={a.url} target="_blank" rel="noopener noreferrer">
-                      访问 <ExternalLink size={13} />
+                      打开页面 <ExternalLink size={13} />
                     </a>
                     <button
                       onClick={async () => {
@@ -430,6 +431,9 @@ export function ArtifactManager({
                     </button>
                   </>
                 ) : null}
+                <details className="artifact-more" name="artifact-actions" onClick={e => { if ((e.target as Element).closest("button, a")) e.currentTarget.open = false; }}>
+                  <summary aria-label={`${a.name} 的更多操作`}><MoreHorizontal size={18} /></summary>
+                  <div>
                 <Link href={`/app/c/${a.conversation_id}`}>来源会话</Link>
                 <button
                   disabled={!!busy}
@@ -453,11 +457,16 @@ export function ArtifactManager({
                     {busy === a.id ? "正在下线…" : "下线"}
                   </button>
                 ) : null}
+                  <p className="artifact-file-detail" title={a.source_path}>{a.source_path}<br />{a.file_count} 个文件 · {formatSize(a.size_bytes)}</p>
+                  </div>
+                </details>
+              </div>
               </div>
             </article>
           ))}
         </div>
       )}
+      {preview ? <ArtifactPreview artifact={preview} onClose={() => setPreview(null)} /> : null}
       {choice ? (
         <DeployDialog
           choice={choice}
@@ -475,4 +484,13 @@ function formatSize(n: number) {
   return n >= 1024 * 1024
     ? `${(n / 1024 / 1024).toFixed(1)} MB`
     : `${Math.max(1, Math.round(n / 1024))} KB`;
+}
+
+function ArtifactPreview({ artifact, onClose }: { artifact: Artifact; onClose: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => { dialog.current?.showModal(); }, []);
+  return <dialog className="artifact-preview-dialog" ref={dialog} onCancel={e => { e.preventDefault(); onClose(); }}>
+    <header><strong>{artifact.name}</strong><a href={artifact.url} target="_blank" rel="noopener noreferrer">打开页面 <ExternalLink size={14} /></a><button className="icon-button" aria-label="关闭预览" onClick={onClose}><X /></button></header>
+    <iframe src={artifact.url} title={`${artifact.name} 的预览`} sandbox="allow-scripts" referrerPolicy="no-referrer" />
+  </dialog>;
 }
