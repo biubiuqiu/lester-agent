@@ -2,9 +2,10 @@
 
 import { CSSProperties, FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Globe, ChevronDown, FileText, Folder, GripVertical, Menu, PanelLeftClose, PanelLeftOpen, Paperclip, Plus, Send, Square, TerminalSquare, Wrench, X } from "lucide-react";
+import { Check, ChevronDown, FileText, Folder, GripVertical, Menu, PanelLeftClose, PanelLeftOpen, Paperclip, Plus, Send, Square, TerminalSquare, Wrench, X } from "lucide-react";
 import { readView, updateView, viewKey, resumeViewState } from "@/lib/conversation-view-state";
 import { useConversationScroll } from "./use-conversation-scroll";
+import { ArtifactIcon, ConversationIcon } from "./workspace-icons";
 import { ProjectRail } from "./project-rail";
 import type { Project } from "@/lib/api";
 import { Brand } from "./brand";
@@ -387,12 +388,6 @@ export function Workspace({ conversationId, projectId }: { conversationId?: stri
     router.push(`/app/c/${id}`);
   }
 
-  function selectProject(id: string) {
-    setConversationSearch("");
-    const latest = conversations.filter(c => c.project_id === id).toSorted((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
-    if (latest) openConversation(latest.id);
-    else { setMobileMenu(false); router.push(`/app/p/${id}`); }
-  }
   const [conversationSearch, setConversationSearch] = useState("");
   const visibleConversations = conversations.filter((item) => item.title.toLocaleLowerCase().includes(conversationSearch.trim().toLocaleLowerCase()));
   const runState = runStatus.conversationId === conversationId ? runStatus.state : "idle";
@@ -422,8 +417,9 @@ export function Workspace({ conversationId, projectId }: { conversationId?: stri
       <div className="sidebar-top"><div className="sidebar-brand-row"><Brand /><button type="button" className="sidebar-collapse-button" onClick={() => setConversationSidebar(true)} title="收起会话栏" aria-label="收起会话栏"><PanelLeftClose /></button></div><button className="icon-button mobile-close" onClick={() => setMobileMenu(false)} aria-label="关闭"><X /></button></div>
 
 
-      <div className="conversation-list">{loading ? <p className="muted-block">正在载入…</p> : <ProjectRail projects={projects} conversations={visibleConversations} currentId={conversationId} selectedProject={selectedProject} unread={unreadRunResults} onOpen={openConversation} onProject={selectProject} onNew={id=>{setMobileMenu(false);setConversationSearch("");router.push(`/app/p/${id}`);}} search={conversationSearch} onSearch={setConversationSearch} onProjects={setProjects} onConversation={updateOrganizedConversation}/>}</div>
-      <div className="sidebar-footer">      <button className="artifacts-nav" onClick={() => {setMobileMenu(false);router.push(`/app/artifacts?returnTo=${encodeURIComponent(conversationId ? `/app/c/${conversationId}` : newConversationPath)}`);}}><Globe size={16}/>产物管理</button><UserMenu user={user} /></div>
+      <nav className="workspace-primary-nav" aria-label="工作区导航"><span className="workspace-nav-item active" aria-current="page"><ConversationIcon size={18}/>会话</span>      <button className="workspace-nav-item" onClick={() => {setMobileMenu(false);router.push(`/app/artifacts?returnTo=${encodeURIComponent(conversationId ? `/app/c/${conversationId}` : newConversationPath)}`);}}><ArtifactIcon size={18}/>产物管理</button></nav>
+      <div className="conversation-list">{loading ? <p className="muted-block">正在载入…</p> : <ProjectRail projects={projects} conversations={visibleConversations} currentId={conversationId} selectedProject={selectedProject} unread={unreadRunResults} onOpen={openConversation} onNew={id=>{setMobileMenu(false);setConversationSearch("");router.push(`/app/p/${id}`);}} search={conversationSearch} onSearch={setConversationSearch} onProjects={setProjects} onConversation={updateOrganizedConversation}/>}</div>
+      <div className="sidebar-footer"><UserMenu user={user} /></div>
     </aside>
     <section className={`conversation-main ${displayedCurrent ? "" : "empty-conversation"}`}>
       <header className="conversation-header"><div className="conversation-header-leading"><button className="icon-button mobile-menu" onClick={() => setMobileMenu(true)} aria-label="打开会话栏"><Menu /></button><button type="button" className="sidebar-restore-button" onClick={() => setConversationSidebar(false)} title="展开会话栏" aria-label="展开会话栏"><PanelLeftOpen /></button>{displayedCurrent ? <div className="agent-heading"><span className="agent-avatar">{agentName(displayedCurrent.agent_slug)[0]}</span><span><strong>{agentName(displayedCurrent.agent_slug)}</strong><small className={`run-state ${runState}`}>{activeLabel}</small></span></div> : <Brand />}</div>{displayedCurrent ? <label className="model-selector"><select aria-label="当前模型" value={displayedCurrent.model_deployment_id || ""} onChange={(event) => chooseModel(event.target.value)}>{deployments.length === 0 ? <option value="">请先配置模型</option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown /></label> : <button className="new-button mobile-new" onClick={() => { setMobileMenu(false); router.push(newConversationPath); }}><Plus />新会话</button>}{displayedCurrent ? <OpenFilesButton /> : null}</header>

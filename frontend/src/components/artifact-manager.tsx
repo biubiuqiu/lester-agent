@@ -1,12 +1,12 @@
 "use client";
 
+import { ArtifactIcon } from "./workspace-icons";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Check,
   Copy,
   ExternalLink,
-  Globe,
   LoaderCircle,
   MoreHorizontal,
   Eye,
@@ -117,7 +117,7 @@ export function DeployDialog({
       </header>
       {result ? (
         <div className="deploy-result">
-          <Globe />
+          <ArtifactIcon />
           <p>页面和本地资源已保存。拥有链接的人可以直接访问。</p>
           <a href={result.url} target="_blank" rel="noopener noreferrer">
             打开站点 <ExternalLink size={14} />
@@ -222,7 +222,7 @@ export function DeployDialog({
             {busy ? (
               <LoaderCircle className="spin" size={16} />
             ) : (
-              <Globe size={16} />
+              <ArtifactIcon size={16} />
             )}{" "}
             {busy
               ? "正在收集资源并部署…"
@@ -257,7 +257,7 @@ export function PublishFileButton({
         title="部署并生成公开链接"
         onClick={() => setOpen(true)}
       >
-        <Globe size={15} />
+        <ArtifactIcon size={15} />
         <span>部署</span>
       </button>
       {open ? (
@@ -392,7 +392,7 @@ export function ArtifactManager({
         </div>
       ) : !filtered.length ? (
         <div className="artifact-empty">
-          <Globe size={38} />
+          <ArtifactIcon size={38} />
           <h2>{items.length ? "没有匹配的产物" : "让成果拥有自己的链接"}</h2>
           <p>
             在对话中生成 HTML 后，点击文件工具栏的“部署”，或让 Lester 帮你发布。
@@ -403,7 +403,7 @@ export function ArtifactManager({
           {filtered.map((a) => (
             <article className="published-site-card" key={a.id}>
               <div className={`artifact-cover ${a.status}`}>
-                <span className="artifact-cover-icon"><Globe size={30} /></span>
+                <span className="artifact-cover-icon"><ArtifactIcon size={30} /></span>
                 <span className={`site-status ${a.status}`}>{a.status === "published" ? "已发布" : "已下线"}</span>
                 {a.status === "published" ? <button className="artifact-preview-button" onClick={() => setPreview(a)} aria-label={`预览 ${a.name}`}><Eye size={15} />预览页面</button> : <span className="artifact-offline-note">站点已下线</span>}
               </div>
