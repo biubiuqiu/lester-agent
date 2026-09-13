@@ -144,7 +144,7 @@ export function DeployDialog({
           <p>
             {result.file_count} 个文件 · {formatSize(result.size_bytes)}
           </p>
-          <Link href="/app/artifacts">查看所有产物</Link>
+          <Link href={`/app/artifacts?returnTo=${encodeURIComponent(`/app/c/${conversation}`)}`}>查看所有产物</Link>
         </div>
       ) : (
         <form
@@ -315,6 +315,7 @@ export function ArtifactManager({
       setBusy("");
     }
   }
+  const sourceConversations = conversations.filter(c => !project || c.project_id === project);
   const filtered = items.filter(
     (a) =>
       (!project || a.project_id === project) &&
@@ -330,10 +331,10 @@ export function ArtifactManager({
         </div>
         <button
           className="primary-button"
-          disabled={!conversations.length}
+          disabled={!sourceConversations.length}
           onClick={() =>
             setChoice({
-              conversationId: conversations[0]?.id || "",
+              conversationId: "",
               sourcePath: "index.html",
             })
           }
@@ -460,7 +461,7 @@ export function ArtifactManager({
       {choice ? (
         <DeployDialog
           choice={choice}
-          conversations={conversations}
+          conversations={choice.artifact ? conversations : sourceConversations}
           onClose={() => setChoice(null)}
           onPublished={(a) =>
             setItems((prev) => [a, ...prev.filter((i) => i.id !== a.id)])

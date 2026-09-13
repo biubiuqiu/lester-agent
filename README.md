@@ -109,9 +109,9 @@ Task-file cards appear after a run finishes, fails, or stops, and only reference
 
 ### Projects and published artifacts
 
-The sidebar groups conversations by project. Use **+** beside Projects to create one; each project menu supports rename and pin. Each conversation menu supports pin and move. Existing conversations migrate into the default project. Selecting a project opens its new-conversation composer; a conversation is created only when you send a message.
+The sidebar groups conversations by project. Use **+** beside Projects to create one; each project menu supports rename and pin. Each conversation menu supports pin and move. Existing conversations migrate into the default project. Selecting a project opens its most recently updated conversation, or the composer if the project is empty. **New conversation** opens a draft in the selected project; a conversation is created only when you send a message. Conversation search spans all projects and shows each result's project.
 
-Open **Artifacts** in the sidebar to search deployments, filter by project, copy a link, update a deployment, open its source conversation, or take it offline. You can also deploy directly from an HTML file's preview toolbar. Moving a conversation changes the project shown for its artifacts without changing their public URLs.
+Open **Artifacts** in the sidebar to enter a standalone management page; **Return to workspace** takes you back to the originating conversation or project. Search deployments, filter by project, copy a link, update a deployment, open its source conversation, or take it offline. You can also deploy directly from an HTML file's preview toolbar. Moving a conversation changes the project shown for its artifacts without changing their public URLs.
 
 The agent has a built-in `deploy_html` tool, so no Skill installation is necessary. Ask it to publish explicitly, for example:
 

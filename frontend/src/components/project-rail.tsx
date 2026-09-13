@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import { Folder, FolderOpen, MoreHorizontal, Pin, Plus } from "lucide-react";
 import { api, type Conversation, type Project } from "@/lib/api";
 import { ConversationRunMark, type UnreadRunResult } from "./run-awareness";
@@ -13,6 +13,8 @@ export function ProjectRail({
   unread,
   onOpen,
   onProject,
+  onNew,
+  search,
   onProjects,
   onConversation,
 }: {
@@ -23,6 +25,8 @@ export function ProjectRail({
   unread: Record<string, UnreadRunResult>;
   onOpen: (id: string) => void;
   onProject: (id: string) => void;
+  onNew: (id: string) => void;
+  search: string;
   onProjects: (projects: Project[]) => void;
   onConversation: (id: string, patch: Partial<Conversation>) => void;
 }) {
@@ -49,7 +53,7 @@ export function ProjectRail({
           body: JSON.stringify({ name }),
         });
         onProjects([...projects, project]);
-        onProject(project.id);
+        onNew(project.id);
       }
       setEditing(null);
     } catch (e) {
@@ -106,7 +110,7 @@ export function ProjectRail({
     sorted[0];
   const activeConversations = activeProject
     ? conversations
-        .filter((conversation) => conversation.project_id === activeProject.id)
+        .filter((conversation) => search.trim() || conversation.project_id === activeProject.id)
         .sort(
           (a, b) =>
             Number(b.pinned) - Number(a.pinned) ||
@@ -191,22 +195,7 @@ export function ProjectRail({
                 </span>
                 {project.pinned ? <Pin size={12} /> : null}
               </button>
-              <details
-                className="rail-menu"
-                name="rail-actions"
-                onClick={(event) => {
-                  if ((event.target as Element).closest("button"))
-                    event.currentTarget.open = false;
-                }}
-                onBlur={(event) => {
-                  if (!event.currentTarget.contains(event.relatedTarget))
-                    event.currentTarget.open = false;
-                }}
-              >
-                <summary aria-label={`项目 ${project.name} 的操作`}>
-                  <MoreHorizontal size={15} />
-                </summary>
-                <div>
+              <RailActions label={`项目 ${project.name} 的操作`}>
                   <button
                     disabled={!!busy}
                     onClick={() => void pinProject(project)}
@@ -221,11 +210,10 @@ export function ProjectRail({
                   >
                     重命名项目
                   </button>
-                  <button onClick={() => onProject(project.id)}>
+                  <button onClick={() => onNew(project.id)}>
                     在此项目新建会话
                   </button>
-                </div>
-              </details>
+              </RailActions>
             </div>
           );
         })}
@@ -235,21 +223,14 @@ export function ProjectRail({
         <section className="project-conversation-section">
           <header className="project-conversation-header">
             <div>
-              <span className="section-kicker">当前项目</span>
-              <strong>{activeProject.name}</strong>
+              <span className="section-kicker">{search.trim() ? "搜索会话" : "会话"}</span>
+              <strong>{search.trim() ? `所有项目 · ${activeConversations.length} 条结果` : activeProject.name}</strong>
             </div>
-            <button
-              type="button"
-              className="project-new-conversation"
-              onClick={() => onProject(activeProject.id)}
-            >
-              <Plus size={14} />
-              新会话
-            </button>
+
           </header>
           <div
             className="project-conversations"
-            aria-label={`${activeProject.name}中的会话`}
+            aria-label={search.trim() ? "会话搜索结果" : `${activeProject.name}中的会话`}
           >
             {activeConversations.map((c) => (
               <div
@@ -268,6 +249,7 @@ export function ProjectRail({
                       {c.title}
                     </strong>
                     <small>
+                      {search.trim() ? `${projects.find(p => p.id === c.project_id)?.name || "项目"} · ` : ""}
                       {c.run_status === "running"
                         ? "正在工作"
                         : c.run_status === "cancelling"
@@ -280,22 +262,7 @@ export function ProjectRail({
                     unread={unread[c.id]}
                   />
                 </button>
-                <details
-                  className="rail-menu"
-                  name="rail-actions"
-                  onClick={(event) => {
-                    if ((event.target as Element).closest("button"))
-                      event.currentTarget.open = false;
-                  }}
-                  onBlur={(event) => {
-                    if (!event.currentTarget.contains(event.relatedTarget))
-                      event.currentTarget.open = false;
-                  }}
-                >
-                  <summary aria-label={`会话 ${c.title} 的操作`}>
-                    <MoreHorizontal size={15} />
-                  </summary>
-                  <div>
+                <RailActions label={`会话 ${c.title} 的操作`}>
                     <button
                       disabled={!!busy}
                       onClick={() => void organize(c, { pinned: !c.pinned })}
@@ -319,15 +286,14 @@ export function ProjectRail({
                         ))}
                       </select>
                     </label>
-                  </div>
-                </details>
+                </RailActions>
               </div>
             ))}
             {!activeConversations.length ? (
               <div className="project-empty-state">
                 <Folder size={18} />
-                <strong>这个项目还没有会话</strong>
-                <span>从上方新建会话开始</span>
+                <strong>{search.trim() ? "没有找到匹配的会话" : "这个项目还没有会话"}</strong>
+                <span>{search.trim() ? "换个关键词试试" : "从上方新建会话开始"}</span>
               </div>
             ) : null}
           </div>
@@ -335,4 +301,23 @@ export function ProjectRail({
       ) : null}
     </div>
   );
+}
+
+function RailActions({ label, children }: { label: string; children: ReactNode }) {
+  const id = useId();
+  const popup = useRef<HTMLDivElement>(null);
+  return <div className="rail-menu">
+    <button type="button" className="rail-actions-trigger" aria-label={label} popoverTarget={id}
+      onClick={(event) => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        if (popup.current) {
+          popup.current.style.left = `${Math.max(8, Math.min(rect.right - 200, window.innerWidth - 208))}px`;
+          popup.current.style.top = `${Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - 230))}px`;
+        }
+      }}><MoreHorizontal size={15} /></button>
+    <div ref={popup} id={id} popover="auto" className="rail-actions-popover" aria-label={label}
+      onClick={(event) => {
+        if ((event.target as Element).closest("button")) popup.current?.hidePopover();
+      }}>{children}</div>
+  </div>;
 }

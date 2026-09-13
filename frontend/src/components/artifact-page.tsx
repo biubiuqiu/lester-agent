@@ -7,7 +7,8 @@ import { api, type Conversation, type Project } from "@/lib/api";
 import { ArtifactManager } from "./artifact-manager";
 import { Brand } from "./brand";
 
-export function ArtifactPage() {
+export function ArtifactPage({ returnTo = "/app" }: { returnTo?: string }) {
+  const [attempt, setAttempt] = useState(0);
   const [projects, setProjects] = useState<Project[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,15 +36,15 @@ export function ArtifactPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [attempt]);
 
   return (
     <main className="artifacts-page-shell">
       <header className="artifacts-page-topbar">
-        <Link className="artifacts-page-brand" href="/app" aria-label="返回 Lester 工作区">
+        <Link className="artifacts-page-brand" href={returnTo} aria-label="返回 Lester 工作区">
           <Brand />
         </Link>
-        <Link className="artifacts-page-back" href="/app">
+        <Link className="artifacts-page-back" href={returnTo}>
           <ArrowLeft size={16} />
           返回工作区
         </Link>
@@ -56,7 +57,7 @@ export function ArtifactPage() {
       ) : error ? (
         <div className="artifact-page-error" role="alert">
           {error}
-          <Link href="/app/artifacts">重新加载</Link>
+          <button type="button" onClick={() => { setError(""); setLoading(true); setAttempt(value => value + 1); }}>重新加载</button>
         </div>
       ) : (
         <ArtifactManager projects={projects} conversations={conversations} />

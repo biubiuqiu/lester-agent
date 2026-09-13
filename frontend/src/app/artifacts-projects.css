@@ -540,7 +540,8 @@
 }
 .project-rail {
   display: flex;
-  min-height: 100%;
+  height: 100%;
+  min-height: 0;
   flex-direction: column;
   gap: 0;
 }
@@ -699,3 +700,13 @@
 .project-empty-state span {
   font-size: 10px;
 }
+
+/* Native popovers render in the top layer, outside the rail's scroll clips. */
+.rail-menu > .rail-actions-trigger { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; color: #758072; }
+.rail-menu > .rail-actions-popover {
+  position: fixed; inset: auto; margin: 0; width: 200px; max-height: calc(100dvh - 16px); overflow-y: auto;
+  padding: 7px; background: white; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 25px #1920191f;
+}
+.rail-menu > .rail-actions-popover:not(:popover-open) { display: none; }
+.rail-menu > .rail-actions-popover:popover-open { display: grid; }
+.artifact-page-error button { border: 1px solid var(--line-strong); border-radius: 8px; padding: 8px 14px; background: white; color: #426537; cursor: pointer; }
