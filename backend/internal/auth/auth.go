@@ -27,6 +27,7 @@ type Principal struct {
 	Email       string    `json:"email"`
 	DisplayName string    `json:"display_name"`
 	AvatarKey   string    `json:"avatar_key"`
+	Role        string    `json:"role"`
 }
 type contextKey struct{}
 
@@ -120,7 +121,15 @@ func (s *Service) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	var id uuid.UUID
 	var hash string
-	if err := s.db.QueryRow(r.Context(), `SELECT id,password_hash FROM users WHERE email=$1`, req.Email).Scan(&id, &hash); err != nil || !verifyPassword(req.Password, hash) {
+	tx, err := s.db.Begin(r.Context())
+	if err != nil {
+		httpapi.Error(w, 500, errors.New("could not sign in"))
+		return
+	}
+	defer tx.Rollback(r.Context())
+	// Coordinate login with password resets and account suspension. Otherwise a
+	// stale password check could insert a session after the admin revoked it.
+	if err := tx.QueryRow(r.Context(), `SELECT id,password_hash FROM users WHERE email=$1 AND NOT disabled FOR SHARE`, req.Email).Scan(&id, &hash); err != nil || !verifyPassword(req.Password, hash) {
 		httpapi.Error(w, 401, errors.New("invalid email or password"))
 		return
 	}
@@ -129,8 +138,12 @@ func (s *Service) Login(w http.ResponseWriter, r *http.Request) {
 		httpapi.Error(w, http.StatusInternalServerError, err)
 		return
 	}
-	if err = insertSession(r.Context(), s.db, id, session); err != nil {
+	if err = insertSession(r.Context(), tx, id, session); err != nil {
 		httpapi.Error(w, http.StatusInternalServerError, fmt.Errorf("create session: %w", err))
+		return
+	}
+	if err = tx.Commit(r.Context()); err != nil {
+		httpapi.Error(w, 500, errors.New("could not sign in"))
 		return
 	}
 	s.setCookie(w, session)
@@ -199,7 +212,7 @@ func (s *Service) Middleware(next http.Handler) http.Handler {
 		}
 		sum := sha256.Sum256(raw)
 		var p Principal
-		err = s.db.QueryRow(r.Context(), `SELECT u.id,u.email,u.display_name,wm.workspace_id,COALESCE(u.avatar_key,'forest') FROM sessions s JOIN users u ON u.id=s.user_id JOIN workspace_members wm ON wm.user_id=u.id WHERE s.token_hash=$1 AND s.expires_at>now() ORDER BY wm.workspace_id LIMIT 1`, sum[:]).Scan(&p.UserID, &p.Email, &p.DisplayName, &p.WorkspaceID, &p.AvatarKey)
+		err = s.db.QueryRow(r.Context(), `SELECT u.id,u.email,u.display_name,wm.workspace_id,COALESCE(u.avatar_key,'forest'),u.role FROM sessions s JOIN users u ON u.id=s.user_id JOIN workspace_members wm ON wm.user_id=u.id WHERE s.token_hash=$1 AND s.expires_at>now() AND NOT u.disabled ORDER BY wm.workspace_id LIMIT 1`, sum[:]).Scan(&p.UserID, &p.Email, &p.DisplayName, &p.WorkspaceID, &p.AvatarKey, &p.Role)
 		if err != nil {
 			httpapi.Error(w, 401, errors.New("session expired"))
 			return

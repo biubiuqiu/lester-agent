@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Boxes, Cpu, LogOut, MonitorCog, MoreHorizontal, UserRound } from "lucide-react";
+import { Boxes, Cpu, LogOut, MonitorCog, MoreHorizontal, ShieldCheck, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { api, UserProfile } from "@/lib/api";
 import { UserAvatar } from "./user-avatar";
@@ -62,6 +62,7 @@ export function UserMenu({ user }: { user: UserProfile | null }) {
     {open ? <div className="user-menu-popover" role="menu" aria-label="账户与设置">
       <header><UserAvatar displayName={name} avatarKey={user?.avatar_key} /><span><strong>{name}</strong><small>{user?.email || "正在加载账户…"}</small></span></header>
       <div className="user-menu-items">
+        {user?.role === "admin" && <button type="button" role="menuitem" onClick={() => navigate("/admin/users")}><ShieldCheck /><span>管理后台</span></button>}
         {menuItems.map((item) => <button key={item.path} type="button" role="menuitem" onClick={() => navigate(item.path)}><item.icon /><span>{item.label}</span></button>)}
       </div>
       {error ? <p className="settings-error" role="alert">{error}</p> : null}

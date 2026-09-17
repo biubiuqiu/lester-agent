@@ -112,8 +112,17 @@ func (s *Service) Create(ctx context.Context, workspaceID, userID uuid.UUID, age
 	if len(projectIDs) > 0 && projectIDs[0] != uuid.Nil {
 		projectID = &projectIDs[0]
 	}
+	if modelID != uuid.Nil {
+		var available bool
+		if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM model_deployments WHERE id=$2 AND (workspace_id=$1 OR workspace_id=$3) AND enabled)`, workspaceID, modelID, model.SystemWorkspaceID).Scan(&available); err != nil {
+			return Conversation{}, err
+		}
+		if !available {
+			return Conversation{}, errors.New("model unavailable")
+		}
+	}
 	var c Conversation
-	err := s.db.QueryRow(ctx, `INSERT INTO conversations(workspace_id,created_by,agent_slug,title,project_id,model_deployment_id) VALUES($1,$2,$3,$4,$6,COALESCE(NULLIF($5,'00000000-0000-0000-0000-000000000000'::uuid),(SELECT id FROM model_deployments WHERE workspace_id=$1 AND is_default LIMIT 1))) RETURNING id,workspace_id,created_by,agent_slug,COALESCE(model_deployment_id,'00000000-0000-0000-0000-000000000000'),title,created_at,updated_at,project_id,pinned`, workspaceID, userID, agent, title, modelID, projectID).Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.ProjectID, &c.Pinned)
+	err := s.db.QueryRow(ctx, `INSERT INTO conversations(workspace_id,created_by,agent_slug,title,project_id,model_deployment_id) VALUES($1,$2,$3,$4,$6,COALESCE(NULLIF($5,'00000000-0000-0000-0000-000000000000'::uuid),(SELECT id FROM model_deployments WHERE (workspace_id=$1 OR workspace_id=$7) AND is_default AND enabled ORDER BY (workspace_id=$1) DESC LIMIT 1))) RETURNING id,workspace_id,created_by,agent_slug,COALESCE(model_deployment_id,'00000000-0000-0000-0000-000000000000'),title,created_at,updated_at,project_id,pinned`, workspaceID, userID, agent, title, modelID, projectID, model.SystemWorkspaceID).Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.ProjectID, &c.Pinned)
 	c.RunStatus = "idle"
 	return c, err
 }
@@ -168,7 +177,7 @@ func (s *Service) Get(ctx context.Context, workspaceID, id uuid.UUID) (Conversat
 	return c, messages, rows.Err()
 }
 func (s *Service) UpdateModel(ctx context.Context, workspaceID, id, modelID uuid.UUID) error {
-	tag, err := s.db.Exec(ctx, `UPDATE conversations SET model_deployment_id=$3,updated_at=now() WHERE workspace_id=$1 AND id=$2 AND EXISTS(SELECT 1 FROM model_deployments WHERE id=$3 AND workspace_id=$1)`, workspaceID, id, modelID)
+	tag, err := s.db.Exec(ctx, `UPDATE conversations SET model_deployment_id=$3,updated_at=now() WHERE workspace_id=$1 AND id=$2 AND EXISTS(SELECT 1 FROM model_deployments WHERE id=$3 AND (workspace_id=$1 OR workspace_id=$4) AND enabled)`, workspaceID, id, modelID, model.SystemWorkspaceID)
 	if err == nil && tag.RowsAffected() == 0 {
 		return errors.New("conversation or model not found")
 	}

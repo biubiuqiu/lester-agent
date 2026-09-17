@@ -481,3 +481,32 @@ helm template lester deploy/helm/lester --set secrets.existingSecret=lester-test
 - Keep Sandbox Service private and Docker socket access on an isolated, dedicated worker.
 - User Computers default to disabled networking and CPU, memory, and PID limits.
 - File APIs and terminal working directories are conversation-scoped. HTML preview authentication, CSP, and iframe restrictions remain in force for generated pages.
+
+## Administration
+
+Administrators have a separate console at `/admin/users` and `/admin/models`, accessible from the account menu. The console supports creating accounts with their own personal workspace and default project, editing names and roles, disabling/re-enabling accounts, and resetting passwords. Disabling an account, changing its role, or resetting its password revokes its sessions. Administrators cannot disable or demote themselves. An already-running agent request is not cancelled by disabling an account.
+
+Shared models are configured centrally in **Administration → Shared models**. Add a provider connection and its encrypted credential, then add a model deployment. Connections and models can be edited; leaving the replacement credential empty retains the existing secret. A disabled model is removed from member selection and rejected for new requests, while historical conversations remain intact. Requests already started are unaffected. Shared connection credentials and provider configuration are never returned by member APIs.
+
+Existing personal model configurations remain private and usable. A personal default takes priority over the system default. The administrator console manages only shared models; it does not expose other users' conversations, files, or personal credentials.
+
+### Upgrade and bootstrap the first administrator
+
+Back up PostgreSQL, stop the API, and apply `backend/migrations/000007_administration.up.sql` once after migrations 001–006. Fresh Compose installations apply it automatically. For an existing Compose installation:
+
+```bash
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
+cat backend/migrations/000007_administration.up.sql | docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
+```
+
+In PowerShell use `Get-Content -Raw` instead of `cat`. Registration always creates a member account; the first signup does **not** automatically gain administrator privileges. Register the intended operator account, then use an authorized PostgreSQL session to bootstrap it explicitly (replace the example email):
+
+```sql
+UPDATE users SET role = 'admin', disabled = false
+WHERE email = 'operator@example.com';
+```
+
+Verify exactly one row was updated, then refresh the app. Subsequent role changes are available in the console. Do not grant access by editing browser state; every admin API requires an authenticated, active administrator. The reserved system-model workspace has no user membership.
+
+For the PostgreSQL-backed permission, account lifecycle, shared-model isolation, default rollback, and migration rollback checks, point `LESTER_TEST_DATABASE_URL` at a disposable PostgreSQL database and run `go test ./...` from `backend/`. Tests create and remove isolated schemas.

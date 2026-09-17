@@ -37,6 +37,18 @@ func Router(deps Dependencies) http.Handler {
 		api.Group(func(private chi.Router) {
 			private.Use(deps.Auth.Middleware)
 			private.Get("/me", deps.Auth.Me)
+			private.Route("/admin", func(admin chi.Router) {
+				admin.Use(auth.RequireAdmin)
+				admin.Get("/users", deps.Auth.ListUsers)
+				admin.Post("/users", deps.Auth.AddUser)
+				admin.Patch("/users/{id}", deps.Auth.UpdateUser)
+				admin.Get("/model-connections", deps.Models.ListConnections)
+				admin.Post("/model-connections", deps.Models.CreateConnection)
+				admin.Patch("/model-connections/{id}", deps.Models.UpdateConnection)
+				admin.Get("/model-deployments", deps.Models.ListDeployments)
+				admin.Post("/model-deployments", deps.Models.CreateDeployment)
+				admin.Patch("/model-deployments/{id}", deps.Models.UpdateDeployment)
+			})
 			if deps.Projects != nil {
 				private.Get("/projects", deps.Projects.List)
 				private.Post("/projects", deps.Projects.Create)

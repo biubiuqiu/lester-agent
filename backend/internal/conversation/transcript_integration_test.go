@@ -93,6 +93,7 @@ func newTranscriptFixture(t *testing.T, legacy bool) transcriptFixture {
 	}
 	applyTestMigration(t, db, "000004_durable_transcript.up.sql")
 	applyTestMigration(t, db, "000006_projects_artifacts.up.sql")
+	applyTestMigration(t, db, "000007_administration.up.sql")
 	return f
 }
 

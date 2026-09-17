@@ -62,11 +62,11 @@ async function parseResponse<T>(response: Response): Promise<T> {
 
 export type ConversationRunStatus = "idle" | "running" | "cancelling" | "completed" | "failed" | "cancelled";
 export type Conversation = { project_id: string; pinned: boolean; id: string; workspace_id: string; created_by: string; agent_slug: string; model_deployment_id: string; title: string; created_at: string; updated_at: string; run_id?: string; run_status: ConversationRunStatus };
-export type UserProfile = { user_id: string; workspace_id: string; email: string; display_name: string; avatar_key: AvatarKey };
+export type UserProfile = { user_id: string; workspace_id: string; email: string; display_name: string; avatar_key: AvatarKey; role: "member" | "admin" };
 export type AvatarKey = "forest" | "ocean" | "clay" | "lilac" | "amber" | "graphite";
 export type Attachment = { id: string; conversation_id: string; original_name: string; stored_path: string; content_type: string; size_bytes: number; created_at: string };
 export type Message = { id: string; role: string; content: string; metadata?: { attachments?: Attachment[] }; created_at: string };
-export type Deployment = { id: string; connection_id: string; name: string; model_id: string; is_default: boolean };
+export type Deployment = { id: string; connection_id: string; name: string; model_id: string; is_default: boolean; enabled: boolean; shared: boolean };
 export type Skill = { id: string; slug: string; name: string; description: string; version: string; source: string; size_bytes: number; installed_at?: string };
 export type FileEntry = { name: string; path: string; is_dir: boolean; size: number; modified_at: string };
 export type ComputerState = { conversation_id: string; user_id: string; provider?: string; provider_ref?: string; status: "not_created" | "creating" | "running" | "suspended" | "stopped" | "unhealthy" | "missing" | "error"; last_error?: string; last_checked_at?: string };
