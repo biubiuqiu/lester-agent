@@ -173,20 +173,76 @@ Lester focuses on conversation-driven work. The current version does not include
 
 ## Architecture
 
+### System overview
+
+The workspace and administration console share the application origin. Published HTML, images, and videos are served by an independent Artifact Host on a separate origin.
+
 ```mermaid
-flowchart TD
-    Web["Web · Next.js"] --> API["API · Go"]
-    API --> Model["Model Providers"]
-    API --> PostgreSQL
+flowchart LR
+    User["Member / administrator"] --> Gateway["Nginx gateway<br/>Application origin"]
+
+    subgraph App["Application services"]
+        Gateway -->|"Pages and assets"| Web["Web · Next.js<br/>Workspace + admin console"]
+        Gateway <-->|"/api · HTTP / SSE / WebSocket"| API["API · Go<br/>Auth, projects, conversations<br/>Agent runtime, models, artifacts"]
+        API -->|"Internal bearer token"| Sandbox["Sandbox Service · Go<br/>Lifecycle, files, commands, terminals"]
+    end
+
+    subgraph Data["Storage"]
+        DB[("PostgreSQL<br/>Accounts, configuration, transcripts<br/>Projects and artifact manifests")]
+        Redis[("Redis<br/>Live event delivery")]
+        Objects[("S3-compatible object store<br/>Skill packages and published files")]
+    end
+
+    API --> DB
     API --> Redis
-    API --> MinIO["Object Store · MinIO/S3"]
-    Visitor["Public site visitor"] --> Host["Artifact Host · Go · separate hostname"]
-    Host --> MinIO
-    Host --> PostgreSQL
-    API --> Sandbox["Sandbox Service · Go"]
-    Sandbox --> Provider{"Sandbox Provider"}
-    Provider --> Toolbox["Docker + lester-toolbox"]
-    Provider --> ACS["Alibaba Cloud ACS · E2B"]
+    API --> Objects
+    API <-->|"Provider adapters"| Models["External model providers<br/>Personal + admin-managed shared models"]
+
+    subgraph Computers["Per-user Computer · per-conversation directories"]
+        Docker["Docker provider<br/>Container + persistent volume<br/>lester-toolbox"]
+        ACS["ACS provider<br/>Cloud sandbox via E2B SDK"]
+    end
+    Sandbox -->|"Docker mode"| Docker
+    Sandbox -->|"ACS mode"| ACS
+
+    Visitor["Public site visitor"] --> Host["Artifact Host · Go<br/>Separate public origin"]
+    Host -->|"Published manifest and status"| DB
+    Host -->|"Manifest-listed files only"| Objects
+```
+
+This diagram shows the Docker Compose entry point. Kubernetes uses Ingress to route to Web and API instead of the Nginx gateway. Browser API requests pass through the gateway directly; the Next.js service does not own the agent runtime or database access.
+
+- **Conversation execution:** API authenticates the user, persists the conversation and run, calls the selected model provider, and executes tools through Sandbox Service. PostgreSQL holds durable history; Redis distributes live events that API streams to the browser.
+- **Administration:** `/admin` uses role-protected API routes to manage accounts and shared models. Personal workspaces stay isolated, and provider credentials are encrypted at rest.
+- **Public artifacts:** Artifact Host reads published snapshots and their manifests. It never serves live Computer files or receives model credentials or sandbox tokens.
+
+### Artifact publishing flow
+
+Single-file HTML and multi-file sites use the same publishing service. Local images, videos, stylesheets, and scripts must be bundled from the conversation directory; missing dependencies or paths outside that boundary reject the deployment.
+
+```mermaid
+sequenceDiagram
+    participant Caller as Agent tool / workspace UI
+    participant API as API · Artifact service
+    participant Sandbox as Sandbox Service
+    participant Store as S3-compatible storage
+    participant DB as PostgreSQL
+    participant Host as Artifact Host
+    participant Visitor as Public visitor
+
+    Caller->>API: Explicit publish (deploy_html or UI)
+    API->>Sandbox: Read entry HTML and local dependencies
+    Sandbox-->>API: Files within the conversation directory
+    Note over API: Validate paths, dependencies, file types and limits
+    API->>Store: Upload immutable snapshot
+    Store-->>API: Upload complete
+    API->>DB: Commit published manifest and version
+    API-->>Caller: Deployment ID and public URL
+    Note over Caller,DB: Updates reuse the deployment ID and URL<br/>Failures retain the previous version
+    Visitor->>Host: Request HTML or a bundled asset
+    Host->>DB: Check published status and manifest membership
+    Host->>Store: Read the listed snapshot object
+    Host-->>Visitor: Serve HTML, image, video or other static asset
 ```
 
 Web, API, Sandbox Service, and Artifact Host build and run separately. Sandbox Service owns Computer lifecycle, commands, files, and interactive terminals behind a common provider interface. Higher layers store an opaque `provider_ref` without depending on Docker container names or ACS Sandbox IDs.
