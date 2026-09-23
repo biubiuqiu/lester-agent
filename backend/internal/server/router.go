@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/biubiuqiu/lester-agent/backend/internal/agent"
 	"github.com/biubiuqiu/lester-agent/backend/internal/artifact"
 	"github.com/biubiuqiu/lester-agent/backend/internal/auth"
 	"github.com/biubiuqiu/lester-agent/backend/internal/contextlibrary"
@@ -18,6 +19,8 @@ import (
 
 type Dependencies struct {
 	Contexts      *contextlibrary.Handler
+	Agents        *agent.Handler
+	AgentBuilder  *agent.BuilderHandler
 	Logger        *slog.Logger
 	WebOrigin     string
 	Auth          *auth.Service
@@ -69,9 +72,16 @@ func Router(deps Dependencies) http.Handler {
 				private.Post("/artifacts/{id}/unpublish", deps.Artifacts.Unpublish)
 			}
 			private.Patch("/me", deps.Auth.UpdateProfile)
-			private.Get("/agents", func(w http.ResponseWriter, _ *http.Request) {
-				httpapi.JSON(w, 200, map[string]any{"agents": []map[string]string{{"slug": "lester", "name": "Lester"}, {"slug": "franklin", "name": "Franklin"}, {"slug": "michael", "name": "Michael"}, {"slug": "trevor", "name": "Trevor"}}})
-			})
+			if deps.Agents != nil {
+				private.Get("/agents", deps.Agents.List)
+				private.Post("/agents", deps.Agents.Save)
+				private.Get("/agents/{slug}", deps.Agents.Get)
+				private.Patch("/agents/{id}", deps.Agents.Save)
+				private.Delete("/agents/{id}", deps.Agents.Delete)
+			}
+			if deps.AgentBuilder != nil {
+				private.Post("/agent-builder/chat", deps.AgentBuilder.Chat)
+			}
 			private.Get("/model-connections", deps.Models.ListConnections)
 			private.Post("/model-connections", deps.Models.CreateConnection)
 			private.Post("/model-connections/{id}/test", deps.Models.TestConnection)

@@ -12,6 +12,7 @@ import (
 	"time"
 	"unicode"
 
+	agentpkg "github.com/biubiuqiu/lester-agent/backend/internal/agent"
 	"github.com/biubiuqiu/lester-agent/backend/internal/agenttool"
 	"github.com/biubiuqiu/lester-agent/backend/internal/contextlibrary"
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
@@ -25,18 +26,22 @@ import (
 )
 
 type Conversation struct {
-	ProjectID         uuid.UUID  `json:"project_id"`
-	Pinned            bool       `json:"pinned"`
-	ID                uuid.UUID  `json:"id"`
-	WorkspaceID       uuid.UUID  `json:"workspace_id"`
-	CreatedBy         uuid.UUID  `json:"created_by"`
-	AgentSlug         string     `json:"agent_slug"`
-	ModelDeploymentID uuid.UUID  `json:"model_deployment_id"`
-	Title             string     `json:"title"`
-	CreatedAt         time.Time  `json:"created_at"`
-	UpdatedAt         time.Time  `json:"updated_at"`
-	RunID             *uuid.UUID `json:"run_id,omitempty"`
-	RunStatus         string     `json:"run_status"`
+	ProjectID            uuid.UUID  `json:"project_id"`
+	Pinned               bool       `json:"pinned"`
+	ID                   uuid.UUID  `json:"id"`
+	WorkspaceID          uuid.UUID  `json:"workspace_id"`
+	CreatedBy            uuid.UUID  `json:"created_by"`
+	AgentSlug            string     `json:"agent_slug"`
+	AgentName            string     `json:"agent_name"`
+	AgentInstructions    string     `json:"-"`
+	AgentSkillSlugs      []string   `json:"-"`
+	AgentSkillsInstalled bool       `json:"-"`
+	ModelDeploymentID    uuid.UUID  `json:"model_deployment_id"`
+	Title                string     `json:"title"`
+	CreatedAt            time.Time  `json:"created_at"`
+	UpdatedAt            time.Time  `json:"updated_at"`
+	RunID                *uuid.UUID `json:"run_id,omitempty"`
+	RunStatus            string     `json:"run_status"`
 }
 type Message struct {
 	ID             uuid.UUID        `json:"id"`
@@ -73,13 +78,14 @@ type installedSkill struct {
 	Slug, Name, Description string
 }
 type Service struct {
-	db         *pgxpool.Pool
-	redis      *redis.Client
-	models     *model.Store
-	sandboxes  *sandbox.Client
-	tools      *agenttool.Registry
-	locks      sync.Map
-	activeRuns sync.Map
+	db                *pgxpool.Pool
+	redis             *redis.Client
+	models            *model.Store
+	sandboxes         *sandbox.Client
+	tools             *agenttool.Registry
+	locks             sync.Map
+	activeRuns        sync.Map
+	installAgentSkill func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, string, string, string) error
 }
 
 type Computer struct {
@@ -102,9 +108,17 @@ func New(db *pgxpool.Pool, redisClient *redis.Client, models *model.Store, sandb
 	return &Service{db: db, redis: redisClient, models: models, sandboxes: sandboxes, tools: tools}
 }
 
+func (s *Service) SetAgentSkillInstaller(fn func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, string, string, string) error) {
+	s.installAgentSkill = fn
+}
+
 func (s *Service) Create(ctx context.Context, workspaceID, userID uuid.UUID, agent, title string, modelID uuid.UUID, projectIDs ...uuid.UUID) (Conversation, error) {
 	if agent == "" {
 		agent = "lester"
+	}
+	definition, err := (&agentpkg.Service{DB: s.db}).Resolve(ctx, workspaceID, agent)
+	if err != nil {
+		return Conversation{}, errors.New("agent unavailable")
 	}
 	if title == "" {
 		title = "新对话"
@@ -123,12 +137,12 @@ func (s *Service) Create(ctx context.Context, workspaceID, userID uuid.UUID, age
 		}
 	}
 	var c Conversation
-	err := s.db.QueryRow(ctx, `INSERT INTO conversations(workspace_id,created_by,agent_slug,title,project_id,model_deployment_id) VALUES($1,$2,$3,$4,$6,COALESCE(NULLIF($5,'00000000-0000-0000-0000-000000000000'::uuid),(SELECT id FROM model_deployments WHERE (workspace_id=$1 OR workspace_id=$7) AND is_default AND enabled ORDER BY (workspace_id=$1) DESC LIMIT 1))) RETURNING id,workspace_id,created_by,agent_slug,COALESCE(model_deployment_id,'00000000-0000-0000-0000-000000000000'),title,created_at,updated_at,project_id,pinned`, workspaceID, userID, agent, title, modelID, projectID, model.SystemWorkspaceID).Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.ProjectID, &c.Pinned)
+	err = s.db.QueryRow(ctx, `INSERT INTO conversations(workspace_id,created_by,agent_slug,agent_name,agent_instructions,agent_skill_slugs,agent_skills_installed,title,project_id,model_deployment_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$10,COALESCE(NULLIF($9,'00000000-0000-0000-0000-000000000000'::uuid),(SELECT id FROM model_deployments WHERE (workspace_id=$1 OR workspace_id=$11) AND is_default AND enabled ORDER BY (workspace_id=$1) DESC LIMIT 1))) RETURNING id,workspace_id,created_by,agent_slug,agent_name,COALESCE(model_deployment_id,'00000000-0000-0000-0000-000000000000'),title,created_at,updated_at,project_id,pinned`, workspaceID, userID, agent, definition.Name, definition.Instructions, definition.SkillSlugs, len(definition.SkillSlugs) == 0, title, modelID, projectID, model.SystemWorkspaceID).Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.AgentName, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.ProjectID, &c.Pinned)
 	c.RunStatus = "idle"
 	return c, err
 }
 func (s *Service) List(ctx context.Context, workspaceID uuid.UUID) ([]Conversation, error) {
-	rows, err := s.db.Query(ctx, `SELECT c.id,c.workspace_id,c.created_by,c.agent_slug,COALESCE(c.model_deployment_id,'00000000-0000-0000-0000-000000000000'),c.title,c.created_at,c.updated_at,latest.id,COALESCE(latest.status,'idle'),c.project_id,c.pinned
+	rows, err := s.db.Query(ctx, `SELECT c.id,c.workspace_id,c.created_by,c.agent_slug,c.agent_name,COALESCE(c.model_deployment_id,'00000000-0000-0000-0000-000000000000'),c.title,c.created_at,c.updated_at,latest.id,COALESCE(latest.status,'idle'),c.project_id,c.pinned
 		FROM conversations c
 		LEFT JOIN LATERAL (SELECT r.id,r.status FROM runs r WHERE r.conversation_id=c.id ORDER BY r.created_at DESC,r.id DESC LIMIT 1) latest ON true
 		WHERE c.workspace_id=$1 ORDER BY c.updated_at DESC`, workspaceID)
@@ -139,7 +153,7 @@ func (s *Service) List(ctx context.Context, workspaceID uuid.UUID) ([]Conversati
 	items := []Conversation{}
 	for rows.Next() {
 		var c Conversation
-		if err = rows.Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.RunID, &c.RunStatus, &c.ProjectID, &c.Pinned); err != nil {
+		if err = rows.Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.AgentName, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.RunID, &c.RunStatus, &c.ProjectID, &c.Pinned); err != nil {
 			return nil, err
 		}
 		items = append(items, c)
@@ -148,10 +162,10 @@ func (s *Service) List(ctx context.Context, workspaceID uuid.UUID) ([]Conversati
 }
 func (s *Service) Get(ctx context.Context, workspaceID, id uuid.UUID) (Conversation, []Message, error) {
 	var c Conversation
-	err := s.db.QueryRow(ctx, `SELECT c.id,c.workspace_id,c.created_by,c.agent_slug,COALESCE(c.model_deployment_id,'00000000-0000-0000-0000-000000000000'),c.title,c.created_at,c.updated_at,latest.id,COALESCE(latest.status,'idle'),c.project_id,c.pinned
+	err := s.db.QueryRow(ctx, `SELECT c.id,c.workspace_id,c.created_by,c.agent_slug,c.agent_name,c.agent_instructions,c.agent_skill_slugs,c.agent_skills_installed,COALESCE(c.model_deployment_id,'00000000-0000-0000-0000-000000000000'),c.title,c.created_at,c.updated_at,latest.id,COALESCE(latest.status,'idle'),c.project_id,c.pinned
 		FROM conversations c
 		LEFT JOIN LATERAL (SELECT r.id,r.status FROM runs r WHERE r.conversation_id=c.id ORDER BY r.created_at DESC,r.id DESC LIMIT 1) latest ON true
-		WHERE c.id=$2 AND c.workspace_id=$1`, workspaceID, id).Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.RunID, &c.RunStatus, &c.ProjectID, &c.Pinned)
+		WHERE c.id=$2 AND c.workspace_id=$1`, workspaceID, id).Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.AgentName, &c.AgentInstructions, &c.AgentSkillSlugs, &c.AgentSkillsInstalled, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.RunID, &c.RunStatus, &c.ProjectID, &c.Pinned)
 	if err != nil {
 		return c, nil, err
 	}
@@ -329,6 +343,29 @@ func (s *Service) execute(ctx context.Context, workspaceID, conversationID, runI
 		s.finishExecutionError(ctx, runID, conversationID, err)
 		return
 	}
+	if !conversation.AgentSkillsInstalled {
+		if s.installAgentSkill == nil {
+			s.finishExecutionError(ctx, runID, conversationID, errors.New("agent skill installer unavailable"))
+			return
+		}
+		for _, slug := range conversation.AgentSkillSlugs {
+			var installed bool
+			if err = s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM conversation_skills cs JOIN skills sk ON sk.id=cs.skill_id WHERE cs.conversation_id=$1 AND sk.slug=$2)`, conversationID, slug).Scan(&installed); err != nil {
+				s.finishExecutionError(ctx, runID, conversationID, err)
+				return
+			}
+			if !installed {
+				if err = s.installAgentSkill(ctx, workspaceID, conversation.CreatedBy, conversationID, computer.SandboxID, computer.WorkDir, slug); err != nil {
+					s.finishExecutionError(ctx, runID, conversationID, err)
+					return
+				}
+			}
+		}
+		if _, err = s.db.Exec(ctx, `UPDATE conversations SET agent_skills_installed=true WHERE id=$1 AND workspace_id=$2`, conversationID, workspaceID); err != nil {
+			s.finishExecutionError(ctx, runID, conversationID, err)
+			return
+		}
+	}
 	skills, err := s.installedSkills(ctx, workspaceID, conversationID)
 	if err != nil {
 		s.finishExecutionError(ctx, runID, conversationID, err)
@@ -338,7 +375,12 @@ func (s *Service) execute(ctx context.Context, workspaceID, conversationID, runI
 	for _, item := range skills {
 		promptSkills = append(promptSkills, prompts.Skill{Slug: item.Slug, Name: item.Name, Description: item.Description})
 	}
-	system, err := prompts.Compose(conversation.AgentSlug, conversationID.String(), workspaceID.String(), deployment.Name, computer.Status, promptSkills)
+	var system string
+	if conversation.AgentInstructions != "" {
+		system, err = prompts.ComposeCustom(conversation.AgentInstructions, conversationID.String(), workspaceID.String(), deployment.Name, computer.Status, promptSkills)
+	} else {
+		system, err = prompts.Compose(conversation.AgentSlug, conversationID.String(), workspaceID.String(), deployment.Name, computer.Status, promptSkills)
+	}
 	if err != nil {
 		s.finishExecutionError(ctx, runID, conversationID, err)
 		return

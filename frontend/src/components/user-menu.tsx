@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, Boxes, Cpu, LogOut, MonitorCog, MoreHorizontal, ShieldCheck, UserRound } from "lucide-react";
+import { BookOpen, Bot, Boxes, Cpu, LogOut, MonitorCog, MoreHorizontal, ShieldCheck, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { api, UserProfile } from "@/lib/api";
 import { UserAvatar } from "./user-avatar";
 import { clearViewState } from "@/lib/conversation-view-state";
 
 const menuItems = [
+  { label: "Agent 管理", path: "/app/agents", icon: Bot },
   { label: "上下文库", path: "/app/contexts", icon: BookOpen },
   { label: "个人资料", path: "/app/settings/profile", icon: UserRound },
   { label: "模型", path: "/app/settings/models", icon: Cpu },

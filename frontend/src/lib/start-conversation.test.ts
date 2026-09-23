@@ -14,7 +14,7 @@ test("first submit creates Lester then sends exactly once with the chosen model"
   assert.equal(result.id, "c");
   assert.deepEqual(calls, [
     { path: "/api/v1/conversations", body: { agent_slug: "lester", model_deployment_id: "model", title: "hello" } },
-    { path: "/api/v1/conversations/c/messages", body: { content: "hello", attachment_ids: [] } },
+    { path: "/api/v1/conversations/c/messages", body: { content: "hello", context_ids: [], attachment_ids: [] } },
   ]);
 });
 
@@ -42,7 +42,7 @@ test("attachments upload into the new conversation before sending only their IDs
   t.mock.method(globalThis, "fetch", async (path: string, init: RequestInit) => {
     paths.push(path);
     if (path.endsWith("/attachments")) { assert.ok(init.body instanceof FormData); return Response.json({ id: "attachment" }); }
-    if (path.endsWith("/messages")) { assert.deepEqual(JSON.parse(String(init.body)), { content: "", attachment_ids: ["attachment"] }); return Response.json({ run_id: "r" }); }
+    if (path.endsWith("/messages")) { assert.deepEqual(JSON.parse(String(init.body)), { content: "", context_ids: [], attachment_ids: ["attachment"] }); return Response.json({ run_id: "r" }); }
     return Response.json({ id: "c" });
   });
   await startConversation("", [new File(["not injected"], "notes.txt")], "model", () => {});
@@ -59,4 +59,14 @@ test("project selection is sent when creating the conversation", async (t) => {
   await startConversation("project draft", [], "model", () => {}, "selected-project");
   assert.equal(calls[0].body.project_id, "selected-project");
   assert.equal(calls.length, 2);
+});
+
+test("chosen Agent is fixed when creating the conversation", async (t) => {
+  const calls: Record<string, unknown>[] = [];
+  t.mock.method(globalThis, "fetch", async (path: string, init: RequestInit) => {
+    calls.push(JSON.parse(String(init.body)));
+    return Response.json(path.endsWith("/messages") ? { run_id: "r" } : { id: "c" });
+  });
+  await startConversation("Analyze", [], "model", () => {}, undefined, [], "custom-agent");
+  assert.equal(calls[0].agent_slug, "custom-agent");
 });

@@ -171,6 +171,14 @@ Each entry supports an 80-character name, a 240-character description, and up to
 
 For an existing installation, back up PostgreSQL, stop API writes, and apply `backend/migrations/000008_context_library.up.sql` once after migrations 001–007, using the same transactional `psql` procedure described below. Rebuild API and Web afterward. Fresh Compose volumes apply the migration automatically. Rolling back the library table does not remove snapshots already stored in messages.
 
+### Custom Agents
+
+Open **Agent management** from the account menu to see built-in and personal Agents. Each Agent has a landing page explaining its purpose and linking to a new conversation. In **Create Agent**, write a name, description and system instructions, then choose Skills from the catalog. The separate Agent creation assistant can discuss your goal and suggest an editable draft; applying its suggestion only fills the form, and saving remains an explicit action.
+
+The new-conversation composer defaults to Lester and lets you choose another Agent before sending. Starting from an Agent landing page preselects that Agent. Creation does not produce an empty conversation: the first send creates it. The API checks Agent ownership within the personal workspace and snapshots the selected Agent's name, instructions and Skill slugs into the conversation. Later edits or deletion do not rewrite existing conversations. Selected Skills install into the conversation Computer before its first model run; installation failure stops the run with an error instead of silently omitting a Skill. Existing conversations can still manage their own Skills.
+
+For an existing installation, back up PostgreSQL, stop API writes, and apply `backend/migrations/000009_agents.up.sql` once after migration 008. Rebuild API and Web afterward. Fresh Compose volumes apply it automatically. Rollback refuses to remove the schema while custom-Agent conversations exist.
+
 ### File synchronization and view state
 
 File and tool/run events invalidate the shared inventory. While the page is visible, metadata polling runs every 5 seconds during execution and every 15 seconds while idle to detect Bash and background-script changes. Automatic scans cover up to 64 directories, 2,000 files, and five nested levels. Dependencies, caches, and `.agent` are skipped by default but can be expanded manually; partial scans are disclosed.
@@ -200,7 +208,7 @@ flowchart LR
     end
 
     subgraph Data["Storage"]
-        DB[("PostgreSQL<br/>Accounts, configuration, transcripts<br/>Projects, context entries and artifact manifests")]
+        DB[("PostgreSQL<br/>Accounts, Agents, configuration, transcripts<br/>Projects, context entries and artifact manifests")]
         Redis[("Redis<br/>Live event delivery")]
         Objects[("S3-compatible object store<br/>Skill packages and published files")]
     end
@@ -225,6 +233,7 @@ flowchart LR
 This diagram shows the Docker Compose entry point. Kubernetes uses Ingress to route to Web and API instead of the Nginx gateway. Browser API requests pass through the gateway directly; the Next.js service does not own the agent runtime or database access.
 
 - **Conversation execution:** API authenticates the user, persists the conversation and run, calls the selected model provider, and executes tools through Sandbox Service. PostgreSQL holds durable history; Redis distributes live events that API streams to the browser.
+- **Custom Agents:** The API stores workspace-scoped definitions and snapshots a chosen Agent into a new conversation. Its selected Skills install in the conversation Computer before execution. The separate creation assistant uses a model to suggest drafts without saving them.
 - **Administration:** `/admin` uses role-protected API routes to manage accounts and shared models. Personal workspaces stay isolated, and provider credentials are encrypted at rest.
 - **Public artifacts:** Artifact Host reads published snapshots and their manifests. It never serves live Computer files or receives model credentials or sandbox tokens.
 

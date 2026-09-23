@@ -3,13 +3,14 @@
 import { ContextInput, useContextReferences } from "./context-input";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { ChevronDown, FileText, Paperclip, Send, X } from "lucide-react";
-import type { Conversation, Deployment, UserProfile } from "@/lib/api";
+import { api, type Agent, type Conversation, type Deployment, type UserProfile } from "@/lib/api";
 import { pastedImageFiles } from "@/lib/clipboard";
 import { readView, updateView, viewKey } from "@/lib/conversation-view-state";
 import { startConversation } from "@/lib/start-conversation";
 
-export function NewConversationComposer({ deployments, user, projectId, projectName }: { deployments: Deployment[]; user: UserProfile; projectId?:string; projectName?:string }) {
+export function NewConversationComposer({ deployments, user, projectId, projectName, initialAgentSlug }: { deployments: Deployment[]; user: UserProfile; projectId?:string; projectName?:string; initialAgentSlug?: string }) {
   const router = useRouter();
   const storageKey = viewKey(user.user_id, user.workspace_id, `new.${projectId || "default"}`);
   const [contexts, setContexts] = useContextReferences(storageKey);
@@ -17,6 +18,12 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
   const [files, setFiles] = useState<File[]>(() => readView(storageKey).files);
   const [missing, setMissing] = useState(() => readView(storageKey).missingFiles);
   const [model, setModel] = useState(deployments.find((item) => item.is_default)?.id || deployments[0]?.id || "");
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [agentSlug, setAgentSlug] = useState(initialAgentSlug || readView(storageKey).agentSlug);
+  const [agentError, setAgentError] = useState("");
+  useEffect(() => { let active=true; api<{agents:Agent[]}>("/api/v1/agents").then(result=>{if(active){setAgents(result.agents);setAgentSlug(current=>result.agents.some(a=>a.slug===current)?current:"lester");}}).catch(reason=>{if(active)setAgentError(reason instanceof Error?reason.message:"Agent 加载失败");});return()=>{active=false}; }, []);
+  useEffect(() => { updateView(storageKey,{agentSlug}); }, [storageKey,agentSlug]);
+  const selectedAgent = agents.find(a=>a.slug===agentSlug);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const submitting = useRef(false);
@@ -35,7 +42,7 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
       const draft = readView(storageKey);
       // Navigation may have let the user start a different draft meanwhile.
       if (JSON.stringify(draft.contexts) === JSON.stringify(contexts) && draft.text === text && draft.files.length === files.length && draft.files.every((file, i) => file === files[i])) {
-        updateView(storageKey, { contexts: [], text: "", files: [], missingFiles: [] });
+        updateView(storageKey, { contexts: [], agentSlug:"lester", text: "", files: [], missingFiles: [] });
       }
     };
     try {
@@ -43,7 +50,7 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
         created = item;
         // Preserve the submitted draft before uploads/send; never auto-resend on reload.
         updateView(viewKey(user.user_id, user.workspace_id, item.id), { contexts, text, files, missingFiles: missing });
-      },projectId,contexts.map((c) => c.id));
+      },projectId,contexts.map((c) => c.id),agentSlug);
       updateView(viewKey(user.user_id, user.workspace_id, conversation.id), { contexts: [], text: "", files: [], missingFiles: [], sendNotice: "" });
       clear();
       if (mounted.current) router.push(`/app/c/${conversation.id}`);
@@ -62,7 +69,7 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
 
   return <div className="new-chat-home"><div className="new-chat-content">
     {projectName?<p className="new-project-context">{projectName}</p>:null}
-    <h1>有什么想交给 Lester？</h1>
+    <h1>有什么想交给 {selectedAgent?.name || "Lester"}？</h1>
     <p className="new-chat-intro">从一个想法开始，把它变成看得见的成果。</p>
     <form className="composer new-chat-composer" onSubmit={submit} aria-label="开始新对话" aria-busy={busy}>
       <div className="compose-box">
@@ -76,6 +83,8 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
           <button className="send-button" aria-label="发送消息" disabled={busy || !model || (!text.trim() && !files.length)}><Send /></button>
         </div>
       </div>
+      <div className="new-agent-picker"><label>本次会话的 Agent <select aria-label="选择 Agent" value={agentSlug} disabled={busy || !agents.length} onChange={event=>{setAgentSlug(event.target.value);updateView(storageKey,{agentSlug:event.target.value});}}>{agents.map(agent=><option key={agent.slug} value={agent.slug}>{agent.name}</option>)}</select></label><Link href={`/app/agents/${encodeURIComponent(agentSlug)}`}>了解这个 Agent</Link><Link href="/app/agents">管理 Agent</Link></div>
+      {agentError ? <p role="alert" className="compose-error">{agentError}</p> : null}
       {busy ? <p role="status" className="composer-status active">正在创建会话并发送消息…</p> : null}
       {error ? <p role="alert" className="compose-error">{error}</p> : null}
       {!deployments.length ? <p className="new-chat-hint">还没有可用模型，<a href="/app/settings/models">前往配置模型</a>后即可开始。你的草稿会保留。</p> : <p className="new-chat-hint">发送后开始新会话 · 可直接粘贴图片 · Enter 发送，Shift + Enter 换行</p>}

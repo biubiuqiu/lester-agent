@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/biubiuqiu/lester-agent/backend/internal/agent"
 	"github.com/biubiuqiu/lester-agent/backend/internal/agenttool"
 	"github.com/biubiuqiu/lester-agent/backend/internal/artifact"
 	"github.com/biubiuqiu/lester-agent/backend/internal/auth"
@@ -70,6 +71,10 @@ func main() {
 		os.Exit(1)
 	}
 	skillService := skill.New(db, objectStore, sandboxClient)
+	conversationService.SetAgentSkillInstaller(func(ctx context.Context, workspaceID, userID, conversationID uuid.UUID, sandboxID, workDir, slug string) error {
+		_, err := skillService.Install(ctx, workspaceID, userID, conversationID, sandboxID, workDir, slug)
+		return err
+	})
 	artifactURL := os.Getenv("ARTIFACT_PUBLIC_URL")
 	if artifactURL == "" {
 		artifactURL = "http://127.0.0.1:13181"
@@ -91,7 +96,7 @@ func main() {
 		os.Exit(1)
 	}
 	authService := auth.New(db, redisClient, cfg.SessionTTL, cfg.SessionCookieSecure)
-	handler := server.Router(server.Dependencies{Contexts: &contextlibrary.Handler{Service: &contextlibrary.Service{DB: db}}, Logger: logger, WebOrigin: cfg.WebOrigin, Auth: authService, Models: model.NewHandler(modelStore), Conversations: conversationHandler, Skills: skill.NewHandler(skillService, conversationService), Projects: &project.Handler{Service: &project.Service{DB: db}}, Artifacts: &artifact.Handler{Service: artifactService}})
+	handler := server.Router(server.Dependencies{Contexts: &contextlibrary.Handler{Service: &contextlibrary.Service{DB: db}}, Agents: &agent.Handler{Service: &agent.Service{DB: db}}, AgentBuilder: &agent.BuilderHandler{DB: db, Models: modelStore}, Logger: logger, WebOrigin: cfg.WebOrigin, Auth: authService, Models: model.NewHandler(modelStore), Conversations: conversationHandler, Skills: skill.NewHandler(skillService, conversationService), Projects: &project.Handler{Service: &project.Service{DB: db}}, Artifacts: &artifact.Handler{Service: artifactService}})
 	server := &http.Server{Addr: cfg.HTTPAddr, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 	go conversationService.SuspendIdle(ctx, cfg.SandboxIdleTTL)
 	go conversationService.MonitorSandboxes(ctx, cfg.SandboxMonitorInterval)
