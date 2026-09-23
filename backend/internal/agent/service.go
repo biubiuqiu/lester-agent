@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/biubiuqiu/lester-agent/backend/internal/blob"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -32,7 +33,10 @@ var Builtins = []Agent{
 
 var ErrInvalid = errors.New("请填写名称和提示词，并检查长度及所选 Skill")
 
-type Service struct{ DB *pgxpool.Pool }
+type Service struct {
+	DB      *pgxpool.Pool
+	Objects blob.Store
+}
 
 func (s *Service) validate(ctx context.Context, a Agent) error {
 	if n := len([]rune(strings.TrimSpace(a.Name))); n == 0 || n > 80 {
@@ -103,11 +107,55 @@ func (s *Service) Save(ctx context.Context, workspace, id uuid.UUID, a Agent) (A
 }
 
 func (s *Service) Delete(ctx context.Context, workspace, id uuid.UUID, version int) error {
-	tag, err := s.DB.Exec(ctx, `DELETE FROM agents WHERE workspace_id=$1 AND id=$2 AND version=$3`, workspace, id, version)
-	if err == nil && tag.RowsAffected() == 0 {
-		return pgx.ErrNoRows
+	tx, err := s.DB.Begin(ctx)
+	if err != nil {
+		return err
 	}
-	return err
+	defer tx.Rollback(ctx)
+	var locked uuid.UUID
+	if err = tx.QueryRow(ctx, `SELECT id FROM agents WHERE workspace_id=$1 AND id=$2 AND version=$3 FOR UPDATE`, workspace, id, version).Scan(&locked); err != nil {
+		return err
+	}
+	rows, err := tx.Query(ctx, `SELECT object_key FROM agent_files WHERE agent_id=$1`, id)
+	if err != nil {
+		return err
+	}
+	var keys []string
+	for rows.Next() {
+		var key string
+		if err = rows.Scan(&key); err != nil {
+			rows.Close()
+			return err
+		}
+		keys = append(keys, key)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	if _, err = tx.Exec(ctx, `DELETE FROM agents WHERE workspace_id=$1 AND id=$2`, workspace, id); err != nil {
+		return err
+	}
+	var unused []string
+	for _, key := range keys {
+		var used bool
+		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM conversation_agent_files WHERE object_key=$1)`, key).Scan(&used); err != nil {
+			return err
+		}
+		if !used {
+			unused = append(unused, key)
+		}
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return err
+	}
+	if s.Objects != nil {
+		for _, key := range unused {
+			_ = s.Objects.Delete(ctx, key)
+		}
+	}
+	return nil
 }
 
 func (s *Service) Resolve(ctx context.Context, workspace uuid.UUID, slug string) (Agent, error) {

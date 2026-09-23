@@ -63,6 +63,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
 export type ConversationRunStatus = "idle" | "running" | "cancelling" | "completed" | "failed" | "cancelled";
 export type Conversation = { project_id: string; pinned: boolean; id: string; workspace_id: string; created_by: string; agent_slug: string; agent_name: string; model_deployment_id: string; title: string; created_at: string; updated_at: string; run_id?: string; run_status: ConversationRunStatus };
 export type Agent = { id: string; slug: string; name: string; description: string; instructions: string; skill_slugs: string[]; version: number; builtin: boolean; updated_at: string };
+export type AgentFile = { id: string; name: string; content_type: string; size_bytes: number; created_at: string };
 export type UserProfile = { user_id: string; workspace_id: string; email: string; display_name: string; avatar_key: AvatarKey; role: "member" | "admin" };
 export type AvatarKey = "forest" | "ocean" | "clay" | "lilac" | "amber" | "graphite";
 export type Attachment = { id: string; conversation_id: string; original_name: string; stored_path: string; content_type: string; size_bytes: number; created_at: string };

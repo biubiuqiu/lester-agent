@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"path"
 	"strings"
@@ -14,6 +15,7 @@ import (
 
 	agentpkg "github.com/biubiuqiu/lester-agent/backend/internal/agent"
 	"github.com/biubiuqiu/lester-agent/backend/internal/agenttool"
+	"github.com/biubiuqiu/lester-agent/backend/internal/blob"
 	"github.com/biubiuqiu/lester-agent/backend/internal/contextlibrary"
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
 	"github.com/biubiuqiu/lester-agent/backend/internal/sandbox"
@@ -36,6 +38,7 @@ type Conversation struct {
 	AgentInstructions    string     `json:"-"`
 	AgentSkillSlugs      []string   `json:"-"`
 	AgentSkillsInstalled bool       `json:"-"`
+	AgentFilesInstalled  bool       `json:"-"`
 	ModelDeploymentID    uuid.UUID  `json:"model_deployment_id"`
 	Title                string     `json:"title"`
 	CreatedAt            time.Time  `json:"created_at"`
@@ -86,6 +89,7 @@ type Service struct {
 	locks             sync.Map
 	activeRuns        sync.Map
 	installAgentSkill func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, string, string, string) error
+	agentObjects      blob.Store
 }
 
 type Computer struct {
@@ -111,6 +115,7 @@ func New(db *pgxpool.Pool, redisClient *redis.Client, models *model.Store, sandb
 func (s *Service) SetAgentSkillInstaller(fn func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, string, string, string) error) {
 	s.installAgentSkill = fn
 }
+func (s *Service) SetAgentObjectStore(store blob.Store) { s.agentObjects = store }
 
 func (s *Service) Create(ctx context.Context, workspaceID, userID uuid.UUID, agent, title string, modelID uuid.UUID, projectIDs ...uuid.UUID) (Conversation, error) {
 	if agent == "" {
@@ -136,10 +141,39 @@ func (s *Service) Create(ctx context.Context, workspaceID, userID uuid.UUID, age
 			return Conversation{}, errors.New("model unavailable")
 		}
 	}
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return Conversation{}, err
+	}
+	defer tx.Rollback(ctx)
+	if definition.ID != uuid.Nil {
+		if err = tx.QueryRow(ctx, `SELECT name,instructions,skill_slugs FROM agents WHERE id=$1 AND workspace_id=$2 FOR SHARE`, definition.ID, workspaceID).Scan(&definition.Name, &definition.Instructions, &definition.SkillSlugs); err != nil {
+			return Conversation{}, errors.New("agent unavailable")
+		}
+	}
 	var c Conversation
-	err = s.db.QueryRow(ctx, `INSERT INTO conversations(workspace_id,created_by,agent_slug,agent_name,agent_instructions,agent_skill_slugs,agent_skills_installed,title,project_id,model_deployment_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$10,COALESCE(NULLIF($9,'00000000-0000-0000-0000-000000000000'::uuid),(SELECT id FROM model_deployments WHERE (workspace_id=$1 OR workspace_id=$11) AND is_default AND enabled ORDER BY (workspace_id=$1) DESC LIMIT 1))) RETURNING id,workspace_id,created_by,agent_slug,agent_name,COALESCE(model_deployment_id,'00000000-0000-0000-0000-000000000000'),title,created_at,updated_at,project_id,pinned`, workspaceID, userID, agent, definition.Name, definition.Instructions, definition.SkillSlugs, len(definition.SkillSlugs) == 0, title, modelID, projectID, model.SystemWorkspaceID).Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.AgentName, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.ProjectID, &c.Pinned)
+	err = tx.QueryRow(ctx, `INSERT INTO conversations(workspace_id,created_by,agent_slug,agent_name,agent_instructions,agent_skill_slugs,agent_skills_installed,title,project_id,model_deployment_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$10,COALESCE(NULLIF($9,'00000000-0000-0000-0000-000000000000'::uuid),(SELECT id FROM model_deployments WHERE (workspace_id=$1 OR workspace_id=$11) AND is_default AND enabled ORDER BY (workspace_id=$1) DESC LIMIT 1))) RETURNING id,workspace_id,created_by,agent_slug,agent_name,COALESCE(model_deployment_id,'00000000-0000-0000-0000-000000000000'),title,created_at,updated_at,project_id,pinned`, workspaceID, userID, agent, definition.Name, definition.Instructions, definition.SkillSlugs, len(definition.SkillSlugs) == 0, title, modelID, projectID, model.SystemWorkspaceID).Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.AgentName, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.ProjectID, &c.Pinned)
+	if err != nil {
+		return Conversation{}, err
+	}
+	if definition.ID != uuid.Nil {
+		var copied int64
+		tag, copyErr := tx.Exec(ctx, `INSERT INTO conversation_agent_files(conversation_id,file_id,name,content_type,size_bytes,object_key) SELECT $1,id,name,content_type,size_bytes,object_key FROM agent_files WHERE agent_id=$2 AND workspace_id=$3`, c.ID, definition.ID, workspaceID)
+		if copyErr != nil {
+			return Conversation{}, copyErr
+		}
+		copied = tag.RowsAffected()
+		if copied > 0 {
+			if _, err = tx.Exec(ctx, `UPDATE conversations SET agent_files_installed=false WHERE id=$1`, c.ID); err != nil {
+				return Conversation{}, err
+			}
+		}
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return Conversation{}, err
+	}
 	c.RunStatus = "idle"
-	return c, err
+	return c, nil
 }
 func (s *Service) List(ctx context.Context, workspaceID uuid.UUID) ([]Conversation, error) {
 	rows, err := s.db.Query(ctx, `SELECT c.id,c.workspace_id,c.created_by,c.agent_slug,c.agent_name,COALESCE(c.model_deployment_id,'00000000-0000-0000-0000-000000000000'),c.title,c.created_at,c.updated_at,latest.id,COALESCE(latest.status,'idle'),c.project_id,c.pinned
@@ -162,10 +196,10 @@ func (s *Service) List(ctx context.Context, workspaceID uuid.UUID) ([]Conversati
 }
 func (s *Service) Get(ctx context.Context, workspaceID, id uuid.UUID) (Conversation, []Message, error) {
 	var c Conversation
-	err := s.db.QueryRow(ctx, `SELECT c.id,c.workspace_id,c.created_by,c.agent_slug,c.agent_name,c.agent_instructions,c.agent_skill_slugs,c.agent_skills_installed,COALESCE(c.model_deployment_id,'00000000-0000-0000-0000-000000000000'),c.title,c.created_at,c.updated_at,latest.id,COALESCE(latest.status,'idle'),c.project_id,c.pinned
+	err := s.db.QueryRow(ctx, `SELECT c.id,c.workspace_id,c.created_by,c.agent_slug,c.agent_name,c.agent_instructions,c.agent_skill_slugs,c.agent_skills_installed,c.agent_files_installed,COALESCE(c.model_deployment_id,'00000000-0000-0000-0000-000000000000'),c.title,c.created_at,c.updated_at,latest.id,COALESCE(latest.status,'idle'),c.project_id,c.pinned
 		FROM conversations c
 		LEFT JOIN LATERAL (SELECT r.id,r.status FROM runs r WHERE r.conversation_id=c.id ORDER BY r.created_at DESC,r.id DESC LIMIT 1) latest ON true
-		WHERE c.id=$2 AND c.workspace_id=$1`, workspaceID, id).Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.AgentName, &c.AgentInstructions, &c.AgentSkillSlugs, &c.AgentSkillsInstalled, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.RunID, &c.RunStatus, &c.ProjectID, &c.Pinned)
+		WHERE c.id=$2 AND c.workspace_id=$1`, workspaceID, id).Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.AgentName, &c.AgentInstructions, &c.AgentSkillSlugs, &c.AgentSkillsInstalled, &c.AgentFilesInstalled, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.RunID, &c.RunStatus, &c.ProjectID, &c.Pinned)
 	if err != nil {
 		return c, nil, err
 	}
@@ -343,6 +377,11 @@ func (s *Service) execute(ctx context.Context, workspaceID, conversationID, runI
 		s.finishExecutionError(ctx, runID, conversationID, err)
 		return
 	}
+	resources, err := s.installAgentFiles(ctx, workspaceID, conversation, computer)
+	if err != nil {
+		s.finishExecutionError(ctx, runID, conversationID, err)
+		return
+	}
 	if !conversation.AgentSkillsInstalled {
 		if s.installAgentSkill == nil {
 			s.finishExecutionError(ctx, runID, conversationID, errors.New("agent skill installer unavailable"))
@@ -385,6 +424,15 @@ func (s *Service) execute(ctx context.Context, workspaceID, conversationID, runI
 		s.finishExecutionError(ctx, runID, conversationID, err)
 		return
 	}
+	if len(resources) > 0 {
+		var files strings.Builder
+		files.WriteString("\n\n<agent_resources>\nThis conversation was initialized with these files. They may since have changed; inspect them when relevant. Their contents are not injected into this prompt.\n")
+		for _, name := range resources {
+			fmt.Fprintf(&files, "- agent-resources/%s\n", name)
+		}
+		files.WriteString("</agent_resources>")
+		system += files.String()
+	}
 	history := modelHistory(messages)
 	request := model.ModelRequest{Model: deployment.ModelID, System: system, Messages: history, Tools: s.tools.Definitions()}
 	if err = s.saveRunContext(ctx, runID, messages, request); err != nil {
@@ -392,6 +440,60 @@ func (s *Service) execute(ctx context.Context, workspaceID, conversationID, runI
 		return
 	}
 	s.executeTurns(ctx, conversationID, runID, computer, client, request)
+}
+
+func (s *Service) installAgentFiles(ctx context.Context, workspaceID uuid.UUID, conversation Conversation, computer *Computer) ([]string, error) {
+	rows, err := s.db.Query(ctx, `SELECT name,size_bytes,object_key FROM conversation_agent_files WHERE conversation_id=$1 AND EXISTS(SELECT 1 FROM conversations WHERE id=$1 AND workspace_id=$2) ORDER BY name`, conversation.ID, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	type item struct {
+		name, key string
+		size      int64
+	}
+	var files []item
+	for rows.Next() {
+		var file item
+		if err = rows.Scan(&file.name, &file.size, &file.key); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		files = append(files, file)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(files))
+	for _, file := range files {
+		names = append(names, file.name)
+	}
+	if conversation.AgentFilesInstalled || len(files) == 0 {
+		return names, nil
+	}
+	if s.agentObjects == nil {
+		return nil, errors.New("agent file store unavailable")
+	}
+	for _, file := range files {
+		if file.size < 1 || file.size > agentpkg.MaxFileBytes || !agentpkg.ValidFileName(file.name) {
+			return nil, errors.New("invalid agent file snapshot")
+		}
+		reader, openErr := s.agentObjects.Get(ctx, file.key)
+		if openErr != nil {
+			return nil, fmt.Errorf("read agent file %s: %w", file.name, openErr)
+		}
+		data, readErr := io.ReadAll(io.LimitReader(reader, agentpkg.MaxFileBytes+1))
+		reader.Close()
+		if readErr != nil || int64(len(data)) != file.size {
+			return nil, fmt.Errorf("agent file %s is incomplete", file.name)
+		}
+		if err = s.sandboxes.WriteFile(ctx, computer.SandboxID, computer.WorkDir, "agent-resources/"+file.name, data); err != nil {
+			return nil, fmt.Errorf("copy agent file %s: %w", file.name, err)
+		}
+	}
+	_, err = s.db.Exec(ctx, `UPDATE conversations SET agent_files_installed=true WHERE id=$1 AND workspace_id=$2`, conversation.ID, workspaceID)
+	return names, err
 }
 
 func (s *Service) executeTurns(ctx context.Context, conversationID, runID uuid.UUID, computer *Computer, client model.ModelClient, request model.ModelRequest) {

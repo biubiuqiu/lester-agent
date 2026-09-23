@@ -177,7 +177,11 @@ Open **Agent management** from the account menu to see built-in and personal Age
 
 The new-conversation composer defaults to Lester and lets you choose another Agent before sending. Starting from an Agent landing page preselects that Agent. Creation does not produce an empty conversation: the first send creates it. The API checks Agent ownership within the personal workspace and snapshots the selected Agent's name, instructions and Skill slugs into the conversation. Later edits or deletion do not rewrite existing conversations. Selected Skills install into the conversation Computer before its first model run; installation failure stops the run with an error instead of silently omitting a Skill. Existing conversations can still manage their own Skills.
 
+The Agent editor gives the system prompt a large, line-numbered writing area with line, column, and character counts. Its file manager accepts up to 20 files per Agent, 10 MiB each and 50 MiB combined. New-Agent uploads are staged until **Create Agent**; existing files can be downloaded or removed. Files live in S3-compatible object storage. At conversation creation, Lester snapshots their object references and, before the first model run, copies the files into `agent-resources/` in that conversation's Computer. The model receives file paths, not automatically injected file contents. Editing or deleting Agent files does not alter earlier conversation snapshots.
+
 For an existing installation, back up PostgreSQL, stop API writes, and apply `backend/migrations/000009_agents.up.sql` once after migration 008. Rebuild API and Web afterward. Fresh Compose volumes apply it automatically. Rollback refuses to remove the schema while custom-Agent conversations exist.
+
+For Agent files, apply `backend/migrations/000010_agent_files.up.sql` once after migration 009 with the same backup and transaction procedure, then rebuild API and Web. Fresh Compose volumes apply it automatically.
 
 ### File synchronization and view state
 
@@ -210,7 +214,7 @@ flowchart LR
     subgraph Data["Storage"]
         DB[("PostgreSQL<br/>Accounts, Agents, configuration, transcripts<br/>Projects, context entries and artifact manifests")]
         Redis[("Redis<br/>Live event delivery")]
-        Objects[("S3-compatible object store<br/>Skill packages and published files")]
+        Objects[("S3-compatible object store<br/>Skill packages, Agent files and published files")]
     end
 
     API --> DB

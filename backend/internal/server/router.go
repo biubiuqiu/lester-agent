@@ -78,6 +78,10 @@ func Router(deps Dependencies) http.Handler {
 				private.Get("/agents/{slug}", deps.Agents.Get)
 				private.Patch("/agents/{id}", deps.Agents.Save)
 				private.Delete("/agents/{id}", deps.Agents.Delete)
+				private.Get("/agents/{id}/files", deps.Agents.ListFiles)
+				private.Post("/agents/{id}/files", deps.Agents.UploadFile)
+				private.Get("/agents/{id}/files/{fileID}", deps.Agents.DownloadFile)
+				private.Delete("/agents/{id}/files/{fileID}", deps.Agents.DeleteFile)
 			}
 			if deps.AgentBuilder != nil {
 				private.Post("/agent-builder/chat", deps.AgentBuilder.Chat)
