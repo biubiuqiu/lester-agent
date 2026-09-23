@@ -159,6 +159,18 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --buil
 
 In PowerShell, replace `cat` with `Get-Content -Raw` and use a single line for the pipeline. Earlier migrations must already be applied. Fresh Compose volumes apply all migrations automatically. Do not delete volumes to upgrade.
 
+### Context library and @ references
+
+Open **Context library** from the account menu, or choose **Manage entries** in the chat context picker. Maintain personal dictionary-style entries with a name, short description, and plain-text or Markdown body. Entries are private to the current workspace, searchable by name and description, and can be edited or deleted. Version checks prevent stale edits from silently overwriting newer changes.
+
+In either a new or existing conversation, type `@` followed by a name, or click **@ Reference context**. Use the arrow keys and Enter, or click a result. Selected entries appear as removable chips; then write your request and send. Reference selections survive navigation and refresh with the message draft. The library is a separate page, not a conversation tab.
+
+The API resolves selected IDs within the authenticated workspace and saves the latest entry bodies and versions as immutable message metadata before starting the run. Historical messages show expandable snapshots, and model history uses those snapshots even after an entry is edited or deleted. Only explicitly selected entries are included; this feature does not add automatic retrieval, embeddings, or memory. Deleted or inaccessible references reject the send and preserve the draft.
+
+Each entry supports an 80-character name, a 240-character description, and up to 20,000 characters of body text. A message can reference up to eight entries with a combined 40,000-character body limit. Names must be unique within a workspace.
+
+For an existing installation, back up PostgreSQL, stop API writes, and apply `backend/migrations/000008_context_library.up.sql` once after migrations 001–007, using the same transactional `psql` procedure described below. Rebuild API and Web afterward. Fresh Compose volumes apply the migration automatically. Rolling back the library table does not remove snapshots already stored in messages.
+
 ### File synchronization and view state
 
 File and tool/run events invalidate the shared inventory. While the page is visible, metadata polling runs every 5 seconds during execution and every 15 seconds while idle to detect Bash and background-script changes. Automatic scans cover up to 64 directories, 2,000 files, and five nested levels. Dependencies, caches, and `.agent` are skipped by default but can be expanded manually; partial scans are disclosed.
@@ -188,7 +200,7 @@ flowchart LR
     end
 
     subgraph Data["Storage"]
-        DB[("PostgreSQL<br/>Accounts, configuration, transcripts<br/>Projects and artifact manifests")]
+        DB[("PostgreSQL<br/>Accounts, configuration, transcripts<br/>Projects, context entries and artifact manifests")]
         Redis[("Redis<br/>Live event delivery")]
         Objects[("S3-compatible object store<br/>Skill packages and published files")]
     end

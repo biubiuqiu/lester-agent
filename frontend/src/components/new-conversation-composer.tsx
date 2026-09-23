@@ -1,5 +1,6 @@
 "use client";
 
+import { ContextInput, useContextReferences } from "./context-input";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, FileText, Paperclip, Send, X } from "lucide-react";
@@ -11,6 +12,7 @@ import { startConversation } from "@/lib/start-conversation";
 export function NewConversationComposer({ deployments, user, projectId, projectName }: { deployments: Deployment[]; user: UserProfile; projectId?:string; projectName?:string }) {
   const router = useRouter();
   const storageKey = viewKey(user.user_id, user.workspace_id, `new.${projectId || "default"}`);
+  const [contexts, setContexts] = useContextReferences(storageKey);
   const [text, setText] = useState(() => readView(storageKey).text);
   const [files, setFiles] = useState<File[]>(() => readView(storageKey).files);
   const [missing, setMissing] = useState(() => readView(storageKey).missingFiles);
@@ -32,17 +34,17 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
     const clear = () => {
       const draft = readView(storageKey);
       // Navigation may have let the user start a different draft meanwhile.
-      if (draft.text === text && draft.files.length === files.length && draft.files.every((file, i) => file === files[i])) {
-        updateView(storageKey, { text: "", files: [], missingFiles: [] });
+      if (JSON.stringify(draft.contexts) === JSON.stringify(contexts) && draft.text === text && draft.files.length === files.length && draft.files.every((file, i) => file === files[i])) {
+        updateView(storageKey, { contexts: [], text: "", files: [], missingFiles: [] });
       }
     };
     try {
       const conversation = await startConversation(text, files, model, (item) => {
         created = item;
         // Preserve the submitted draft before uploads/send; never auto-resend on reload.
-        updateView(viewKey(user.user_id, user.workspace_id, item.id), { text, files, missingFiles: missing });
-      },projectId);
-      updateView(viewKey(user.user_id, user.workspace_id, conversation.id), { text: "", files: [], missingFiles: [], sendNotice: "" });
+        updateView(viewKey(user.user_id, user.workspace_id, item.id), { contexts, text, files, missingFiles: missing });
+      },projectId,contexts.map((c) => c.id));
+      updateView(viewKey(user.user_id, user.workspace_id, conversation.id), { contexts: [], text: "", files: [], missingFiles: [], sendNotice: "" });
       clear();
       if (mounted.current) router.push(`/app/c/${conversation.id}`);
     } catch (reason) {
@@ -66,7 +68,7 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
       <div className="compose-box">
         {missing.length ? <p className="draft-attachment-notice" role="status">请重新选择刷新前的附件：{missing.join("、")}<button type="button" onClick={() => { setMissing([]); updateView(storageKey, { missingFiles: [] }); }}>知道了</button></p> : null}
         {files.length ? <div className="pending-attachments">{files.map((file, index) => <span key={`${file.name}-${index}`}><FileText />{file.name}<button type="button" disabled={busy} aria-label={`移除 ${file.name}`} onClick={() => changeFiles(files.filter((_, i) => i !== index))}><X /></button></span>)}</div> : null}
-        <textarea rows={3} autoFocus aria-label="消息输入框" placeholder="描述你的目标，上传文件或粘贴图片…" value={text} disabled={busy} onChange={(event) => { setText(event.target.value); updateView(storageKey, { text: event.target.value }); }} onPaste={(event) => { const images = pastedImageFiles(event); if (images.length) { event.preventDefault(); changeFiles([...files, ...images]); } }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
+        <ContextInput references={contexts} onReferences={setContexts} rows={3} autoFocus aria-label="消息输入框" placeholder="描述你的目标，上传文件或粘贴图片…" value={text} disabled={busy} onText={(value) => { setText(value); updateView(storageKey, { text: value }); }} onPaste={(event) => { const images = pastedImageFiles(event); if (images.length) { event.preventDefault(); changeFiles([...files, ...images]); } }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
         <div className="compose-actions">
           <input ref={input} type="file" multiple hidden onChange={(event) => { changeFiles([...files, ...Array.from(event.target.files || [])]); event.target.value = ""; }} />
           <button type="button" className="icon-button upload-button" aria-label="添加附件" title="添加附件或直接粘贴图片" disabled={busy} onClick={() => input.current?.click()}><Paperclip /></button>

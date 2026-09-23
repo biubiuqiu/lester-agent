@@ -22,6 +22,7 @@ function ChatMessage({ message }: { message: Message }) {
       <div className="chat-message-content">
         <MessageContent content={message.content} />
         {message.metadata?.attachments?.length ? <div className="message-attachments">{message.metadata.attachments.map((attachment) => <span key={attachment.id}><FileText /><span><strong>{attachment.original_name}</strong><small>{formatBytes(attachment.size_bytes)} · .agent/upload</small></span></span>)}</div> : null}
+        {message.metadata?.contexts?.map((entry) => <details className="message-context" key={entry.id}><summary>@{entry.title} · v{entry.version}</summary><pre>{entry.content}</pre></details>)}
         <time>{new Date(message.created_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</time>
       </div>
     </article>

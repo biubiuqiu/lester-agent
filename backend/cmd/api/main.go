@@ -14,6 +14,7 @@ import (
 	"github.com/biubiuqiu/lester-agent/backend/internal/auth"
 	"github.com/biubiuqiu/lester-agent/backend/internal/blob"
 	"github.com/biubiuqiu/lester-agent/backend/internal/config"
+	"github.com/biubiuqiu/lester-agent/backend/internal/contextlibrary"
 	"github.com/biubiuqiu/lester-agent/backend/internal/conversation"
 	"github.com/biubiuqiu/lester-agent/backend/internal/database"
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
@@ -90,7 +91,7 @@ func main() {
 		os.Exit(1)
 	}
 	authService := auth.New(db, redisClient, cfg.SessionTTL, cfg.SessionCookieSecure)
-	handler := server.Router(server.Dependencies{Logger: logger, WebOrigin: cfg.WebOrigin, Auth: authService, Models: model.NewHandler(modelStore), Conversations: conversationHandler, Skills: skill.NewHandler(skillService, conversationService), Projects: &project.Handler{Service: &project.Service{DB: db}}, Artifacts: &artifact.Handler{Service: artifactService}})
+	handler := server.Router(server.Dependencies{Contexts: &contextlibrary.Handler{Service: &contextlibrary.Service{DB: db}}, Logger: logger, WebOrigin: cfg.WebOrigin, Auth: authService, Models: model.NewHandler(modelStore), Conversations: conversationHandler, Skills: skill.NewHandler(skillService, conversationService), Projects: &project.Handler{Service: &project.Service{DB: db}}, Artifacts: &artifact.Handler{Service: artifactService}})
 	server := &http.Server{Addr: cfg.HTTPAddr, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 	go conversationService.SuspendIdle(ctx, cfg.SandboxIdleTTL)
 	go conversationService.MonitorSandboxes(ctx, cfg.SandboxMonitorInterval)

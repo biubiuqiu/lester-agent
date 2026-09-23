@@ -81,3 +81,47 @@
 .admin-shell button:disabled { opacity:.5; cursor:not-allowed; }
 .admin-shell .settings-heading { gap:20px; }
 @media(max-width:720px) { .admin-shell { display:flex; flex-direction:column; height:100dvh; overflow:auto; } .admin-sidebar { width:100%; padding:16px; border-right:0; border-bottom:1px solid #e0e4da; flex-shrink:0; } .admin-sidebar nav { display:flex; gap:8px; } .admin-sidebar .admin-label { margin:12px 0; } .admin-sidebar .back-button { margin-top:12px; } .admin-identity { display:none; } .admin-shell .settings-main { padding:24px 16px; overflow:visible; } .admin-shell .settings-heading { flex-wrap:wrap; } .admin-summary-detail { font-size:11px; padding-left:10px; } .admin-shell .settings-grid { grid-template-columns:1fr; } }
+.context-library { height:100dvh; overflow:auto; background:#f7f8f5; color:#2a382c; }
+.context-library-header { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:20px 32px; border-bottom:1px solid #e0e5dc; background:#fff; }
+.context-library-header a,.context-library-header span { display:flex; align-items:center; gap:8px; color:inherit; text-decoration:none; font-size:13px; }
+.context-library-main { max-width:1220px; margin:0 auto; padding:40px 30px; }
+.context-library-grid { display:grid; grid-template-columns:290px minmax(0,1fr); gap:24px; margin-top:30px; align-items:start; }
+.context-library-list,.context-library-editor { background:#fff; border:1px solid #dfe5da; border-radius:14px; min-width:0; }
+.context-library-list { overflow:hidden; max-height:70vh; overflow-y:auto; }
+.context-list-count { font-size:11px; color:#7a8577; margin:12px 18px; }
+.context-library-list>button { display:block; width:100%; text-align:left; border:0; border-top:1px solid #eef1e9; background:transparent; padding:16px 18px; cursor:pointer; }
+.context-library-list>button.active,.context-library-list>button:hover { background:#eef3e9; }
+.context-library-list strong,.context-library-list small { display:block; overflow-wrap:anywhere; }
+.context-library-list strong { font-size:14px; font-weight:600; }
+.context-library-list small { color:#7a8577; font-size:12px; margin-top:6px; }
+.context-library-editor { padding:26px; }
+.context-library-editor form { display:grid; gap:20px; }
+.context-library-editor header { display:flex; align-items:center; justify-content:space-between; }
+.context-library-editor h2 { font-size:19px; margin:0; }
+.context-library-editor header small { color:#7a8577; font-size:12px; }
+.context-library-editor textarea { font-family:inherit; font-size:14px; line-height:1.7; font-weight:400; min-height:260px; resize:vertical; }
+.context-library-editor footer { display:flex; gap:12px; justify-content:flex-end; }
+.context-delete { border:0; background:transparent; color:#a15750; margin-right:auto; cursor:pointer; }
+.context-delete-confirm { border:1px solid #e5c4bb; background:#fff7f3; padding:14px; border-radius:8px; font-size:13px; }
+.context-delete-confirm button { margin-right:12px; padding:6px 12px; }
+.context-library-empty { min-height:340px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; color:#7b8577; text-align:center; }
+.context-library-empty p { font-size:13px; }
+.context-input { position:relative; min-width:0; }
+.context-references { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-bottom:7px; }
+.context-add { display:flex; align-items:center; gap:5px; border:0; background:transparent; color:#697c61; padding:5px 2px; font-size:11px; cursor:pointer; }
+.context-references>span { display:flex; align-items:center; gap:5px; background:#edf3e7; color:#506247; border:1px solid #dae3d1; border-radius:6px; padding:4px 7px; font-size:11px; max-width:100%; overflow-wrap:anywhere; }
+.context-references>span>button { border:0; background:transparent; display:flex; cursor:pointer; }
+.context-picker { position:absolute; z-index:30; bottom:100%; left:0; width:min(400px,100%); background:#fff; border:1px solid #dbe2d4; border-radius:12px; box-shadow:0 12px 35px #172b1620; padding:8px; max-height:320px; overflow:auto; }
+.context-picker header { display:flex; align-items:center; gap:12px; padding:8px; font-size:12px; }
+.context-picker header a { margin-left:auto; color:#637b56; }
+.context-picker header button { border:0; background:transparent; cursor:pointer; }
+.context-picker [role=option] { display:block; width:100%; border:0; text-align:left; background:transparent; border-radius:6px; padding:10px; cursor:pointer; }
+.context-picker [role=option].selected,.context-picker [role=option]:hover { background:#edf3e8; }
+.context-picker strong,.context-picker small { display:block; }
+.context-picker small,.context-picker p { font-size:11px; color:#7a8374; }
+.context-picker [role=option] small { margin-top:4px; }
+.context-picker-hint { padding:8px; }
+.message-context { margin-top:8px; font-size:12px; border:1px solid #dbe3d5; border-radius:8px; padding:8px 10px; }
+.message-context summary { cursor:pointer; color:#59714b; }
+.message-context pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:240px; overflow:auto; font-family:inherit; font-size:12px; line-height:1.6; }
+@media(max-width:720px) { .context-library-main { padding:24px 16px; } .context-library-header { padding:16px; } .context-library-grid { grid-template-columns:1fr; gap:16px; } .context-library-list { max-height:240px; } .context-library .settings-heading { flex-wrap:wrap; gap:20px; } .context-library-editor { padding:18px; } }

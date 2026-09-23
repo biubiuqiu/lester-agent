@@ -65,7 +65,7 @@ export type Conversation = { project_id: string; pinned: boolean; id: string; wo
 export type UserProfile = { user_id: string; workspace_id: string; email: string; display_name: string; avatar_key: AvatarKey; role: "member" | "admin" };
 export type AvatarKey = "forest" | "ocean" | "clay" | "lilac" | "amber" | "graphite";
 export type Attachment = { id: string; conversation_id: string; original_name: string; stored_path: string; content_type: string; size_bytes: number; created_at: string };
-export type Message = { id: string; role: string; content: string; metadata?: { attachments?: Attachment[] }; created_at: string };
+export type Message = { id: string; role: string; content: string; metadata?: { attachments?: Attachment[]; contexts?: ContextEntry[] }; created_at: string };
 export type Deployment = { id: string; connection_id: string; name: string; model_id: string; is_default: boolean; enabled: boolean; shared: boolean };
 export type Skill = { id: string; slug: string; name: string; description: string; version: string; source: string; size_bytes: number; installed_at?: string };
 export type FileEntry = { name: string; path: string; is_dir: boolean; size: number; modified_at: string };
@@ -73,3 +73,6 @@ export type ComputerState = { conversation_id: string; user_id: string; provider
 
 export type Project = { id:string; name:string; is_default:boolean; pinned:boolean; conversation_count:number; created_at:string };
 export type Artifact = {id:string;conversation_id:string;project_id:string;name:string;source_path:string;entry_path:string;version:string;status:"published"|"unpublished";url:string;file_count:number;size_bytes:number;created_at:string;updated_at:string;warnings?:string[]};
+
+export type ContextReference = { id: string; title: string };
+export type ContextEntry = ContextReference & { description: string; content: string; version: number; updated_at: string };

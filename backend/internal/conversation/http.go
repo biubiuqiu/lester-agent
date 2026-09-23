@@ -111,11 +111,12 @@ func (h *Handler) Send(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Content       string      `json:"content"`
 		AttachmentIDs []uuid.UUID `json:"attachment_ids"`
+		ContextIDs    []uuid.UUID `json:"context_ids"`
 	}
 	if !httpapi.Decode(w, r, &req) {
 		return
 	}
-	runID, err := h.service.Send(r.Context(), p.WorkspaceID, p.UserID, id, req.Content, req.AttachmentIDs)
+	runID, err := h.service.Send(r.Context(), p.WorkspaceID, p.UserID, id, req.Content, req.AttachmentIDs, req.ContextIDs)
 	if err != nil {
 		if errors.Is(err, ErrRunInProgress) {
 			httpapi.Error(w, http.StatusConflict, err)

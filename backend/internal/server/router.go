@@ -6,6 +6,7 @@ import (
 
 	"github.com/biubiuqiu/lester-agent/backend/internal/artifact"
 	"github.com/biubiuqiu/lester-agent/backend/internal/auth"
+	"github.com/biubiuqiu/lester-agent/backend/internal/contextlibrary"
 	"github.com/biubiuqiu/lester-agent/backend/internal/conversation"
 	"github.com/biubiuqiu/lester-agent/backend/internal/httpapi"
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
@@ -16,6 +17,7 @@ import (
 )
 
 type Dependencies struct {
+	Contexts      *contextlibrary.Handler
 	Logger        *slog.Logger
 	WebOrigin     string
 	Auth          *auth.Service
@@ -37,6 +39,13 @@ func Router(deps Dependencies) http.Handler {
 		api.Group(func(private chi.Router) {
 			private.Use(deps.Auth.Middleware)
 			private.Get("/me", deps.Auth.Me)
+			if deps.Contexts != nil {
+				private.Get("/contexts", deps.Contexts.List)
+				private.Post("/contexts", deps.Contexts.Save)
+				private.Get("/contexts/{id}", deps.Contexts.Get)
+				private.Patch("/contexts/{id}", deps.Contexts.Save)
+				private.Delete("/contexts/{id}", deps.Contexts.Delete)
+			}
 			private.Route("/admin", func(admin chi.Router) {
 				admin.Use(auth.RequireAdmin)
 				admin.Get("/users", deps.Auth.ListUsers)

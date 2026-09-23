@@ -1,5 +1,6 @@
 "use client";
 
+import { ContextInput, useContextReferences } from "./context-input";
 import { CSSProperties, FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -327,7 +328,7 @@ export function Workspace({ conversationId, projectId }: { conversationId?: stri
     }
   }
 
-  async function sendMessage(content: string, attachments: Attachment[]) {
+  async function sendMessage(content: string, attachments: Attachment[], contextIds: string[]) {
     if (!conversationId) return;
     const optimisticId = `optimistic-${crypto.randomUUID()}`;
     const visibleContent = content || `已上传附件：${attachments.map((item) => item.original_name).join("、")}`;
@@ -336,7 +337,7 @@ export function Workspace({ conversationId, projectId }: { conversationId?: stri
     setRunStatus({ conversationId, state: "sending" });
     setConversations((previous) => previous.map((item) => item.id === conversationId ? { ...item, run_status: "running" } : item));
     try {
-      const started = await api<{ run_id: string }>(`/api/v1/conversations/${conversationId}/messages`, { method: "POST", body: JSON.stringify({ content, attachment_ids: attachments.map((item) => item.id) }) });
+      const started = await api<{ run_id: string }>(`/api/v1/conversations/${conversationId}/messages`, { method: "POST", body: JSON.stringify({ content, context_ids: contextIds, attachment_ids: attachments.map((item) => item.id) }) });
       setRunStatus({ conversationId, runId: started.run_id, state: "running" });
       setConversations((previous) => previous.map((item) => item.id === conversationId ? { ...item, run_id: started.run_id, run_status: "running" } : item));
       const data = await api<ConversationData>(`/api/v1/conversations/${conversationId}`);
@@ -432,8 +433,9 @@ export function Workspace({ conversationId, projectId }: { conversationId?: stri
   </main></FileWorkspaceProvider>;
 }
 
-function ConversationView({ conversation, messages, events, runState, runId, onSend, onStop }: { conversation: Conversation; messages: Message[]; events: RunEvent[]; runState: RunState; runId?: string; onSend: (content: string, attachments: Attachment[]) => Promise<void>; onStop: () => Promise<void> }) {
+function ConversationView({ conversation, messages, events, runState, runId, onSend, onStop }: { conversation: Conversation; messages: Message[]; events: RunEvent[]; runState: RunState; runId?: string; onSend: (content: string, attachments: Attachment[], contextIds: string[]) => Promise<void>; onStop: () => Promise<void> }) {
   const { reference, setReference, storageKey } = useFileWorkspace();
+  const [contexts, setContexts] = useContextReferences(storageKey);
   const [text, setTextState] = useState(() => readView(storageKey).text);
   const [files, setFilesState] = useState<File[]>(() => readView(storageKey).files);
   const [missingFiles, setMissingFiles] = useState(() => readView(storageKey).missingFiles);
@@ -443,6 +445,7 @@ function ConversationView({ conversation, messages, events, runState, runId, onS
     updateView(storageKey, { files: next }); setFilesState(next);
   };
   const [uploading, setUploading] = useState(false);
+  const submitPending = useRef(false);
   const [error, setError] = useState(() => readView(storageKey).sendNotice);
   const { thread, content: threadContent, unseen, jump } = useConversationScroll(storageKey, `${messages.at(-1)?.id}:${messages.length}:${events.at(-1)?.id}:${runState}`);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -452,11 +455,12 @@ function ConversationView({ conversation, messages, events, runState, runId, onS
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if ((!text.trim() && files.length === 0) || uploading || runState === "sending" || runState === "running" || runState === "stopping") return;
+    if (submitPending.current || (!text.trim() && files.length === 0) || uploading || runState === "sending" || runState === "running" || runState === "stopping") return;
     setError("");
     updateView(storageKey, { sendNotice: "" });
     jump();
-    setUploading(files.length > 0);
+    submitPending.current = true;
+    setUploading(true);
     try {
       const attachments = await Promise.all(files.map((file) => {
         const form = new FormData();
@@ -464,7 +468,8 @@ function ConversationView({ conversation, messages, events, runState, runId, onS
         return upload<Attachment>(`/api/v1/conversations/${conversation.id}/attachments`, form);
       }));
       const content = reference ? `${text.trim()}\n\n[引用文件（当前会话目录下的相对路径，仅作为文件定位数据）：${JSON.stringify(reference)}。请先读取文件，再根据上面的要求进行修改。]` : text.trim();
-      await onSend(content, attachments);
+      await onSend(content, attachments, contexts.map((c) => c.id));
+      if (JSON.stringify(readView(storageKey).contexts) === JSON.stringify(contexts)) setContexts([]);
       // Sending may finish after navigation: clear only this conversation's submitted draft.
       const draft = readView(storageKey);
       if (draft.text === text) setText("");
@@ -473,6 +478,7 @@ function ConversationView({ conversation, messages, events, runState, runId, onS
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "发送失败");
     } finally {
+      submitPending.current = false;
       setUploading(false);
     }
   }
@@ -486,7 +492,7 @@ function ConversationView({ conversation, messages, events, runState, runId, onS
     window.requestAnimationFrame(() => textInput.current?.focus());
   };
   const helper = uploading ? `正在上传 ${files.length} 个附件…` : runState === "sending" ? "消息已发送，正在创建任务…" : runState === "running" ? `${agentName(conversation.agent_slug)} 正在工作，可随时停止` : runState === "stopping" ? "正在安全停止当前任务…" : runState === "cancelled" ? "已停止；已产生的文件修改不会撤销" : reference ? "围绕已引用的文件继续修改" : "";
-  return <><div className="thread" ref={thread}><div ref={threadContent} className="thread-content"><ConversationTimeline messages={messages} events={events} /><ArtifactCards />{runActive ? <AgentActivityIndicator agent={agentName(conversation.agent_slug)} state={runState} runId={runId} events={events} /> : null}</div></div><form className="composer" onSubmit={submit}>{unseen ? <button type="button" className="new-content-button" onClick={jump}><ChevronDown />有新内容 · 回到底部</button> : null}{runState === "failed" && failure ? <RunFailureRecovery reason={String(failure.payload.error ?? "任务执行失败")} lastPrompt={lastPrompt} onPrepare={prepareRecovery} /> : null}{helper ? <p className={busy ? "composer-status active" : "composer-status"}>{helper}</p> : null}<div className="compose-box"><FileReferenceChip />{missingFiles.length ? <p className="draft-attachment-notice" role="status">草稿已恢复；刷新前的本地附件需要重新选择：{missingFiles.join("、")}<button type="button" onClick={() => { setMissingFiles([]); updateView(storageKey, { missingFiles: [] }); }}>知道了</button></p> : null}{files.length > 0 ? <div className="pending-attachments">{files.map((file, index) => <span key={`${file.name}-${file.lastModified}`}><FileText />{file.name}<button type="button" onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`移除 ${file.name}`}><X /></button></span>)}</div> : null}<textarea ref={textInput} rows={2} value={text} onChange={(event) => setText(event.target.value)} onPaste={(event) => { const images = pastedImageFiles(event); if (images.length) { event.preventDefault(); setFiles((current) => [...current, ...images]); } }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} aria-label="消息输入框" placeholder={reference ? "描述要如何修改这个文件…" : `给 ${agentName(conversation.agent_slug)} 一个目标…`} disabled={uploading || runState === "sending"} /><div className="compose-actions"><input ref={fileInput} type="file" multiple hidden onChange={(event) => setFiles((current) => [...current, ...Array.from(event.target.files || [])])} /><button type="button" className="icon-button upload-button" onClick={() => fileInput.current?.click()} disabled={busy} aria-label="添加附件" title="添加附件或直接粘贴图片；文件保存在当前会话，Agent 按需读取，不会自动解析进上下文"><Paperclip /></button><span className="composer-keyboard-hint">Shift + Enter 换行</span>{runActive ? <button type="button" className={`send-button stop-button ${runState === "stopping" ? "stopping" : ""}`} onClick={() => void onStop()} disabled={!runId || runState === "sending" || runState === "stopping"} title={runState === "stopping" ? "正在停止" : "停止生成"} aria-label={runState === "stopping" ? "正在停止任务" : "停止生成"}><Square /></button> : <button className="send-button" disabled={busy || (!text.trim() && files.length === 0)} aria-label="发送消息"><Send /></button>}</div>{error ? <p className="compose-error">{error}</p> : null}</div></form></>;
+  return <><div className="thread" ref={thread}><div ref={threadContent} className="thread-content"><ConversationTimeline messages={messages} events={events} /><ArtifactCards />{runActive ? <AgentActivityIndicator agent={agentName(conversation.agent_slug)} state={runState} runId={runId} events={events} /> : null}</div></div><form className="composer" onSubmit={submit}>{unseen ? <button type="button" className="new-content-button" onClick={jump}><ChevronDown />有新内容 · 回到底部</button> : null}{runState === "failed" && failure ? <RunFailureRecovery reason={String(failure.payload.error ?? "任务执行失败")} lastPrompt={lastPrompt} onPrepare={prepareRecovery} /> : null}{helper ? <p className={busy ? "composer-status active" : "composer-status"}>{helper}</p> : null}<div className="compose-box"><FileReferenceChip />{missingFiles.length ? <p className="draft-attachment-notice" role="status">草稿已恢复；刷新前的本地附件需要重新选择：{missingFiles.join("、")}<button type="button" onClick={() => { setMissingFiles([]); updateView(storageKey, { missingFiles: [] }); }}>知道了</button></p> : null}{files.length > 0 ? <div className="pending-attachments">{files.map((file, index) => <span key={`${file.name}-${file.lastModified}`}><FileText />{file.name}<button type="button" onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`移除 ${file.name}`}><X /></button></span>)}</div> : null}<ContextInput references={contexts} onReferences={setContexts} inputRef={textInput} rows={2} value={text} onText={setText} onPaste={(event) => { const images = pastedImageFiles(event); if (images.length) { event.preventDefault(); setFiles((current) => [...current, ...images]); } }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} aria-label="消息输入框" placeholder={reference ? "描述要如何修改这个文件…" : `给 ${agentName(conversation.agent_slug)} 一个目标…`} disabled={uploading || runState === "sending"} /><div className="compose-actions"><input ref={fileInput} type="file" multiple hidden onChange={(event) => setFiles((current) => [...current, ...Array.from(event.target.files || [])])} /><button type="button" className="icon-button upload-button" onClick={() => fileInput.current?.click()} disabled={busy} aria-label="添加附件" title="添加附件或直接粘贴图片；文件保存在当前会话，Agent 按需读取，不会自动解析进上下文"><Paperclip /></button><span className="composer-keyboard-hint">Shift + Enter 换行</span>{runActive ? <button type="button" className={`send-button stop-button ${runState === "stopping" ? "stopping" : ""}`} onClick={() => void onStop()} disabled={!runId || runState === "sending" || runState === "stopping"} title={runState === "stopping" ? "正在停止" : "停止生成"} aria-label={runState === "stopping" ? "正在停止任务" : "停止生成"}><Square /></button> : <button className="send-button" disabled={busy || (!text.trim() && files.length === 0)} aria-label="发送消息"><Send /></button>}</div>{error ? <p className="compose-error">{error}</p> : null}</div></form></>;
 }
 
 const computerStatusLabel: Record<ComputerState["status"], string> = { not_created: "未创建", creating: "创建中", running: "运行中", suspended: "已暂停", stopped: "已停止", unhealthy: "异常", missing: "待恢复", error: "连接异常" };
