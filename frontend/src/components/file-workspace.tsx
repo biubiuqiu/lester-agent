@@ -20,8 +20,8 @@ type FileWorkspaceValue = FileState & {
   reference: string | null;
   expanded: boolean;
   panelOpen: boolean;
-  panelTab: "files" | "terminal" | "skills";
-  setPanelTab: (tab: "files" | "terminal" | "skills") => void;
+  panelTab: "files" | "terminal" | "skills" | "agent";
+  setPanelTab: (tab: "files" | "terminal" | "skills" | "agent") => void;
   open: (file: FileEntry) => void;
   close: (path: string) => void;
   refresh: () => void;
@@ -52,7 +52,7 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, runI
   const setReference = useCallback((value: string | null) => { updateView(storageKey, { reference: value }); setReferenceState(value); }, [storageKey]);
   const [expanded, setExpanded] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
-  const [panelTab, setPanelTab] = useState<"files" | "terminal" | "skills">("files");
+  const [panelTab, setPanelTab] = useState<"files" | "terminal" | "skills" | "agent">("files");
   const [observed, setObserved] = useState<{ runId?: string; changes: Change[] }>({ changes: [] });
   const refreshRef = useRef<() => void>(() => {});
   const watchedDirectories = useRef(new Set<string>([...readView(storageKey).directories, ...readView(storageKey).tabs.map((path) => path.split("/").slice(0, -1).join("/"))]));

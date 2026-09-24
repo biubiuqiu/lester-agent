@@ -17,3 +17,13 @@ func TestCompositionOrder(t *testing.T) {
 		t.Fatal("installed skill was not added to the prompt")
 	}
 }
+
+func TestAgentDesignerPersona(t *testing.T) {
+	prompt, err := Compose("agent-designer", "c", "w", "m", "running", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(prompt, "智能体设计师") || !strings.Contains(prompt, "save_agent") {
+		t.Fatal("Agent Designer instructions missing from composed prompt")
+	}
+}

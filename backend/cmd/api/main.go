@@ -59,6 +59,7 @@ func main() {
 	modelStore := model.NewStore(db, secrets, integration.NewDefaultRegistry())
 	sandboxClient := sandbox.NewClient(cfg.SandboxURL, cfg.SandboxToken)
 	toolRegistry := agenttool.NewDefaultRegistry(db)
+	toolRegistry.Register(agenttool.SaveAgent{DB: db})
 	conversationService := conversation.New(db, redisClient, modelStore, sandboxClient, toolRegistry)
 	conversationHandler := conversation.NewHandler(conversationService, db, redisClient, sandboxClient, cfg.SandboxURL, cfg.SandboxToken, cfg.WebOrigin)
 	objectStore, err := blob.NewMinIO(cfg.ObjectStoreEndpoint, cfg.ObjectStoreAccessKey, cfg.ObjectStoreSecretKey, cfg.ObjectStoreBucket, cfg.ObjectStoreUseSSL)

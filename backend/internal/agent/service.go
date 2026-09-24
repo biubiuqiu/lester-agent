@@ -13,15 +13,16 @@ import (
 )
 
 type Agent struct {
-	ID           uuid.UUID `json:"id"`
-	Slug         string    `json:"slug"`
-	Name         string    `json:"name"`
-	Description  string    `json:"description"`
-	Instructions string    `json:"instructions"`
-	SkillSlugs   []string  `json:"skill_slugs"`
-	Version      int       `json:"version"`
-	Builtin      bool      `json:"builtin"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID                    uuid.UUID  `json:"id"`
+	Slug                  string     `json:"slug"`
+	Name                  string     `json:"name"`
+	Description           string     `json:"description"`
+	Instructions          string     `json:"instructions"`
+	SkillSlugs            []string   `json:"skill_slugs"`
+	Version               int        `json:"version"`
+	Builtin               bool       `json:"builtin"`
+	UpdatedAt             time.Time  `json:"updated_at"`
+	BuilderConversationID *uuid.UUID `json:"builder_conversation_id,omitempty"`
 }
 
 var Builtins = []Agent{
@@ -29,6 +30,7 @@ var Builtins = []Agent{
 	{Slug: "franklin", Name: "Franklin", Description: "直接、高效，专注推进。", Builtin: true, SkillSlugs: []string{}},
 	{Slug: "michael", Name: "Michael", Description: "结构化、审慎，重视质量。", Builtin: true, SkillSlugs: []string{}},
 	{Slug: "trevor", Name: "Trevor", Description: "大胆、主动，擅长探索。", Builtin: true, SkillSlugs: []string{}},
+	{Slug: "agent-designer", Name: "智能体设计师", Description: "通过对话了解需求，创建并完善专属智能体。", Builtin: true, SkillSlugs: []string{}},
 }
 
 var ErrInvalid = errors.New("请填写名称和提示词，并检查长度及所选 Skill")
@@ -64,14 +66,14 @@ func (s *Service) validate(ctx context.Context, a Agent) error {
 
 func (s *Service) List(ctx context.Context, workspace uuid.UUID) ([]Agent, error) {
 	items := append([]Agent{}, Builtins...)
-	rows, err := s.DB.Query(ctx, `SELECT id,name,description,instructions,skill_slugs,version,updated_at FROM agents WHERE workspace_id=$1 ORDER BY updated_at DESC,id`, workspace)
+	rows, err := s.DB.Query(ctx, `SELECT a.id,a.name,a.description,a.instructions,a.skill_slugs,a.version,a.updated_at,(SELECT c.id FROM conversations c WHERE c.created_agent_id=a.id AND c.workspace_id=$1 ORDER BY c.created_at LIMIT 1) FROM agents a WHERE a.workspace_id=$1 ORDER BY a.updated_at DESC,a.id`, workspace)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var a Agent
-		if err = rows.Scan(&a.ID, &a.Name, &a.Description, &a.Instructions, &a.SkillSlugs, &a.Version, &a.UpdatedAt); err != nil {
+		if err = rows.Scan(&a.ID, &a.Name, &a.Description, &a.Instructions, &a.SkillSlugs, &a.Version, &a.UpdatedAt, &a.BuilderConversationID); err != nil {
 			return nil, err
 		}
 		a.Slug = "custom-" + a.ID.String()
@@ -82,7 +84,7 @@ func (s *Service) List(ctx context.Context, workspace uuid.UUID) ([]Agent, error
 
 func (s *Service) Get(ctx context.Context, workspace, id uuid.UUID) (Agent, error) {
 	var a Agent
-	err := s.DB.QueryRow(ctx, `SELECT id,name,description,instructions,skill_slugs,version,updated_at FROM agents WHERE workspace_id=$1 AND id=$2`, workspace, id).Scan(&a.ID, &a.Name, &a.Description, &a.Instructions, &a.SkillSlugs, &a.Version, &a.UpdatedAt)
+	err := s.DB.QueryRow(ctx, `SELECT a.id,a.name,a.description,a.instructions,a.skill_slugs,a.version,a.updated_at,(SELECT c.id FROM conversations c WHERE c.created_agent_id=a.id AND c.workspace_id=$1 ORDER BY c.created_at LIMIT 1) FROM agents a WHERE a.workspace_id=$1 AND a.id=$2`, workspace, id).Scan(&a.ID, &a.Name, &a.Description, &a.Instructions, &a.SkillSlugs, &a.Version, &a.UpdatedAt, &a.BuilderConversationID)
 	a.Slug = "custom-" + a.ID.String()
 	return a, err
 }

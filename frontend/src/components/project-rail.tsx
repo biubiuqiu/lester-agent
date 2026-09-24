@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useRef, useState, type ReactNode } from "react";
-import { ChevronRight, MoreHorizontal, Pin, Plus, Search, X } from "lucide-react";
+import { Bot, ChevronRight, MoreHorizontal, Pin, Plus, Search, X } from "lucide-react";
 import { ProjectIcon, ConversationIcon } from "./workspace-icons";
 import { api, type Conversation, type Project } from "@/lib/api";
 import { ConversationRunMark, type UnreadRunResult } from "./run-awareness";
@@ -172,9 +172,9 @@ export function ProjectRail({
                 </RailActions>
               </div>
               {opened ? <ul className="tree-conversations" aria-label={`${project.name}中的会话`}>
-                {items.slice(0, limit).map(c => <li key={c.id} className={`tree-conversation ${c.id === currentId ? "active" : ""}`}>
+                {items.slice(0, limit).map(c => <li key={c.id} className={`tree-conversation ${c.id === currentId ? "active" : ""} ${c.agent_slug === "agent-designer" ? "is-designer" : ""}`}>
                   <button className="tree-conversation-link" title={c.title} aria-current={c.id === currentId ? "page" : undefined} onClick={() => onOpen(c.id)}>
-                    <ConversationIcon size={14} /><span>{c.title}</span>{c.pinned ? <Pin size={10} /> : null}<ConversationRunMark status={c.run_status} unread={unread[c.id]} />
+                    {c.agent_slug === "agent-designer" ? <Bot size={14} /> : <ConversationIcon size={14} />}<span>{c.title}</span>{c.pinned ? <Pin size={10} /> : null}<ConversationRunMark status={c.run_status} unread={unread[c.id]} />
                   </button>
                   <RailActions label={`会话 ${c.title} 的操作`}>
                     <button disabled={!!busy} onClick={() => void organize(c, { pinned: !c.pinned })}>{c.pinned ? "取消会话置顶" : "置顶会话"}</button>

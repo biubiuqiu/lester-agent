@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"path"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -34,6 +35,7 @@ type Conversation struct {
 	WorkspaceID          uuid.UUID  `json:"workspace_id"`
 	CreatedBy            uuid.UUID  `json:"created_by"`
 	AgentSlug            string     `json:"agent_slug"`
+	CreatedAgentID       *uuid.UUID `json:"created_agent_id,omitempty"`
 	AgentName            string     `json:"agent_name"`
 	AgentInstructions    string     `json:"-"`
 	AgentSkillSlugs      []string   `json:"-"`
@@ -176,7 +178,7 @@ func (s *Service) Create(ctx context.Context, workspaceID, userID uuid.UUID, age
 	return c, nil
 }
 func (s *Service) List(ctx context.Context, workspaceID uuid.UUID) ([]Conversation, error) {
-	rows, err := s.db.Query(ctx, `SELECT c.id,c.workspace_id,c.created_by,c.agent_slug,c.agent_name,COALESCE(c.model_deployment_id,'00000000-0000-0000-0000-000000000000'),c.title,c.created_at,c.updated_at,latest.id,COALESCE(latest.status,'idle'),c.project_id,c.pinned
+	rows, err := s.db.Query(ctx, `SELECT c.id,c.workspace_id,c.created_by,c.agent_slug,c.agent_name,c.created_agent_id,COALESCE(c.model_deployment_id,'00000000-0000-0000-0000-000000000000'),c.title,c.created_at,c.updated_at,latest.id,COALESCE(latest.status,'idle'),c.project_id,c.pinned
 		FROM conversations c
 		LEFT JOIN LATERAL (SELECT r.id,r.status FROM runs r WHERE r.conversation_id=c.id ORDER BY r.created_at DESC,r.id DESC LIMIT 1) latest ON true
 		WHERE c.workspace_id=$1 ORDER BY c.updated_at DESC`, workspaceID)
@@ -187,7 +189,7 @@ func (s *Service) List(ctx context.Context, workspaceID uuid.UUID) ([]Conversati
 	items := []Conversation{}
 	for rows.Next() {
 		var c Conversation
-		if err = rows.Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.AgentName, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.RunID, &c.RunStatus, &c.ProjectID, &c.Pinned); err != nil {
+		if err = rows.Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.AgentName, &c.CreatedAgentID, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.RunID, &c.RunStatus, &c.ProjectID, &c.Pinned); err != nil {
 			return nil, err
 		}
 		items = append(items, c)
@@ -196,10 +198,10 @@ func (s *Service) List(ctx context.Context, workspaceID uuid.UUID) ([]Conversati
 }
 func (s *Service) Get(ctx context.Context, workspaceID, id uuid.UUID) (Conversation, []Message, error) {
 	var c Conversation
-	err := s.db.QueryRow(ctx, `SELECT c.id,c.workspace_id,c.created_by,c.agent_slug,c.agent_name,c.agent_instructions,c.agent_skill_slugs,c.agent_skills_installed,c.agent_files_installed,COALESCE(c.model_deployment_id,'00000000-0000-0000-0000-000000000000'),c.title,c.created_at,c.updated_at,latest.id,COALESCE(latest.status,'idle'),c.project_id,c.pinned
+	err := s.db.QueryRow(ctx, `SELECT c.id,c.workspace_id,c.created_by,c.agent_slug,c.agent_name,c.agent_instructions,c.agent_skill_slugs,c.agent_skills_installed,c.agent_files_installed,c.created_agent_id,COALESCE(c.model_deployment_id,'00000000-0000-0000-0000-000000000000'),c.title,c.created_at,c.updated_at,latest.id,COALESCE(latest.status,'idle'),c.project_id,c.pinned
 		FROM conversations c
 		LEFT JOIN LATERAL (SELECT r.id,r.status FROM runs r WHERE r.conversation_id=c.id ORDER BY r.created_at DESC,r.id DESC LIMIT 1) latest ON true
-		WHERE c.id=$2 AND c.workspace_id=$1`, workspaceID, id).Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.AgentName, &c.AgentInstructions, &c.AgentSkillSlugs, &c.AgentSkillsInstalled, &c.AgentFilesInstalled, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.RunID, &c.RunStatus, &c.ProjectID, &c.Pinned)
+		WHERE c.id=$2 AND c.workspace_id=$1`, workspaceID, id).Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.AgentName, &c.AgentInstructions, &c.AgentSkillSlugs, &c.AgentSkillsInstalled, &c.AgentFilesInstalled, &c.CreatedAgentID, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.RunID, &c.RunStatus, &c.ProjectID, &c.Pinned)
 	if err != nil {
 		return c, nil, err
 	}
@@ -424,6 +426,14 @@ func (s *Service) execute(ctx context.Context, workspaceID, conversationID, runI
 		s.finishExecutionError(ctx, runID, conversationID, err)
 		return
 	}
+	if conversation.AgentSlug == "agent-designer" {
+		catalog, catalogErr := s.designerSkillCatalog(ctx)
+		if catalogErr != nil {
+			s.finishExecutionError(ctx, runID, conversationID, catalogErr)
+			return
+		}
+		system += catalog
+	}
 	if len(resources) > 0 {
 		var files strings.Builder
 		files.WriteString("\n\n<agent_resources>\nThis conversation was initialized with these files. They may since have changed; inspect them when relevant. Their contents are not injected into this prompt.\n")
@@ -434,12 +444,35 @@ func (s *Service) execute(ctx context.Context, workspaceID, conversationID, runI
 		system += files.String()
 	}
 	history := modelHistory(messages)
-	request := model.ModelRequest{Model: deployment.ModelID, System: system, Messages: history, Tools: s.tools.Definitions()}
+	toolDefinitions := s.tools.Definitions()
+	if conversation.AgentSlug != "agent-designer" {
+		toolDefinitions = slices.DeleteFunc(toolDefinitions, func(tool model.Tool) bool { return tool.Name == "save_agent" })
+	}
+	request := model.ModelRequest{Model: deployment.ModelID, System: system, Messages: history, Tools: toolDefinitions}
 	if err = s.saveRunContext(ctx, runID, messages, request); err != nil {
 		s.finishExecutionError(ctx, runID, conversationID, err)
 		return
 	}
 	s.executeTurns(ctx, conversationID, runID, computer, client, request)
+}
+
+func (s *Service) designerSkillCatalog(ctx context.Context) (string, error) {
+	rows, err := s.db.Query(ctx, `SELECT slug,name,description FROM skills ORDER BY name`)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	var catalog strings.Builder
+	catalog.WriteString("\n\n<available_agent_skills>\n")
+	for rows.Next() {
+		var slug, name, description string
+		if err = rows.Scan(&slug, &name, &description); err != nil {
+			return "", err
+		}
+		fmt.Fprintf(&catalog, "- %s | %s | %s\n", slug, name, description)
+	}
+	catalog.WriteString("</available_agent_skills>")
+	return catalog.String(), rows.Err()
 }
 
 func (s *Service) installAgentFiles(ctx context.Context, workspaceID uuid.UUID, conversation Conversation, computer *Computer) ([]string, error) {
