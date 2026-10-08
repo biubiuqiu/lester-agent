@@ -69,7 +69,7 @@ const SourcePreview = dynamic(
 );
 
 export function FileExplorer({ conversationId }: { conversationId: string }) {
-  const { storageKey, directories, signature, selected, tabs, changes, files, loading, error, limited, open, close, refresh, loadDirectory, expanded: enlarged, setExpanded, setReference, setPanelOpen } = useFileWorkspace();
+  const { storageKey, directories, signature, selected, tabs, changes, files, loading, error, limited, open, close, refresh, loadDirectory, expanded: enlarged, setExpanded, setReference, setPanelOpen, modes, setPreviewMode: setWorkspacePreviewMode } = useFileWorkspace();
   const [expanded, setTreeExpanded] = useState<Set<string>>(() => new Set(readView(storageKey).directories));
   const [treeOpen, setTreeOpenState] = useState(() => readView(storageKey).treeOpen);
   const setTreeOpen = (value: boolean) => { updateView(storageKey, { treeOpen: value }); setTreeOpenState(value); };
@@ -79,12 +79,10 @@ export function FileExplorer({ conversationId }: { conversationId: string }) {
     document.addEventListener("pointerdown", closeOutside);
     return () => document.removeEventListener("pointerdown", closeOutside);
   }, []);
-  const [modes, setModes] = useState(() => readView(storageKey).modes);
   const previewMode = selected ? modes[selected.path] ?? "preview" : "preview";
   const setPreviewMode = (mode: "preview" | "source") => {
     if (!selected) return;
-    const next = Object.fromEntries(Object.entries({ ...modes, [selected.path]: mode }).slice(-16));
-    updateView(storageKey, { modes: next }); setModes(next);
+    setWorkspacePreviewMode(selected.path, mode);
   };
   const [previewAttempt, setPreviewAttempt] = useState(0);
   const [preview, setPreview] = useState<PreviewState>({ key: "", content: "", error: "" });

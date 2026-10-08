@@ -6,6 +6,7 @@ import { type FileEntry, readConversationFileBytes } from "@/lib/api";
 import { listDirectory, relativeFilePath, scanFiles, wasPathCovered, type FileState } from "@/lib/file-inventory";
 import { readView, updateView } from "@/lib/conversation-view-state";
 import { artifactFiles } from "@/lib/artifact-files";
+import { deliverableKind } from "@/lib/deliverables";
 import type { RunEvent } from "./tool-timeline";
 
 type Change = { path: string; kind: "added" | "updated" | "deleted" };
@@ -14,15 +15,19 @@ type FileWorkspaceValue = FileState & {
   storageKey: string;
   loading: boolean;
   running: boolean;
+  runOutcome?: "failed" | "cancelled";
+  modes: Record<string, "preview" | "source">;
+  setPreviewMode: (path: string, mode: "preview" | "source") => void;
   changes: Change[];
   tabs: FileEntry[];
   selected: FileEntry | null;
   reference: string | null;
+  referenceRevision: number;
   expanded: boolean;
   panelOpen: boolean;
-  panelTab: "files" | "terminal" | "skills" | "agent";
-  setPanelTab: (tab: "files" | "terminal" | "skills" | "agent") => void;
-  open: (file: FileEntry) => void;
+  panelTab: "files" | "results" | "terminal" | "skills" | "agent";
+  setPanelTab: (tab: "files" | "results" | "terminal" | "skills" | "agent") => void;
+  open: (file: FileEntry, mode?: "preview") => void;
   close: (path: string) => void;
   refresh: () => void;
   loadDirectory: (path: string) => Promise<void>;
@@ -45,18 +50,24 @@ export function useOptionalFileWorkspace() {
   return useContext(Context);
 }
 
-export function FileWorkspaceProvider({ conversationId, storageKey, events, runId, running, children }: {
-  conversationId?: string; storageKey: string; events: RunEvent[]; runId?: string; running: boolean; children: React.ReactNode;
+export function FileWorkspaceProvider({ conversationId, storageKey, events, runId, running, runOutcome, children }: {
+  conversationId?: string; storageKey: string; events: RunEvent[]; runId?: string; running: boolean; runOutcome?: "failed" | "cancelled"; children: React.ReactNode;
 }) {
   const [state, setState] = useState<FileState>(emptyState);
   const [loading, setLoading] = useState(true);
   const [tabs, setTabs] = useState<FileEntry[]>(() => readView(storageKey).tabs.map((path) => ({ path, name: path.split("/").at(-1) ?? path, is_dir: false, size: 0, modified_at: "" })));
   const [selectedPath, setSelectedPath] = useState<string | null>(() => readView(storageKey).selected);
   const [reference, setReferenceState] = useState<string | null>(() => readView(storageKey).reference);
-  const setReference = useCallback((value: string | null) => { updateView(storageKey, { reference: value }); setReferenceState(value); }, [storageKey]);
+  const [referenceRevision, setReferenceRevision] = useState(0);
+  const setReference = useCallback((value: string | null) => { updateView(storageKey, { reference: value }); setReferenceState(value); setReferenceRevision((revision) => revision + 1); }, [storageKey]);
   const [expanded, setExpanded] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
-  const [panelTab, setPanelTab] = useState<"files" | "terminal" | "skills" | "agent">("files");
+  const [panelTab, setPanelTab] = useState<"files" | "results" | "terminal" | "skills" | "agent">("files");
+  const [modes, setModes] = useState(() => readView(storageKey).modes);
+  const setPreviewMode = useCallback((path: string, mode: "preview" | "source") => {
+    const next = Object.fromEntries(Object.entries({ ...readView(storageKey).modes, [path]: mode }).slice(-16));
+    updateView(storageKey, { modes: next }); setModes(next);
+  }, [storageKey]);
   const [observed, setObserved] = useState<{ runId?: string; changes: Change[] }>({ changes: [] });
   const refreshRef = useRef<() => void>(() => {});
   const watchedDirectories = useRef(new Set<string>([...readView(storageKey).directories, ...readView(storageKey).tabs.map((path) => path.split("/").slice(0, -1).join("/"))]));
@@ -143,12 +154,13 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, runI
       setState((value) => ({ ...value, directories: { ...value.directories, [path]: { entries: [], error: reason instanceof Error ? reason.message : "目录加载失败" } } }));
     }
   }, [conversationId]);
-  const open = useCallback((file: FileEntry) => {
+  const open = useCallback((file: FileEntry, mode?: "preview") => {
+    if (mode) setPreviewMode(file.path, mode);
     const paths = [...readView(storageKey).tabs.filter((path) => path !== file.path), file.path].slice(-8);
     updateView(storageKey, { tabs: paths, selected: file.path });
     setTabs((value) => value.some((item) => item.path === file.path) ? value : [...value, file].slice(-8));
     setSelectedPath(file.path); setPanelTab("files"); setPanelOpen(true);
-  }, [storageKey]);
+  }, [storageKey, setPreviewMode]);
   const close = (path: string) => {
     const next = tabs.filter((file) => file.path !== path);
     setTabs(next);
@@ -168,7 +180,7 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, runI
   const selected = state.files.find((file) => file.path === selectedPath)
     ?? Object.values(state.directories).flatMap((directory) => directory.entries).find((file) => !file.is_dir && file.path === selectedPath)
     ?? null;
-  return <Context.Provider value={{ ...state, storageKey, conversationId: conversationId ?? "", loading, running, tabs, selected, changes, reference, expanded, panelOpen, panelTab, setPanelTab, open, close, refresh, loadDirectory, setExpanded, setPanelOpen, setReference }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ ...state, storageKey, conversationId: conversationId ?? "", loading, running, runOutcome, modes, setPreviewMode, tabs, selected, changes, reference, referenceRevision, expanded, panelOpen, panelTab, setPanelTab, open, close, refresh, loadDirectory, setExpanded, setPanelOpen, setReference }}>{children}</Context.Provider>;
 }
 
 export function OpenFilesButton() {
@@ -183,12 +195,12 @@ export function FileReferenceChip() {
 
 export function ArtifactCards() {
   const { files, changes, open, conversationId, running } = useFileWorkspace();
-  const verified = artifactFiles(files, changes, running);
+  const verified = artifactFiles(files.filter((file) => !deliverableKind(file)), changes, running);
   if (!verified.length) return null;
-  return <section className="artifact-cards" aria-label="任务文件"><small title="本轮任务涉及的文件，打开查看当前版本">相关文件</small>{verified.map((file) => <div className="artifact-card" key={file.path}>
+  return <details className="related-files"><summary>其他相关文件 · {verified.length}</summary><section className="artifact-cards" aria-label="任务文件">{verified.map((file) => <div className="artifact-card" key={file.path}>
     <button type="button" onClick={() => open(file)} title={file.path} aria-label={`查看 ${file.name}`}><FileText /><span><strong>{file.name}</strong><small>{file.name.includes(".") ? file.name.split(".").at(-1)?.toUpperCase() : "文件"} · {file.size < 1024 ? `${file.size} B` : file.size < 1048576 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / 1048576).toFixed(1)} MB`}</small></span><span>查看</span></button>
     <FileDownload conversationId={conversationId} file={file} />
-  </div>)}</section>;
+  </div>)}</section></details>;
 }
 
 export function FileDownload({ conversationId, file }: { conversationId: string; file: FileEntry }) {

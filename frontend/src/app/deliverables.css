@@ -1,0 +1,36 @@
+.deliverables { width: min(100%, 780px); margin: 24px auto 16px; }
+.deliverables > header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.deliverables-eyebrow { color: #62765e; font-size: 11px; letter-spacing: .08em; }
+.deliverables h2 { display: flex; align-items: center; gap: 8px; margin: 5px 0 0; font-size: 18px; font-weight: 600; color: #2b4332; }
+.deliverables h2 small { padding: 2px 7px; border-radius: 6px; background: #eaf0e4; color: #496444; font-size: 12px; }
+.deliverables-intro { margin: 0 0 16px; color: #637267; font-size: 13px; line-height: 1.7; }
+.deliverables-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.deliverable-card { min-width: 0; border: 1px solid #dce4d7; border-radius: 12px; background: #fff; }
+.deliverable-preview { display: block; width: 100%; border: 0; padding: 0; background: transparent; text-align: left; border-radius: 12px 12px 0 0; }
+.deliverable-cover { display: flex; align-items: center; gap: 10px; min-height: 72px; padding: 16px; background: #eef3e8; color: #4c6947; border-radius: inherit; }
+.deliverable-card.markdown .deliverable-cover { background: #f4f0e8; color: #786448; }
+.deliverable-cover > svg:first-child { width: 26px; height: 26px; }
+.deliverable-cover > svg:last-child { margin-left: auto; width: 16px; height: 16px; }
+.deliverable-cover > span { font-size: 12px; }
+.deliverable-info { display: grid; gap: 6px; padding: 14px 16px; min-width: 0; }
+.deliverable-info strong { font-size: 15px; color: #2d4433; overflow-wrap: anywhere; line-height: 1.5; }
+.deliverable-info > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #627267; font-size: 12px; }
+.deliverable-info small { color: #68766a; font-size: 11px; }
+.deliverable-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; padding: 8px 12px; border-top: 1px solid #edf0e8; }
+.deliverable-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 36px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: #45613f; font-size: 12px; }
+.deliverable-actions .deliverable-modify { margin-right: auto; }
+.deliverable-actions button:hover, .deliverables-refresh:hover { background: #eaf0e4; }
+.deliverable-actions .file-download button { width: 36px; height: 36px; }
+.deliverables-notice { border: 1px solid #e5dcc6; border-radius: 8px; background: #faf6ec; padding: 10px 12px; color: #76613d; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.deliverables-notice button { border: 0; background: transparent; color: inherit; text-decoration: underline; margin-left: 8px; }
+.deliverables-empty { display: grid; justify-items: start; gap: 10px; padding: 24px 16px; border: 1px dashed #d7e0d0; border-radius: 10px; color: #60735c; font-size: 13px; line-height: 1.7; }
+.deliverables-refresh, .deliverables-more { min-height: 36px; border: 1px solid #dce4d7; border-radius: 7px; background: #fff; color: #45613f; padding: 8px 12px; }
+.deliverables-more { margin-top: 12px; font-size: 12px; }
+.deliverables-panel { flex: 1; min-height: 0; overflow-y: auto; width: 100%; margin: 0; padding: 20px 16px; }
+.deliverables-panel .deliverables-grid { grid-template-columns: minmax(0, 1fr); }
+.related-files { width: min(100%, 780px); margin: 12px auto 16px; }
+.related-files > summary { color: #627267; font-size: 12px; padding: 8px 0; }
+.related-files .artifact-cards { margin: 0; }
+.open-results-button { border: 0; background: transparent; color: #36573e; text-align: left; font-size: 14px; min-height: 44px; }
+@container (max-width: 380px) { .computer-panel-header .computer-tabs { gap: 0; } .computer-panel-header .computer-tabs button { padding: 0 7px; } .computer-panel-header .computer-tabs svg { display: none; } }
+@media (max-width: 700px) { .deliverables-grid { grid-template-columns: minmax(0, 1fr); } .deliverable-actions button, .deliverable-actions .file-download button { min-height: 44px; height: 44px; } .computer-panel-header .computer-tabs button { min-height: 44px; } }
