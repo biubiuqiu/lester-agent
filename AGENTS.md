@@ -157,6 +157,8 @@ Preserve these behaviors when changing the implementation:
 
 - Source previews must render plain text when the extension has no registered syntax grammar (including `.txt` and extensionless files), while highlighting is pending, or when grammar loading fails. Check that the highlight state exists before reading its fields: `highlighted?.language === language` can be true when both sides are undefined and does not guard a subsequent `highlighted.source` access.
 - When changing previews, exercise a plain-text file, a supported source language, and switching between them. Preserve the visible composer and bounded scrolling with long files.
+- HTML srcdoc navigation must resolve relative to the source file and open only verified conversation inventory entries. Validate messages against the current iframe window; never grant same-origin access. Separate-page previews use the focused workspace viewer, and direct preview responses must also enforce a CSP sandbox.
+- Raw file-content responses are attachment byte streams with `application/octet-stream`, `nosniff`, and `no-store`; never let content sniffing execute generated HTML/SVG in the application origin.
 - Distinguish errors from generated HTML inside the sandboxed preview iframe from Lester application errors. An artifact's JavaScript syntax error is not evidence of a failure in the application's preview component; report it separately and do not silently edit user artifacts during application debugging.
 
 ## Local development
@@ -164,7 +166,7 @@ Preserve these behaviors when changing the implementation:
 ### Existing Windows checkout and startup
 
 - The established checkout on the current development machine is `G:\codespace\lester-agent`. A desktop task may start in `C:\Users\deniswen\Documents\ChatGPT\lester`; verify the Git root before running repository commands.
-- As of 2026-09-09, this machine's deployment uses `http://localhost:13180/app` through the gateway. Windows reserved `13000–13099`, preventing the former `13080` binding. Treat this as local context, not the repository default: verify `GATEWAY_PORT` and `WEB_ORIGIN` in the ignored `deploy/.env` without printing secrets. For a Docker port-binding permission error, inspect `netsh interface ipv4 show excludedportrange protocol=tcp` and listening ports; choose an available port and update both settings together.
+- As of 2026-10-08, this machine's deployment uses `http://localhost:13280/app` through the gateway and port `13281` for Artifact Host. Windows reserved the former `13180/13181` ports. Treat this as local context, not the repository default: verify `GATEWAY_PORT`, `WEB_ORIGIN`, `ARTIFACT_PORT`, and `ARTIFACT_PUBLIC_URL` in the ignored `deploy/.env` without printing secrets. For a Docker port-binding permission error, inspect `netsh interface ipv4 show excludedportrange protocol=tcp` and listening ports; choose available ports and keep their configured origins aligned.
 - Preserve the existing `deploy/.env` and persistent volumes. Copy the example only for a fresh setup. Routine startup from the repository root is `docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d`; verify Docker is available, service status, the app route, and API readiness before reporting success.
 - After frontend changes, use `docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --no-deps --build web` to deploy the new bundle. Reload the browser before checking the fix; a successful local build alone does not update the running container.
 - PostgreSQL entrypoint migration mounts initialize a new data directory only. For an existing volume, inspect migration requirements after pulling changes and apply missing migrations explicitly using the repository's documented procedure; never delete the volume to upgrade the schema.
@@ -193,6 +195,7 @@ Run frontend checks:
 ```bash
 cd frontend
 pnpm install --frozen-lockfile
+pnpm test
 pnpm lint
 pnpm build
 ```

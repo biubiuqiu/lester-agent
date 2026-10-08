@@ -34,7 +34,11 @@ export async function listDirectory(conversationId: string, path: string, signal
 export async function scanFiles(conversationId: string, signal: AbortSignal, watched: string[]): Promise<FileState> {
   const directories: FileState["directories"] = {};
   const files: FileEntry[] = [];
-  const queue = [{ path: "", depth: 0 }, ...watched.map((path) => ({ path, depth: 5 }))];
+  const queue = [...new Set(["", ...watched])].map((path) => ({
+    path,
+    depth: path.split("/").some((part) => skippedDirectories.has(part)) ? 5 : Math.min(5, path.split("/").filter(Boolean).length),
+  }));
+  const scheduled = new Set(queue.map((item) => item.path));
   const visited = new Set<string>();
   let limited = false;
   let count = 0;
@@ -50,7 +54,9 @@ export async function scanFiles(conversationId: string, signal: AbortSignal, wat
         for (const file of entries) {
           if (!file.is_dir) { if (files.length < 2000) files.push(file); else limited = true; }
           else if (!skippedDirectories.has(file.name)) {
-            if (depth < 5) queue.push({ path: file.path, depth: depth + 1 }); else limited = true;
+            if (depth < 5) {
+              if (!scheduled.has(file.path)) { scheduled.add(file.path); queue.push({ path: file.path, depth: depth + 1 }); }
+            } else limited = true;
           }
         }
       } catch (reason) {

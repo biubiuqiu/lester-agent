@@ -55,26 +55,31 @@ export function useOptionalFileWorkspace() {
 export function FileWorkspaceProvider({ conversationId, storageKey, events, runId, running, runOutcome, children }: {
   conversationId?: string; storageKey: string; events: RunEvent[]; runId?: string; running: boolean; runOutcome?: "failed" | "cancelled"; children: React.ReactNode;
 }) {
+  const [requestedPreview] = useState(() => {
+    if (!conversationId || typeof window === "undefined" || window.location.pathname !== `/app/c/${conversationId}`) return "";
+    const path = new URLSearchParams(window.location.search).get("preview") || "";
+    return path.length <= 1000 ? relativeFilePath(conversationId, path) : "";
+  });
   const [state, setState] = useState<FileState>(emptyState);
   const [loading, setLoading] = useState(true);
   const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
   const [deliverablesError, setDeliverablesError] = useState("");
-  const [tabs, setTabs] = useState<FileEntry[]>(() => readView(storageKey).tabs.map((path) => ({ path, name: path.split("/").at(-1) ?? path, is_dir: false, size: 0, modified_at: "" })));
-  const [selectedPath, setSelectedPath] = useState<string | null>(() => readView(storageKey).selected);
+  const [tabs, setTabs] = useState<FileEntry[]>(() => [...new Set([...readView(storageKey).tabs, ...(requestedPreview ? [requestedPreview] : [])])].slice(-8).map((path) => ({ path, name: path.split("/").at(-1) ?? path, is_dir: false, size: 0, modified_at: "" })));
+  const [selectedPath, setSelectedPath] = useState<string | null>(() => requestedPreview || readView(storageKey).selected);
   const [reference, setReferenceState] = useState<string | null>(() => readView(storageKey).reference);
   const [referenceRevision, setReferenceRevision] = useState(0);
   const setReference = useCallback((value: string | null) => { updateView(storageKey, { reference: value }); setReferenceState(value); setReferenceRevision((revision) => revision + 1); }, [storageKey]);
-  const [expanded, setExpanded] = useState(false);
-  const [panelOpen, setPanelOpen] = useState(false);
+  const [expanded, setExpanded] = useState(Boolean(requestedPreview));
+  const [panelOpen, setPanelOpen] = useState(Boolean(requestedPreview));
   const [panelTab, setPanelTab] = useState<"files" | "results" | "terminal" | "skills" | "agent">("files");
-  const [modes, setModes] = useState(() => readView(storageKey).modes);
+  const [modes, setModes] = useState<Record<string, "preview" | "source">>(() => ({ ...readView(storageKey).modes, ...(requestedPreview ? { [requestedPreview]: "preview" } : {}) }));
   const setPreviewMode = useCallback((path: string, mode: "preview" | "source") => {
     const next = Object.fromEntries(Object.entries({ ...readView(storageKey).modes, [path]: mode }).slice(-16));
     updateView(storageKey, { modes: next }); setModes(next);
   }, [storageKey]);
   const [observed, setObserved] = useState<{ runId?: string; changes: Change[] }>({ changes: [] });
   const refreshRef = useRef<() => void>(() => {});
-  const watchedDirectories = useRef(new Set<string>([...readView(storageKey).directories, ...readView(storageKey).tabs.map((path) => path.split("/").slice(0, -1).join("/"))]));
+  const watchedDirectories = useRef(new Set<string>([...readView(storageKey).directories, ...tabs.map((file) => file.path.split("/").slice(0, -1).join("/"))]));
   const runRef = useRef(runId);
   const runningRef = useRef(running);
   useEffect(() => { runRef.current = runId; runningRef.current = running; }, [runId, running]);

@@ -10,6 +10,10 @@
 .open-agent-button { display: none; align-items: center; gap: 5px; border: 1px solid #dce5d9; border-radius: 8px; background: #edf4eb; padding: 7px 9px; color: #3d6245; font-size: 12px; cursor: pointer; }
 .designer-expand-button { display: inline-grid; flex: none; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 6px; background: transparent; color: #677a69; cursor: pointer; }
 .designer-expand-button:hover { background: #edf4eb; color: #31573a; }
+.computer-panel-header .computer-tabs { overflow-x: auto; scrollbar-width: none; }
+@container (max-width: 460px) {
+  .computer-panel-header .computer-tabs button { flex: 0 0 auto; gap: 4px; padding: 0 6px; font-size: 12px; white-space: nowrap; }
+}
 .designer-agent-panel { min-height: 0; flex: 1; overflow-y: auto; background: #fff; }
 .designer-agent-panel > header { display: flex; justify-content: space-between; align-items: start; gap: 12px; padding: 20px 22px; border-bottom: 1px solid #e6ece3; }
 .designer-agent-panel > header div { display: grid; gap: 4px; min-width: 0; }

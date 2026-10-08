@@ -34,6 +34,7 @@ import { usePreviewScroll } from "./use-preview-scroll";
 import { PublishFileButton } from "./artifact-manager";
 import { FileError } from "./file-error";
 import { MessageContent } from "./message-content";
+import { resolveWorkspaceReference } from "@/lib/workspace-reference";
 
 type DirectoryState = {
   entries: FileEntry[];
@@ -71,8 +72,8 @@ const SourcePreview = dynamic(
 export function FileExplorer({ conversationId }: { conversationId: string }) {
   const { storageKey, directories, signature, selected, tabs, changes, files, loading, error, limited, open, close, refresh, loadDirectory, expanded: enlarged, setExpanded, setReference, setPanelOpen, modes, setPreviewMode: setWorkspacePreviewMode } = useFileWorkspace();
   const [expanded, setTreeExpanded] = useState<Set<string>>(() => new Set(readView(storageKey).directories));
-  const [treeOpen, setTreeOpenState] = useState(() => readView(storageKey).treeOpen);
-  const setTreeOpen = (value: boolean) => { updateView(storageKey, { treeOpen: value }); setTreeOpenState(value); };
+  const [treeOpen, setTreeOpenState] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("preview") ? false : readView(storageKey).treeOpen);
+  const setTreeOpen = useCallback((value: boolean) => { updateView(storageKey, { treeOpen: value }); setTreeOpenState(value); }, [storageKey]);
   const changesMenu = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
     const closeOutside = (event: PointerEvent) => { if (changesMenu.current && !changesMenu.current.contains(event.target as Node)) changesMenu.current.open = false; };
@@ -228,6 +229,18 @@ function FilePreview({
   onReference: () => void;
 }) {
   const markdownScroll = usePreviewScroll(storageKey, `markdown:${file?.path}`);
+  const iframe = useRef<HTMLIFrameElement>(null);
+  const { files, open } = useFileWorkspace();
+  useEffect(() => {
+    if (kind !== "html" || mode !== "preview") return;
+    const navigate = (event: MessageEvent) => {
+      if (!iframe.current || event.source !== iframe.current.contentWindow || event.data?.type !== "lester:preview:navigate" || typeof event.data.path !== "string") return;
+      const target = files.find((item) => !item.is_dir && item.path === event.data.path);
+      if (target) open(target, "preview");
+    };
+    window.addEventListener("message", navigate);
+    return () => window.removeEventListener("message", navigate);
+  }, [files, open, kind, mode]);
   if (!file) return <section className="file-preview empty"><Eye /><strong>选择文件进行预览</strong><p>支持代码、文本、图片、PDF 和 HTML 页面。</p></section>;
   const url = `${conversationFilePreviewURL(conversationId, file.path)}?v=${encodeURIComponent(file.modified_at + ":" + file.size)}`;
   return <section className="file-preview">
@@ -236,13 +249,13 @@ function FilePreview({
         <button type="button" aria-pressed={mode === "preview"} className={mode === "preview" ? "active" : ""} onClick={() => onModeChange("preview")}><Eye />预览</button>
         <button type="button" aria-pressed={mode === "source"} className={mode === "source" ? "active" : ""} onClick={() => onModeChange("source")}><Code2 />源码</button>
       </nav> : <span className="file-preview-format"><FileGlyph file={file} />{fileExtension(file.name).toUpperCase() || "文本"}<small>{formatBytes(file.size)}</small></span>}
-      <div className="file-preview-actions">{preview.updatedAt ? <RecentFileUpdate key={preview.updatedAt} /> : null}<button type="button" className="file-ask-agent" onClick={onReference} title="让 Agent 修改此文件" aria-label="让 Agent 修改此文件"><MessageSquare /><span>修改</span></button>{kind === "html" ? <PublishFileButton conversationId={conversationId} path={file.path}/> : null}<FileDownload conversationId={conversationId} file={file} />{kind === "html" ? <a href={url} target="_blank" rel="noopener noreferrer" title="在新页面打开 HTML 预览" aria-label={`在新页面预览 ${file.name}`}><ExternalLink /></a> : null}</div>
+      <div className="file-preview-actions">{preview.updatedAt ? <RecentFileUpdate key={preview.updatedAt} /> : null}<button type="button" className="file-ask-agent" onClick={onReference} title="让 Agent 修改此文件" aria-label="让 Agent 修改此文件"><MessageSquare /><span>修改</span></button>{kind === "html" ? <PublishFileButton conversationId={conversationId} path={file.path}/> : null}<FileDownload conversationId={conversationId} file={file} />{kind === "html" ? <a href={`/app/c/${conversationId}?preview=${encodeURIComponent(file.path)}`} target="_blank" rel="noopener noreferrer" title="在新页面打开 HTML 预览" aria-label={`在新页面预览 ${file.name}`}><ExternalLink /></a> : null}</div>
     </header>
     <div ref={kind === "markdown" && mode === "preview" ? markdownScroll : undefined} className={`file-preview-body ${kind}`}>
       {preview.loading && preview.content ? <span className="preview-syncing" role="status">正在同步最新版本…</span> : null}
       {preview.loading && !preview.content ? <div className="file-preview-state"><LoaderCircle />正在读取文件…</div> : null}
       {preview.error ? <FileError detail={preview.error} onRetry={onRetry} /> : null}
-      {(!preview.loading || Boolean(preview.content)) && !preview.error && kind === "html" && mode === "preview" ? <iframe title={`${file.name} preview`} srcDoc={preview.content} sandbox="allow-scripts" /> : null}
+      {(!preview.loading || Boolean(preview.content)) && !preview.error && kind === "html" && mode === "preview" ? <iframe ref={iframe} title={`${file.name} preview`} srcDoc={preview.content} sandbox="allow-scripts" /> : null}
       {(!preview.loading || Boolean(preview.content)) && !preview.error && kind === "image" ? <img src={url} alt={file.name} /> : null}
       {(!preview.loading || Boolean(preview.content)) && !preview.error && kind === "pdf" ? <iframe title={`${file.name} PDF preview`} src={url} /> : null}
       {(!preview.loading || Boolean(preview.content)) && !preview.error && (kind === "text" || ((kind === "html" || kind === "markdown") && mode === "source")) ? <SourcePreview key={file.path} content={preview.content} fileName={file.name} filePath={file.path} storageKey={storageKey} /> : null}
@@ -296,6 +309,22 @@ async function buildHTMLPreview(conversationId: string, filePath: string, source
   policy.content = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; media-src data: blob:; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'";
   document.head.prepend(policy);
 
+  // Keep local navigation in the verified conversation inventory. A srcdoc URL
+  // otherwise resolves against the Lester page instead of the source HTML file.
+  for (const link of document.querySelectorAll<HTMLAnchorElement>("a[href], area[href]")) {
+    const path = resolveWorkspaceReference(filePath, link.getAttribute("href") || "");
+    link.removeAttribute("data-lester-preview-path");
+    if (path) link.setAttribute("data-lester-preview-path", path);
+  }
+  const navigation = document.createElement("script");
+  navigation.textContent = `document.addEventListener("click", function(event) {
+    var link = event.target instanceof Element && event.target.closest("[data-lester-preview-path]");
+    if (!link) return;
+    event.preventDefault();
+    parent.postMessage({ type: "lester:preview:navigate", path: link.getAttribute("data-lester-preview-path") }, "*");
+  }, true);`;
+  policy.after(navigation);
+
   const tasks: Promise<void>[] = [];
   const stylesheets = [...document.querySelectorAll<HTMLLinkElement>('link[rel~="stylesheet"][href]')].slice(0, 20);
   for (const link of stylesheets) {
@@ -338,27 +367,6 @@ async function buildHTMLPreview(conversationId: string, filePath: string, source
   await Promise.allSettled(tasks);
   if (signal.aborted) throw new DOMException("Aborted", "AbortError");
   return `<!doctype html>\n${document.documentElement.outerHTML}`;
-}
-
-function resolveWorkspaceReference(baseFile: string, reference: string) {
-  const value = reference.trim();
-  if (!value || value.startsWith("#") || /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(value)) return "";
-  const pathOnly = value.split(/[?#]/, 1)[0];
-  const parts = value.startsWith("/") ? [] : normalizePath(baseFile).split("/").slice(0, -1);
-  for (const part of normalizePath(pathOnly).split("/")) {
-    if (!part || part === ".") continue;
-    if (part === "..") {
-      if (parts.length === 0) return "";
-      parts.pop();
-    } else {
-      try {
-        parts.push(decodeURIComponent(part));
-      } catch {
-        return "";
-      }
-    }
-  }
-  return parts.join("/");
 }
 
 function imageMIMEType(path: string) {

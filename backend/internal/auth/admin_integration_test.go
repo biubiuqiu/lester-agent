@@ -33,6 +33,9 @@ func TestAdministration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer root.Close()
+	if _, err = root.Exec(ctx, `BEGIN; SELECT pg_advisory_xact_lock(hashtextextended('lester:test:pgcrypto',0)); CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public; COMMIT;`); err != nil {
+		t.Fatal(err)
+	}
 	schema := "admin_test_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 	if _, err = root.Exec(ctx, `CREATE SCHEMA `+pgx.Identifier{schema}.Sanitize()); err != nil {
 		t.Fatal(err)

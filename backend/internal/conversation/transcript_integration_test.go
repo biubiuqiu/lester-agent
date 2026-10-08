@@ -44,7 +44,9 @@ func newTranscriptFixture(t *testing.T, legacy bool) transcriptFixture {
 	}
 	// All mutable test data is confined to a generated schema in a test database.
 	schema := "transcript_test_" + strings.ReplaceAll(uuid.NewString(), "-", "")
-	if _, err = admin.Exec(ctx, `CREATE EXTENSION IF NOT EXISTS pgcrypto`); err != nil {
+	// Packages share a test database but use separate schemas. Serialize the
+	// database-wide extension setup before any package applies its migrations.
+	if _, err = admin.Exec(ctx, `BEGIN; SELECT pg_advisory_xact_lock(hashtextextended('lester:test:pgcrypto',0)); CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public; COMMIT;`); err != nil {
 		admin.Close()
 		t.Fatal(err)
 	}

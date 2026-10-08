@@ -28,6 +28,9 @@ func TestPreviewContentType(t *testing.T) {
 func TestPreviewContentSecurityPolicyAllowsOnlyCurrentAssetOrigin(t *testing.T) {
 	request := httptest.NewRequest("GET", "http://localhost:18080/api/v1/conversations/id/preview/index.html", nil)
 	policy := previewContentSecurityPolicy(request)
+	if !strings.Contains(policy, "sandbox allow-scripts;") || strings.Contains(policy, "allow-same-origin") {
+		t.Fatalf("direct HTML preview must retain an opaque sandbox origin: %q", policy)
+	}
 	if !strings.Contains(policy, "script-src 'unsafe-inline' http://localhost:18080") {
 		t.Fatalf("policy does not allow current preview assets: %q", policy)
 	}

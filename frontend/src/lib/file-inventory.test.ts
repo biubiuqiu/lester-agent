@@ -37,6 +37,24 @@ test("inventory discovers nested files and explicitly opened excluded directorie
   assert.equal(second.signature, repeated.signature);
 });
 
+test("reopening an HTML directory keeps its nested assets in the verified inventory", async (context) => {
+  const inventory: Record<string, FileEntry[]> = {
+    "": [file("website", true)],
+    website: [file("website/index.html"), file("website/assets", true)],
+    "website/assets": [file("website/assets/icon.svg")],
+  };
+  const calls: string[] = [];
+  context.mock.method(globalThis, "fetch", async (input: string | URL | Request) => {
+    const path = new URL(input instanceof Request ? input.url : input, "http://localhost").searchParams.get("path") || "";
+    calls.push(path);
+    return Response.json({ files: inventory[path] || [] });
+  });
+  const result = await scanFiles("c", new AbortController().signal, ["", "website"]);
+  assert.deepEqual(result.files.map((entry) => entry.path), ["website/assets/icon.svg", "website/index.html"]);
+  assert.equal(result.limited, false);
+  assert.equal(new Set(calls).size, calls.length);
+});
+
 test("directory scans are bounded and disclose incomplete coverage", async (context) => {
   let calls = 0;
   context.mock.method(globalThis, "fetch", async (input: string | URL | Request) => {

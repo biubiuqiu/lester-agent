@@ -517,6 +517,7 @@ function ComputerPanel({ conversationId, createdAgentId, agentRevision, width, m
   useEffect(() => {
     if (createdAgentId === previousAgentId.current) return;
     previousAgentId.current = createdAgentId;
+    if (new URLSearchParams(window.location.search).has("preview")) return;
     if (createdAgentId) { setTab("agent"); setPanelOpen(true); }
     else { setTab("files"); setPanelOpen(false); }
   }, [createdAgentId, setTab, setPanelOpen]);

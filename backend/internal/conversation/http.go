@@ -407,6 +407,12 @@ func (h *Handler) ReadFile(w http.ResponseWriter, r *http.Request) {
 		httpapi.Error(w, 404, err)
 		return
 	}
+	// This endpoint transports bytes to the viewer, never an executable page in
+	// the application origin. Rendered files use the isolated preview endpoint.
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": path.Base(r.URL.Query().Get("path"))}))
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write(data)
 }
 func (h *Handler) PreviewFile(w http.ResponseWriter, r *http.Request) {
@@ -444,10 +450,10 @@ func previewContentSecurityPolicy(r *http.Request) string {
 	}
 	host := r.Host
 	if host == "" || strings.ContainsAny(host, " \t\r\n;'\"") {
-		return "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'"
+		return "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'"
 	}
 	origin := scheme + "://" + host
-	return fmt.Sprintf("default-src 'none'; script-src 'unsafe-inline' %s; style-src 'unsafe-inline' %s; img-src %s data: blob:; font-src %s data:; media-src %s data: blob:; connect-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'", origin, origin, origin, origin, origin)
+	return fmt.Sprintf("sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline' %s; style-src 'unsafe-inline' %s; img-src %s data: blob:; font-src %s data:; media-src %s data: blob:; connect-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'", origin, origin, origin, origin, origin)
 }
 
 func previewContentType(filePath string) string {

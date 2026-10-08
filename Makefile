@@ -14,6 +14,7 @@ test:
 	cd backend && go test ./...
 
 web-check:
+	pnpm --dir frontend test
 	pnpm --dir frontend lint
 	pnpm --dir frontend build
 
