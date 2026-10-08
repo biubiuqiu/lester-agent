@@ -41,6 +41,10 @@ export function useFileWorkspace() {
   return context;
 }
 
+export function useOptionalFileWorkspace() {
+  return useContext(Context);
+}
+
 export function FileWorkspaceProvider({ conversationId, storageKey, events, runId, running, children }: {
   conversationId?: string; storageKey: string; events: RunEvent[]; runId?: string; running: boolean; children: React.ReactNode;
 }) {

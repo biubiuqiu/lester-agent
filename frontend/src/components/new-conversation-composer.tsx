@@ -4,7 +4,7 @@ import { ContextInput, useContextReferences } from "./context-input";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronDown, FileText, Paperclip, Send, X } from "lucide-react";
+import { ArrowRight, ChevronDown, FileText, Paperclip, Send, X } from "lucide-react";
 import { api, type Agent, type Conversation, type Deployment, type UserProfile } from "@/lib/api";
 import { pastedImageFiles } from "@/lib/clipboard";
 import { readView, updateView, viewKey } from "@/lib/conversation-view-state";
@@ -30,6 +30,14 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const input = useRef<HTMLInputElement>(null);
+  const messageInput = useRef<HTMLTextAreaElement>(null);
+  const returnTo = projectId ? `/app/p/${encodeURIComponent(projectId)}` : "/app";
+  const modelSettingsURL = `/app/settings/models?returnTo=${encodeURIComponent(returnTo)}`;
+  function chooseExample(prompt: string) {
+    setText(prompt);
+    updateView(storageKey, { text: prompt });
+    messageInput.current?.focus();
+  }
   const changeFiles = (next: File[]) => { setFiles(next); updateView(storageKey, { files: next }); };
 
   async function submit(event: FormEvent) {
@@ -75,7 +83,7 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
       <div className="compose-box">
         {missing.length ? <p className="draft-attachment-notice" role="status">请重新选择刷新前的附件：{missing.join("、")}<button type="button" onClick={() => { setMissing([]); updateView(storageKey, { missingFiles: [] }); }}>知道了</button></p> : null}
         {files.length ? <div className="pending-attachments">{files.map((file, index) => <span key={`${file.name}-${index}`}><FileText />{file.name}<button type="button" disabled={busy} aria-label={`移除 ${file.name}`} onClick={() => changeFiles(files.filter((_, i) => i !== index))}><X /></button></span>)}</div> : null}
-        <ContextInput references={contexts} onReferences={setContexts} rows={3} autoFocus aria-label="消息输入框" placeholder="描述你的目标，上传文件或粘贴图片…" value={text} disabled={busy} onText={(value) => { setText(value); updateView(storageKey, { text: value }); }} onPaste={(event) => { const images = pastedImageFiles(event); if (images.length) { event.preventDefault(); changeFiles([...files, ...images]); } }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
+        <ContextInput inputRef={messageInput} references={contexts} onReferences={setContexts} rows={3} autoFocus aria-label="消息输入框" placeholder="描述你的目标，上传文件或粘贴图片…" value={text} disabled={busy} onText={(value) => { setText(value); updateView(storageKey, { text: value }); }} onPaste={(event) => { const images = pastedImageFiles(event); if (images.length) { event.preventDefault(); changeFiles([...files, ...images]); } }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
         <div className="compose-actions">
           <input ref={input} type="file" multiple hidden onChange={(event) => { changeFiles([...files, ...Array.from(event.target.files || [])]); event.target.value = ""; }} />
           <button type="button" className="icon-button upload-button" aria-label="添加附件" title="添加附件或直接粘贴图片" disabled={busy} onClick={() => input.current?.click()}><Paperclip /></button>
@@ -83,11 +91,19 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
           <button className="send-button" aria-label="发送消息" disabled={busy || !model || (!text.trim() && !files.length)}><Send /></button>
         </div>
       </div>
-      <div className="new-agent-picker"><label>本次会话的 Agent <select aria-label="选择 Agent" value={agentSlug} disabled={busy || !agents.length} onChange={event=>{setAgentSlug(event.target.value);updateView(storageKey,{agentSlug:event.target.value});}}>{agents.map(agent=><option key={agent.slug} value={agent.slug}>{agent.name}</option>)}</select></label><Link href={`/app/agents/${encodeURIComponent(agentSlug)}`}>了解这个 Agent</Link><Link href="/app/agents">管理 Agent</Link></div>
+      <details className="agent-options">
+        <summary>本次由 {selectedAgent?.name || "Lester"} 协助 <span>更换 Agent</span></summary>
+        <div className="new-agent-picker"><label>选择 Agent <select aria-label="选择 Agent" value={agentSlug} disabled={busy || !agents.length} onChange={event=>{setAgentSlug(event.target.value);updateView(storageKey,{agentSlug:event.target.value});}}>{agents.map(agent=><option key={agent.slug} value={agent.slug}>{agent.name}</option>)}</select></label><Link href={`/app/agents/${encodeURIComponent(agentSlug)}`}>了解这个 Agent</Link><Link href="/app/agents">管理 Agent</Link></div>
+      </details>
       {agentError ? <p role="alert" className="compose-error">{agentError}</p> : null}
       {busy ? <p role="status" className="composer-status active">正在创建会话并发送消息…</p> : null}
       {error ? <p role="alert" className="compose-error">{error}</p> : null}
-      {!deployments.length ? <p className="new-chat-hint">还没有可用模型，<a href="/app/settings/models">前往配置模型</a>后即可开始。你的草稿会保留。</p> : <p className="new-chat-hint">发送后开始新会话 · 可直接粘贴图片 · Enter 发送，Shift + Enter 换行</p>}
+      {!deployments.length ? <div className="model-setup-prompt"><div><strong>再准备一个模型，就可以开始了</strong><p>连接你的模型服务，或使用管理员提供的共享模型。你的草稿会保留。</p></div><Link className="primary-button" href={modelSettingsURL}>配置第一个模型 <ArrowRight size={16} /></Link></div> : <p className="new-chat-hint">发送后开始新会话 · 可直接粘贴图片 · Enter 发送，Shift + Enter 换行</p>}
     </form>
+    <div className="task-examples" aria-label="任务示例"><p>可以从这些任务开始</p><div>{[
+      ["整理需求文档", "帮我整理产品需求，生成一份包含目标、功能范围和验收标准的评审文档。"],
+      ["分析一份表格", "分析我上传的表格，找出主要趋势和异常，并整理成简明报告。"],
+      ["制作一个网页", "帮我制作一个产品介绍网页，先和我确认目标用户、内容和视觉风格。"],
+    ].map(([title, prompt]) => <button type="button" key={title} disabled={busy} onClick={() => chooseExample(prompt)}>{title}<ArrowRight size={14} /></button>)}</div></div>
   </div></div>;
 }

@@ -1,0 +1,76 @@
+/* First-task guidance and responsive refinements within the existing palette. */
+.field-help { display: block; color: #5c6b60; font-size: 12px; font-weight: 400; line-height: 1.65; }
+.login-page { padding: 24px 0; }
+.login-card .field { font-size: 13px; gap: 8px; }
+.login-card .field input { min-height: 46px; font-size: 16px; }
+.login-card .primary-button { min-height: 46px; font-size: 14px; }
+.login-card .text-button { min-height: 44px; font-size: 13px; }
+.login-card .form-error { font-size: 13px; line-height: 1.6; }
+.password-field { position: relative; }
+.password-field input { padding-right: 48px; }
+.password-field button { position: absolute; top: 1px; right: 1px; display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; color: #5c6b60; }
+.password-field svg { width: 18px; height: 18px; }
+.login-card :is(button, input):focus-visible, .model-setup-steps button:focus-visible, .model-advanced summary:focus-visible { outline: 2px solid #506c57; outline-offset: 3px; }
+.model-setup-prompt, .model-ready { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-top: 18px; padding: 20px; border: 1px solid #d8e3d4; border-radius: 14px; background: #f1f5ee; }
+.model-setup-prompt strong, .model-ready strong { font-size: 15px; }
+.model-setup-prompt p, .model-ready p { margin: 6px 0 0; color: #5c6b60; font-size: 13px; line-height: 1.7; }
+.model-setup-prompt .primary-button, .model-ready .primary-button { flex-shrink: 0; min-height: 44px; text-decoration: none; font-size: 13px; }
+.agent-options { margin-top: 12px; font-size: 13px; color: #5c6b60; }
+.agent-options summary { width: fit-content; padding: 8px 0; cursor: pointer; }
+.agent-options summary span { margin-left: 8px; color: #40694d; font-size: 12px; }
+.task-examples { margin-top: 24px; text-align: center; }
+.task-examples > p { margin: 0 0 10px; color: #5c6b60; font-size: 13px; }
+.task-examples > div { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.task-examples button { display: inline-flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 44px; padding: 10px 14px; border: 1px solid #dce4d7; border-radius: 10px; background: #fff; color: #344c38; font-size: 13px; }
+.task-examples button:hover { background: #f1f5ee; border-color: #a6baa0; }
+.model-setup-steps { display: flex; gap: 20px; align-items: center; list-style: none; padding: 0; margin: 0 0 24px; }
+.model-setup-steps li, .model-setup-steps button { display: flex; align-items: center; gap: 8px; color: #5c6b60; font-size: 13px; }
+.model-setup-steps button { min-height: 44px; border: 0; border-radius: 9px; padding: 5px 8px; background: transparent; cursor: pointer; }
+.model-setup-steps button:disabled { cursor: default; }
+.model-setup-steps span { display: grid; place-items: center; width: 26px; height: 26px; flex-shrink: 0; border: 1px solid #d5ded0; border-radius: 50%; font-size: 12px; }
+.model-setup-steps [aria-current="step"] { color: #253d2b; font-weight: 650; background: #e9f0e5; }
+.model-setup-steps [aria-current="step"] span, .model-setup-steps .complete span { border-color: #506c57; background: #506c57; color: #fff; }
+.model-ready { margin: 0 0 24px; }
+.model-setup-grid { grid-template-columns: minmax(0, 1fr); }
+.model-setup-grid .settings-card { max-width: 680px; }
+.settings-card[hidden] { display: none; }
+.settings-card .field { font-size: 13px; font-weight: 550; }
+.settings-card .field :is(input, select) { min-height: 44px; font-size: 14px; }
+.settings-card .field textarea { font-size: 14px; line-height: 1.6; }
+.settings-card header p, .check-field, .provider-list small, .deployment-list small { color: #5c6b60; font-size: 12px; line-height: 1.5; }
+.settings-card .primary-button { min-height: 44px; }
+.model-advanced { border-top: 1px solid #e5e9e0; padding-top: 12px; }
+.model-advanced summary { cursor: pointer; padding: 4px 0; color: #344c38; font-size: 13px; }
+.model-advanced summary span { margin-left: 10px; color: #5c6b60; font-size: 12px; }
+.model-advanced > .field { margin-top: 14px; }
+.mobile-conversation-options { display: none; }
+.message-file-link { border: 0; border-radius: 4px; padding: 0; background: transparent; color: #36573e; font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.message-file-link:focus-visible { outline: 2px solid #506c57; outline-offset: 3px; }
+@media (max-width: 700px) {
+  .login-card { padding: 28px 24px; }
+  .login-copy { margin: 28px 0 24px; }
+  .model-setup-prompt, .model-ready { flex-direction: column; align-items: stretch; gap: 14px; padding: 16px; }
+  .model-setup-steps { gap: 5px; justify-content: space-between; }
+  .model-setup-steps li, .model-setup-steps button { gap: 5px; font-size: 12px; }
+  .model-setup-steps button { padding: 5px 3px; }
+  .model-setup-steps span { width: 24px; height: 24px; }
+  .settings-card .field :is(input, select, textarea) { font-size: 16px; }
+  .model-advanced summary span { display: block; margin: 4px 0 0; }
+  .conversation-header .conversation-model-selector, .conversation-header:has(.agent-heading) > .workspace-artifacts-link { display: none; }
+  .conversation-header-leading { flex: 1; overflow: hidden; }
+  .agent-heading { min-width: 0; }
+  .agent-heading > span:last-child { min-width: 0; }
+  .agent-heading strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .agent-avatar { flex-shrink: 0; }
+  .conversation-header .mobile-menu, .open-files-button { min-width: 44px; min-height: 44px; flex-shrink: 0; }
+  .open-files-button { white-space: nowrap; padding: 8px 12px; }
+  .mobile-conversation-options { display: block; flex-shrink: 0; }
+  .mobile-conversation-options > summary { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid #dde4dc; border-radius: 9px; cursor: pointer; list-style: none; }
+  .mobile-conversation-options > summary::-webkit-details-marker { display: none; }
+  .mobile-conversation-options > summary svg { width: 20px; height: 20px; }
+  .mobile-conversation-options > div { position: absolute; z-index: 12; top: 60px; right: 12px; width: min(280px, calc(100vw - 24px)); display: grid; gap: 16px; padding: 16px; border: 1px solid #dde4dc; border-radius: 12px; background: #fff; box-shadow: 0 8px 30px #233c2720; }
+  .mobile-conversation-options a { display: flex; align-items: center; min-height: 44px; color: #36573e; }
+  .composer .compose-box { padding: 10px 12px; }
+  .composer .compose-box textarea { min-height: 42px; }
+  .composer .upload-button, .composer .send-button { width: 44px; height: 44px; }
+}

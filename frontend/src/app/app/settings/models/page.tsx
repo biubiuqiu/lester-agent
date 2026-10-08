@@ -1,3 +1,6 @@
 import { SettingsShell } from "@/components/settings-shell";
 import { ModelSettings } from "@/components/model-settings";
-export default function Models() { return <SettingsShell active="models"><ModelSettings /></SettingsShell>; }
+export default async function Models({ searchParams }: { searchParams: Promise<{ returnTo?: string | string[] }> }) {
+  const { returnTo } = await searchParams;
+  return <SettingsShell active="models"><ModelSettings requestedReturn={typeof returnTo === "string" ? returnTo : undefined} /></SettingsShell>;
+}

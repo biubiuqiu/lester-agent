@@ -16,6 +16,8 @@ The current implementation intentionally does not include:
 - browser automation
 - Computer snapshots, or automatic cross-provider workspace migration
 
+First-task UI changes must preserve drafts when users leave to configure models and return to the original project. Task examples only fill the composer; sending remains explicit. Model setup distinguishes saved configuration from verified provider access: the current connection-test endpoint does not call the provider. Preserve advanced cloud-provider configuration and the separate administrator model controls. Link assistant file references only to files verified in the current conversation inventory.
+
 Do not implement, simulate, or silently scaffold these capabilities without an explicit request. A disabled UI placeholder must remain clearly disabled and must not imply that the feature works.
 
 Implementation phase labels are internal planning terms. Do not expose labels such as `Phase 0–4` or `Phase 5+` in the user-facing UI or README.
