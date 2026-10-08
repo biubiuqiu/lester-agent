@@ -73,6 +73,7 @@ function mergeRunEvents(previous: RunEvent[], incoming: RunEvent[]) {
 }
 
 function eventRunStatus(type: string): ConversationRunStatus | null {
+  if (type === "RUN_CANCELLING") return "cancelling";
   if (type === "RUN_COMPLETED") return "completed";
   if (type === "RUN_CANCELLED") return "cancelled";
   if (type === "RUN_FAILED") return "failed";
@@ -304,6 +305,7 @@ export function Workspace({ conversationId, projectId, initialAgentSlug }: { con
           : { conversationId: conversation, runId: event.run_id, state: "running" });
       }
       if (nextStatus === "completed") setRunStatus({ conversationId: conversation, runId: event.run_id, state: "idle" });
+      if (nextStatus === "cancelling") setRunStatus({ conversationId: conversation, runId: event.run_id, state: "stopping" });
       if (nextStatus === "cancelled") setRunStatus({ conversationId: conversation, runId: event.run_id, state: "cancelled" });
       if (nextStatus === "failed") setRunStatus({ conversationId: conversation, runId: event.run_id, state: "failed" });
       if (nextStatus === "completed" || nextStatus === "cancelled" || nextStatus === "failed") {

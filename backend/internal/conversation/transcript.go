@@ -9,6 +9,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/biubiuqiu/lester-agent/backend/internal/eventlog"
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
 	"github.com/biubiuqiu/lester-agent/backend/internal/toolcontext"
 	"github.com/google/uuid"
@@ -321,9 +322,39 @@ func (s *Service) finishFailedRun(ctx context.Context, runID, conversationID uui
 	if _, err = tx.Exec(ctx, `UPDATE runs SET status='failed',completed_at=now() WHERE id=$1`, runID); err != nil {
 		return err
 	}
+	if err = eventlog.Append(ctx, tx, runID, conversationID, "RUN_FAILED", map[string]any{"error": reason}); err != nil {
+		return err
+	}
 	if err = tx.Commit(ctx); err != nil {
 		return fmt.Errorf("finish failed run: %w", err)
 	}
-	s.event(ctx, runID, conversationID, "RUN_FAILED", map[string]any{"error": reason})
 	return nil
+}
+
+func (s *Service) finishCompletedRun(ctx context.Context, runID, conversationID uuid.UUID) error {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if _, err = tx.Exec(ctx, `SELECT id FROM conversations WHERE id=$1 FOR UPDATE`, conversationID); err != nil {
+		return err
+	}
+	var status string
+	if err = tx.QueryRow(ctx, `SELECT status FROM runs WHERE id=$1 AND conversation_id=$2 FOR UPDATE`, runID, conversationID).Scan(&status); err != nil {
+		return err
+	}
+	if status == "completed" {
+		return nil
+	}
+	if status != "running" {
+		return ErrRunNotActive
+	}
+	if _, err = tx.Exec(ctx, `UPDATE runs SET status='completed',completed_at=now() WHERE id=$1`, runID); err != nil {
+		return err
+	}
+	if err = eventlog.Append(ctx, tx, runID, conversationID, "RUN_COMPLETED", map[string]any{}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }

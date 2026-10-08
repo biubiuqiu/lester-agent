@@ -15,6 +15,7 @@
 .deliverable-info { display: grid; gap: 6px; padding: 14px 16px; min-width: 0; }
 .deliverable-info strong { font-size: 15px; color: #2d4433; overflow-wrap: anywhere; line-height: 1.5; }
 .deliverable-info > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #627267; font-size: 12px; }
+.deliverable-info > .deliverable-summary { white-space: normal; overflow-wrap: anywhere; line-height: 1.6; }
 .deliverable-info small { color: #68766a; font-size: 11px; }
 .deliverable-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; padding: 8px 12px; border-top: 1px solid #edf0e8; }
 .deliverable-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 36px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: #45613f; font-size: 12px; }

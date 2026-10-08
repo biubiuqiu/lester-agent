@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/biubiuqiu/lester-agent/backend/internal/eventlog"
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -70,6 +71,9 @@ func (s *Service) CancelRun(ctx context.Context, workspaceID, conversationID, ru
 		if _, err = tx.Exec(ctx, `UPDATE runs SET status='cancelling' WHERE id=$1`, runID); err != nil {
 			return err
 		}
+		if err = eventlog.Append(ctx, tx, runID, conversationID, "RUN_CANCELLING", map[string]any{}); err != nil {
+			return err
+		}
 	case "cancelling", "cancelled":
 		// Idempotent retries are safe.
 	default:
@@ -79,7 +83,7 @@ func (s *Service) CancelRun(ctx context.Context, workspaceID, conversationID, ru
 		return err
 	}
 
-	if value, ok := s.activeRuns.Load(runID); ok {
+	if value, ok := s.executor.active.Load(runID); ok {
 		execution := value.(*activeExecution)
 		execution.cancel(ErrRunCancelled)
 		select {
@@ -143,10 +147,12 @@ func (s *Service) finishCancelledRun(ctx context.Context, runID, conversationID 
 	if _, err = tx.Exec(ctx, `UPDATE runs SET status='cancelled',completed_at=now() WHERE id=$1`, runID); err != nil {
 		return false, err
 	}
+	if err = eventlog.Append(ctx, tx, runID, conversationID, "RUN_CANCELLED", map[string]any{"reason": "user_requested"}); err != nil {
+		return false, err
+	}
 	if err = tx.Commit(ctx); err != nil {
 		return false, fmt.Errorf("finish cancelled run: %w", err)
 	}
-	s.event(ctx, runID, conversationID, "RUN_CANCELLED", map[string]any{"reason": "user_requested"})
 	return true, nil
 }
 

@@ -69,7 +69,7 @@ func newTranscriptFixture(t *testing.T, legacy bool) transcriptFixture {
 	for _, file := range []string{"000001_phase_0_4.up.sql", "000002_user_sandboxes.up.sql", "000003_skills_attachments.up.sql"} {
 		applyTestMigration(t, db, file)
 	}
-	f := transcriptFixture{service: New(db, nil, nil, nil, agenttool.NewDefaultRegistry(db)), workspaceID: uuid.New(), userID: uuid.New(), conversationID: uuid.New()}
+	f := transcriptFixture{service: New(db, nil, nil, agenttool.NewDefaultRegistry(db)), workspaceID: uuid.New(), userID: uuid.New(), conversationID: uuid.New()}
 	for _, stmt := range []struct {
 		query string
 		args  []any
@@ -98,6 +98,7 @@ func newTranscriptFixture(t *testing.T, legacy bool) transcriptFixture {
 	applyTestMigration(t, db, "000009_agents.up.sql")
 	applyTestMigration(t, db, "000010_agent_files.up.sql")
 	applyTestMigration(t, db, "000011_agent_designer.up.sql")
+	applyTestMigration(t, db, "000012_deliverables_events.up.sql")
 	return f
 }
 
@@ -292,7 +293,7 @@ func TestTranscriptReadEditSurvivesReload(t *testing.T) {
 			return nil
 		}
 	}}
-	f.service.executeTurns(ctx, f.conversationID, runID, &Computer{SandboxID: "test", WorkDir: conversationWorkDir(f.conversationID)}, client, request)
+	f.service.executor.executeTurns(ctx, f.conversationID, runID, &Computer{SandboxID: "test", WorkDir: conversationWorkDir(f.conversationID)}, client, request)
 	stored := f.messages(t)
 	if got := files.content("config.yaml"); len(stored) != 6 || got != "port: 9090\nmode: development\n" {
 		t.Fatalf("messages=%d file=%q", len(stored), got)
@@ -321,7 +322,7 @@ func TestTranscriptReadEditSurvivesReload(t *testing.T) {
 		t.Fatalf("read event result=%q id=%s", result, callID)
 	}
 	// New service instance models a later request after process restart.
-	f.service = New(f.service.db, nil, nil, nil, agenttool.NewDefaultRegistry(f.service.db))
+	f.service = New(f.service.db, nil, nil, agenttool.NewDefaultRegistry(f.service.db))
 	f.startRun(t, "What was the old port?")
 	restored := modelHistory(f.messages(t))
 	if len(restored) != 7 || restored[2].ToolCallID != "read-1" || !strings.Contains(restored[2].Content, "8080") {
@@ -351,7 +352,7 @@ func TestExecuteTurnsAllowsMoreThanTwelveToolIterations(t *testing.T) {
 		return nil
 	}}
 
-	f.service.executeTurns(ctx, f.conversationID, runID, &Computer{SandboxID: "test", WorkDir: conversationWorkDir(f.conversationID)}, client, request)
+	f.service.executor.executeTurns(ctx, f.conversationID, runID, &Computer{SandboxID: "test", WorkDir: conversationWorkDir(f.conversationID)}, client, request)
 
 	var status string
 	var invokedTools int
@@ -421,7 +422,7 @@ func TestToolContextProjectsEveryIterationAndReloadWithoutPruningStorage(t *test
 	if err := f.service.saveRunContext(ctx, runID, initial, request); err != nil {
 		t.Fatal(err)
 	}
-	f.service.executeTurns(ctx, f.conversationID, runID, computer, client, request)
+	f.service.executor.executeTurns(ctx, f.conversationID, runID, computer, client, request)
 	stored := f.messages(t)
 	if client.step != 3 || len(stored) != 17 {
 		t.Fatalf("steps=%d messages=%d", client.step, len(stored))
@@ -443,7 +444,7 @@ func TestToolContextProjectsEveryIterationAndReloadWithoutPruningStorage(t *test
 		t.Fatalf("policy snapshot: %s err=%v", version, err)
 	}
 	// A later run reconstructs exactly the same policy from the unpruned DB.
-	f.service = New(f.service.db, nil, nil, nil, agenttool.NewDefaultRegistry(f.service.db))
+	f.service = New(f.service.db, nil, nil, agenttool.NewDefaultRegistry(f.service.db))
 	nextRun := f.startRun(t, "continue")
 	client = &scriptedModel{respond: func(_ int, request model.ModelRequest) []model.ModelEvent {
 		projection, err := toolcontext.Build(modelHistory(f.messages(t)))
@@ -452,7 +453,7 @@ func TestToolContextProjectsEveryIterationAndReloadWithoutPruningStorage(t *test
 		}
 		return []model.ModelEvent{{Delta: "continued"}}
 	}}
-	f.service.executeTurns(ctx, f.conversationID, nextRun, computer, client, model.ModelRequest{Messages: modelHistory(f.messages(t))})
+	f.service.executor.executeTurns(ctx, f.conversationID, nextRun, computer, client, model.ModelRequest{Messages: modelHistory(f.messages(t))})
 	if client.step != 1 {
 		t.Fatal("reload did not reach the model")
 	}
@@ -509,7 +510,7 @@ func TestTranscriptToolFailureAndPartialStream(t *testing.T) {
 		}
 		return []model.ModelEvent{{Delta: "partial response"}, {Err: errors.New("stream interrupted")}}
 	}}
-	f.service.executeTurns(ctx, f.conversationID, runID, &Computer{SandboxID: "test"}, client, model.ModelRequest{Messages: modelHistory(f.messages(t))})
+	f.service.executor.executeTurns(ctx, f.conversationID, runID, &Computer{SandboxID: "test"}, client, model.ModelRequest{Messages: modelHistory(f.messages(t))})
 	stored := f.messages(t)
 	if len(stored) != 4 || stored[2].Metadata["is_error"] != true || stored[3].Metadata["incomplete"] != true {
 		t.Fatalf("stored=%#v", stored)
@@ -524,14 +525,14 @@ func TestCancelRunStopsModelAndPersistsCancelledState(t *testing.T) {
 	runID := f.startRun(t, "keep working until I stop you")
 	runCtx, cancelRun := context.WithCancelCause(context.Background())
 	execution := &activeExecution{cancel: cancelRun, done: make(chan struct{})}
-	f.service.activeRuns.Store(runID, execution)
+	f.service.executor.active.Store(runID, execution)
 	client := &cancellableModel{started: make(chan struct{})}
 	go func() {
 		defer func() {
-			f.service.activeRuns.Delete(runID)
+			f.service.executor.active.Delete(runID)
 			close(execution.done)
 		}()
-		f.service.executeTurns(runCtx, f.conversationID, runID, &Computer{}, client, model.ModelRequest{Messages: modelHistory(f.messages(t))})
+		f.service.executor.executeTurns(runCtx, f.conversationID, runID, &Computer{}, client, model.ModelRequest{Messages: modelHistory(f.messages(t))})
 	}()
 	select {
 	case <-client.started:
@@ -658,6 +659,7 @@ func TestTranscriptGuardAndConcurrentSequence(t *testing.T) {
 			t.Fatalf("sequence=%d at %d", m.Seq, i)
 		}
 	}
+	applyTestMigration(t, f.service.db, "000012_deliverables_events.down.sql")
 	applyTestMigration(t, f.service.db, "000004_durable_transcript.down.sql")
 	var count int
 	if err := f.service.db.QueryRow(ctx, `SELECT count(*) FROM messages`).Scan(&count); err != nil || count != 14 {

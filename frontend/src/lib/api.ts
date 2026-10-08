@@ -71,6 +71,7 @@ export type Message = { id: string; role: string; content: string; metadata?: { 
 export type Deployment = { id: string; connection_id: string; name: string; model_id: string; is_default: boolean; enabled: boolean; shared: boolean };
 export type Skill = { id: string; slug: string; name: string; description: string; version: string; source: string; size_bytes: number; installed_at?: string };
 export type FileEntry = { name: string; path: string; is_dir: boolean; size: number; modified_at: string };
+export type Deliverable = { id: string; conversation_id: string; run_id: string; title: string; summary: string; entry_path: string; kind: "html" | "markdown"; content_sha256: string; created_at: string; updated_at: string };
 export type ComputerState = { conversation_id: string; user_id: string; provider?: string; provider_ref?: string; status: "not_created" | "creating" | "running" | "suspended" | "stopped" | "unhealthy" | "missing" | "error"; last_error?: string; last_checked_at?: string };
 
 export type Project = { id:string; name:string; is_default:boolean; pinned:boolean; conversation_count:number; created_at:string };

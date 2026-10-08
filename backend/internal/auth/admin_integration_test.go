@@ -136,7 +136,7 @@ func TestAdministration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	conversations := conversation.New(db, nil, models, nil, nil)
+	conversations := conversation.New(db, models, nil, nil)
 	chat, err := conversations.Create(ctx, memberWorkspace, member.ID, "lester", "Shared default", uuid.Nil)
 	if err != nil || chat.ModelDeploymentID != deployment.ID {
 		t.Fatalf("conversation system default: %v %v", chat.ModelDeploymentID, err)

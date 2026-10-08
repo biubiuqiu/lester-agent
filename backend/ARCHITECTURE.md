@@ -19,7 +19,7 @@ To add a tool:
 3. Register it in `NewDefaultRegistry`; add aliases only when compatibility requires them.
 4. Add focused handler tests. Do not edit the conversation execution loop.
 
-The conversation service remains responsible for run state, model turns, durable events, and connecting a tool result to the correct model call ID. It delegates all tool-specific behavior to the registry.
+The conversation service owns the API and durable run state. `conversation/executor.go` owns in-process model turns, tool invocation, active contexts, and shutdown. It delegates all tool-specific behavior to the registry and preserves tool call IDs in the transcript. Tools with application dependencies, including `register_deliverable`, are registered explicitly in the composition root.
 
 ## Durable transcript
 
@@ -41,9 +41,23 @@ Docker-backed file operations run through `cmd/lester-toolbox`, a static Go help
 
 ACS supports both Native and Private routing. Native is the production default and requires wildcard DNS/TLS; Private uses the `/kruise` path layout for simpler internal/test deployments. ACS pause/resume backs idle suspension. The adapter reconnects before data-plane operations so paused sandboxes wake and fresh runtime access tokens are used; tokens are never stored in Lester's database. Snapshot/volume portability and automatic migration between Docker and ACS are not implemented.
 
-`MODEL_DELTA` events are coalesced by time/size before PostgreSQL insertion. Each inserted event is published to both its conversation channel and authenticated Workspace channel. The browser keeps one Workspace SSE for all live conversation states and loads the selected conversation's durable event history through JSON. SSE subscribes to Redis before reading durable history, sends numeric event IDs, honors `Last-Event-ID`, deduplicates the subscribe/query overlap, and bounds every history replay to the most recent 1,200 events. PostgreSQL remains authoritative; Redis only carries events that have already been inserted.
+`MODEL_DELTA` events are coalesced by time/size before PostgreSQL insertion. `internal/eventlog.Append` stores each event and its outbox delivery intent in one transaction. Run start, cancelling, terminal transitions, and deliverable registration commit their state and event together. Append is the last domain operation before commit: locks follow conversation → run → workspace event lock, and event IDs are allocated under that final lock so IDs follow commit order within a Workspace stream. A single advisory-locked dispatcher across API replicas publishes ordered batches to both conversation and Workspace channels. It removes intents only after both publications succeed; a failed batch retries with the original IDs. Delivery to Redis is at least once, and clients deduplicate by event ID. This does not imply exactly-once tools or receipt by disconnected browsers. The browser keeps one Workspace SSE for all live conversation states and loads the selected conversation's durable event history through JSON. SSE subscribes to Redis before reading durable history, sends numeric event IDs, honors `Last-Event-ID`, deduplicates the subscribe/query overlap, and bounds every history replay to the most recent 1,200 events. PostgreSQL remains authoritative; Redis only carries events that have already been inserted.
 
 Sandbox Service is an internal trust boundary. `/healthz` is public for probes, while every lifecycle, command, file, and terminal route requires the shared `SANDBOX_SERVICE_TOKEN`. The API adds this token to HTTP and WebSocket upstream requests. Deployment configuration must keep the service private even though the token provides defense in depth.
+
+## Execution lifecycle and event delivery
+
+The executor runs inside API; there is no independent Worker, job queue, lease, or automatic task resumption. Shutdown stops new launches, cancels active contexts, waits for cleanup, persists interrupted/unknown outcomes, and releases conversation guards. User cancellation still ends as cancelled. An abrupt process kill is repaired when the next sender acquires the released database guard; tools are never automatically replayed.
+
+The dispatcher bounds each flush to 100 events and five seconds. It intentionally holds only outbox row locks and a dispatcher advisory lock during Redis publication to preserve order across replicas. Domain transactions do not wait on those outbox rows. Redis failure retains intents for later retries/startup, so operators must monitor pending outbox count and disk growth. This is a bounded initial implementation, not a measured high-throughput queue. SSE/history replay remains capped at 1,200 events; PostgreSQL history remains authoritative.
+
+## Registered deliverables
+
+`internal/deliverable` stores workspace-scoped metadata in PostgreSQL. The independent `register_deliverable` tool accepts a relative HTML/Markdown entry path, title, and summary. Registration reads the actual bounded file outside a transaction, then locks the conversation/run and rechecks that the run is still running before persisting metadata and its event. Cross-workspace access, missing files, unsafe paths, and cancellation races are rejected. Each conversation has at most 200 records; re-registering the same path retains its ID and updates the source run and entry SHA-256.
+
+The authenticated `GET /api/v1/conversations/{id}/deliverables` reads metadata without waking a Computer. The UI joins records with the current verified file inventory, shows registered titles/summaries first, and retains type-based discovery for older files. Missing/unscanned files do not become phantom cards. Metadata and inventory failures are reported separately. Summaries are Agent-authored, the digest covers the entry at registration time, and current previews can later change: registration is neither validation nor a content/version snapshot. Publication remains explicit and uses the separate artifact service.
+
+Migration 012 adds metadata and the outbox; apply it after 011 and before starting the updated API. Its down migration drops registered metadata and pending delivery intents but leaves messages, run events, Computer files, and published artifacts intact. Stop the updated API before rollback and restore the compatible application version together with the schema.
 
 ## Tool context projection
 
@@ -75,4 +89,4 @@ OpenAI-compatible and Anthropic-compatible transports reuse shared streaming cli
 
 Registries are assembled explicitly in `cmd/api/main.go`, so available capabilities are visible at startup. Registry metadata, typed argument validation, handler composition, endpoint construction, and both OpenAI/Anthropic streaming adapters have focused tests. Full verification remains `go test ./...` from `backend/`.
 
-Set `LESTER_TEST_DATABASE_URL` to a disposable PostgreSQL database to run transcript integration tests. Each test creates and cleans up its own uniquely named schema. These tests cover migration/backfill/rollback, read/edit persistence and replay, event results, run guards, sequence allocation, failed tools, partial streams, and interrupted tool recovery. PostgreSQL integration tests are currently opt-in; CI does not provision a database.
+Set `LESTER_TEST_DATABASE_URL` to a disposable PostgreSQL database to run transcript integration tests. Each test creates and cleans up its own uniquely named schema. These tests cover migration/backfill/rollback, read/edit persistence and replay, event results, run guards, sequence allocation, failed tools, partial streams, and interrupted tool recovery. Local runs skip PostgreSQL integration tests when the variable is unset; CI provisions PostgreSQL and runs them. Additional integration coverage exercises deliverable identity/workspace isolation, cancellation races, atomic state/event rollback, partial-publish retries, workspace commit ordering, executor shutdown, and migration 012 rollback.

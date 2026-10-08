@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Download, FileText, FolderOpen, X } from "lucide-react";
-import { type FileEntry, readConversationFileBytes } from "@/lib/api";
+import { api, type Deliverable, type FileEntry, readConversationFileBytes } from "@/lib/api";
 import { listDirectory, relativeFilePath, scanFiles, wasPathCovered, type FileState } from "@/lib/file-inventory";
 import { readView, updateView } from "@/lib/conversation-view-state";
 import { artifactFiles } from "@/lib/artifact-files";
@@ -16,6 +16,8 @@ type FileWorkspaceValue = FileState & {
   loading: boolean;
   running: boolean;
   runOutcome?: "failed" | "cancelled";
+  deliverables: Deliverable[];
+  deliverablesError: string;
   modes: Record<string, "preview" | "source">;
   setPreviewMode: (path: string, mode: "preview" | "source") => void;
   changes: Change[];
@@ -38,7 +40,7 @@ type FileWorkspaceValue = FileState & {
 
 const Context = createContext<FileWorkspaceValue | null>(null);
 const emptyState: FileState = { directories: {}, files: [], signature: "", limited: false, error: "" };
-const refreshEvents = new Set(["FILE_UPDATED", "TOOL_COMPLETED", "TOOL_FAILED", "RUN_COMPLETED", "RUN_FAILED", "RUN_CANCELLED"]);
+const refreshEvents = new Set(["FILE_UPDATED", "DELIVERABLE_REGISTERED", "TOOL_COMPLETED", "TOOL_FAILED", "RUN_COMPLETED", "RUN_FAILED", "RUN_CANCELLED"]);
 
 export function useFileWorkspace() {
   const context = useContext(Context);
@@ -55,6 +57,8 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, runI
 }) {
   const [state, setState] = useState<FileState>(emptyState);
   const [loading, setLoading] = useState(true);
+  const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
+  const [deliverablesError, setDeliverablesError] = useState("");
   const [tabs, setTabs] = useState<FileEntry[]>(() => readView(storageKey).tabs.map((path) => ({ path, name: path.split("/").at(-1) ?? path, is_dir: false, size: 0, modified_at: "" })));
   const [selectedPath, setSelectedPath] = useState<string | null>(() => readView(storageKey).selected);
   const [reference, setReferenceState] = useState<string | null>(() => readView(storageKey).reference);
@@ -91,8 +95,20 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, runI
       pending = true;
       const owner = runRef.current;
       try {
-        const next = await scanFiles(conversationId, controller.signal, [...watchedDirectories.current]);
+        const [inventory, registered] = await Promise.allSettled([
+          scanFiles(conversationId, controller.signal, [...watchedDirectories.current]),
+          api<{ deliverables: Deliverable[] }>(`/api/v1/conversations/${conversationId}/deliverables`, { signal: controller.signal }),
+        ]);
         if (stopped) return;
+        if (registered.status === "fulfilled") {
+          if (!Array.isArray(registered.value.deliverables)) setDeliverablesError("成果记录返回格式不正确");
+          else {
+            setDeliverables((value) => JSON.stringify(value) === JSON.stringify(registered.value.deliverables) ? value : registered.value.deliverables);
+            setDeliverablesError("");
+          }
+        } else setDeliverablesError(registered.reason instanceof Error ? registered.reason.message : "成果记录加载失败");
+        if (inventory.status === "rejected") throw inventory.reason;
+        const next = inventory.value;
         if (previous && owner === runRef.current) {
           const old = new Map(previous.files.map((file) => [file.path, file]));
           const current = new Map(next.files.map((file) => [file.path, file]));
@@ -180,7 +196,7 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, runI
   const selected = state.files.find((file) => file.path === selectedPath)
     ?? Object.values(state.directories).flatMap((directory) => directory.entries).find((file) => !file.is_dir && file.path === selectedPath)
     ?? null;
-  return <Context.Provider value={{ ...state, storageKey, conversationId: conversationId ?? "", loading, running, runOutcome, modes, setPreviewMode, tabs, selected, changes, reference, referenceRevision, expanded, panelOpen, panelTab, setPanelTab, open, close, refresh, loadDirectory, setExpanded, setPanelOpen, setReference }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ ...state, storageKey, conversationId: conversationId ?? "", loading, running, runOutcome, deliverables, deliverablesError, modes, setPreviewMode, tabs, selected, changes, reference, referenceRevision, expanded, panelOpen, panelTab, setPanelTab, open, close, refresh, loadDirectory, setExpanded, setPanelOpen, setReference }}>{children}</Context.Provider>;
 }
 
 export function OpenFilesButton() {
@@ -194,8 +210,9 @@ export function FileReferenceChip() {
 }
 
 export function ArtifactCards() {
-  const { files, changes, open, conversationId, running } = useFileWorkspace();
-  const verified = artifactFiles(files.filter((file) => !deliverableKind(file)), changes, running);
+  const { files, changes, open, conversationId, running, deliverables } = useFileWorkspace();
+  const registeredPaths = new Set(deliverables.map((item) => item.entry_path));
+  const verified = artifactFiles(files.filter((file) => !deliverableKind(file) && !registeredPaths.has(file.path)), changes, running);
   if (!verified.length) return null;
   return <details className="related-files"><summary>其他相关文件 · {verified.length}</summary><section className="artifact-cards" aria-label="任务文件">{verified.map((file) => <div className="artifact-card" key={file.path}>
     <button type="button" onClick={() => open(file)} title={file.path} aria-label={`查看 ${file.name}`}><FileText /><span><strong>{file.name}</strong><small>{file.name.includes(".") ? file.name.split(".").at(-1)?.toUpperCase() : "文件"} · {file.size < 1024 ? `${file.size} B` : file.size < 1048576 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / 1048576).toFixed(1)} MB`}</small></span><span>查看</span></button>

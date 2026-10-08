@@ -65,6 +65,7 @@ func TestProjectMigrationAndOrganization(t *testing.T) {
 	if _, err = f.service.db.Exec(ctx, `INSERT INTO conversations(workspace_id,created_by,agent_slug,project_id) VALUES($1,$2,'lester',$3)`, f.workspaceID, f.userID, foreign[0].ID); err == nil {
 		t.Fatal("cross workspace insert accepted")
 	}
+	applyTestMigration(t, f.service.db, "000012_deliverables_events.down.sql")
 	applyTestMigration(t, f.service.db, "000006_projects_artifacts.down.sql")
 	applyTestMigration(t, f.service.db, "000006_projects_artifacts.up.sql")
 	list, err = p.List(ctx, f.workspaceID)

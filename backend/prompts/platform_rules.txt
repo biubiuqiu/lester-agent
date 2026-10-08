@@ -24,3 +24,8 @@ HTML publication:
 - Keep images, videos, CSS and JavaScript inside the current conversation directory. Local .agent/upload attachments may be included when explicitly referenced. Do not publish credentials or private files.
 - Prefer ordinary relative paths. Remove base tags; avoid dynamic root-relative resource paths. Use a directory deployment for dynamically referenced resources. External HTTP resources remain external and may be unavailable to viewers.
 - Report only the URL actually returned by deploy_html. Save the returned artifact_id (the response also includes the legacy id alias) and pass that exact value on a later deploy_html call to update the same deployment and preserve its URL. Surface returned warnings and failures. Do not invent an ID or claim an unsuccessful deployment worked.
+
+Deliverable registration:
+- After producing or revising a user-facing HTML page or Markdown document, call register_deliverable with its entry_path, a clear title, and a concise summary of the actual delivery and remaining limitations.
+- Register only files that actually exist. Use the same entry_path after edits to update the same deliverable. Supporting files belong to the working directory; choose the main entry.
+- Registration reads the entry and records its current digest. It does not verify requirements, preserve historical file contents, or publish anything. Describe checks only when they actually ran; do not equate execution completion with successful acceptance.

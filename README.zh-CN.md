@@ -107,7 +107,11 @@ ACS Provider 支持 `native` 与 `private` 两种 E2B 路由。生产默认使�
 
 任务结束后，会话中已同步的 HTML 网页与 Markdown 文档集中展示为成果卡片，支持预览、下载和“继续修改”。点击继续修改只引用该文件并回到输入框，保留已有草稿，不会自动发送。HTML 卡片可打开现有部署对话框，由用户明确发布。
 
-Computer 的“成果”标签和手机端“⋯ → 查看会话成果”可打开同一成果列表。列表按修改时间展示当前文件，后续追问和刷新后仍可查找；依赖、隐藏目录、Agent 资源及 README/AGENTS/SKILL 等常见辅助文档会被排除。其他本轮相关文件折叠展示。成果区按文件类型整理，不代表任务验收通过、已发布或历史版本快照；执行失败、停止及同步范围不完整时会明确提示。任务执行期间可在文件面板查看生成中的文件。
+Computer 的“成果”标签和手机端“⋯ → 查看会话成果”可打开同一成果列表。Agent 可通过 `register_deliverable` 为真实存在的 HTML/Markdown 文件登记标题、摘要、来源任务和入口文件 SHA-256；同一路径再次登记保留成果 ID，每个会话最多登记 200 项。已登记成果优先展示，仍兼容按文件类型发现旧成果；自动发现会排除依赖、隐藏目录、Agent 资源及 README/AGENTS/SKILL 等常见辅助文档。明确登记的 Markdown 文档可作为成果。
+
+页面只为当前文件清单中确认存在的文件显示卡片，后续追问和刷新后仍可查找。其他本轮相关文件折叠展示。登记摘要由 Agent 撰写，摘要和入口摘要值均不代表验收通过；预览仍显示当前文件，不是历史内容快照，也不会自动发布。执行失败、停止、目录范围不完整及成果记录同步失败时会明确提示。任务执行期间可在文件面板查看生成中的文件。
+
+运行执行器已与会话服务拆分，但仍在 API 进程内运行。关键运行状态与事件、待投递记录在同一 PostgreSQL 事务中保存；Redis 投递失败会保留记录并重试，重复事件按 ID 去重。正常停机时会中断运行并清理守卫，不会自动重放工具；暂未引入独立 Worker 或任务恢复队列。
 
 ## 上下文存储
 
@@ -155,6 +159,20 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --buil
 ```
 
 全新部署会自动执行 004–005。004 保留旧聊天记录的原有排序，但不能补回旧版本从未保存的工具结果；005 为用户资料增加内置头像主题。回滚 SQL 保留消息文本，不过旧 API 不理解新增工具消息；完整应用降级应使用备份恢复。
+
+### 成果登记与可靠事件升级
+
+当前版本需要迁移 001–012。上面的 004–005 命令仅说明历史聊天升级，不足以升级到当前版本；请按编号补齐所有尚未执行的迁移。若数据库已完成 001–011，先备份、停止 API 写入，再执行一次 012，随后重建 API/Web：
+
+```bash
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
+  sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  < backend/migrations/000012_deliverables_events.up.sql
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
+```
+
+全新 Compose 数据卷会按序执行 001–012；已有数据卷不会自动升级，勿删除数据卷。012 回滚会删除成果登记和待投递记录，保留原文件、消息、运行事件及已发布站点；回滚前停止新版 API，并配套恢复兼容的应用版本。Redis 长期不可用时待投递表会增长，需要监控数量和磁盘空间。
 
 ## Skill 与附件机制
 

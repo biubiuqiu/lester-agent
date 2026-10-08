@@ -9,6 +9,7 @@ import (
 	"github.com/biubiuqiu/lester-agent/backend/internal/auth"
 	"github.com/biubiuqiu/lester-agent/backend/internal/contextlibrary"
 	"github.com/biubiuqiu/lester-agent/backend/internal/conversation"
+	"github.com/biubiuqiu/lester-agent/backend/internal/deliverable"
 	"github.com/biubiuqiu/lester-agent/backend/internal/httpapi"
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
 	"github.com/biubiuqiu/lester-agent/backend/internal/project"
@@ -29,6 +30,7 @@ type Dependencies struct {
 	Skills        *skill.Handler
 	Projects      *project.Handler
 	Artifacts     *artifact.Handler
+	Deliverables  *deliverable.Handler
 }
 
 func Router(deps Dependencies) http.Handler {
@@ -70,6 +72,9 @@ func Router(deps Dependencies) http.Handler {
 				private.Get("/artifacts", deps.Artifacts.List)
 				private.Post("/conversations/{id}/artifacts", deps.Artifacts.Publish)
 				private.Post("/artifacts/{id}/unpublish", deps.Artifacts.Unpublish)
+			}
+			if deps.Deliverables != nil {
+				private.Get("/conversations/{id}/deliverables", deps.Deliverables.List)
 			}
 			private.Patch("/me", deps.Auth.UpdateProfile)
 			if deps.Agents != nil {
