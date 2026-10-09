@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { api, UserProfile } from "@/lib/api";
 import { UserAvatar } from "./user-avatar";
 import { clearViewState } from "@/lib/conversation-view-state";
+import { useGuide } from "./user-guide";
 
 const menuItems = [
   { label: "Agent 管理", path: "/app/agents", icon: Bot },
@@ -20,6 +21,7 @@ const menuItems = [
 
 export function UserMenu({ user }: { user: UserProfile | null }) {
   const router = useRouter();
+  const guide = useGuide();
   const root = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -66,6 +68,7 @@ export function UserMenu({ user }: { user: UserProfile | null }) {
     {open ? <div className="user-menu-popover" role="menu" aria-label="账户与设置">
       <header><UserAvatar displayName={name} avatarKey={user?.avatar_key} avatarURL={user?.avatar_url} /><span><strong>{name}</strong><small>{user?.email || "正在加载账户…"}</small></span></header>
       <div className="user-menu-items">
+        {guide && <button type="button" role="menuitem" onClick={() => { setOpen(false); guide.open(); }}><BookOpen /><span>新手引导</span></button>}
         {user?.role === "admin" && <button type="button" role="menuitem" onClick={() => navigate("/admin/users")}><ShieldCheck /><span>管理后台</span></button>}
         {menuItems.map((item) => <button key={item.path} type="button" role="menuitem" onClick={() => navigate(item.path)}><item.icon /><span>{item.label}</span></button>)}
       </div>

@@ -51,6 +51,8 @@ func Router(deps Dependencies) http.Handler {
 		api.Group(func(private chi.Router) {
 			private.Use(deps.Auth.Middleware)
 			private.Get("/me", deps.Auth.Me)
+			private.Get("/me/guides", deps.Auth.Guides)
+			private.Patch("/me/guides/{topic}", deps.Auth.SaveGuide)
 			if deps.Contexts != nil {
 				private.Get("/contexts", deps.Contexts.List)
 				private.Post("/contexts", deps.Contexts.Save)

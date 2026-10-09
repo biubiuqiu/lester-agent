@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { api, type Conversation, type Project } from "@/lib/api";
 import { ArtifactManager } from "./artifact-manager";
 import { Brand } from "./brand";
+import { GuideLauncher } from "./user-guide";
 
 export function ArtifactPage({ returnTo = "/app" }: { returnTo?: string }) {
   const [attempt, setAttempt] = useState(0);
@@ -41,6 +42,7 @@ export function ArtifactPage({ returnTo = "/app" }: { returnTo?: string }) {
   return (
     <main className="artifacts-page-shell">
       <header className="artifacts-page-topbar">
+        <GuideLauncher />
         <Link className="artifacts-page-brand" href={returnTo} aria-label="返回 Lester 工作区">
           <Brand />
         </Link>

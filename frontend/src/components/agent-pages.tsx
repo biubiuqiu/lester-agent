@@ -1,4 +1,5 @@
 "use client";
+import { GuideLauncher } from "./user-guide";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -6,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Bot, Plus, Trash2 } from "lucide-react";
 import { api, type Agent, type AgentFile } from "@/lib/api";
 
-function Header({ title }: { title: string }) { return <header className="agent-page-header"><Link href="/app"><ArrowLeft size={17} />工作区</Link><span><Bot size={18} />{title}</span></header>; }
+function Header({ title }: { title: string }) { return <header className="agent-page-header"><Link href="/app"><ArrowLeft size={17} />工作区</Link><span><Bot size={18} />{title}</span><GuideLauncher /></header>; }
 
 export function AgentCatalog() {
   const [items,setItems]=useState<Agent[]>([]); const [error,setError]=useState(""); const [loading,setLoading]=useState(true);

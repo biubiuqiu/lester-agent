@@ -53,6 +53,11 @@ export const siteDocs: SiteDoc[] = [
         <p>资料页可修改称呼、设置或更换密码、上传照片或恢复内置头像。照片支持小于 2 MB 的 PNG/JPEG/GIF，居中裁剪为方形，GIF 使用首帧。头像上传和恢复即时保存；称呼与主题选择需点击“保存资料”。更换密码会保留当前登录，退出其他设备。</p>
         <p>找回密码链接在 30 分钟后过期，验证链接在 24 小时后过期，均只能使用一次。密码重设后所有设备需重新登录。第三方按钮未出现时，请联系部署负责人配置，参见<Link href="/docs/deployment#authentication">登录与邮件服务配置</Link>。</p>
       </> },
+      { id: "guides", title: "逐步认识工作区", content: <>
+        <p>新账户首次进入会看到可跳过的 7 步教学，介绍选择模型、描述目标、提供材料、查看执行和文件成果。点击“新手引导”打开教学中心，每个功能都有“上一步 / 下一步”的说明。</p>
+        <p>模型、项目、文件、Agent、上下文库、Computer、Skill、个人资料与发布各有独立教学。功能页首次访问的提示可关闭；进度跟随账户保存，完成后也可重新看一遍。已有账户升级后不会被强制欢迎弹窗打断。</p>
+        <p>教学不会自动发送任务或发布内容；跳转模型配置时草稿保留。阅读模型教学不等于模型调用已验证。</p>
+      </> },
       { id: "conversation", title: "描述目标，开始会话", content: <>
         <p>在工作区首页选择模型和 Agent，写下目标、约束和想要的交付物。发送第一条消息时才会创建会话；任务示例只填入草稿。</p>
         <p>你可以上传文件或粘贴图片。附件存入当前会话目录，模型默认接收文件路径提示，按需要使用工具读取内容。</p>
@@ -145,11 +150,14 @@ export const siteDocs: SiteDoc[] = [
         <p>已有部署不要重新覆盖 <code>deploy/.env</code>，也不要删除 Volume 来升级。切换 Docker 与 ACS Provider 不会自动迁移用户文件，应另行规划。</p>
       </> },
       { id: "upgrade", title: "已有数据库升级", content: <>
-        <p>当前版本需要迁移 001–013。全新 PostgreSQL 数据目录会按序执行初始化 SQL，已有 Volume 不会自动重新执行这些文件。</p>
+        <p>当前版本需要迁移 001–014。全新 PostgreSQL 数据目录会按序执行初始化 SQL，已有 Volume 不会自动重新执行这些文件。</p>
         <p>先备份并停止 API 写入，确认数据库已应用哪些迁移，再按编号执行尚未应用的 <code>backend/migrations/*.up.sql</code>。不要重复执行已经完成的迁移。</p>
-        <p>例如，数据库已完成 001–012 时，执行一次账号机制的 013，再重建 API 和 Web：</p>
-        <CodeBlock label="迁移 013（仅适用于已完成 001–012）">{"docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api\ndocker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"' < backend/migrations/000013_account_identity.up.sql\ndocker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web"}</CodeBlock>
+        <p>例如，数据库已完成 001–012 时，执行一次账号机制的 013，并继续执行下面的 014，再重建 API 和 Web：</p>
+        <CodeBlock label="迁移 013（仅适用于已完成 001–012）">{"docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api\ndocker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"' < backend/migrations/000013_account_identity.up.sql"}</CodeBlock>
         <p>这段重定向命令适用于 Bash。PowerShell 可使用 <code>Get-Content -Raw</code> 读取迁移文件，再通过管道传入同一 <code>exec -T postgres</code> 命令。</p>
+        <p>数据库已完成 001–013 时，执行一次新手引导的 014。新数据库会自动初始化；已有卷不会自动升级：</p>
+        <CodeBlock label="迁移 014（仅适用于已完成 001–013）">{"docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api\ndocker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"' < backend/migrations/000014_user_guides.up.sql\ndocker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web"}</CodeBlock>
+        <p>014 回滚只删除新手引导进度；使用兼容的 API/Web 版本。迁移时已有账户默认跳过自动欢迎，新账户首次进入会看到引导。</p>
         <Note>回滚应配套恢复兼容的应用版本。迁移 013 会删除身份、令牌和头像引用，存在无密码账号时会拒绝回滚，应先安排密码恢复。工作区与文件不会迁移。迁移 012 回滚会删除成果登记和待投递记录。</Note>
       </> },
       { id: "helm", title: "Kubernetes 与 ACS", content: <>

@@ -20,6 +20,7 @@ services:
       - ../backend/migrations/000011_agent_designer.up.sql:/docker-entrypoint-initdb.d/011.sql:ro
       - ../backend/migrations/000012_deliverables_events.up.sql:/docker-entrypoint-initdb.d/012.sql:ro
       - ../backend/migrations/000013_account_identity.up.sql:/docker-entrypoint-initdb.d/013.sql:ro
+      - ../backend/migrations/000014_user_guides.up.sql:/docker-entrypoint-initdb.d/014.sql:ro
     healthcheck:
       test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
       interval: 3s

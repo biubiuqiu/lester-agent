@@ -4,9 +4,11 @@ import { ReactNode } from "react";
 import { Box, ChevronLeft, Database, ServerCog, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Brand } from "./brand";
+import { GuideLauncher } from "./user-guide";
 
-export function SettingsShell({ active, children }: { active: "profile" | "models" | "sandbox" | "skills"; children: ReactNode }) {
+export function SettingsShell({ active, children, returnTo = "/app" }: { active: "profile" | "models" | "sandbox" | "skills"; children: ReactNode; returnTo?: string }) {
   const router = useRouter();
+  const returnPath = /^\/app(?:\/p\/[A-Za-z0-9_-]+)?$/.test(returnTo) ? returnTo : "/app";
   return <main className="settings-shell">
     <aside className="settings-sidebar">
       <Brand />
@@ -16,7 +18,8 @@ export function SettingsShell({ active, children }: { active: "profile" | "model
         <button className={active === "sandbox" ? "active" : ""} onClick={() => router.push("/app/settings/sandbox")}><ServerCog />Computer</button>
         <button className={active === "skills" ? "active" : ""} onClick={() => router.push("/app/settings/skills")}><Box />Skill 广场</button>
       </nav>
-      <button className="back-button" onClick={() => router.push("/app")}><ChevronLeft />返回工作区</button>
+      <GuideLauncher />
+      <button className="back-button" onClick={() => router.push(returnPath)}><ChevronLeft />返回工作区</button>
     </aside>
     <section className="settings-main">{children}</section>
   </main>;
