@@ -35,9 +35,16 @@ type Dependencies struct {
 
 func Router(deps Dependencies) http.Handler {
 	router := chi.NewRouter()
-	router.Use(middleware.RequestID, middleware.RealIP, httpapi.Recover(deps.Logger), httpapi.AccessLog(deps.Logger), httpapi.CORS(deps.WebOrigin))
+	router.Use(middleware.RequestID, middleware.RealIP, httpapi.Recover(deps.Logger), httpapi.AccessLog(deps.Logger), httpapi.CORS(deps.WebOrigin), auth.MutationOrigin(deps.WebOrigin))
 	router.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { httpapi.JSON(w, 200, map[string]bool{"ok": true}) })
 	router.Route("/api/v1", func(api chi.Router) {
+		api.Get("/auth/options", deps.Auth.Capabilities)
+		api.Get("/auth/oauth/{provider}/start", deps.Auth.OAuthStart)
+		api.Get("/auth/oauth/{provider}/callback", deps.Auth.OAuthCallback)
+		api.Post("/auth/verify-email", deps.Auth.VerifyEmail)
+		api.Post("/auth/resend-verification", deps.Auth.ResendVerification)
+		api.Post("/auth/forgot-password", deps.Auth.ForgotPassword)
+		api.Post("/auth/reset-password", deps.Auth.ResetPassword)
 		api.Post("/auth/register", deps.Auth.Register)
 		api.Post("/auth/login", deps.Auth.Login)
 		api.Post("/auth/logout", deps.Auth.Logout)
@@ -77,6 +84,14 @@ func Router(deps Dependencies) http.Handler {
 				private.Get("/conversations/{id}/deliverables", deps.Deliverables.List)
 			}
 			private.Patch("/me", deps.Auth.UpdateProfile)
+			private.Patch("/me/password", deps.Auth.ChangePassword)
+			private.Get("/me/identities", deps.Auth.Identities)
+			private.Post("/me/identities/{provider}/link", deps.Auth.OAuthLink)
+			private.Delete("/me/identities/{provider}", deps.Auth.UnlinkIdentity)
+			private.Get("/me/avatar", deps.Auth.Avatar)
+			private.Post("/me/avatar", deps.Auth.UploadAvatar)
+			private.Delete("/me/avatar", deps.Auth.RemoveAvatar)
+			private.Post("/me/avatar/{provider}", deps.Auth.UseProviderAvatar)
 			if deps.Agents != nil {
 				private.Get("/agents", deps.Agents.List)
 				private.Post("/agents", deps.Agents.Save)

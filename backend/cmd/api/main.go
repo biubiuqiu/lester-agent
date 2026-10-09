@@ -109,6 +109,17 @@ func run() error {
 		return err
 	}
 	authService := auth.New(db, redisClient, cfg.SessionTTL, cfg.SessionCookieSecure)
+	var mailer auth.Mailer
+	if cfg.SMTPHost != "" {
+		smtpMailer, mailErr := auth.NewSMTPMailer(auth.SMTPConfig{Host: cfg.SMTPHost, Port: cfg.SMTPPort, Username: cfg.SMTPUsername, Password: cfg.SMTPPassword, From: cfg.SMTPFrom, TLSMode: cfg.SMTPTLSMode})
+		if mailErr != nil {
+			return mailErr
+		}
+		mailer = smtpMailer
+	}
+	if err = authService.Configure(auth.Options{WebOrigin: cfg.WebOrigin, RegistrationEnabled: cfg.RegistrationEnabled, Providers: auth.DefaultProviders(cfg.GoogleClientID, cfg.GoogleClientSecret, cfg.GitHubClientID, cfg.GitHubClientSecret), Mailer: mailer, Avatars: objectStore}); err != nil {
+		return err
+	}
 	handler := server.Router(server.Dependencies{Deliverables: &deliverable.Handler{Service: deliverableService}, Contexts: &contextlibrary.Handler{Service: &contextlibrary.Service{DB: db}}, Agents: &agent.Handler{Service: &agent.Service{DB: db, Objects: objectStore}}, AgentBuilder: &agent.BuilderHandler{DB: db, Models: modelStore}, Logger: logger, WebOrigin: cfg.WebOrigin, Auth: authService, Models: model.NewHandler(modelStore), Conversations: conversationHandler, Skills: skill.NewHandler(skillService, conversationService), Projects: &project.Handler{Service: &project.Service{DB: db}}, Artifacts: &artifact.Handler{Service: artifactService}})
 	server := &http.Server{Addr: cfg.HTTPAddr, Handler: handler, ReadHeaderTimeout: 10 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
 	dispatcher := &eventlog.Dispatcher{DB: db, Publish: func(ctx context.Context, channel string, data []byte) error {

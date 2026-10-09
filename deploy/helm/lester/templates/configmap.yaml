@@ -8,6 +8,14 @@ data:
   WEB_ORIGIN: {{ required "config.webOrigin is required" .Values.config.webOrigin | trimSuffix "/" | quote }}
   ARTIFACT_PUBLIC_URL: {{ required "config.artifactPublicURL is required" .Values.config.artifactPublicURL | trimSuffix "/" | quote }}
   SESSION_COOKIE_SECURE: {{ .Values.config.sessionCookieSecure | quote }}
+  AUTH_REGISTRATION_ENABLED: {{ .Values.config.auth.registrationEnabled | quote }}
+  GOOGLE_OAUTH_CLIENT_ID: {{ .Values.config.auth.googleClientID | quote }}
+  GITHUB_OAUTH_CLIENT_ID: {{ .Values.config.auth.githubClientID | quote }}
+  SMTP_HOST: {{ .Values.config.auth.smtpHost | quote }}
+  SMTP_PORT: {{ .Values.config.auth.smtpPort | quote }}
+  SMTP_USERNAME: {{ .Values.config.auth.smtpUsername | quote }}
+  SMTP_FROM: {{ .Values.config.auth.smtpFrom | quote }}
+  SMTP_TLS_MODE: {{ .Values.config.auth.smtpTLSMode | quote }}
   OBJECT_STORE_ENDPOINT: {{ required "config.objectStore.endpoint is required" .Values.config.objectStore.endpoint | quote }}
   OBJECT_STORE_BUCKET: {{ required "config.objectStore.bucket is required" .Values.config.objectStore.bucket | quote }}
   OBJECT_STORE_USE_SSL: {{ .Values.config.objectStore.useSSL | quote }}

@@ -37,7 +37,7 @@ export const siteDocs: SiteDoc[] = [
         <p>部署在远程主机时，请使用该主机配置的访问地址，而不是浏览器所在电脑的 localhost。</p>
       </> },
       { id: "first-task", title: "4. 完成第一项任务", content: <>
-        <ol><li>进入工作区，注册并登录。Lester 会创建你的 Personal Workspace 和默认项目。</li><li>点击“配置第一个模型”，保存服务连接，再添加对应的 Model ID。更多说明见<Link href="/docs/models">模型配置</Link>。</li><li>输入一个目标，例如“制作一个产品介绍网页，保存为 index.html”。需要时上传材料，再明确发送。</li><li>跟随执行过程。任务结束后，打开成果预览，也可以下载文件或点击“继续修改”。</li></ol>
+        <ol><li>进入工作区，使用邮箱或已配置的 Google / GitHub 注册、登录。启用邮件服务时先验证邮箱。Lester 会创建你的 Personal Workspace 和默认项目。详见<Link href="/docs/usage#account">账号与登录</Link>。</li><li>点击“配置第一个模型”，保存服务连接，再添加对应的 Model ID。更多说明见<Link href="/docs/models">模型配置</Link>。</li><li>输入一个目标，例如“制作一个产品介绍网页，保存为 index.html”。需要时上传材料，再明确发送。</li><li>跟随执行过程。任务结束后，打开成果预览，也可以下载文件或点击“继续修改”。</li></ol>
         <Note>保存模型配置不代表连接已经验证。第一次实际任务会确认模型是否能被调用；示例任务只会填写输入框，不会自动发送。</Note>
         <p><Link href="/app" prefetch={false}>进入当前部署的工作区</Link>，或继续阅读<Link href="/docs/usage">使用指南</Link>。</p>
       </> },
@@ -47,6 +47,12 @@ export const siteDocs: SiteDoc[] = [
     slug: "usage", navTitle: "使用指南", title: "和 Lester 一起完成工作",
     description: "从描述目标，到查看成果，再继续把它做好。",
     sections: [
+      { id: "account", title: "注册、登录与个人资料", content: <>
+        <p>使用邮箱和密码，或部署方已配置的 Google / GitHub 登录。启用邮件服务时，新邮箱注册需验证；登录页可重新发送验证邮件或找回密码。未配置邮件服务时，保留自部署即时注册方式。</p>
+        <p>相同邮箱不会自动合并账号。已有账号请先用原方式登录，再到“个人资料 → 登录方式”绑定第三方身份。绑定不会更改账号邮箱、项目或文件。至少保留一种可用登录方式；解除绑定会退出其他设备。</p>
+        <p>资料页可修改称呼、设置或更换密码、上传照片或恢复内置头像。照片支持小于 2 MB 的 PNG/JPEG/GIF，居中裁剪为方形，GIF 使用首帧。头像上传和恢复即时保存；称呼与主题选择需点击“保存资料”。更换密码会保留当前登录，退出其他设备。</p>
+        <p>找回密码链接在 30 分钟后过期，验证链接在 24 小时后过期，均只能使用一次。密码重设后所有设备需重新登录。第三方按钮未出现时，请联系部署负责人配置，参见<Link href="/docs/deployment#authentication">登录与邮件服务配置</Link>。</p>
+      </> },
       { id: "conversation", title: "描述目标，开始会话", content: <>
         <p>在工作区首页选择模型和 Agent，写下目标、约束和想要的交付物。发送第一条消息时才会创建会话；任务示例只填入草稿。</p>
         <p>你可以上传文件或粘贴图片。附件存入当前会话目录，模型默认接收文件路径提示，按需要使用工具读取内容。</p>
@@ -118,6 +124,16 @@ export const siteDocs: SiteDoc[] = [
         <CodeBlock label="应用地址示例">{"GATEWAY_PORT=13280\nWEB_ORIGIN=http://localhost:13280"}</CodeBlock>
         <p>远程访问时，设置为实际公开地址，并使用 HTTPS 入口。更新配置后重新启动完整 Compose 栈。不要把 Sandbox Service 或 Docker Socket 暴露为公网服务。</p>
       </> },
+      { id: "authentication", title: "配置第三方登录与邮件", content: <>
+        <p>在 <code>deploy/.env</code> 成对填写 <code>GOOGLE_OAUTH_CLIENT_ID</code> / <code>GOOGLE_OAUTH_CLIENT_SECRET</code>，或 <code>GITHUB_OAUTH_CLIENT_ID</code> / <code>GITHUB_OAUTH_CLIENT_SECRET</code>。空的变量对隐藏对应按钮；配置只填一项会拒绝启动。</p>
+        <CodeBlock label="OAuth 回调地址">{"<WEB_ORIGIN>/api/v1/auth/oauth/google/callback\n<WEB_ORIGIN>/api/v1/auth/oauth/github/callback"}</CodeBlock>
+        <p>将 <code>&lt;WEB_ORIGIN&gt;</code> 替换为真实应用地址。Google 创建 Web application 客户端并配置授权页面、测试用户或正式发布；GitHub 创建对应环境的 OAuth App。授权回调需与配置完全一致，并经同源 Gateway / Ingress 转发到 API。</p>
+        <p>生产环境使用 HTTPS，并设置 <code>SESSION_COOKIE_SECURE=true</code>；HTTP 仅限 localhost 开发。密钥保存在服务端，API 需能访问 Google / GitHub 的 HTTPS 接口。</p>
+        <CodeBlock label="SMTP 配置示例">{"SMTP_HOST=smtp.example.com\nSMTP_PORT=587\nSMTP_TLS_MODE=starttls\nSMTP_USERNAME=your-mail-account\nSMTP_PASSWORD=your-mail-password\nSMTP_FROM=no-reply@example.com"}</CodeBlock>
+        <p>替换为邮件服务实际参数并使用已授权的发件地址。465 端口可用 <code>SMTP_TLS_MODE=tls</code>，STARTTLS 要求服务器支持 TLS 且证书有效。明文 plain 仅允许 localhost 测试。</p>
+        <p>SMTP 启用后，新邮箱注册需验证，支持“忘记密码”；旧账号可从资料页补充验证。关闭 SMTP 不会让待验证账号自动获得访问权。设置 <code>AUTH_REGISTRATION_ENABLED=false</code> 可关闭所有新账号注册，同时保留已有账号登录和绑定。</p>
+        <p>Helm 对应参数在 <code>config.auth</code>，OAuth/SMTP 密钥在 <code>secrets</code> 或引用的 existingSecret。完整字段见<a href={`${repositoryURL}#accounts-and-sign-in`} target="_blank" rel="noopener noreferrer">仓库账号配置文档</a>。</p>
+      </> },
       { id: "artifacts", title: "配置公开站点地址", content: <>
         <p>Artifact Host 默认在 <code>http://127.0.0.1:13181</code>。外部分享需配置可访问的站点地址；应用与 Artifact Host 必须使用不同主机名，只有端口不同是不够的。</p>
         <CodeBlock label="独立域名示例">{"WEB_ORIGIN=https://lester.example.com\nARTIFACT_PUBLIC_URL=https://sites.example.net\nARTIFACT_PORT=13181"}</CodeBlock>
@@ -128,12 +144,12 @@ export const siteDocs: SiteDoc[] = [
         <p>已有部署不要重新覆盖 <code>deploy/.env</code>，也不要删除 Volume 来升级。切换 Docker 与 ACS Provider 不会自动迁移用户文件，应另行规划。</p>
       </> },
       { id: "upgrade", title: "已有数据库升级", content: <>
-        <p>当前版本需要迁移 001–012。全新 PostgreSQL 数据目录会按序执行初始化 SQL，已有 Volume 不会自动重新执行这些文件。</p>
+        <p>当前版本需要迁移 001–013。全新 PostgreSQL 数据目录会按序执行初始化 SQL，已有 Volume 不会自动重新执行这些文件。</p>
         <p>先备份并停止 API 写入，确认数据库已应用哪些迁移，再按编号执行尚未应用的 <code>backend/migrations/*.up.sql</code>。不要重复执行已经完成的迁移。</p>
-        <p>例如，数据库已完成 001–011 时，执行一次 012，再重建 API 和 Web：</p>
-        <CodeBlock label="迁移 012（仅适用于已完成 001–011）">{"docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api\ndocker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"' < backend/migrations/000012_deliverables_events.up.sql\ndocker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web"}</CodeBlock>
+        <p>例如，数据库已完成 001–012 时，执行一次账号机制的 013，再重建 API 和 Web：</p>
+        <CodeBlock label="迁移 013（仅适用于已完成 001–012）">{"docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api\ndocker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"' < backend/migrations/000013_account_identity.up.sql\ndocker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web"}</CodeBlock>
         <p>这段重定向命令适用于 Bash。PowerShell 可使用 <code>Get-Content -Raw</code> 读取迁移文件，再通过管道传入同一 <code>exec -T postgres</code> 命令。</p>
-        <Note>回滚应配套恢复兼容的应用版本。迁移 012 的回滚会删除成果登记和待投递记录；原文件、消息、运行事件和已发布站点会保留。</Note>
+        <Note>回滚应配套恢复兼容的应用版本。迁移 013 会删除身份、令牌和头像引用，存在无密码账号时会拒绝回滚，应先安排密码恢复。工作区与文件不会迁移。迁移 012 回滚会删除成果登记和待投递记录。</Note>
       </> },
       { id: "helm", title: "Kubernetes 与 ACS", content: <>
         <p>Helm Chart 位于 <code>deploy/helm/lester</code>。PostgreSQL、Redis 和兼容 S3 的对象存储由外部提供，安装前需按编号完成数据库迁移。</p>

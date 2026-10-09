@@ -20,6 +20,7 @@ import (
 func TestPrivateHTMLBytesCannotExecuteAtApplicationOrigin(t *testing.T) {
 	f := newTranscriptFixture(t, false)
 	applyTestMigration(t, f.service.db, "000005_user_profiles.up.sql")
+	applyTestMigration(t, f.service.db, "000013_account_identity.up.sql")
 	content := "<!doctype html><script>localStorage.getItem('private-data')</script>"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {

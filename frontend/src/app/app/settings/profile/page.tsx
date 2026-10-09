@@ -1,77 +1,73 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { Check, UserRound } from "lucide-react";
+import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
+import { Check, Upload, UserRound } from "lucide-react";
 import { SettingsShell } from "@/components/settings-shell";
+import { AccountSecurity } from "@/components/account-security";
 import { avatarOptions, UserAvatar } from "@/components/user-avatar";
-import { api, AvatarKey, UserProfile } from "@/lib/api";
+import { api, upload, AvatarKey, AuthOptions, UserProfile } from "@/lib/api";
 
 export default function ProfileSettings() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [options, setOptions] = useState<AuthOptions | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [avatarKey, setAvatarKey] = useState<AvatarKey>("forest");
+  const [useDefaultAvatar, setUseDefaultAvatar] = useState(false);
   const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false);
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState(false);
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     let active = true;
-    api<UserProfile>("/api/v1/me").then((value) => {
+    api<UserProfile>("/api/v1/me").then(value => {
       if (!active) return;
-      setProfile(value);
-      setDisplayName(value.display_name);
-      setAvatarKey(value.avatar_key || "forest");
-    }).catch((reason: Error) => {
-      if (active) setError(reason.message);
-    });
+      setProfile(value); setDisplayName(value.display_name); setAvatarKey(value.avatar_key || "forest");
+    }).catch(reason => { if (active) setError(reason instanceof Error ? reason.message : "账户读取失败，请刷新重试"); });
+    api<AuthOptions>("/api/v1/auth/options").then(value => { if (active) setOptions(value); }).catch(() => {});
     return () => { active = false; };
   }, []);
-
+  const dirty = Boolean(profile && (displayName !== profile.display_name || avatarKey !== profile.avatar_key || (useDefaultAvatar && profile.avatar_url)));
+  async function run(callback: () => Promise<void>) {
+    if (inFlight.current) return;
+    inFlight.current = true; setBusy(true); setError(""); setNotice("");
+    try { await callback(); } catch (reason) { setError(reason instanceof Error ? reason.message : "操作失败"); }
+    finally { inFlight.current = false; setBusy(false); }
+  }
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setBusy(true);
-    setError("");
-    setSaved(false);
-    try {
-      const updated = await api<UserProfile>("/api/v1/me", { method: "PATCH", body: JSON.stringify({ display_name: displayName, avatar_key: avatarKey }) });
-      setProfile(updated);
-      setDisplayName(updated.display_name);
-      setAvatarKey(updated.avatar_key);
-      setSaved(true);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "保存失败");
-    } finally {
-      setBusy(false);
-    }
+    await run(async () => {
+      const updated = await api<UserProfile>("/api/v1/me", { method: "PATCH", body: JSON.stringify({ display_name: displayName, avatar_key: avatarKey, use_default_avatar: useDefaultAvatar }) });
+      setProfile(updated); setDisplayName(updated.display_name); setAvatarKey(updated.avatar_key); setUseDefaultAvatar(false); setNotice("个人资料已保存。");
+    });
   }
-
+  async function changeAvatar(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]; event.target.value = "";
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { setError("请选择小于 2 MB 的图片。"); return; }
+    await run(async () => {
+      const data = new FormData(); data.append("avatar", file);
+      const updated = await upload<UserProfile>("/api/v1/me/avatar", data);
+      setProfile(updated); setUseDefaultAvatar(false); setNotice("图片头像已保存。");
+    });
+  }
+  async function useProviderAvatar(provider: "google" | "github") {
+    const updated = await api<UserProfile>(`/api/v1/me/avatar/${provider}`, { method: "POST" });
+    setProfile(updated); setUseDefaultAvatar(false);
+  }
   return <SettingsShell active="profile">
-    <header className="settings-heading">
-      <div><p className="eyebrow">Settings / Profile</p><h1>个人资料</h1><p>管理你在 Lester 中展示的称呼和头像。</p></div>
-    </header>
+    <header className="settings-heading"><div><p className="eyebrow">Settings / Account</p><h1>个人资料与账号</h1><p>管理称呼、头像、登录方式和账号安全。</p></div></header>
     <form className="profile-settings" onSubmit={save}>
-      <section className="profile-identity">
-        <UserAvatar displayName={displayName || profile?.display_name} avatarKey={avatarKey} size="large" />
-        <div><h2>{displayName || "你的称呼"}</h2><p>{profile?.email || "正在载入账户信息…"}</p></div>
-      </section>
-      <section className="settings-card profile-card">
-        <header><span className="card-icon"><UserRound /></span><div><h2>基本信息</h2><p>这些信息用于侧边栏和你的账户菜单。</p></div></header>
-        <label className="field">称呼<input value={displayName} onChange={(event) => { setDisplayName(event.target.value); setSaved(false); }} maxLength={60} required autoComplete="name" /></label>
-        <label className="field">邮箱<input value={profile?.email || ""} readOnly aria-readonly="true" /></label>
-        <p className="profile-help">邮箱是当前登录账号。如需更换账号，请先退出登录。</p>
-      </section>
-      <section className="settings-card profile-card">
-        <header><div><h2>选择头像</h2><p>选择一个 Lester 内置头像主题。</p></div></header>
-        <div className="avatar-picker" role="radiogroup" aria-label="选择头像">
-          {avatarOptions.map((option) => <button key={option.key} type="button" role="radio" aria-checked={avatarKey === option.key} className={avatarKey === option.key ? "selected" : ""} onClick={() => { setAvatarKey(option.key); setSaved(false); }}>
-            <UserAvatar displayName={displayName} avatarKey={option.key} size="large" />
-            <span>{option.label}</span>
-            {avatarKey === option.key ? <Check /> : null}
-          </button>)}
-        </div>
-      </section>
-      {error ? <p className="settings-error">保存失败：{error}</p> : null}
-      <footer className="profile-actions"><span>{saved ? <><Check />已保存</> : "修改后记得保存"}</span><button className="primary-button" disabled={busy || !displayName.trim()}>{busy ? "保存中…" : "保存更改"}</button></footer>
+      <section className="profile-identity"><UserAvatar displayName={displayName || profile?.display_name} avatarKey={avatarKey} avatarURL={useDefaultAvatar ? undefined : profile?.avatar_url} size="large" /><div><h2>{displayName || "你的称呼"}</h2><p>{profile?.email || "正在载入账户信息…"}</p></div></section>
+      <section className="settings-card profile-card"><header><span className="card-icon"><UserRound /></span><div><h2>基本信息</h2><p>这些信息用于侧边栏和你的账户菜单。</p></div></header><label className="field">称呼<input value={displayName} onChange={event => { setDisplayName(event.target.value); setNotice(""); }} maxLength={60} required autoComplete="name" disabled={busy || !profile} /></label><label className="field">账号邮箱<input value={profile?.email || ""} readOnly aria-readonly="true" /></label><div className="profile-email-status"><span>{profile?.email_verified ? <><Check size={14} />邮箱已验证</> : "邮箱尚未验证"}</span>{profile && !profile.email_verified && options?.email_verification_required && <button className="text-button" type="button" disabled={busy} onClick={() => void run(async () => { const result = await api<{ message: string }>("/api/v1/auth/resend-verification", { method: "POST", body: JSON.stringify({ email: profile.email }) }); setNotice(result.message); })}>发送验证邮件</button>}</div><p className="profile-help">绑定第三方登录不会更改账号邮箱、已有项目或文件。</p></section>
+      <section className="settings-card profile-card"><header><div><h2>头像</h2><p>上传自己的照片，或选择一个内置头像主题。</p></div></header><div className="avatar-upload-actions"><label className={`secondary-button ${busy || !profile ? "disabled" : ""}`} htmlFor="avatar-upload"><Upload size={15} />上传图片</label><input id="avatar-upload" className="account-file-input" type="file" accept="image/png,image/jpeg,image/gif" onChange={event => void changeAvatar(event)} disabled={busy || !profile} aria-label="上传头像图片" />{profile?.avatar_url && <button type="button" className="text-button" disabled={busy} onClick={() => void run(async () => { const updated = await api<UserProfile>("/api/v1/me/avatar", { method: "DELETE" }); setProfile(updated); setUseDefaultAvatar(false); setNotice("已恢复内置头像。"); })}>恢复内置头像</button>}</div><p className="profile-help">PNG、JPEG 或 GIF，小于 2 MB。图片将居中裁剪为方形；GIF 使用首帧。上传和恢复会即时保存。</p><div className="avatar-picker" role="radiogroup" aria-label="选择头像主题">{avatarOptions.map(option => {
+        const selected = avatarKey === option.key && (!profile?.avatar_url || useDefaultAvatar);
+        return <button key={option.key} type="button" role="radio" aria-checked={selected} className={selected ? "selected" : ""} disabled={busy || !profile} onClick={() => { setAvatarKey(option.key); setUseDefaultAvatar(true); setNotice(""); }}><UserAvatar displayName={displayName} avatarKey={option.key} size="large" /><span>{option.label}</span>{selected ? <Check /> : null}</button>;
+      })}</div></section>
+      {error && <p className="settings-error" role="alert">{error}</p>}
+      {notice && <p className="account-feedback" role="status"><Check size={16} />{notice}</p>}
+      <footer className="profile-actions"><span>{dirty ? "资料更改尚未保存" : ""}</span><button className="primary-button" disabled={busy || !profile || !displayName.trim() || !dirty}>{busy ? "保存中…" : "保存资料"}</button></footer>
     </form>
+    <AccountSecurity profile={profile} unsaved={dirty || busy} onPasswordSet={() => setProfile(value => value ? { ...value, has_password: true } : value)} onProviderAvatar={useProviderAvatar} />
   </SettingsShell>;
 }

@@ -262,3 +262,50 @@
 .login-public-links { display:flex; justify-content:center; gap:24px; border-top:1px solid var(--line); margin-top:24px; padding-top:18px; color:var(--muted); font-size:12px; }
 .login-public-links a { color:inherit; text-decoration:none; }
 .login-public-links a:hover { color:var(--dark); text-decoration:underline; text-underline-offset:4px; }
+
+/* Account entry and identity management reuse the workspace's quiet palette. */
+.login-page { padding:32px 16px; }
+.login-card .login-copy { margin:28px 0 24px; }
+.user-avatar img { display:block; width:100%; height:100%; border-radius:inherit; object-fit:cover; }
+.auth-social > div { display:grid; gap:10px; }
+.auth-provider-button { display:flex; align-items:center; justify-content:center; gap:12px; min-height:44px; border:1px solid var(--line-strong); border-radius:9px; background:white; color:var(--ink); text-decoration:none; font-size:13px; font-weight:650; }
+.auth-provider-button:hover { background:var(--sage); border-color:#9caf9e; }
+.auth-provider-button[aria-disabled=true] { opacity:.5; cursor:wait; }
+.auth-social > p { display:flex; align-items:center; gap:12px; margin:20px 0; color:var(--muted); font-size:11px; }
+.auth-social > p::before,.auth-social > p::after { content:""; height:1px; flex:1; background:var(--line); }
+.auth-notice,.account-feedback { display:flex; align-items:flex-start; gap:8px; margin:0; border-radius:9px; background:#eef5ee; padding:12px; color:#346043; font-size:12px; line-height:1.7; }
+.auth-notice svg,.account-feedback svg { flex-shrink:0; margin-top:2px; }
+.auth-registration-note { display:flex; align-items:center; justify-content:center; gap:6px; color:var(--muted); font-size:11px; line-height:1.8; }
+.login-card > .auth-forgot { margin-top:14px; }
+.login-card > .auth-resend { margin-top:13px; font-size:11px; }
+.auth-config-error { color:#9c492f; font-size:11px; line-height:1.7; }
+.login-card :is(input,button,a):focus-visible,.account-security :is(input,button):focus-visible,.avatar-upload-actions:focus-within { outline:3px solid #b2c8b6; outline-offset:3px; }
+.profile-email-status { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:12px; font-size:11px; color:var(--muted); }
+.profile-email-status > span { display:flex; align-items:center; gap:5px; }
+.avatar-upload-actions { display:flex; flex-wrap:wrap; align-items:center; gap:16px; margin-bottom:12px; border-radius:5px; }
+.avatar-upload-actions label { cursor:pointer; }
+.avatar-upload-actions label.disabled { opacity:.5; cursor:not-allowed; }
+.account-file-input { position:absolute; width:1px; height:1px; opacity:0; overflow:hidden; }
+.account-security { display:grid; gap:18px; max-width:760px; margin-top:24px; }
+.account-password-form { display:grid; gap:16px; }
+.account-password-form > .primary-button { width:max-content; }
+.identity-list { display:grid; gap:16px; }
+.identity-row { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 0; border-bottom:1px solid var(--line); }
+.identity-row:last-child { border-bottom:0; }
+.identity-info { display:flex; align-items:center; gap:12px; min-width:0; }
+.identity-info > svg { flex-shrink:0; }
+.identity-info strong,.identity-info small { display:block; }
+.identity-info strong { font-size:13px; }
+.identity-info small { margin-top:5px; color:var(--muted); font-size:11px; overflow-wrap:anywhere; }
+.identity-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:10px; flex-shrink:0; }
+.identity-actions .secondary-button { min-height:34px; padding:0 10px; font-size:11px; }
+.identity-actions .text-button { font-size:11px; }
+.account-security button:disabled { opacity:.5; cursor:not-allowed; }
+@media(max-width:550px) {
+  .login-page { padding:18px 12px; }
+  .login-card { width:100%; max-width:420px; padding:25px 22px; }
+  .identity-row { align-items:flex-start; flex-direction:column; gap:14px; }
+  .identity-actions { width:100%; justify-content:flex-start; }
+  .profile-email-status { align-items:flex-start; flex-wrap:wrap; }
+  .avatar-picker { gap:10px; }
+}

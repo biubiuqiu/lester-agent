@@ -168,7 +168,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --buil
 
 ### 成果登记与可靠事件升级
 
-当前版本需要迁移 001–012。上面的 004–005 命令仅说明历史聊天升级，不足以升级到当前版本；请按编号补齐所有尚未执行的迁移。若数据库已完成 001–011，先备份、停止 API 写入，再执行一次 012，随后重建 API/Web：
+当前版本需要迁移 001–013；账号机制的 013 迁移见下方“账号、第三方登录与头像”。上面的 004–005 命令仅说明历史聊天升级，不足以升级到当前版本；请按编号补齐所有尚未执行的迁移。若数据库已完成 001–011，先备份、停止 API 写入，再执行一次 012，并继续补齐 013 后重建 API/Web：
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
@@ -178,7 +178,49 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T post
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
 ```
 
-全新 Compose 数据卷会按序执行 001–012；已有数据卷不会自动升级，勿删除数据卷。012 回滚会删除成果登记和待投递记录，保留原文件、消息、运行事件及已发布站点；回滚前停止新版 API，并配套恢复兼容的应用版本。Redis 长期不可用时待投递表会增长，需要监控数量和磁盘空间。
+全新 Compose 数据卷会按序执行 001–013；已有数据卷不会自动升级，勿删除数据卷。012 回滚会删除成果登记和待投递记录，保留原文件、消息、运行事件及已发布站点；回滚前停止新版 API，并配套恢复兼容的应用版本。Redis 长期不可用时待投递表会增长，需要监控数量和磁盘空间。
+
+## 账号、第三方登录与头像
+
+登录页支持邮箱密码以及部署方配置的 Google / GitHub 登录。首次注册会创建一个 Personal Workspace 和默认项目，新账号始终是普通成员。`AUTH_REGISTRATION_ENABLED=false` 关闭邮箱和第三方的**新账号注册**，已有账号仍可登录、绑定身份。注册校验有效邮箱、1–60 字称呼和至少 10 字符、不超过 1024 字节的密码；界面要求确认密码。
+
+在 `deploy/.env` 配置：
+
+| 服务 | 变量 | 授权回调地址 |
+| --- | --- | --- |
+| Google | `GOOGLE_OAUTH_CLIENT_ID`、`GOOGLE_OAUTH_CLIENT_SECRET` | `<WEB_ORIGIN>/api/v1/auth/oauth/google/callback` |
+| GitHub | `GITHUB_OAUTH_CLIENT_ID`、`GITHUB_OAUTH_CLIENT_SECRET` | `<WEB_ORIGIN>/api/v1/auth/oauth/github/callback` |
+
+Google 在 Cloud Console 的 Google Auth Platform 创建 Web application 客户端，配置授权页面、测试用户或正式发布状态，并添加精确回调地址。GitHub 在 Developer settings 创建 OAuth App，每个部署环境使用对应回调的应用。回调应经同源 Gateway / Ingress 转发到 API。生产环境必须 HTTPS，并设置 `SESSION_COOKIE_SECURE=true`；HTTP 仅限 localhost 开发。未配置的完整变量对会隐藏对应按钮；只填一项会拒绝启动。密钥只放 `.env` 或 Kubernetes Secret。API 需能访问第三方 HTTPS 接口；授权范围为 Google 的 `openid email profile` 和 GitHub 的 `read:user user:email`。
+
+身份按第三方稳定用户 ID 识别，邮箱必须由服务商确认已验证，GitHub 私有邮箱也支持。回调使用单次、10 分钟有效、绑定浏览器的状态和 PKCE S256；Access Token 不持久化。相同邮箱**不会自动合并账户**：先用原方式登录，再到“个人资料 → 登录方式”绑定。绑定不会改写原邮箱、称呼、工作区或文件。解除绑定需保留其他已配置的登录方式或密码，并退出其他设备、轮换当前会话。停用账号仍无法登录。
+
+配置 SMTP 后，新邮箱注册必须验证，登录页提供“忘记密码”和重新发送验证邮件；旧账号保持可用，可从资料页补充验证。不配置 SMTP 时保留自部署的即时注册方式，邮箱显示未验证，邮件操作隐藏。验证链接有效 24 小时，找回密码链接有效 30 分钟，数据库仅保存摘要且只能使用一次；令牌放在 URL fragment，页面读入后立即移除，操作需明确提交。找回密码撤销所有会话和待处理安全令牌；设置页修改密码保留轮换后的当前会话、退出其他设备。
+
+```dotenv
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_TLS_MODE=starttls
+SMTP_USERNAME=your-mail-account
+SMTP_PASSWORD=your-mail-password
+SMTP_FROM=no-reply@example.com
+```
+
+发件地址需获得邮件服务授权。465 端口可用 `SMTP_TLS_MODE=tls`；`starttls` 要求服务端支持 TLS 且证书有效。明文 `plain` 仅限 localhost 测试。申请邮件对未知、停用和符合条件的账户返回相同信息；邮件失败可检查 API 的 `account mail request failed` 日志。注册邮件发送失败时账户仍需验证，可重新发送；关闭 SMTP 不会让待验证账号自动获得访问权。Helm 的 ID/邮件参数位于 `config.auth`，密钥位于 `secrets.googleOAuthClientSecret`、`secrets.githubOAuthClientSecret`、`secrets.smtpPassword`；使用 `existingSecret` 时按需加入三个对应环境变量密钥。
+
+头像支持小于 2 MiB 的 PNG/JPEG/GIF，服务端居中裁剪并转为 256×256 PNG，GIF 使用首帧且移除元数据；拒绝单边超过 4096 像素或总量超过 1200 万像素的图片。照片存入现有私有对象存储，仅通过已登录的 `/api/v1/me/avatar` 读取，失败回退到首字头像。第三方首次注册尝试导入头像，失败不阻止登录；资料页支持上传、恢复主题、明确使用已绑定账号的照片。远程获取仅允许指定 Google/GitHub HTTPS 图片主机，不跟随跳转、限定时间/大小且不携带凭证。替换或删除的旧对象会尽力清理；备份对象存储时包含头像。
+
+已有部署先备份、停止 API 写入，在 001–012 之后执行一次：
+
+```bash
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
+  sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  < backend/migrations/000013_account_identity.up.sql
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
+```
+
+保留 `.env`、原密钥和数据卷。全新卷自动初始化 001–013，已有卷不会自动升级。PowerShell 用 `Get-Content -Raw` 管道传入 `exec -T postgres`。013 回滚会删除身份、令牌和头像引用，存在无密码账号时会拒绝回滚；降级前先安排密码恢复并配套兼容版本。工作区、项目和文件不迁移。实际 OAuth 授权与邮件投递需使用部署方真实配置验收。
 
 ## Skill 与附件机制
 

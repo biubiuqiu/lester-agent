@@ -170,6 +170,12 @@ func (s *Service) ChangeManagedUser(ctx context.Context, actor, id uuid.UUID, in
 		return err
 	}
 	if in.Disabled || hash != "" || role != in.Role {
+		if _, err = tx.Exec(ctx, `DELETE FROM auth_email_tokens WHERE user_id=$1`, id); err != nil {
+			return err
+		}
+		if _, err = tx.Exec(ctx, `DELETE FROM auth_oauth_flows WHERE user_id=$1`, id); err != nil {
+			return err
+		}
 		if _, err = tx.Exec(ctx, `DELETE FROM sessions WHERE user_id=$1`, id); err != nil {
 			return err
 		}

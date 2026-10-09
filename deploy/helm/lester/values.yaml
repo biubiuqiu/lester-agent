@@ -31,6 +31,15 @@ config:
   webOrigin: https://lester.example.com
   artifactPublicURL: https://sites.example.net
   sessionCookieSecure: true
+  auth:
+    registrationEnabled: true
+    googleClientID: ""
+    githubClientID: ""
+    smtpHost: ""
+    smtpPort: 587
+    smtpUsername: ""
+    smtpFrom: ""
+    smtpTLSMode: starttls
   objectStore:
     endpoint: s3.example.com
     bucket: lester-skills
@@ -47,6 +56,11 @@ secrets:
   sandboxServiceToken: ""
   objectStoreAccessKey: ""
   objectStoreSecretKey: ""
+  # Optional auth secrets. Include these keys in existingSecret when enabled:
+  # GOOGLE_OAUTH_CLIENT_SECRET, GITHUB_OAUTH_CLIENT_SECRET, SMTP_PASSWORD.
+  googleOAuthClientSecret: ""
+  githubOAuthClientSecret: ""
+  smtpPassword: ""
   # Required when sandbox.provider=acs. It must match the API key configured
   # on ack-sandbox-manager.
   acsSandboxAPIKey: ""

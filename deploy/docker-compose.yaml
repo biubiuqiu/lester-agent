@@ -19,6 +19,7 @@ services:
       - ../backend/migrations/000010_agent_files.up.sql:/docker-entrypoint-initdb.d/010.sql:ro
       - ../backend/migrations/000011_agent_designer.up.sql:/docker-entrypoint-initdb.d/011.sql:ro
       - ../backend/migrations/000012_deliverables_events.up.sql:/docker-entrypoint-initdb.d/012.sql:ro
+      - ../backend/migrations/000013_account_identity.up.sql:/docker-entrypoint-initdb.d/013.sql:ro
     healthcheck:
       test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
       interval: 3s
@@ -68,6 +69,17 @@ services:
       WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:13000}
       ARTIFACT_PUBLIC_URL: ${ARTIFACT_PUBLIC_URL:-http://127.0.0.1:13181}
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      AUTH_REGISTRATION_ENABLED: ${AUTH_REGISTRATION_ENABLED:-true}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
+      GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_TLS_MODE: ${SMTP_TLS_MODE:-starttls}
       SANDBOX_SERVICE_URL: http://sandbox-service:8090
       SANDBOX_SERVICE_TOKEN: ${SANDBOX_SERVICE_TOKEN:?SANDBOX_SERVICE_TOKEN must be set in deploy/.env}
       MASTER_KEY_BASE64: ${MASTER_KEY_BASE64:?MASTER_KEY_BASE64 must be set in deploy/.env}

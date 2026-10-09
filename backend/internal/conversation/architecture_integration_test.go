@@ -320,6 +320,7 @@ func TestDeliverablesMigrationRollback(t *testing.T) {
 func TestDeliverableToolAndAuthenticatedList(t *testing.T) {
 	f := newTranscriptFixture(t, false)
 	applyTestMigration(t, f.service.db, "000005_user_profiles.up.sql")
+	applyTestMigration(t, f.service.db, "000013_account_identity.up.sql")
 	ctx := context.Background()
 	files := &deliverableFiles{content: []byte("# Delivery report")}
 	service := &deliverable.Service{DB: f.service.db, Files: files}

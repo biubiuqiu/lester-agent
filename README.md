@@ -112,7 +112,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml ps
 - **Add conversation Skills.** Install packages from the Skill marketplace into a conversation, then let the agent load their instructions when needed.
 - **Organize projects.** Every workspace starts with a default project. Create and rename projects, pin projects and conversations, and move conversations between projects without moving their Computer files.
 - **Publish HTML artifacts.** Deploy a single HTML file or a static directory, including local images and videos, to durable S3-compatible storage. Share a public URL and manage deployments on the dedicated Artifacts page.
-- **Manage your profile.** The account menu groups profile, model, Computer, and Skill settings. Display names and built-in avatar themes persist.
+- **Manage your profile.** The account menu groups profile, model, Computer, and Skill settings. Display names, uploaded avatars, built-in themes, linked Google/GitHub identities and passwords can be managed in **个人资料**.
 
 The executor is separated from the conversation service but still runs inside API. Critical run transitions, events, and outbox intents commit atomically in PostgreSQL. Redis publication failures retain events for retries with stable IDs; clients deduplicate repeats. Graceful shutdown interrupts runs and releases their guards without replaying tools. An independent Worker and automatic task resumption are not implemented.
 
@@ -383,7 +383,7 @@ Fresh installs apply 004–005 automatically. Migration 004 preserves old chat o
 
 ### Deliverable registration and reliable events upgrade
 
-The current version requires migrations 001–012. The historical 004–005 commands above are insufficient for a full upgrade; apply every missing migration in numeric order. For a database already on 001–011, back it up, stop API writes, apply 012 once, then rebuild API/Web:
+The current version requires migrations 001–013. Migration 013 is described in [Accounts and sign-in](#accounts-and-sign-in). The historical 004–005 commands above are insufficient for a full upgrade; apply every missing migration in numeric order. For a database already on 001–011, back it up, stop API writes, apply 012 once, then complete 013 below before rebuilding API/Web:
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
@@ -393,7 +393,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T post
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
 ```
 
-New Compose volumes initialize migrations 001–012; existing volumes never upgrade automatically. Do not delete volumes. Rolling back 012 drops registered metadata and pending delivery intents while preserving Computer files, messages, run events, and published artifacts. Stop the updated API before rollback and restore a compatible application version. Monitor pending outbox count and disk space during prolonged Redis outages.
+New Compose volumes initialize migrations 001–013; existing volumes never upgrade automatically. Do not delete volumes. Rolling back 012 drops registered metadata and pending delivery intents while preserving Computer files, messages, run events, and published artifacts. Stop the updated API before rollback and restore a compatible application version. Monitor pending outbox count and disk space during prolonged Redis outages.
 
 ## Skills and attachments
 
@@ -590,6 +590,52 @@ helm template lester deploy/helm/lester --set secrets.existingSecret=lester-test
 - Keep Sandbox Service private and Docker socket access on an isolated, dedicated worker.
 - User Computers default to disabled networking and CPU, memory, and PID limits.
 - File APIs and terminal working directories are conversation-scoped. HTML preview authentication, CSP, and iframe restrictions remain in force for generated pages.
+
+## Accounts and sign-in
+
+The login page supports email/password and configured Google/GitHub OAuth sign-in. First registration creates one Personal Workspace and default project; all self-registered users are members. Set `AUTH_REGISTRATION_ENABLED=false` to close **new** email and OAuth registrations; existing accounts can still sign in and link identities. Email/display-name/password lengths are validated on the server; registration includes password confirmation in the UI.
+
+Configure OAuth in `deploy/.env` (leave an entire pair empty to hide that provider):
+
+| Provider | Environment variables | Exact authorized callback |
+| --- | --- | --- |
+| Google | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` | `<WEB_ORIGIN>/api/v1/auth/oauth/google/callback` |
+| GitHub | `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET` | `<WEB_ORIGIN>/api/v1/auth/oauth/github/callback` |
+
+Create a **Web application** OAuth client in Google Cloud Console (Google Auth Platform), configure its consent screen/test users or production availability, and register the exact callback. Create a GitHub **OAuth App** in Developer settings with this deployment's callback; use a separate app for each environment. OAuth callbacks must reach API through the same-origin gateway/Ingress. Use HTTPS and `SESSION_COOKIE_SECURE=true` in production; HTTP is supported only for localhost development. Keep secrets in `.env`/Kubernetes Secrets, never in frontend build variables. The API needs outbound HTTPS to the identity providers. Scopes are `openid email profile` for Google and `read:user user:email` for GitHub.
+
+Identity ownership uses the provider's immutable subject/ID and a verified email (GitHub private emails are supported through `/user/emails`). Ten-minute state records are browser-bound, single-use and shared across API replicas; authorization uses PKCE S256. OAuth access tokens are used only during the callback and are not persisted. An email match with an existing Lester account **never automatically merges accounts**: sign in with the existing method, then bind from **个人资料 → 登录方式**. Binding does not replace the account email, name, projects or files. Unlinking requires another currently available login method or a password, rotates the current session and signs out other devices. Disabled accounts remain blocked. Configuration changes are enforced after API restart.
+
+### Email verification and recovery
+
+Optional SMTP enables verification for **new email registrations**, resending verification links and **忘记密码**. Without SMTP, the existing self-hosted immediate-registration behavior remains, with email marked unverified and mail controls hidden. Previously registered accounts are not suddenly locked out when enabling SMTP; they can verify from profile settings. Verification links last 24 hours, reset links 30 minutes; both are hashed at rest and single-use. Links carry tokens in URL fragments, which the login page immediately removes, and confirmation/submission is explicit. A reset verifies mailbox ownership and revokes all sessions and pending security tokens; setting/changing a password from settings preserves a freshly rotated current session and revokes others. Mail requests return the same accepted response for eligible/unknown accounts. Monitor API `account mail request failed` warnings if SMTP delivery is unavailable.
+
+```dotenv
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_TLS_MODE=starttls
+SMTP_USERNAME=your-mail-account
+SMTP_PASSWORD=your-mail-password
+SMTP_FROM=no-reply@example.com
+```
+
+Use a sender authorized by your mail service. `SMTP_TLS_MODE=tls` supports port 465; `starttls` requires server TLS support with valid certificates. `plain` is allowed only on localhost for development mail fixtures. In Helm, configure IDs/mail settings under `config.auth` and secrets under `secrets.googleOAuthClientSecret`, `secrets.githubOAuthClientSecret`, `secrets.smtpPassword`, or add `GOOGLE_OAUTH_CLIENT_SECRET`, `GITHUB_OAUTH_CLIENT_SECRET`, `SMTP_PASSWORD` to the referenced `existingSecret` when enabled. Pending unverified registrations still need their verification link; disabling SMTP does not grant them access. Mail delivery and provider consent must be checked with your deployment's real credentials.
+
+### Avatars and account upgrade
+
+Profile settings support PNG/JPEG/GIF uploads below 2 MiB, center-cropped and re-encoded to a 256×256 PNG (GIF first frame, metadata removed). Images exceeding 4096 pixels per side or 12 million pixels are rejected. Avatars use the existing private object store and authenticated `/api/v1/me/avatar`, with built-in initials as fallback. First OAuth registration attempts to import the provider avatar; failure does not block sign-in. Bound users can explicitly choose the provider photo, upload their own image or restore a built-in theme. Provider avatar fetches use an HTTPS hostname allowlist, strict size/time limits, no redirects and no access tokens. Replaced/deleted photo objects are removed on a best-effort basis; include avatar objects in object-store backups.
+
+Current code requires migration **013** after 001–012. Back up PostgreSQL/object storage, stop API writes, preserve your `.env` and encryption key, apply it **once**, then rebuild API/Web:
+
+```bash
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
+  sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  < backend/migrations/000013_account_identity.up.sql
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
+```
+
+Fresh Compose volumes initialize 001–013 automatically; existing volumes never re-run init scripts. PowerShell can pipe `Get-Content -Raw` into the same `exec -T postgres` command. Rolling back 013 removes identity/token/avatar references and therefore **refuses while accounts without passwords exist**; arrange password recovery before a downgrade and restore a compatible application version. Existing workspace files and projects are not moved. PostgreSQL-backed auth tests use mock identity providers and a local SMTP fixture; live third-party consent/delivery require deployment validation.
 
 ## Administration
 
