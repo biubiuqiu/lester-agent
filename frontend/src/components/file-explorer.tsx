@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element -- Workspace images use authenticated runtime URLs and unknown dimensions. */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import {
   ChevronDown,
@@ -70,7 +70,13 @@ const SourcePreview = dynamic(
 );
 
 export function FileExplorer({ conversationId }: { conversationId: string }) {
-  const { storageKey, directories, signature, selected, tabs, changes, files, loading, error, limited, open, close, refresh, loadDirectory, expanded: enlarged, setExpanded, setReference, setPanelOpen, modes, setPreviewMode: setWorkspacePreviewMode } = useFileWorkspace();
+  const { storageKey, directories, signature, selected, tabs, changes, files, loading, error, limited, open, close, refresh, loadDirectory, expanded: enlarged, setExpanded, setReference, setPanelOpen, modes, fileRevisions, setPreviewMode: setWorkspacePreviewMode } = useFileWorkspace();
+  const tabPrefix = useId();
+  const tabId = (path: string) => `${tabPrefix}-${encodeURIComponent(path)}`;
+  const tabList = useRef<HTMLElement>(null);
+  useEffect(() => {
+    tabList.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [selected?.path]);
   const [expanded, setTreeExpanded] = useState<Set<string>>(() => new Set(readView(storageKey).directories));
   const [treeOpen, setTreeOpenState] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("preview") ? false : readView(storageKey).treeOpen);
   const setTreeOpen = useCallback((value: boolean) => { updateView(storageKey, { treeOpen: value }); setTreeOpenState(value); }, [storageKey]);
@@ -92,8 +98,8 @@ export function FileExplorer({ conversationId }: { conversationId: string }) {
   const selectedPath = selected?.path;
   const needsTextContent = selectedKind === "text" || selectedKind === "html" || selectedKind === "markdown";
   // HTML can embed local assets: rebuild when their directory metadata changes too.
-  const assetRevision = selectedKind === "html" && previewMode === "preview" ? signature : "";
-  const previewKey = selected ? `${selected.path}:${selected.modified_at}:${selected.size}:${previewMode}:${assetRevision}` : "";
+  const assetRevision = selectedKind === "html" && previewMode === "preview" ? `${signature}:${JSON.stringify(fileRevisions)}` : "";
+  const previewKey = selected ? `${selected.path}:${selected.modified_at}:${selected.size}:${fileRevisions[selected.path] ?? 0}:${previewMode}:${assetRevision}` : "";
   const previewTooLarge = Boolean(selected && needsTextContent && selected.size > maxTextPreviewBytes);
   const identity = JSON.stringify([selectedPath, previewMode]);
   const activePreview: PreviewState & { loading: boolean } = previewTooLarge
@@ -148,8 +154,16 @@ export function FileExplorer({ conversationId }: { conversationId: string }) {
         {loading ? <div className="file-tree-status">正在同步文件…</div> : <FileTreeItems directoryPath="" depth={0} directories={directories} expanded={expanded} selectedPath={selected?.path || ""} onToggle={toggleDirectory} onSelect={selectFile} />}
       </div> : null}
     </section>
-    {tabs.length ? <nav className="open-file-tabs" aria-label="已打开文件">{tabs.map((file) => <div key={file.path} className={selected?.path === file.path ? "active" : ""}><button type="button" onClick={() => selectFile(file)} title={file.path} aria-pressed={selected?.path === file.path}>{file.name}</button><button type="button" onClick={() => close(file.path)} aria-label={`关闭 ${file.name}`}><X /></button></div>)}</nav> : null}
-    <FilePreview key={`${selected?.path ?? "empty"}:${previewMode}`} onRetry={() => { setPreview((value) => ({ ...value, key: "", error: "" })); setPreviewAttempt((value) => value + 1); }} storageKey={storageKey} conversationId={conversationId} file={selected} kind={selectedKind} mode={previewMode} preview={activePreview} onModeChange={setPreviewMode} onReference={() => { if (selected) setReference(selected.path); setExpanded(false); setPanelOpen(false); }} />
+    {tabs.length ? <nav ref={tabList} className="open-file-tabs" role="tablist" aria-label="已打开文件">{tabs.map((file, index) => <div key={file.path} className={selected?.path === file.path ? "active" : ""}><button id={tabId(file.path)} role="tab" type="button" onClick={() => selectFile(file)} title={file.path} aria-selected={selected?.path === file.path} aria-controls={`${tabPrefix}-panel`} tabIndex={selected?.path === file.path || (!selected && index === 0) ? 0 : -1} onKeyDown={(event) => {
+      let next: FileEntry | undefined;
+      if (event.key === "ArrowRight") next = tabs[(index + 1) % tabs.length];
+      if (event.key === "ArrowLeft") next = tabs[(index - 1 + tabs.length) % tabs.length];
+      if (event.key === "Home") next = tabs[0];
+      if (event.key === "End") next = tabs.at(-1);
+      if (next) { event.preventDefault(); selectFile(next); document.getElementById(tabId(next.path))?.focus(); }
+      if (event.key === "Delete") { event.preventDefault(); close(file.path); const neighbor = tabs[index + 1] ?? tabs[index - 1]; if (neighbor) document.getElementById(tabId(neighbor.path))?.focus(); }
+    }}>{file.name}</button><button type="button" onClick={() => close(file.path)} aria-label={`关闭 ${file.name}`}><X /></button></div>)}</nav> : null}
+    <div id={`${tabPrefix}-panel`} className="file-tab-panel" role={selected ? "tabpanel" : undefined} aria-labelledby={selected ? tabId(selected.path) : undefined}><FilePreview key={`${selected?.path ?? "empty"}:${previewMode}`} onRetry={() => { setPreview((value) => ({ ...value, key: "", error: "" })); setPreviewAttempt((value) => value + 1); }} storageKey={storageKey} conversationId={conversationId} file={selected} kind={selectedKind} mode={previewMode} preview={activePreview} onModeChange={setPreviewMode} onReference={() => { if (selected) setReference(selected.path); setExpanded(false); setPanelOpen(false); }} /></div>
   </div>;
 }
 

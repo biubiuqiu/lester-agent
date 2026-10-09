@@ -1,5 +1,7 @@
 /* File-centered workspace: compact chrome, generous preview, bounded scroll areas. */
 .file-explorer { min-height: 0; overflow: hidden; }
+.file-tab-panel { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+.open-file-tabs button:focus-visible { outline: 2px solid #56775e; outline-offset: -3px; border-radius: 6px; }
 .file-tree-pane, .file-tree-pane.has-preview { flex: 0 1 auto; height: auto; min-height: 0; max-height: min(28vh, 250px); background: var(--workspace-surface, #f7f8f5); }
 .file-tree-pane.collapsed { flex: 0 0 auto; height: auto; }
 .file-tree-scroll { padding: 0 8px 8px; }

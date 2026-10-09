@@ -7,6 +7,7 @@ import { listDirectory, relativeFilePath, scanFiles, wasPathCovered, type FileSt
 import { readView, updateView } from "@/lib/conversation-view-state";
 import { artifactFiles } from "@/lib/artifact-files";
 import { deliverableKind } from "@/lib/deliverables";
+import { AutoOpenFiles, mergeFileTabs } from "@/lib/auto-open-files";
 import type { RunEvent } from "./tool-timeline";
 
 type Change = { path: string; kind: "added" | "updated" | "deleted" };
@@ -19,6 +20,7 @@ type FileWorkspaceValue = FileState & {
   deliverables: Deliverable[];
   deliverablesError: string;
   modes: Record<string, "preview" | "source">;
+  fileRevisions: Record<string, number>;
   setPreviewMode: (path: string, mode: "preview" | "source") => void;
   changes: Change[];
   tabs: FileEntry[];
@@ -52,8 +54,8 @@ export function useOptionalFileWorkspace() {
   return useContext(Context);
 }
 
-export function FileWorkspaceProvider({ conversationId, storageKey, events, runId, running, runOutcome, children }: {
-  conversationId?: string; storageKey: string; events: RunEvent[]; runId?: string; running: boolean; runOutcome?: "failed" | "cancelled"; children: React.ReactNode;
+export function FileWorkspaceProvider({ conversationId, storageKey, events, liveFileEvents, runId, running, runOutcome, children }: {
+  conversationId?: string; storageKey: string; events: RunEvent[]; liveFileEvents: RunEvent[]; runId?: string; running: boolean; runOutcome?: "failed" | "cancelled"; children: React.ReactNode;
 }) {
   const [requestedPreview] = useState(() => {
     if (!conversationId || typeof window === "undefined" || window.location.pathname !== `/app/c/${conversationId}`) return "";
@@ -65,6 +67,12 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, runI
   const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
   const [deliverablesError, setDeliverablesError] = useState("");
   const [tabs, setTabs] = useState<FileEntry[]>(() => [...new Set([...readView(storageKey).tabs, ...(requestedPreview ? [requestedPreview] : [])])].slice(-8).map((path) => ({ path, name: path.split("/").at(-1) ?? path, is_dir: false, size: 0, modified_at: "" })));
+  const tabsRef = useRef(tabs);
+  const autoOpen = useRef<AutoOpenFiles | null>(null);
+  if (!autoOpen.current) autoOpen.current = new AutoOpenFiles(conversationId ?? "");
+  const liveScanCursor = useRef(0);
+  const pendingRunScans = useRef(new Map<string, number>());
+  const [fileRevisions, setFileRevisions] = useState<Record<string, number>>({});
   const [selectedPath, setSelectedPath] = useState<string | null>(() => requestedPreview || readView(storageKey).selected);
   const [reference, setReferenceState] = useState<string | null>(() => readView(storageKey).reference);
   const [referenceRevision, setReferenceRevision] = useState(0);
@@ -79,11 +87,44 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, runI
   }, [storageKey]);
   const [observed, setObserved] = useState<{ runId?: string; changes: Change[] }>({ changes: [] });
   const refreshRef = useRef<() => void>(() => {});
-  const watchedDirectories = useRef(new Set<string>([...readView(storageKey).directories, ...tabs.map((file) => file.path.split("/").slice(0, -1).join("/"))]));
+  const watchedDirectories = useRef(new Set<string>([...readView(storageKey).directories, ...tabs.map((file) => file.path.split("/").slice(0, -1).join("/"))].slice(-63)));
+  const watchDirectory = useCallback((path: string) => {
+    const watched = watchedDirectories.current;
+    watched.delete(path); watched.add(path);
+    // scanFiles always adds the root; retain space for each recent target.
+    while (watched.size > 63) watched.delete(watched.keys().next().value!);
+  }, []);
   const runRef = useRef(runId);
   const runningRef = useRef(running);
   useEffect(() => { runRef.current = runId; runningRef.current = running; }, [runId, running]);
   const revision = events.findLast((event) => refreshEvents.has(event.type))?.id ?? 0;
+  const openBatch = useCallback((files: FileEntry[]) => {
+    const selected = files.at(-1);
+    if (!selected) return;
+    const next = mergeFileTabs(tabsRef.current, files);
+    tabsRef.current = next;
+    for (const file of files) watchDirectory(file.path.split("/").slice(0, -1).join("/"));
+    updateView(storageKey, { tabs: next.map((file) => file.path), selected: selected.path });
+    setTabs(next); setSelectedPath(selected.path); setPanelTab("files"); setPanelOpen(true);
+  }, [storageKey, watchDirectory]);
+
+  useEffect(() => {
+    const paths = autoOpen.current!.receive(liveFileEvents);
+    let needsScan = paths.length > 0;
+    for (const event of liveFileEvents) {
+      if (event.id <= liveScanCursor.current) continue;
+      liveScanCursor.current = event.id;
+      if (event.conversation_id !== conversationId || !event.run_id || !refreshEvents.has(event.type)) continue;
+      pendingRunScans.current.set(event.run_id, event.id);
+      while (pendingRunScans.current.size > 4) pendingRunScans.current.delete(pendingRunScans.current.keys().next().value!);
+      needsScan = true;
+    }
+    if (!needsScan) return;
+    // Explicit writes can target deep directories beyond the normal scan.
+    for (const path of paths) watchDirectory(path.split("/").slice(0, -1).join("/"));
+    const timer = setTimeout(() => refreshRef.current(), 400);
+    return () => clearTimeout(timer);
+  }, [liveFileEvents, conversationId, watchDirectory]);
 
   useEffect(() => {
     if (!conversationId) return;
@@ -99,6 +140,8 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, runI
       clearTimeout(timer);
       pending = true;
       const owner = runRef.current;
+      const wasRunning = runningRef.current;
+      const pendingEvent = owner ? pendingRunScans.current.get(owner) : undefined;
       try {
         const [inventory, registered] = await Promise.allSettled([
           scanFiles(conversationId, controller.signal, [...watchedDirectories.current]),
@@ -135,6 +178,19 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, runI
             }
             return { runId: owner, changes: [...merged.values()].slice(-200) };
           });
+          // Shell-created outputs have no FILE_UPDATED notification. Open only
+          // proved changes observed during this run, never the initial listing.
+          if (owner && (wasRunning || pendingEvent !== undefined)) {
+            const changedPaths = new Set(changes.filter((change) => change.kind !== "deleted").map((change) => change.path));
+            autoOpen.current!.changed(next.files.filter((file) => changedPaths.has(file.path)));
+          }
+        }
+        if (owner && pendingEvent !== undefined && pendingRunScans.current.get(owner) === pendingEvent) pendingRunScans.current.delete(owner);
+        const ready = autoOpen.current!.take(next.files);
+        if (ready.length) {
+          openBatch(ready);
+          // An explicit edit can keep both size and timestamp unchanged.
+          setFileRevisions((value) => Object.fromEntries(Object.entries({ ...value, ...Object.fromEntries(ready.map((file) => [file.path, (value[file.path] ?? 0) + 1])) }).slice(-2000)));
         }
         previous = next;
         setState((value) => value.signature === next.signature && value.error === next.error && value.limited === next.limited ? value : next);
@@ -156,7 +212,7 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, runI
     document.addEventListener("visibilitychange", onVisible);
     void scan();
     return () => { stopped = true; controller.abort(); clearTimeout(timer); document.removeEventListener("visibilitychange", onVisible); refreshRef.current = () => {}; };
-  }, [conversationId]);
+  }, [conversationId, openBatch]);
 
   useEffect(() => {
     if (!revision) return;
@@ -167,26 +223,26 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, runI
   const refresh = useCallback(() => refreshRef.current(), []);
   const loadDirectory = useCallback(async (path: string) => {
     if (!conversationId) return;
-    watchedDirectories.current.add(path);
+    watchDirectory(path);
     try {
       const entries = await listDirectory(conversationId, path);
       setState((value) => ({ ...value, directories: { ...value.directories, [path]: { entries, error: "" } } }));
     } catch (reason) {
       setState((value) => ({ ...value, directories: { ...value.directories, [path]: { entries: [], error: reason instanceof Error ? reason.message : "目录加载失败" } } }));
     }
-  }, [conversationId]);
+  }, [conversationId, watchDirectory]);
   const open = useCallback((file: FileEntry, mode?: "preview") => {
     if (mode) setPreviewMode(file.path, mode);
-    const paths = [...readView(storageKey).tabs.filter((path) => path !== file.path), file.path].slice(-8);
-    updateView(storageKey, { tabs: paths, selected: file.path });
-    setTabs((value) => value.some((item) => item.path === file.path) ? value : [...value, file].slice(-8));
-    setSelectedPath(file.path); setPanelTab("files"); setPanelOpen(true);
-  }, [storageKey, setPreviewMode]);
+    openBatch([file]);
+  }, [openBatch, setPreviewMode]);
   const close = (path: string) => {
-    const next = tabs.filter((file) => file.path !== path);
+    const index = tabsRef.current.findIndex((file) => file.path === path);
+    const next = tabsRef.current.filter((file) => file.path !== path);
+    const replacement = next[Math.min(index, next.length - 1)]?.path ?? null;
+    tabsRef.current = next;
     setTabs(next);
-    updateView(storageKey, { tabs: next.map((file) => file.path), selected: selectedPath === path ? next.at(-1)?.path ?? null : selectedPath });
-    if (selectedPath === path) setSelectedPath(next.at(-1)?.path ?? null);
+    updateView(storageKey, { tabs: next.map((file) => file.path), selected: selectedPath === path ? replacement : selectedPath });
+    if (selectedPath === path) setSelectedPath(replacement);
   };
   const changes = useMemo(() => {
     const entries = new Map<string, Change>();
@@ -201,7 +257,7 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, runI
   const selected = state.files.find((file) => file.path === selectedPath)
     ?? Object.values(state.directories).flatMap((directory) => directory.entries).find((file) => !file.is_dir && file.path === selectedPath)
     ?? null;
-  return <Context.Provider value={{ ...state, storageKey, conversationId: conversationId ?? "", loading, running, runOutcome, deliverables, deliverablesError, modes, setPreviewMode, tabs, selected, changes, reference, referenceRevision, expanded, panelOpen, panelTab, setPanelTab, open, close, refresh, loadDirectory, setExpanded, setPanelOpen, setReference }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ ...state, storageKey, conversationId: conversationId ?? "", loading, running, runOutcome, deliverables, deliverablesError, modes, fileRevisions, setPreviewMode, tabs, selected, changes, reference, referenceRevision, expanded, panelOpen, panelTab, setPanelTab, open, close, refresh, loadDirectory, setExpanded, setPanelOpen, setReference }}>{children}</Context.Provider>;
 }
 
 export function OpenFilesButton() {

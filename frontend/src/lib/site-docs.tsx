@@ -37,7 +37,7 @@ export const siteDocs: SiteDoc[] = [
         <p>部署在远程主机时，请使用该主机配置的访问地址，而不是浏览器所在电脑的 localhost。</p>
       </> },
       { id: "first-task", title: "4. 完成第一项任务", content: <>
-        <ol><li>进入工作区，使用邮箱或已配置的 Google / GitHub 注册、登录。启用邮件服务时先验证邮箱。Lester 会创建你的 Personal Workspace 和默认项目。详见<Link href="/docs/usage#account">账号与登录</Link>。</li><li>点击“配置第一个模型”，保存服务连接，再添加对应的 Model ID。更多说明见<Link href="/docs/models">模型配置</Link>。</li><li>输入一个目标，例如“制作一个产品介绍网页，保存为 index.html”。需要时上传材料，再明确发送。</li><li>跟随执行过程。任务结束后，打开成果预览，也可以下载文件或点击“继续修改”。</li></ol>
+        <ol><li>进入工作区，使用邮箱或已配置的 Google / GitHub 注册、登录。启用邮件服务时先验证邮箱。Lester 会创建你的 Personal Workspace 和默认项目。详见<Link href="/docs/usage#account">账号与登录</Link>。</li><li>点击“配置第一个模型”，保存服务连接，再添加对应的 Model ID。更多说明见<Link href="/docs/models">模型配置</Link>。</li><li>输入一个目标，例如“制作一个产品介绍网页，保存为 index.html”。需要时上传材料，再明确发送。</li><li>跟随执行过程。文件写入或编辑后会自动打开预览；任务结束后还可从成果卡片下载文件或点击“继续修改”。</li></ol>
         <Note>保存模型配置不代表连接已经验证。第一次实际任务会确认模型是否能被调用；示例任务只会填写输入框，不会自动发送。</Note>
         <p><Link href="/app" prefetch={false}>进入当前部署的工作区</Link>，或继续阅读<Link href="/docs/usage">使用指南</Link>。</p>
       </> },
@@ -60,8 +60,9 @@ export const siteDocs: SiteDoc[] = [
       </> },
       { id: "computer", title: "使用你的 Computer", content: <>
         <p>每个用户拥有一个逻辑 Computer，每个会话有独立的目录。Agent 可以在目录内运行命令、读取、创建和编辑文件。桌面右侧提供文件列表、预览和终端。</p>
+        <p>Agent 写入、编辑或登记文件后，确认文件实际存在再自动打开；运行中同步发现的命令生成文件也会打开。多个文件放在独立标签中（最多 8 个），同一路径复用标签，支持切换、关闭并保留查看方式。HTML 默认使用隔离 iframe 预览，可以切换源码；修改后同步最新内容。左右方向键、Home/End 切换标签，Delete 关闭标签。历史或重复事件不会反复弹出文件。</p>
         <p>Computer 的工作区会保留；空闲时暂停，下一次访问时唤醒。当前支持 Docker 与 Alibaba Cloud ACS Provider。两者之间不会自动迁移文件。</p>
-        <p>手机端可以通过会话菜单查看成果，或打开文件面板。桌面端可以拖动调整右侧宽度、放大预览和收起会话栏。</p>
+        <p>手机端会自动打开文件面板，可关闭后继续对话，也可以通过会话菜单查看成果。桌面端可以拖动调整右侧宽度、放大预览和收起会话栏。</p>
       </> },
       { id: "deliverables", title: "查看成果，继续修改", content: <>
         <p>任务结束、失败或停止后，成果区集中展示当前文件清单中确认存在的 HTML 网页与 Markdown 文档。Agent 可以登记标题、摘要和来源任务，旧文件仍支持按类型发现。</p>

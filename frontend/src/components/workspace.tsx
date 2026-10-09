@@ -42,6 +42,7 @@ const panelWidthPreferenceKey = "lester.workspace.computer-panel-width.v1";
 const eventCursorKey = (workspaceId: string) => `lester.workspace.event-cursor.v1.${workspaceId}`;
 const unreadRunResultsKey = (workspaceId: string) => `lester.workspace.unread-run-results.v2.${workspaceId}`;
 const runNoticeReplayToleranceMs = 30_000;
+const fileScanEvents = new Set(["FILE_UPDATED", "DELIVERABLE_REGISTERED", "TOOL_COMPLETED", "TOOL_FAILED", "RUN_COMPLETED", "RUN_FAILED", "RUN_CANCELLED"]);
 const defaultPanelWidth = 420;
 const minPanelWidth = 320;
 const maxPanelWidth = 1600;
@@ -106,6 +107,8 @@ export function Workspace({ conversationId, projectId, initialAgentSlug }: { con
   const [current, setCurrent] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [eventsByConversation, setEventsByConversation] = useState<Record<string, RunEvent[]>>({});
+  const [liveFiles, setLiveFiles] = useState<{ conversationId?: string; events: RunEvent[] }>({ conversationId, events: [] });
+  if (liveFiles.conversationId !== conversationId) setLiveFiles({ conversationId, events: [] });
   const [runStatus, setRunStatus] = useState<RunStatus>({ state: "idle" });
   const [unreadRunResults, setUnreadRunResults] = useState<Record<string, UnreadRunResult>>({});
   const [runNotice, setRunNotice] = useState<RunNotice | null>(null);
@@ -267,6 +270,14 @@ export function Workspace({ conversationId, projectId, initialAgentSlug }: { con
       const conversation = incoming.conversation_id;
       if (!conversation) return;
       const event = { ...incoming, conversation_id: conversation };
+      const currentCursor = Number(window.sessionStorage.getItem(eventCursorKey(workspaceId)) ?? 0);
+      // History and old outbox deliveries still update the timeline, but only
+      // fresh, unseen notifications may request a new file tab.
+      if (activeConversationIdRef.current === conversation && event.id > currentCursor
+        && Date.parse(event.created_at) >= streamStartedAt - runNoticeReplayToleranceMs
+        && fileScanEvents.has(event.type)) {
+        setLiveFiles((previous) => previous.conversationId === conversation ? { ...previous, events: [...previous.events, event].slice(-64) } : previous);
+      }
       if (activeConversationIdRef.current === conversation) {
         setEventsByConversation((previous) => ({
           ...previous,
@@ -279,7 +290,6 @@ export function Workspace({ conversationId, projectId, initialAgentSlug }: { con
           ? { ...item, run_id: event.run_id, run_status: nextStatus, updated_at: terminalRunStatuses.has(nextStatus) ? event.created_at : item.updated_at }
           : item));
       }
-      const currentCursor = Number(window.sessionStorage.getItem(eventCursorKey(workspaceId)) ?? 0);
       if (!Number.isSafeInteger(currentCursor) || event.id > currentCursor) {
         window.sessionStorage.setItem(eventCursorKey(workspaceId), String(event.id));
       }
@@ -418,7 +428,7 @@ export function Workspace({ conversationId, projectId, initialAgentSlug }: { con
   const renderedPanelWidth = layoutHydrated ? panelWidth : defaultPanelWidth;
   const renderedPanelMaxWidth = layoutHydrated ? currentPanelMaxWidth(renderedSidebarCollapsed) : maxPanelWidth;
   const shellStyle = { "--computer-panel-width": `${renderedPanelWidth}px` } as CSSProperties;
-  return <FileWorkspaceProvider key={`${user?.user_id ?? "pending"}:${displayedCurrent?.id ?? "empty"}`} conversationId={displayedCurrent?.id} storageKey={user && displayedCurrent ? viewKey(user.user_id, user.workspace_id, displayedCurrent.id) : ""} events={eventsByConversation[displayedCurrent?.id ?? ""] ?? []} runId={runStatus.conversationId === conversationId ? runStatus.runId : undefined} running={runState === "running" || runState === "sending" || runState === "stopping"} runOutcome={runState === "failed" || runState === "cancelled" ? runState : undefined}><main className={`workspace-shell ${renderedSidebarCollapsed ? "sidebar-collapsed" : ""} ${panelResize ? "panel-resizing" : ""}`} style={shellStyle}>
+  return <FileWorkspaceProvider key={`${user?.user_id ?? "pending"}:${displayedCurrent?.id ?? "empty"}`} conversationId={displayedCurrent?.id} storageKey={user && displayedCurrent ? viewKey(user.user_id, user.workspace_id, displayedCurrent.id) : ""} liveFileEvents={liveFiles.events} events={eventsByConversation[displayedCurrent?.id ?? ""] ?? []} runId={runStatus.conversationId === conversationId ? runStatus.runId : undefined} running={runState === "running" || runState === "sending" || runState === "stopping"} runOutcome={runState === "failed" || runState === "cancelled" ? runState : undefined}><main className={`workspace-shell ${renderedSidebarCollapsed ? "sidebar-collapsed" : ""} ${panelResize ? "panel-resizing" : ""}`} style={shellStyle}>
     <aside className={`conversation-sidebar ${mobileMenu ? "mobile-open" : ""}`}>
       <div className="sidebar-top"><div className="sidebar-brand-row"><Brand /><button type="button" className="sidebar-collapse-button" onClick={() => setConversationSidebar(true)} title="收起会话栏" aria-label="收起会话栏"><PanelLeftClose /></button></div><button className="icon-button mobile-close" onClick={() => setMobileMenu(false)} aria-label="关闭"><X /></button></div>
 
