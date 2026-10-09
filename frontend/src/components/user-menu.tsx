@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, Bot, Boxes, Cpu, LogOut, MonitorCog, MoreHorizontal, ShieldCheck, UserRound } from "lucide-react";
+import { BookOpen, Bot, Boxes, Cpu, House, LogOut, MonitorCog, MoreHorizontal, ShieldCheck, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { api, UserProfile } from "@/lib/api";
 import { UserAvatar } from "./user-avatar";
@@ -14,6 +14,8 @@ const menuItems = [
   { label: "模型", path: "/app/settings/models", icon: Cpu },
   { label: "Computer", path: "/app/settings/sandbox", icon: MonitorCog },
   { label: "Skill 广场", path: "/app/settings/skills", icon: Boxes },
+  { label: "项目官网", path: "/", icon: House },
+  { label: "帮助文档", path: "/docs", icon: BookOpen },
 ];
 
 export function UserMenu({ user }: { user: UserProfile | null }) {

@@ -22,6 +22,14 @@ Do not implement, simulate, or silently scaffold these capabilities without an e
 
 Implementation phase labels are internal planning terms. Do not expose labels such as `Phase 0–4` or `Phase 5+` in the user-facing UI or README.
 
+## Public website and documentation
+
+- `/` is the anonymous, server-rendered project homepage; `/docs` and its static chapters are public help. `/app` remains the authenticated conversation-first workspace. Keep public pages independent of API availability and session state; do not redirect public visitors to login or fetch workspace data there.
+- Public-site routes live under `frontend/src/app/(public)/`; scope their styles so workspace, login, and settings layouts remain independent. Small client components support labeled examples and clipboard controls; do not ship design images as interactive UI.
+- Homepage examples are explicitly illustrative, never real model runs, test results, or evidence of validation. Workspace entry must use the existing login flow and never auto-send. Link the actual `biubiuqiu/lester-agent` repository/Issues; do not fabricate a hosted demo, metrics, a licence, or unavailable Memory/connector/scheduling/browser capabilities.
+- Maintain `frontend/src/lib/site-docs.tsx` with README when supported behavior, environment variables, or migration requirements change. Distinguish fresh initialization from existing-volume upgrades, preserve the encryption key/data, and accurately explain model configuration versus actual provider verification.
+- Verify anonymous access, documentation navigation, copy success/error, desktop/mobile layout, and the existing workspace/login entry after public-site changes.
+
 ## Terminology
 
 `Workflow` has two possible meanings in this repository:

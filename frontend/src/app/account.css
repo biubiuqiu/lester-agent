@@ -68,7 +68,8 @@
   right: 0;
   bottom: calc(100% + 8px);
   left: 0;
-  overflow: hidden;
+  max-height: calc(100dvh - 110px);
+  overflow-y: auto;
   border: 1px solid #dfe3dd;
   border-radius: 14px;
   background: #fff;
@@ -257,3 +258,7 @@
   .user-menu-popover { animation: none; }
   .avatar-picker button { transition: none; }
 }
+
+.login-public-links { display:flex; justify-content:center; gap:24px; border-top:1px solid var(--line); margin-top:24px; padding-top:18px; color:var(--muted); font-size:12px; }
+.login-public-links a { color:inherit; text-decoration:none; }
+.login-public-links a:hover { color:var(--dark); text-decoration:underline; text-underline-offset:4px; }

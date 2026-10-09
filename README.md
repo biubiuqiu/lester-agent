@@ -6,6 +6,12 @@ Describe a goal, choose a model, and let Lester work with files and commands in 
 
 [Quick start](#quick-start) · [Walkthrough](#watch-the-walkthrough) · [Architecture](#architecture) · [Deployment](#deployment) · [Chinese reference](README.zh-CN.md)
 
+## Public website and help
+
+The deployment root `/` is Lester's public project homepage, with a product introduction, explicitly labeled interactive examples, deployment guidance, and links to the GitHub repository and Issues. `/docs` provides Chinese help for quick start, everyday usage, model setup, deployment/upgrades, and troubleshooting. Both surfaces are statically rendered and work without authentication or API access. `/app` remains the conversation workspace; the login page and account menu link back to the website/help.
+
+Documentation content lives in `frontend/src/lib/site-docs.tsx`; shared public-site components live in `frontend/src/components/site/`. Update the help content alongside changes to capabilities, environment variables, and migrations. The homepage examples do not run a model or start tasks; the workspace entry uses the existing login flow. No additional database migration or deployment service is needed for the website.
+
 ## Watch the walkthrough
 
 [![Lester walkthrough: generate a page, inspect its source, and refine it in conversation](docs/media/lester-walkthrough.gif)](docs/media/lester-walkthrough.mp4)
@@ -70,7 +76,7 @@ To restart an existing installation without rebuilding, omit `--build`.
 
 ### 3. Start your first conversation
 
-1. Open [http://localhost:13000](http://localhost:13000).
+1. Open [http://localhost:13000](http://localhost:13000), then select **进入工作区** to enter `/app`.
 2. Register and sign in. Lester creates your Personal Workspace automatically.
 3. Select **配置第一个模型** on the home screen (or open **Settings → Models**). Save your provider connection, then add a Model ID. Connection and display names are optional; advanced endpoint/JSON configuration remains available. The first model is selected as your personal default unless you uncheck that option.
 4. Type a goal in the home composer. Sending the first message creates the conversation and starts the task.

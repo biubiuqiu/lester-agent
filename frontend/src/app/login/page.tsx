@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { api } from "@/lib/api";
@@ -56,6 +57,7 @@ export default function Login() {
           <button className="primary-button" disabled={busy}>{busy ? "处理中…" : mode === "login" ? "登录" : "创建账号"}</button>
         </form>
         <button className="text-button" disabled={busy} onClick={() => { setMode(mode === "login" ? "register" : "login"); setShowPassword(false); setError(""); }}>{mode === "login" ? "没有账号？创建一个" : "已有账号？去登录"}</button>
+        <nav className="login-public-links" aria-label="项目与帮助"><Link href="/">了解 Lester</Link><Link href="/docs">帮助文档</Link></nav>
       </section>
     </main>
   );
