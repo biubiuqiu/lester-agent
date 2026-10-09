@@ -48,6 +48,8 @@ func Router(deps Dependencies) http.Handler {
 		api.Post("/auth/register", deps.Auth.Register)
 		api.Post("/auth/login", deps.Auth.Login)
 		api.Post("/auth/logout", deps.Auth.Logout)
+		api.Post("/auth/refresh", deps.Auth.Refresh)
+		api.With(deps.Auth.Middleware).Get("/auth/session", deps.Auth.SessionStatus)
 		api.Group(func(private chi.Router) {
 			private.Use(deps.Auth.Middleware)
 			private.Get("/me", deps.Auth.Me)

@@ -24,15 +24,18 @@ import (
 )
 
 type Principal struct {
-	UserID        uuid.UUID `json:"user_id"`
-	WorkspaceID   uuid.UUID `json:"workspace_id"`
-	Email         string    `json:"email"`
-	DisplayName   string    `json:"display_name"`
-	AvatarKey     string    `json:"avatar_key"`
-	Role          string    `json:"role"`
-	AvatarURL     string    `json:"avatar_url,omitempty"`
-	EmailVerified bool      `json:"email_verified"`
-	HasPassword   bool      `json:"has_password"`
+	UserID         uuid.UUID `json:"user_id"`
+	WorkspaceID    uuid.UUID `json:"workspace_id"`
+	Email          string    `json:"email"`
+	DisplayName    string    `json:"display_name"`
+	AvatarKey      string    `json:"avatar_key"`
+	Role           string    `json:"role"`
+	AvatarURL      string    `json:"avatar_url,omitempty"`
+	EmailVerified  bool      `json:"email_verified"`
+	HasPassword    bool      `json:"has_password"`
+	SessionHash    []byte    `json:"-"`
+	AccessExpires  time.Time `json:"-"`
+	RefreshExpires time.Time `json:"-"`
 }
 type contextKey struct{}
 
@@ -46,15 +49,15 @@ func FromContext(ctx context.Context) (Principal, bool) {
 }
 
 type Service struct {
-	db      *pgxpool.Pool
-	redis   *redis.Client
-	ttl     time.Duration
-	secure  bool
-	options Options
+	db        *pgxpool.Pool
+	redis     *redis.Client
+	accessTTL time.Duration
+	secure    bool
+	options   Options
 }
 
-func New(db *pgxpool.Pool, redisClient *redis.Client, ttl time.Duration, secure bool) *Service {
-	return &Service{db: db, redis: redisClient, ttl: ttl, secure: secure, options: Options{RegistrationEnabled: true}}
+func New(db *pgxpool.Pool, redisClient *redis.Client, accessTTL time.Duration, secure bool) *Service {
+	return &Service{db: db, redis: redisClient, accessTTL: accessTTL, secure: secure, options: Options{RegistrationEnabled: true}}
 }
 
 func (s *Service) Register(w http.ResponseWriter, r *http.Request) {
@@ -111,7 +114,7 @@ func (s *Service) Register(w http.ResponseWriter, r *http.Request) {
 	if s.options.Mailer != nil {
 		token, err = issueEmailToken(r.Context(), tx, userID, "verify")
 	} else {
-		session, err = newSession(s.ttl)
+		session, err = newSession(s.accessTTL)
 		if err == nil {
 			err = insertSession(r.Context(), tx, userID, session)
 		}
@@ -184,7 +187,7 @@ func (s *Service) Login(w http.ResponseWriter, r *http.Request) {
 		httpapi.Error(w, 403, errors.New("请先验证邮箱，再登录；可在登录页重新发送验证邮件"))
 		return
 	}
-	session, err := newSession(s.ttl)
+	session, err := newSession(s.accessTTL)
 	if err != nil {
 		httpapi.Error(w, http.StatusInternalServerError, err)
 		return
@@ -198,16 +201,6 @@ func (s *Service) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.setCookie(w, session)
-	w.WriteHeader(204)
-}
-func (s *Service) Logout(w http.ResponseWriter, r *http.Request) {
-	if cookie, err := r.Cookie("lester_session"); err == nil {
-		if raw, e := base64.RawURLEncoding.DecodeString(cookie.Value); e == nil {
-			sum := sha256.Sum256(raw)
-			_, _ = s.db.Exec(r.Context(), `DELETE FROM sessions WHERE token_hash=$1`, sum[:])
-		}
-	}
-	http.SetCookie(w, &http.Cookie{Name: "lester_session", Value: "", Path: "/", HttpOnly: true, Secure: s.secure, SameSite: http.SameSiteLaxMode, MaxAge: -1})
 	w.WriteHeader(204)
 }
 func (s *Service) Me(w http.ResponseWriter, r *http.Request) {
@@ -280,22 +273,20 @@ func normalizeProfile(displayName, avatarKey string) (string, string, error) {
 
 func (s *Service) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie("lester_session")
-		if err != nil {
-			httpapi.Error(w, 401, errors.New("authentication required"))
+		sum := cookieDigest(r, accessCookieName)
+		if sum == nil {
+			accessRequired(w)
 			return
 		}
-		raw, err := base64.RawURLEncoding.DecodeString(cookie.Value)
-		if err != nil {
-			httpapi.Error(w, 401, errors.New("invalid session"))
-			return
-		}
-		sum := sha256.Sum256(raw)
 		var p Principal
 		var avatarKey string
-		err = s.db.QueryRow(r.Context(), `SELECT u.id,u.email,u.display_name,wm.workspace_id,COALESCE(u.avatar_key,'forest'),u.role,COALESCE(u.avatar_object_key,''),u.email_verified,u.password_hash IS NOT NULL FROM sessions s JOIN users u ON u.id=s.user_id JOIN workspace_members wm ON wm.user_id=u.id WHERE s.token_hash=$1 AND s.expires_at>now() AND NOT u.disabled AND (NOT u.email_verification_required OR u.email_verified) ORDER BY wm.workspace_id LIMIT 1`, sum[:]).Scan(&p.UserID, &p.Email, &p.DisplayName, &p.WorkspaceID, &p.AvatarKey, &p.Role, &avatarKey, &p.EmailVerified, &p.HasPassword)
+		err := s.db.QueryRow(r.Context(), `SELECT u.id,u.email,u.display_name,wm.workspace_id,COALESCE(u.avatar_key,'forest'),u.role,COALESCE(u.avatar_object_key,''),u.email_verified,u.password_hash IS NOT NULL,s.token_hash,a.expires_at,s.expires_at FROM auth_access_tokens a JOIN sessions s ON s.id=a.session_id JOIN users u ON u.id=s.user_id JOIN workspace_members wm ON wm.user_id=u.id WHERE a.token_hash=$1 AND a.expires_at>now() AND s.expires_at>now() AND NOT u.disabled AND (NOT u.email_verification_required OR u.email_verified) ORDER BY wm.workspace_id LIMIT 1`, sum).Scan(&p.UserID, &p.Email, &p.DisplayName, &p.WorkspaceID, &p.AvatarKey, &p.Role, &avatarKey, &p.EmailVerified, &p.HasPassword, &p.SessionHash, &p.AccessExpires, &p.RefreshExpires)
+		if errors.Is(err, pgx.ErrNoRows) {
+			accessRequired(w)
+			return
+		}
 		if err != nil {
-			httpapi.Error(w, 401, errors.New("session expired"))
+			httpapi.Error(w, 503, errors.New("暂时无法验证登录状态，请稍后重试"))
 			return
 		}
 		if avatarKey != "" {
@@ -303,33 +294,6 @@ func (s *Service) Middleware(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), contextKey{}, p)))
 	})
-}
-
-type sessionRecord struct {
-	raw     []byte
-	expires time.Time
-}
-
-type sessionExecutor interface {
-	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
-}
-
-func newSession(ttl time.Duration) (sessionRecord, error) {
-	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil {
-		return sessionRecord{}, fmt.Errorf("generate session token: %w", err)
-	}
-	return sessionRecord{raw: raw, expires: time.Now().Add(ttl)}, nil
-}
-
-func insertSession(ctx context.Context, executor sessionExecutor, userID uuid.UUID, session sessionRecord) error {
-	sum := sha256.Sum256(session.raw)
-	_, err := executor.Exec(ctx, `INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,$3)`, userID, sum[:], session.expires)
-	return err
-}
-
-func (s *Service) setCookie(w http.ResponseWriter, session sessionRecord) {
-	http.SetCookie(w, &http.Cookie{Name: "lester_session", Value: base64.RawURLEncoding.EncodeToString(session.raw), Path: "/", HttpOnly: true, Secure: s.secure, SameSite: http.SameSiteLaxMode, Expires: session.expires})
 }
 
 var rateLimitScript = redis.NewScript(`

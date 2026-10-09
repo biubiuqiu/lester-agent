@@ -213,7 +213,7 @@ func (s *Service) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	var session sessionRecord
 	if err == nil {
-		session, err = newSession(s.ttl)
+		session, err = newSession(s.accessTTL)
 	}
 	if err == nil {
 		err = insertSession(r.Context(), tx, p.UserID, session)

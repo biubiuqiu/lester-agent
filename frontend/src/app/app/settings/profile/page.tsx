@@ -1,13 +1,19 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import { authenticatedFetch } from "@/lib/auth-client";
+import { API } from "@/lib/api";
 import { Check, Upload, UserRound } from "lucide-react";
 import { SettingsShell } from "@/components/settings-shell";
 import { AccountSecurity } from "@/components/account-security";
 import { avatarOptions, UserAvatar } from "@/components/user-avatar";
 import { api, upload, AvatarKey, AuthOptions, UserProfile } from "@/lib/api";
 
+const AvatarCropper = dynamic(() => import("@/components/avatar-cropper").then(module => module.AvatarCropper), { ssr: false });
+
 export default function ProfileSettings() {
+  const [cropFile, setCropFile] = useState<File | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [options, setOptions] = useState<AuthOptions | null>(null);
   const [displayName, setDisplayName] = useState("");
@@ -45,10 +51,25 @@ export default function ProfileSettings() {
     const file = event.target.files?.[0]; event.target.value = "";
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) { setError("请选择小于 2 MB 的图片。"); return; }
-    await run(async () => {
+    if (!["image/png", "image/jpeg", "image/gif"].includes(file.type)) { setError("请选择 PNG、JPEG 或 GIF 图片。"); return; }
+    setError(""); setCropFile(file);
+  }
+  async function saveCroppedAvatar(file: File) {
+    if (inFlight.current) throw new Error("其他资料正在保存，请稍后重试。");
+    inFlight.current = true; setBusy(true); setError("");
+    try {
       const data = new FormData(); data.append("avatar", file);
       const updated = await upload<UserProfile>("/api/v1/me/avatar", data);
       setProfile(updated); setUseDefaultAvatar(false); setNotice("图片头像已保存。");
+    } finally { inFlight.current = false; setBusy(false); }
+  }
+  async function recropAvatar() {
+    if (!profile?.avatar_url) return;
+    await run(async () => {
+      const response = await authenticatedFetch(API + profile.avatar_url);
+      if (!response.ok) throw new Error("头像读取失败，请重试。");
+      const blob = await response.blob();
+      setCropFile(new File([blob], "avatar.png", { type: "image/png" }));
     });
   }
   async function useProviderAvatar(provider: "google" | "github") {
@@ -60,7 +81,7 @@ export default function ProfileSettings() {
     <form className="profile-settings" onSubmit={save}>
       <section className="profile-identity"><UserAvatar displayName={displayName || profile?.display_name} avatarKey={avatarKey} avatarURL={useDefaultAvatar ? undefined : profile?.avatar_url} size="large" /><div><h2>{displayName || "你的称呼"}</h2><p>{profile?.email || "正在载入账户信息…"}</p></div></section>
       <section className="settings-card profile-card"><header><span className="card-icon"><UserRound /></span><div><h2>基本信息</h2><p>这些信息用于侧边栏和你的账户菜单。</p></div></header><label className="field">称呼<input value={displayName} onChange={event => { setDisplayName(event.target.value); setNotice(""); }} maxLength={60} required autoComplete="name" disabled={busy || !profile} /></label><label className="field">账号邮箱<input value={profile?.email || ""} readOnly aria-readonly="true" /></label><div className="profile-email-status"><span>{profile?.email_verified ? <><Check size={14} />邮箱已验证</> : "邮箱尚未验证"}</span>{profile && !profile.email_verified && options?.email_verification_required && <button className="text-button" type="button" disabled={busy} onClick={() => void run(async () => { const result = await api<{ message: string }>("/api/v1/auth/resend-verification", { method: "POST", body: JSON.stringify({ email: profile.email }) }); setNotice(result.message); })}>发送验证邮件</button>}</div><p className="profile-help">绑定第三方登录不会更改账号邮箱、已有项目或文件。</p></section>
-      <section className="settings-card profile-card"><header><div><h2>头像</h2><p>上传自己的照片，或选择一个内置头像主题。</p></div></header><div className="avatar-upload-actions"><label className={`secondary-button ${busy || !profile ? "disabled" : ""}`} htmlFor="avatar-upload"><Upload size={15} />上传图片</label><input id="avatar-upload" className="account-file-input" type="file" accept="image/png,image/jpeg,image/gif" onChange={event => void changeAvatar(event)} disabled={busy || !profile} aria-label="上传头像图片" />{profile?.avatar_url && <button type="button" className="text-button" disabled={busy} onClick={() => void run(async () => { const updated = await api<UserProfile>("/api/v1/me/avatar", { method: "DELETE" }); setProfile(updated); setUseDefaultAvatar(false); setNotice("已恢复内置头像。"); })}>恢复内置头像</button>}</div><p className="profile-help">PNG、JPEG 或 GIF，小于 2 MB。图片将居中裁剪为方形；GIF 使用首帧。上传和恢复会即时保存。</p><div className="avatar-picker" role="radiogroup" aria-label="选择头像主题">{avatarOptions.map(option => {
+      <section className="settings-card profile-card"><header><div><h2>头像</h2><p>上传自己的照片，或选择一个内置头像主题。</p></div></header><div className="avatar-upload-actions"><label className={`secondary-button ${busy || !profile ? "disabled" : ""}`} htmlFor="avatar-upload"><Upload size={15} />上传图片</label><input id="avatar-upload" className="account-file-input" type="file" accept="image/png,image/jpeg,image/gif" onChange={event => void changeAvatar(event)} disabled={busy || !profile} aria-label="上传头像图片" />{profile?.avatar_url && <button type="button" className="secondary-button" disabled={busy} onClick={() => void recropAvatar()}>调整裁剪</button>}{profile?.avatar_url && <button type="button" className="text-button" disabled={busy} onClick={() => void run(async () => { const updated = await api<UserProfile>("/api/v1/me/avatar", { method: "DELETE" }); setProfile(updated); setUseDefaultAvatar(false); setNotice("已恢复内置头像。"); })}>恢复内置头像</button>}</div><p className="profile-help">PNG、JPEG 或 GIF，小于 2 MB。上传后可拖动、缩放、旋转并预览圆形效果；GIF 使用首帧。确认裁剪后保存，取消不会更改头像。</p><div className="avatar-picker" role="radiogroup" aria-label="选择头像主题">{avatarOptions.map(option => {
         const selected = avatarKey === option.key && (!profile?.avatar_url || useDefaultAvatar);
         return <button key={option.key} type="button" role="radio" aria-checked={selected} className={selected ? "selected" : ""} disabled={busy || !profile} onClick={() => { setAvatarKey(option.key); setUseDefaultAvatar(true); setNotice(""); }}><UserAvatar displayName={displayName} avatarKey={option.key} size="large" /><span>{option.label}</span>{selected ? <Check /> : null}</button>;
       })}</div></section>
@@ -68,6 +89,7 @@ export default function ProfileSettings() {
       {notice && <p className="account-feedback" role="status"><Check size={16} />{notice}</p>}
       <footer className="profile-actions"><span>{dirty ? "资料更改尚未保存" : ""}</span><button className="primary-button" disabled={busy || !profile || !displayName.trim() || !dirty}>{busy ? "保存中…" : "保存资料"}</button></footer>
     </form>
+    {cropFile && <AvatarCropper key={`${cropFile.name}:${cropFile.lastModified}`} file={cropFile} onCancel={() => setCropFile(null)} onSave={saveCroppedAvatar} />}
     <AccountSecurity profile={profile} unsaved={dirty || busy} onPasswordSet={() => setProfile(value => value ? { ...value, has_password: true } : value)} onProviderAvatar={useProviderAvatar} />
   </SettingsShell>;
 }

@@ -321,6 +321,7 @@ func TestDeliverableToolAndAuthenticatedList(t *testing.T) {
 	f := newTranscriptFixture(t, false)
 	applyTestMigration(t, f.service.db, "000005_user_profiles.up.sql")
 	applyTestMigration(t, f.service.db, "000013_account_identity.up.sql")
+	applyTestMigration(t, f.service.db, "000015_rotating_tokens.up.sql")
 	ctx := context.Background()
 	files := &deliverableFiles{content: []byte("# Delivery report")}
 	service := &deliverable.Service{DB: f.service.db, Files: files}
@@ -342,9 +343,10 @@ func TestDeliverableToolAndAuthenticatedList(t *testing.T) {
 	if err := f.service.db.QueryRow(ctx, `SELECT status FROM runs WHERE id=$1`, run).Scan(&status); err != nil || status != "completed" {
 		t.Fatalf("registration execution failed: %s, %v", status, err)
 	}
-	raw := []byte(uuid.NewString())
+	rawArray := sha256.Sum256([]byte(uuid.NewString()))
+	raw := rawArray[:]
 	sum := sha256.Sum256(raw)
-	if _, err := f.service.db.Exec(ctx, `INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '1 hour')`, f.userID, sum[:]); err != nil {
+	if _, err := f.service.db.Exec(ctx, `WITH family AS (INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '30 days') RETURNING id) INSERT INTO auth_access_tokens(token_hash,session_id,expires_at) SELECT $2,id,now()+interval '2 hours' FROM family`, f.userID, sum[:]); err != nil {
 		t.Fatal(err)
 	}
 	router := chi.NewRouter()
@@ -353,7 +355,7 @@ func TestDeliverableToolAndAuthenticatedList(t *testing.T) {
 	call := func(id string, authenticated bool) *httptest.ResponseRecorder {
 		request := httptest.NewRequest("GET", "/conversations/"+id+"/deliverables", nil)
 		if authenticated {
-			request.AddCookie(&http.Cookie{Name: "lester_session", Value: base64.RawURLEncoding.EncodeToString(raw)})
+			request.AddCookie(&http.Cookie{Name: "lester_access_token", Value: base64.RawURLEncoding.EncodeToString(raw)})
 		}
 		response := httptest.NewRecorder()
 		router.ServeHTTP(response, request)

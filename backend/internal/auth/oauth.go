@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -31,6 +32,7 @@ var errAccountUnavailable = errors.New("account_unavailable")
 type providerIdentity struct{ Subject, Email, Name, AvatarURL string }
 type oauthFlow struct {
 	Provider, Purpose, Verifier string
+	ReturnTo                    string
 	UserID                      *uuid.UUID
 	SessionHash                 []byte
 }
@@ -44,16 +46,10 @@ func randomToken() (string, error) {
 }
 func tokenDigest(value string) []byte { sum := sha256.Sum256([]byte(value)); return sum[:] }
 func sessionDigest(r *http.Request) []byte {
-	cookie, err := r.Cookie("lester_session")
-	if err != nil {
-		return nil
+	if p, ok := FromContext(r.Context()); ok && len(p.SessionHash) != 0 {
+		return p.SessionHash
 	}
-	raw, err := base64.RawURLEncoding.DecodeString(cookie.Value)
-	if err != nil || len(raw) != 32 {
-		return nil
-	}
-	sum := sha256.Sum256(raw)
-	return sum[:]
+	return cookieDigest(r, accessCookieName)
 }
 func flowCookieName(provider string) string { return "lester_oauth_" + provider }
 func (s *Service) flowCookie(w http.ResponseWriter, provider, value string, maxAge int) {
@@ -104,7 +100,7 @@ func (s *Service) beginOAuth(w http.ResponseWriter, r *http.Request, purpose str
 	// API replicas and expire in ten minutes. Each browser keeps one per provider.
 	_, err = s.db.Exec(r.Context(), `DELETE FROM auth_oauth_flows WHERE expires_at<now()`)
 	if err == nil {
-		_, err = s.db.Exec(r.Context(), `INSERT INTO auth_oauth_flows(token_hash,browser_hash,provider,purpose,user_id,session_hash,verifier,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,now()+interval '10 minutes')`, tokenDigest(state), tokenDigest(browser), name, purpose, userID, sessionHash, verifier)
+		_, err = s.db.Exec(r.Context(), `INSERT INTO auth_oauth_flows(token_hash,browser_hash,provider,purpose,user_id,session_hash,verifier,expires_at,return_to) VALUES($1,$2,$3,$4,$5,$6,$7,now()+interval '10 minutes',$8)`, tokenDigest(state), tokenDigest(browser), name, purpose, userID, sessionHash, verifier, safeAuthReturn(r.URL.Query().Get("returnTo")))
 	}
 	if err != nil {
 		httpapi.Error(w, 500, errors.New("无法开始登录"))
@@ -120,17 +116,23 @@ func (s *Service) beginOAuth(w http.ResponseWriter, r *http.Request, purpose str
 	}
 }
 
-func (s *Service) oauthRedirect(w http.ResponseWriter, r *http.Request, purpose, code string) {
+func (s *Service) oauthRedirect(w http.ResponseWriter, r *http.Request, purpose, code string, returnTo ...string) {
 	target := s.options.WebOrigin + "/login"
 	if purpose == "link" {
 		target = s.options.WebOrigin + "/app/settings/profile"
 	}
 	if code != "" {
 		target += "?auth_error=" + url.QueryEscape(code)
+		if purpose == "login" && len(returnTo) > 0 && safeAuthReturn(returnTo[0]) != "/app" {
+			target += "&returnTo=" + url.QueryEscape(safeAuthReturn(returnTo[0]))
+		}
 	} else if purpose == "link" {
 		target += "?auth=linked"
 	} else {
 		target = s.options.WebOrigin + "/app"
+		if len(returnTo) > 0 {
+			target = s.options.WebOrigin + safeAuthReturn(returnTo[0])
+		}
 	}
 	http.Redirect(w, r, target, http.StatusSeeOther)
 }
@@ -152,23 +154,30 @@ func (s *Service) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 	var flow oauthFlow
 	// Consume only the flow bound to this browser and provider. An invalid or
 	// expired callback cannot replay it or delete another browser's flow.
-	err = s.db.QueryRow(r.Context(), `DELETE FROM auth_oauth_flows WHERE token_hash=$1 AND browser_hash=$2 AND provider=$3 AND expires_at>now() RETURNING provider,purpose,user_id,session_hash,verifier`, tokenDigest(state), tokenDigest(cookie.Value), name).Scan(&flow.Provider, &flow.Purpose, &flow.UserID, &flow.SessionHash, &flow.Verifier)
+	err = s.db.QueryRow(r.Context(), `DELETE FROM auth_oauth_flows WHERE token_hash=$1 AND browser_hash=$2 AND provider=$3 AND expires_at>now() RETURNING provider,purpose,user_id,session_hash,verifier,return_to`, tokenDigest(state), tokenDigest(cookie.Value), name).Scan(&flow.Provider, &flow.Purpose, &flow.UserID, &flow.SessionHash, &flow.Verifier, &flow.ReturnTo)
 	if err != nil {
 		s.oauthRedirect(w, r, "login", "invalid_state")
 		return
 	}
 	s.flowCookie(w, name, "", -1)
-	if flow.Purpose == "link" && subtle.ConstantTimeCompare(flow.SessionHash, sessionDigest(r)) != 1 {
-		s.oauthRedirect(w, r, "link", "session_expired")
-		return
+	if flow.Purpose == "link" {
+		browserSession, lookupErr := s.browserSessionDigest(r)
+		if lookupErr != nil {
+			s.oauthRedirect(w, r, "link", "provider_error")
+			return
+		}
+		if subtle.ConstantTimeCompare(flow.SessionHash, browserSession) != 1 {
+			s.oauthRedirect(w, r, "link", "session_expired")
+			return
+		}
 	}
 	if r.URL.Query().Get("error") != "" {
-		s.oauthRedirect(w, r, flow.Purpose, "access_denied")
+		s.oauthRedirect(w, r, flow.Purpose, "access_denied", flow.ReturnTo)
 		return
 	}
 	code := r.URL.Query().Get("code")
 	if code == "" || len(code) > 4096 {
-		s.oauthRedirect(w, r, flow.Purpose, "provider_error")
+		s.oauthRedirect(w, r, flow.Purpose, "provider_error", flow.ReturnTo)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
@@ -180,7 +189,7 @@ func (s *Service) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 	ctx = context.WithValue(ctx, oauth2.HTTPClient, client)
 	token, err := provider.Config.Exchange(ctx, code, oauth2.VerifierOption(flow.Verifier))
 	if err != nil {
-		s.oauthRedirect(w, r, flow.Purpose, "provider_error")
+		s.oauthRedirect(w, r, flow.Purpose, "provider_error", flow.ReturnTo)
 		return
 	}
 	identity, err := fetchProviderIdentity(ctx, client, name, provider, token.AccessToken)
@@ -189,7 +198,7 @@ func (s *Service) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, errUnverifiedEmail) {
 			code = "verified_email_required"
 		}
-		s.oauthRedirect(w, r, flow.Purpose, code)
+		s.oauthRedirect(w, r, flow.Purpose, code, flow.ReturnTo)
 		return
 	}
 	userID, created, session, err := s.completeOAuth(ctx, flow, identity)
@@ -200,7 +209,7 @@ func (s *Service) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 				code = known.Error()
 			}
 		}
-		s.oauthRedirect(w, r, flow.Purpose, code)
+		s.oauthRedirect(w, r, flow.Purpose, code, flow.ReturnTo)
 		return
 	}
 	if created && identity.AvatarURL != "" {
@@ -209,7 +218,7 @@ func (s *Service) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 	if flow.Purpose == "login" {
 		s.setCookie(w, session)
 	}
-	s.oauthRedirect(w, r, flow.Purpose, "")
+	s.oauthRedirect(w, r, flow.Purpose, "", flow.ReturnTo)
 }
 
 var errUnverifiedEmail = errors.New("verified email required")
@@ -389,7 +398,7 @@ func (s *Service) completeOAuth(ctx context.Context, flow oauthFlow, identity pr
 		return userID, false, session, err
 	}
 	if flow.Purpose == "login" {
-		session, err = newSession(s.ttl)
+		session, err = newSession(s.accessTTL)
 		if err == nil {
 			err = insertSession(ctx, tx, userID, session)
 		}
@@ -480,7 +489,7 @@ func (s *Service) UnlinkIdentity(w http.ResponseWriter, r *http.Request) {
 		_, err = tx.Exec(r.Context(), `DELETE FROM sessions WHERE user_id=$1`, p.UserID)
 	}
 	if err == nil {
-		session, err = newSession(s.ttl)
+		session, err = newSession(s.accessTTL)
 	}
 	if err == nil {
 		err = insertSession(r.Context(), tx, p.UserID, session)
@@ -506,4 +515,31 @@ func DefaultProviders(googleID, googleSecret, githubID, githubSecret string) map
 		providers["github"] = OAuthProvider{Config: oauth2.Config{ClientID: githubID, ClientSecret: githubSecret, Scopes: []string{"read:user", "user:email"}, Endpoint: oauth2.Endpoint{AuthURL: "https://github.com/login/oauth/authorize", TokenURL: "https://github.com/login/oauth/access_token", AuthStyle: oauth2.AuthStyleInParams}}, UserInfoURL: "https://api.github.com/user", EmailsURL: "https://api.github.com/user/emails"}
 	}
 	return providers
+}
+
+// Redirects remain within the configured deployment, never a supplied host.
+func safeAuthReturn(value string) string {
+	if len(value) > 4096 || !strings.HasPrefix(value, "/") || strings.HasPrefix(value, "//") {
+		return "/app"
+	}
+	parsed, err := url.ParseRequestURI(value)
+	if err != nil || parsed.IsAbs() || parsed.Host != "" {
+		return "/app"
+	}
+	for _, char := range parsed.Path {
+		if char < 32 || char == 127 || char == '\\' {
+			return "/app"
+		}
+	}
+	target := path.Clean(parsed.Path)
+	allowed := target == "/app" || strings.HasPrefix(target, "/app/") || target == "/admin" || strings.HasPrefix(target, "/admin/")
+	if strings.HasPrefix(target, "/preview/") {
+		_, err := uuid.Parse(strings.TrimPrefix(target, "/preview/"))
+		allowed = err == nil
+	}
+	if !allowed {
+		return "/app"
+	}
+	parsed.Path, parsed.RawPath = target, ""
+	return parsed.RequestURI()
 }

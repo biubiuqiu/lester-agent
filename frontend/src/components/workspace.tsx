@@ -1,4 +1,6 @@
 "use client";
+
+import { ensureSession, redirectToLogin, SessionExpired } from "@/lib/auth-client";
 import { GuideLauncher } from "./user-guide";
 
 import { ContextInput, useContextReferences } from "./context-input";
@@ -127,6 +129,7 @@ export function Workspace({ conversationId, projectId, initialAgentSlug }: { con
   const [panelResize, setPanelResize] = useState<{ startX: number; startWidth: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState("");
+  const [streamAttempt, setStreamAttempt] = useState(0);
   const [streamError, setStreamError] = useState({ conversationId: "", message: "" });
   const panelWidthRef = useRef(panelWidth);
   const layoutHydrated = useSyncExternalStore(subscribeToHydration, getClientSnapshot, getServerSnapshot);
@@ -255,6 +258,8 @@ export function Workspace({ conversationId, projectId, initialAgentSlug }: { con
   useEffect(() => {
     const workspaceId = user?.workspace_id;
     if (!workspaceId) return;
+    let active = true;
+    let reconnect: ReturnType<typeof setTimeout> | undefined;
     const endpoint = new URL(`${API}/api/v1/events`, window.location.origin);
     const streamStartedAt = Date.now();
     const storedCursor = Number(window.sessionStorage.getItem(eventCursorKey(workspaceId)) ?? 0);
@@ -327,10 +332,15 @@ export function Workspace({ conversationId, projectId, initialAgentSlug }: { con
       setStreamError({ conversationId: "*", message: "" });
     };
     stream.onerror = () => {
+      void ensureSession(true).catch(error => { if (active && error instanceof SessionExpired) redirectToLogin(); }).finally(() => {
+        // A 401 permanently closes native EventSource. After renewal recreate
+        // it with the persisted cursor; ordinary disconnects keep native retry.
+        if (active && stream.readyState === EventSource.CLOSED && !reconnect) reconnect = setTimeout(() => { if (active) setStreamAttempt(value => value + 1); }, 1500);
+      });
       setStreamError({ conversationId: "*", message: "实时连接暂时中断，浏览器正在自动重连" });
     };
-    return () => stream.close();
-  }, [user?.workspace_id]);
+    return () => { active = false; clearTimeout(reconnect); stream.close(); };
+  }, [user?.workspace_id, streamAttempt]);
 
   async function chooseModel(id: string) {
     if (!conversationId) return;
@@ -590,25 +600,52 @@ function ConversationSkills({ conversationId }: { conversationId: string }) {
 }
 
 function Terminal({ conversationId }: { conversationId: string }) {
+  const [connectionError, setConnectionError] = useState("");
+  const [attempt, setAttempt] = useState(0);
   const mount = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    let active = true;
     let socket: WebSocket | undefined;
-    let terminal: { dispose: () => void; write: (value: string) => void; onData: (callback: (value: string) => void) => void } | undefined;
+    let terminal: { dispose: () => void } | undefined;
+    let resize: ResizeObserver | undefined;
+    let input: { dispose: () => void } | undefined;
     void (async () => {
-      const [{ Terminal }, { FitAddon }] = await Promise.all([import("@xterm/xterm"), import("@xterm/addon-fit")]);
-      if (!mount.current) return;
+      const [{ Terminal }, { FitAddon }] = await Promise.all([import("@xterm/xterm"), import("@xterm/addon-fit"), ensureSession(true)]);
+      if (!active || !mount.current) return;
       const instance = new Terminal({ cursorBlink: true, fontSize: 12, theme: { background: "#151a16", foreground: "#dce6dd" } });
+      terminal = instance;
       const fit = new FitAddon();
-      instance.loadAddon(fit); instance.open(mount.current); fit.fit(); instance.write("Lester Computer\r\nConnecting…\r\n");
+      instance.loadAddon(fit); instance.open(mount.current); fit.fit(); instance.write("Lester Computer\r\n正在连接…\r\n");
       const endpoint = new URL(`${API}/api/v1/conversations/${conversationId}/terminal`, window.location.origin);
       endpoint.protocol = endpoint.protocol === "https:" ? "wss:" : "ws:";
       socket = new WebSocket(endpoint);
-      socket.onmessage = (event) => { const data = JSON.parse(event.data); if (data.Type === "output" || data.type === "output") instance.write(data.Data || data.data); };
-      socket.onopen = () => instance.onData((data) => socket?.send(JSON.stringify({ Type: "input", Data: data })));
-      socket.onerror = () => instance.write("\r\nTerminal unavailable until the Computer starts.");
-      terminal = instance;
-    })();
-    return () => { socket?.close(); terminal?.dispose(); };
-  }, [conversationId]);
-  return <div className="terminal" ref={mount} />;
+      const fitTerminal = () => {
+        if (!active) return;
+        fit.fit();
+        if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ Type: "resize", Cols: instance.cols, Rows: instance.rows }));
+      };
+      resize = new ResizeObserver(fitTerminal); resize.observe(mount.current);
+      socket.onmessage = event => {
+        try {
+          const message = JSON.parse(event.data);
+          const type = message.Type ?? message.type, data = message.Data ?? message.data;
+          if (type === "output" && typeof data === "string") instance.write(data);
+          else if (type === "error") instance.write("\r\n终端暂不可用，请检查 Computer 状态后重新打开终端。\r\n");
+        } catch { instance.write("\r\n收到无法解析的终端消息。\r\n"); }
+      };
+      socket.onopen = () => {
+        fitTerminal();
+        input = instance.onData(data => { if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ Type: "input", Data: data })); });
+      };
+      socket.onerror = () => { if (active) instance.write("\r\n终端连接失败，请检查 Computer 状态或网络。\r\n"); };
+      socket.onclose = () => { if (active) instance.write("\r\n终端连接已断开，重新打开终端可重连。\r\n"); };
+    })().catch(error => {
+      if (!active) return;
+      resize?.disconnect(); input?.dispose(); socket?.close(); terminal?.dispose();
+      if (error instanceof SessionExpired) redirectToLogin();
+      else setConnectionError("终端暂时无法连接，请检查网络或 Computer 状态后重试。");
+    });
+    return () => { active = false; resize?.disconnect(); input?.dispose(); socket?.close(); terminal?.dispose(); };
+  }, [conversationId, attempt]);
+  return connectionError ? <div className="terminal"><p role="alert">{connectionError}</p><button type="button" className="secondary-button" onClick={() => { setConnectionError(""); setAttempt(value => value + 1); }}>重新连接</button></div> : <div className="terminal" ref={mount} />;
 }

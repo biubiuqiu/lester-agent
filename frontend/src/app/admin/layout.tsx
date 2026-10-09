@@ -7,6 +7,8 @@ import { ArrowLeft, Cpu, ShieldCheck, Users } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { api, type UserProfile } from "@/lib/api";
 
+import { AuthSessionKeeper } from "@/components/auth-session-keeper";
+
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const path = usePathname();
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -20,7 +22,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     }).catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : "无法验证管理员权限"); });
     return () => { active = false; };
   }, []);
-  return <main className="settings-shell admin-shell">
+  return <main className="settings-shell admin-shell"><AuthSessionKeeper />
     <aside className="settings-sidebar admin-sidebar">
       <Brand /><div className="admin-label"><ShieldCheck size={15} />管理后台</div>
       <nav aria-label="后台导航">

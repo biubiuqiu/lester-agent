@@ -108,7 +108,7 @@ func run() error {
 		logger.Error("seed skills", "error", err)
 		return err
 	}
-	authService := auth.New(db, redisClient, cfg.SessionTTL, cfg.SessionCookieSecure)
+	authService := auth.New(db, redisClient, cfg.AccessTokenTTL, cfg.SessionCookieSecure)
 	var mailer auth.Mailer
 	if cfg.SMTPHost != "" {
 		smtpMailer, mailErr := auth.NewSMTPMailer(auth.SMTPConfig{Host: cfg.SMTPHost, Port: cfg.SMTPPort, Username: cfg.SMTPUsername, Password: cfg.SMTPPassword, From: cfg.SMTPFrom, TLSMode: cfg.SMTPTLSMode})

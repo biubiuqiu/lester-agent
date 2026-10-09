@@ -49,8 +49,9 @@ export const siteDocs: SiteDoc[] = [
     sections: [
       { id: "account", title: "注册、登录与个人资料", content: <>
         <p>使用邮箱和密码，或部署方已配置的 Google / GitHub 登录。启用邮件服务时，新邮箱注册需验证；登录页可重新发送验证邮件或找回密码。未配置邮件服务时，保留自部署即时注册方式。</p>
+        <p>access token 有效 2 小时，refresh token 有效 30 天。持续使用会自动轮换并重新计算 30 天，可持续续期；30 天未续期需重新登录。退出登录或重设密码会撤销令牌。</p>
         <p>相同邮箱不会自动合并账号。已有账号请先用原方式登录，再到“个人资料 → 登录方式”绑定第三方身份。绑定不会更改账号邮箱、项目或文件。至少保留一种可用登录方式；解除绑定会退出其他设备。</p>
-        <p>资料页可修改称呼、设置或更换密码、上传照片或恢复内置头像。照片支持小于 2 MB 的 PNG/JPEG/GIF，居中裁剪为方形，GIF 使用首帧。头像上传和恢复即时保存；称呼与主题选择需点击“保存资料”。更换密码会保留当前登录，退出其他设备。</p>
+        <p>资料页可修改称呼、设置或更换密码、上传照片或恢复内置头像。照片支持小于 2 MB 的 PNG/JPEG/GIF，可拖动、缩放、旋转、重置，并预览圆形效果，GIF 使用首帧。确认裁剪才保存，取消不修改头像；已有照片可调整裁剪。头像恢复即时保存；称呼与主题选择需点击“保存资料”。更换密码会保留当前登录，退出其他设备。</p>
         <p>找回密码链接在 30 分钟后过期，验证链接在 24 小时后过期，均只能使用一次。密码重设后所有设备需重新登录。第三方按钮未出现时，请联系部署负责人配置，参见<Link href="/docs/deployment#authentication">登录与邮件服务配置</Link>。</p>
       </> },
       { id: "guides", title: "逐步认识工作区", content: <>
@@ -65,7 +66,7 @@ export const siteDocs: SiteDoc[] = [
       </> },
       { id: "computer", title: "使用你的 Computer", content: <>
         <p>每个用户拥有一个逻辑 Computer，每个会话有独立的目录。Agent 可以在目录内运行命令、读取、创建和编辑文件。桌面右侧提供文件列表、预览和终端。</p>
-        <p>Agent 写入、编辑或登记文件后，确认文件实际存在再自动打开；运行中同步发现的命令生成文件也会打开。多个文件放在独立标签中（最多 8 个），同一路径复用标签，支持切换、关闭并保留查看方式。HTML 默认使用隔离 iframe 预览，可以切换源码；修改后同步最新内容。左右方向键、Home/End 切换标签，Delete 关闭标签。历史或重复事件不会反复弹出文件。</p>
+        <p>Agent 写入、编辑或登记文件后，确认文件实际存在再自动打开；运行中同步发现的命令生成文件也会打开。多个文件放在独立标签中（最多 8 个），同一路径复用标签，支持切换、关闭并保留查看方式。HTML 默认使用隔离 iframe 预览，可以切换源码；修改后同步最新内容。点击“在新页面打开”只显示私有 HTML，不带工作区侧栏、终端或文件面板，也不会自动发布。左右方向键、Home/End 切换标签，Delete 关闭标签。历史或重复事件不会反复弹出文件。</p>
         <p>Computer 的工作区会保留；空闲时暂停，下一次访问时唤醒。当前支持 Docker 与 Alibaba Cloud ACS Provider。两者之间不会自动迁移文件。</p>
         <p>手机端会自动打开文件面板，可关闭后继续对话，也可以通过会话菜单查看成果。桌面端可以拖动调整右侧宽度、放大预览和收起会话栏。</p>
       </> },
@@ -150,14 +151,17 @@ export const siteDocs: SiteDoc[] = [
         <p>已有部署不要重新覆盖 <code>deploy/.env</code>，也不要删除 Volume 来升级。切换 Docker 与 ACS Provider 不会自动迁移用户文件，应另行规划。</p>
       </> },
       { id: "upgrade", title: "已有数据库升级", content: <>
-        <p>当前版本需要迁移 001–014。全新 PostgreSQL 数据目录会按序执行初始化 SQL，已有 Volume 不会自动重新执行这些文件。</p>
+        <p>当前版本需要迁移 001–015。全新 PostgreSQL 数据目录会按序执行初始化 SQL，已有 Volume 不会自动重新执行这些文件。</p>
         <p>先备份并停止 API 写入，确认数据库已应用哪些迁移，再按编号执行尚未应用的 <code>backend/migrations/*.up.sql</code>。不要重复执行已经完成的迁移。</p>
-        <p>例如，数据库已完成 001–012 时，执行一次账号机制的 013，并继续执行下面的 014，再重建 API 和 Web：</p>
+        <p>例如，数据库已完成 001–012 时，执行一次账号机制的 013，并继续执行下面的 014、015，再重建 API 和 Web：</p>
         <CodeBlock label="迁移 013（仅适用于已完成 001–012）">{"docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api\ndocker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"' < backend/migrations/000013_account_identity.up.sql"}</CodeBlock>
         <p>这段重定向命令适用于 Bash。PowerShell 可使用 <code>Get-Content -Raw</code> 读取迁移文件，再通过管道传入同一 <code>exec -T postgres</code> 命令。</p>
         <p>数据库已完成 001–013 时，执行一次新手引导的 014。新数据库会自动初始化；已有卷不会自动升级：</p>
-        <CodeBlock label="迁移 014（仅适用于已完成 001–013）">{"docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api\ndocker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"' < backend/migrations/000014_user_guides.up.sql\ndocker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web"}</CodeBlock>
+        <CodeBlock label="迁移 014（仅适用于已完成 001–013）">{"docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api\ndocker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"' < backend/migrations/000014_user_guides.up.sql"}</CodeBlock>
         <p>014 回滚只删除新手引导进度；使用兼容的 API/Web 版本。迁移时已有账户默认跳过自动欢迎，新账户首次进入会看到引导。</p>
+        <p>以上旧版本升级还需继续补齐 015。数据库已完成 001–014 时，备份、停止 API 写入，执行一次 015，再启动新版 API/Web：</p>
+        <CodeBlock label="迁移 015（仅适用于已完成 001–014）">{"docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api\ndocker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"' < backend/migrations/000015_rotating_tokens.up.sql\ndocker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web"}</CodeBlock>
+        <p>015 使旧登录失效，升级后需重新登录一次，账号、项目与文件保留。015 回滚也撤销登录，需配套兼容的 API/Web。双令牌有效期为固定默认值，无需新增环境变量。</p>
         <Note>回滚应配套恢复兼容的应用版本。迁移 013 会删除身份、令牌和头像引用，存在无密码账号时会拒绝回滚，应先安排密码恢复。工作区与文件不会迁移。迁移 012 回滚会删除成果登记和待投递记录。</Note>
       </> },
       { id: "helm", title: "Kubernetes 与 ACS", content: <>

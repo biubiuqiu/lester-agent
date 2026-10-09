@@ -170,7 +170,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --buil
 
 ### 成果登记与可靠事件升级
 
-当前版本需要迁移 001–014；账号机制的 013 迁移见下方“账号、第三方登录与头像”。上面的 004–005 命令仅说明历史聊天升级，不足以升级到当前版本；请按编号补齐所有尚未执行的迁移。若数据库已完成 001–011，先备份、停止 API 写入，再执行一次 012，并继续补齐 013、014 后重建 API/Web：
+当前版本需要迁移 001–015；账号机制的 013 迁移见下方“账号、第三方登录与头像”。上面的 004–005 命令仅说明历史聊天升级，不足以升级到当前版本；请按编号补齐所有尚未执行的迁移。若数据库已完成 001–011，先备份、停止 API 写入，再执行一次 012，并继续补齐 013、014、015 后重建 API/Web：
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
@@ -179,7 +179,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T post
   < backend/migrations/000012_deliverables_events.up.sql
 ```
 
-全新 Compose 数据卷会按序执行 001–014；已有数据卷不会自动升级，勿删除数据卷。012 回滚会删除成果登记和待投递记录，保留原文件、消息、运行事件及已发布站点；回滚前停止新版 API，并配套恢复兼容的应用版本。Redis 长期不可用时待投递表会增长，需要监控数量和磁盘空间。
+全新 Compose 数据卷会按序执行 001–015；已有数据卷不会自动升级，勿删除数据卷。012 回滚会删除成果登记和待投递记录，保留原文件、消息、运行事件及已发布站点；回滚前停止新版 API，并配套恢复兼容的应用版本。Redis 长期不可用时待投递表会增长，需要监控数量和磁盘空间。
 
 ## 账号、第三方登录与头像
 
@@ -211,21 +211,24 @@ SMTP_FROM=no-reply@example.com
 
 头像支持小于 2 MiB 的 PNG/JPEG/GIF，服务端居中裁剪并转为 256×256 PNG，GIF 使用首帧且移除元数据；拒绝单边超过 4096 像素或总量超过 1200 万像素的图片。照片存入现有私有对象存储，仅通过已登录的 `/api/v1/me/avatar` 读取，失败回退到首字头像。第三方首次注册尝试导入头像，失败不阻止登录；资料页支持上传、恢复主题、明确使用已绑定账号的照片。远程获取仅允许指定 Google/GitHub HTTPS 图片主机，不跟随跳转、限定时间/大小且不携带凭证。替换或删除的旧对象会尽力清理；备份对象存储时包含头像。
 
-已有部署先备份、停止 API 写入；数据库在 001–012 时依次执行一次 013、014。已完成 013 时只执行下方“逐步新手引导”中的 014：
+已有部署先备份、停止 API 写入；数据库在 001–012 时依次执行一次 013、014、015。已完成 013 时执行下方“逐步新手引导”中的 014、015：
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000013_account_identity.up.sql
-# 最新 API/Web 需先应用 014，再启动。
+# 最新 API/Web 需先应用 014、015，再启动。
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000014_user_guides.up.sql
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
+  sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  < backend/migrations/000015_rotating_tokens.up.sql
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
 ```
 
-保留 `.env`、原密钥和数据卷。全新卷自动初始化 001–014，已有卷不会自动升级。PowerShell 用 `Get-Content -Raw` 管道传入 `exec -T postgres`。013 回滚会删除身份、令牌和头像引用，存在无密码账号时会拒绝回滚；降级前先安排密码恢复并配套兼容版本。工作区、项目和文件不迁移。实际 OAuth 授权与邮件投递需使用部署方真实配置验收。
+保留 `.env`、原密钥和数据卷。全新卷自动初始化 001–015，已有卷不会自动升级。PowerShell 用 `Get-Content -Raw` 管道传入 `exec -T postgres`。013 回滚会删除身份、令牌和头像引用，存在无密码账号时会拒绝回滚；降级前先安排密码恢复并配套兼容版本。工作区、项目和文件不迁移。实际 OAuth 授权与邮件投递需使用部署方真实配置验收。
 
 ## 逐步新手引导
 
@@ -233,17 +236,20 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --buil
 
 引导只解释界面，不会自动发送任务、调用模型、安装 Skill 或发布文件。打开模型配置时，已有任务草稿继续保留。完成模型教学不代表模型服务已验证；仍需一次真实运行确认。
 
-已有数据库完成 001–013 后，先备份，再执行一次 014 并重建 API/Web：
+已有数据库完成 001–013 后，先备份，再执行一次 014、015 并重建 API/Web：
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000014_user_guides.up.sql
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
+  sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  < backend/migrations/000015_rotating_tokens.up.sql
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
 ```
 
-保留原 `.env`、加密密钥与数据卷；更早的部署先按编号补齐缺失迁移。全新 Compose 卷包含 014；Helm 在部署前手动应用 SQL。014 回滚只移除教学进度，需配套恢复兼容的 API/Web。进度接口限定当前登录用户，不能读写其他账户的进度。
+保留原 `.env`、加密密钥与数据卷；更早的部署先按编号补齐缺失迁移。全新 Compose 卷包含 014、015；Helm 在部署前手动应用 SQL。014 回滚只移除教学进度，需配套恢复兼容的 API/Web。进度接口限定当前登录用户，不能读写其他账户的进度。
 
 ## Skill 与附件机制
 
@@ -474,3 +480,21 @@ make web-check
 - Sandbox Service 拥有 Docker Socket 权限，生产部署时应运行在隔离的专用 Worker
 - User Computer 默认禁用网络，并限制 CPU、内存和 PID 数量
 - 文件 API 与终端默认进入 `/workspace/conversations/{conversationId}`，不会把其他会话目录展示为当前会话文件
+
+## 双令牌登录、头像裁剪与独立 HTML 预览
+
+邮箱、Google 和 GitHub 登录统一签发两个 HttpOnly/SameSite Cookie，数据库只存摘要：**access token 两小时过期**；**refresh token 30 天过期**，每次续期都会轮换并重新计算 30 天。持续使用没有累计登录时长上限；30 天未续期则需要重新登录。浏览器在到期前、受保护请求被认证中间件拒绝后自动续期，并协调多个请求和标签页。仅重试尚未进入业务处理的认证拒绝，网络故障不会清空草稿。退出登录及密码、账号安全变更撤销整个令牌组；超过 5 秒并发宽限后重用已消费的 refresh token 会撤销该设备的令牌组。
+
+上传头像后，可拖动或用方向键调整位置、缩放、手机双指缩放、旋转、重置，并查看圆形头像效果。点击“保存头像”才上传裁剪后的 256px PNG；取消不更改原头像。已有图片或第三方头像可点击“调整裁剪”。HTML 的“在新页面打开”仅显示私有、隔离的 HTML 及本地资源，可跳转同一会话内已验证的 HTML 文件，不再带入侧栏、终端、文件面板，也不会发布网站。
+
+数据库已完成 **001–014** 时，先备份、停止 API 写入，执行一次 **015** 后重建 API/Web。更早版本先按编号补齐缺失迁移：
+
+```bash
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
+  sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  < backend/migrations/000015_rotating_tokens.up.sql
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
+```
+
+015 会使旧登录失效，升级后需重新登录一次，账号、个人资料、项目与文件不受影响。保留原 `.env`、加密密钥与数据卷。全新 Compose 卷初始化 001–015；Helm 部署前手动执行 SQL。015 回滚也会撤销登录，需配套兼容的 API/Web。有效期为应用固定默认值，无需新增环境变量。

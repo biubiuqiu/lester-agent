@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./preview.css";
+import "./avatar-crop.css";
 import "./account.css";
 import "./workspace-errors.css";
 import "./file-workspace.css";

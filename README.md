@@ -16,17 +16,20 @@ Documentation content lives in `frontend/src/lib/site-docs.tsx`; shared public-s
 
 New accounts see a skippable seven-step introduction when they first enter `/app`. The **新手引导** entry in the workspace header/account menu and settings pages opens ten tutorials: first task, models, projects, files, Agents, context library, Computer, Skills, profile, and publishing. Feature pages show a dismissible first-use hint. Progress is stored per account and topic, so paused guides can resume on another device; completed guides can be replayed. Existing accounts are opted out of the automatic welcome during migration. Reading tutorials does not create tasks, call a model, install Skills, or publish files. Visiting model settings preserves the existing task draft.
 
-Existing databases on 001–013 must apply **014 once** before rebuilding API and Web:
+Existing databases on 001–013 must apply **014 and 015 once** before rebuilding API and Web:
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000014_user_guides.up.sql
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
+  sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  < backend/migrations/000015_rotating_tokens.up.sql
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
 ```
 
-Back up first, retain `.env`, encryption keys and volumes, and apply earlier missing migrations in order. Fresh Compose databases include 014 automatically; Helm deployments apply SQL externally. Rolling back 014 removes tutorial progress only and requires a compatible API/Web version. `GET /api/v1/me/guides` and `PATCH /api/v1/me/guides/{topic}` are authenticated and always scoped to the session user.
+Back up first, retain `.env`, encryption keys and volumes, and apply earlier missing migrations in order. Fresh Compose databases include 014 and 015 automatically; Helm deployments apply SQL externally. Rolling back 014 removes tutorial progress only and requires a compatible API/Web version. `GET /api/v1/me/guides` and `PATCH /api/v1/me/guides/{topic}` are authenticated and always scoped to the session user.
 
 ## Watch the walkthrough
 
@@ -400,7 +403,7 @@ Fresh installs apply 004–005 automatically. Migration 004 preserves old chat o
 
 ### Deliverable registration and reliable events upgrade
 
-The current version requires migrations 001–014. Migration 013 is described in [Accounts and sign-in](#accounts-and-sign-in). The historical 004–005 commands above are insufficient for a full upgrade; apply every missing migration in numeric order. For a database already on 001–011, back it up, stop API writes, apply 012 once, then complete 013 and 014 below before rebuilding API/Web:
+The current version requires migrations 001–015. Migration 013 is described in [Accounts and sign-in](#accounts-and-sign-in). The historical 004–005 commands above are insufficient for a full upgrade; apply every missing migration in numeric order. For a database already on 001–011, back it up, stop API writes, apply 012 once, then complete 013, 014 and 015 below before rebuilding API/Web:
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
@@ -409,7 +412,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T post
   < backend/migrations/000012_deliverables_events.up.sql
 ```
 
-New Compose volumes initialize migrations 001–014; existing volumes never upgrade automatically. Do not delete volumes. Rolling back 012 drops registered metadata and pending delivery intents while preserving Computer files, messages, run events, and published artifacts. Stop the updated API before rollback and restore a compatible application version. Monitor pending outbox count and disk space during prolonged Redis outages.
+New Compose volumes initialize migrations 001–015; existing volumes never upgrade automatically. Do not delete volumes. Rolling back 012 drops registered metadata and pending delivery intents while preserving Computer files, messages, run events, and published artifacts. Stop the updated API before rollback and restore a compatible application version. Monitor pending outbox count and disk space during prolonged Redis outages.
 
 ## Skills and attachments
 
@@ -641,21 +644,24 @@ Use a sender authorized by your mail service. `SMTP_TLS_MODE=tls` supports port 
 
 Profile settings support PNG/JPEG/GIF uploads below 2 MiB, center-cropped and re-encoded to a 256×256 PNG (GIF first frame, metadata removed). Images exceeding 4096 pixels per side or 12 million pixels are rejected. Avatars use the existing private object store and authenticated `/api/v1/me/avatar`, with built-in initials as fallback. First OAuth registration attempts to import the provider avatar; failure does not block sign-in. Bound users can explicitly choose the provider photo, upload their own image or restore a built-in theme. Provider avatar fetches use an HTTPS hostname allowlist, strict size/time limits, no redirects and no access tokens. Replaced/deleted photo objects are removed on a best-effort basis; include avatar objects in object-store backups.
 
-Accounts require migration **013** after 001–012; the latest version also requires **014** for user guides. For a database on 001–012, back up PostgreSQL/object storage, stop API writes, preserve your `.env` and encryption key, apply each **once**, then rebuild API/Web. If already on 013, apply only [014](#step-by-step-user-guides):
+Accounts require migration **013** after 001–012; the latest version also requires **014** for user guides and **015** for rotating login tokens. For a database on 001–012, back up PostgreSQL/object storage, stop API writes, preserve your `.env` and encryption key, apply each **once**, then rebuild API/Web. If already on 013, apply [014 and 015](#step-by-step-user-guides):
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000013_account_identity.up.sql
-# Also apply 014 before restarting the latest API/Web.
+# Also apply 014 and 015 before restarting the latest API/Web.
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000014_user_guides.up.sql
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
+  sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  < backend/migrations/000015_rotating_tokens.up.sql
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
 ```
 
-Fresh Compose volumes initialize 001–014 automatically; existing volumes never re-run init scripts. PowerShell can pipe `Get-Content -Raw` into the same `exec -T postgres` command. Rolling back 013 removes identity/token/avatar references and therefore **refuses while accounts without passwords exist**; arrange password recovery before a downgrade and restore a compatible application version. Existing workspace files and projects are not moved. PostgreSQL-backed auth tests use mock identity providers and a local SMTP fixture; live third-party consent/delivery require deployment validation.
+Fresh Compose volumes initialize 001–015 automatically; existing volumes never re-run init scripts. PowerShell can pipe `Get-Content -Raw` into the same `exec -T postgres` command. Rolling back 013 removes identity/token/avatar references and therefore **refuses while accounts without passwords exist**; arrange password recovery before a downgrade and restore a compatible application version. Existing workspace files and projects are not moved. PostgreSQL-backed auth tests use mock identity providers and a local SMTP fixture; live third-party consent/delivery require deployment validation.
 
 ## Administration
 
@@ -685,3 +691,21 @@ WHERE email = 'operator@example.com';
 Verify exactly one row was updated, then refresh the app. Subsequent role changes are available in the console. Do not grant access by editing browser state; every admin API requires an authenticated, active administrator. The reserved system-model workspace has no user membership.
 
 For the PostgreSQL-backed permission, account lifecycle, shared-model isolation, default rollback, and migration rollback checks, point `LESTER_TEST_DATABASE_URL` at a disposable PostgreSQL database and run `go test ./...` from `backend/`. Tests create and remove isolated schemas.
+
+## Rotating login tokens, avatar cropping and standalone HTML preview
+
+Login (email, Google and GitHub) issues separate opaque access and refresh credentials in HttpOnly/SameSite cookies; PostgreSQL stores only hashes. Access lasts **2 hours**. Refresh lasts **30 days**, rotates on use and restarts the 30-day window; continuously active sessions have no absolute lifetime. Thirty days without renewal requires a new login. The browser renews automatically before expiry and after an authentication-middleware rejection, coordinating concurrent requests/tabs without replaying domain mutations. Network outages preserve drafts. Logout and password/account security changes revoke the entire token family; refresh replay outside a five-second concurrent-tab grace revokes that device's family.
+
+Avatar upload opens a crop dialog with drag/keyboard positioning, zoom, mobile pinch, rotation, reset and a circular preview. Confirm uploads the chosen 256px PNG; cancel leaves the avatar unchanged. Existing uploaded/provider photos can be cropped again from **Adjust crop**. HTML **Open in new tab** opens only the private, isolated HTML preview at `/preview/{conversationId}?path=...`, with authenticated local assets and HTML navigation; it does not publish or mount workspace panels.
+
+For an existing database on **001–014**, back up, stop API writes, apply **015 once**, then rebuild API/Web. Older deployments must first apply all missing migrations in numeric order:
+
+```bash
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
+  sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  < backend/migrations/000015_rotating_tokens.up.sql
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
+```
+
+Migration 015 invalidates old sessions: users sign in once after upgrade. Accounts, profiles, projects and files remain intact. Retain `.env`, encryption keys and volumes. Fresh Compose volumes initialize 001–015; Helm requires SQL before deployment. Rolling back 015 also invalidates current credentials and must be paired with compatible API/Web. The lifetimes are fixed application defaults; no extra environment variables are required.

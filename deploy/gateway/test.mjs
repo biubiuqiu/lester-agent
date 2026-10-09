@@ -13,7 +13,7 @@ if (process.argv[2] === 'serve') {
       return;
     }
     if (req.url === '/api/preview/index.html') {
-      if (req.headers.cookie !== 'session=fixture') {
+      if (req.headers.cookie !== 'lester_access_token=fixture') {
         res.writeHead(401).end();
         return;
       }
@@ -28,7 +28,7 @@ if (process.argv[2] === 'serve') {
     let bytes = 0;
     for await (const chunk of req) bytes += chunk.length;
     res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Set-Cookie', 'session=fixture; Path=/; HttpOnly; SameSite=Lax');
+    res.setHeader('Set-Cookie', ['lester_access_token=fixture; Path=/; HttpOnly; SameSite=Lax; Max-Age=7200', 'lester_refresh_token=refresh-fixture; Path=/api/v1/auth; HttpOnly; SameSite=Lax; Max-Age=2592000']);
     res.end(JSON.stringify({ upstream: 'api', url: req.url, method: req.method, headers: req.headers, bytes }));
   });
   api.on('upgrade', (req, socket) => {
@@ -55,7 +55,7 @@ if (process.argv[2] === 'serve') {
 } else {
   const base = 'http://gateway:8080';
   const request = (path, options) => fetch(base + path, { signal: AbortSignal.timeout(10000), ...options });
-  for (const path of ['/', '/app', '/_next/static/app.js', '/apiculture']) {
+  for (const path of ['/', '/app', '/_next/static/app.js', '/apiculture', '/preview/11111111-1111-1111-1111-111111111111?path=index.html']) {
     assert.equal(await (await request(path)).text(), `web:${path}`);
   }
   assert.equal(await (await request('/healthz')).text(), 'ok\n');
@@ -66,15 +66,23 @@ if (process.argv[2] === 'serve') {
   }
   const response = await request('/api/login', {
     method: 'POST', body: 'fixture', headers: {
-      Cookie: 'session=fixture', Authorization: 'Bearer fixture',
+      Cookie: 'lester_access_token=fixture', Authorization: 'Bearer fixture',
       Origin: 'http://gateway:8080', 'Last-Event-ID': '42',
       'X-Forwarded-Proto': 'https', 'X-Forwarded-For': 'spoofed',
     },
   });
   assert.match(response.headers.get('set-cookie'), /HttpOnly/);
+  assert.equal(response.headers.getSetCookie().length, 2);
+  assert.match(response.headers.getSetCookie()[0], /lester_access_token=fixture; Path=\/;.*Max-Age=7200/);
+  assert.match(response.headers.getSetCookie()[1], /lester_refresh_token=refresh-fixture; Path=\/api\/v1\/auth;.*Max-Age=2592000/);
+  const refresh = await request('/api/v1/auth/refresh', { method: 'POST', headers: { Cookie: 'lester_refresh_token=refresh-fixture' } });
+  const renewed = await refresh.json();
+  assert.equal(renewed.url, '/api/v1/auth/refresh');
+  assert.equal(renewed.headers.cookie, 'lester_refresh_token=refresh-fixture');
+  assert.equal(refresh.headers.getSetCookie().length, 2);
   const result = await response.json();
   assert.equal(result.method, 'POST');
-  assert.equal(result.headers.cookie, 'session=fixture');
+  assert.equal(result.headers.cookie, 'lester_access_token=fixture');
   assert.equal(result.headers.authorization, 'Bearer fixture');
   assert.equal(result.headers.origin, 'http://gateway:8080');
   assert.equal(result.headers['last-event-id'], '42');
@@ -84,7 +92,7 @@ if (process.argv[2] === 'serve') {
   console.log('PASS routes, escaped paths, auth/cookies, cursor, forwarding headers');
 
   assert.equal((await request('/api/preview/index.html')).status, 401);
-  const preview = await request('/api/preview/index.html', { headers: { Cookie: 'session=fixture' } });
+  const preview = await request('/api/preview/index.html', { headers: { Cookie: 'lester_access_token=fixture' } });
   assert.equal(preview.headers.get('content-security-policy'), "sandbox allow-scripts; default-src 'none'");
   assert.equal(preview.headers.get('cache-control'), 'no-store');
   assert.match(await preview.text(), /private preview/);

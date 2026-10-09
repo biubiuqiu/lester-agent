@@ -25,7 +25,6 @@ import {
   conversationFilePreviewURL,
   FileEntry,
   readConversationFile,
-  readConversationFileBytes,
 } from "@/lib/api";
 
 import { useFileWorkspace, FileDownload } from "./file-workspace";
@@ -34,7 +33,7 @@ import { usePreviewScroll } from "./use-preview-scroll";
 import { PublishFileButton } from "./artifact-manager";
 import { FileError } from "./file-error";
 import { MessageContent } from "./message-content";
-import { resolveWorkspaceReference } from "@/lib/workspace-reference";
+import { buildHTMLPreview } from "@/lib/html-preview";
 
 type DirectoryState = {
   entries: FileEntry[];
@@ -59,7 +58,6 @@ const textExtensions = new Set([
 ]);
 const imageExtensions = new Set(["avif", "bmp", "gif", "ico", "jpeg", "jpg", "png", "webp"]);
 const codeExtensions = new Set(["c", "cc", "cpp", "css", "go", "h", "hpp", "java", "js", "jsx", "mjs", "php", "py", "rb", "rs", "scss", "sh", "sql", "ts", "tsx"]);
-const ignoredScriptAttributes = new Set(["src", "integrity", "crossorigin"]);
 const maxTextPreviewBytes = 768 * 1024;
 const SourcePreview = dynamic(
   () => import("@/components/source-preview").then((module) => module.SourcePreview),
@@ -263,7 +261,7 @@ function FilePreview({
         <button type="button" aria-pressed={mode === "preview"} className={mode === "preview" ? "active" : ""} onClick={() => onModeChange("preview")}><Eye />预览</button>
         <button type="button" aria-pressed={mode === "source"} className={mode === "source" ? "active" : ""} onClick={() => onModeChange("source")}><Code2 />源码</button>
       </nav> : <span className="file-preview-format"><FileGlyph file={file} />{fileExtension(file.name).toUpperCase() || "文本"}<small>{formatBytes(file.size)}</small></span>}
-      <div className="file-preview-actions">{preview.updatedAt ? <RecentFileUpdate key={preview.updatedAt} /> : null}<button type="button" className="file-ask-agent" onClick={onReference} title="让 Agent 修改此文件" aria-label="让 Agent 修改此文件"><MessageSquare /><span>修改</span></button>{kind === "html" ? <PublishFileButton conversationId={conversationId} path={file.path}/> : null}<FileDownload conversationId={conversationId} file={file} />{kind === "html" ? <a href={`/app/c/${conversationId}?preview=${encodeURIComponent(file.path)}`} target="_blank" rel="noopener noreferrer" title="在新页面打开 HTML 预览" aria-label={`在新页面预览 ${file.name}`}><ExternalLink /></a> : null}</div>
+      <div className="file-preview-actions">{preview.updatedAt ? <RecentFileUpdate key={preview.updatedAt} /> : null}<button type="button" className="file-ask-agent" onClick={onReference} title="让 Agent 修改此文件" aria-label="让 Agent 修改此文件"><MessageSquare /><span>修改</span></button>{kind === "html" ? <PublishFileButton conversationId={conversationId} path={file.path}/> : null}<FileDownload conversationId={conversationId} file={file} />{kind === "html" ? <a href={`/preview/${conversationId}?path=${encodeURIComponent(file.path)}`} target="_blank" rel="noopener noreferrer" title="在新页面打开 HTML 预览" aria-label={`在新页面预览 ${file.name}`}><ExternalLink /></a> : null}</div>
     </header>
     <div ref={kind === "markdown" && mode === "preview" ? markdownScroll : undefined} className={`file-preview-body ${kind}`}>
       {preview.loading && preview.content ? <span className="preview-syncing" role="status">正在同步最新版本…</span> : null}
@@ -313,90 +311,6 @@ function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
-async function buildHTMLPreview(conversationId: string, filePath: string, source: string, signal: AbortSignal) {
-  const document = new DOMParser().parseFromString(source, "text/html");
-  document.querySelectorAll('meta[http-equiv="Content-Security-Policy" i]').forEach((element) => element.remove());
-  const policy = document.createElement("meta");
-  policy.httpEquiv = "Content-Security-Policy";
-  policy.content = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; media-src data: blob:; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'";
-  document.head.prepend(policy);
-
-  // Keep local navigation in the verified conversation inventory. A srcdoc URL
-  // otherwise resolves against the Lester page instead of the source HTML file.
-  for (const link of document.querySelectorAll<HTMLAnchorElement>("a[href], area[href]")) {
-    const path = resolveWorkspaceReference(filePath, link.getAttribute("href") || "");
-    link.removeAttribute("data-lester-preview-path");
-    if (path) link.setAttribute("data-lester-preview-path", path);
-  }
-  const navigation = document.createElement("script");
-  navigation.textContent = `document.addEventListener("click", function(event) {
-    var link = event.target instanceof Element && event.target.closest("[data-lester-preview-path]");
-    if (!link) return;
-    event.preventDefault();
-    parent.postMessage({ type: "lester:preview:navigate", path: link.getAttribute("data-lester-preview-path") }, "*");
-  }, true);`;
-  policy.after(navigation);
-
-  const tasks: Promise<void>[] = [];
-  const stylesheets = [...document.querySelectorAll<HTMLLinkElement>('link[rel~="stylesheet"][href]')].slice(0, 20);
-  for (const link of stylesheets) {
-    const assetPath = resolveWorkspaceReference(filePath, link.getAttribute("href") || "");
-    if (!assetPath) continue;
-    tasks.push(readConversationFile(conversationId, assetPath, signal).then((content) => {
-      if (content.length > 512 * 1024) return;
-      const style = document.createElement("style");
-      style.textContent = content;
-      link.replaceWith(style);
-    }));
-  }
-
-  const scripts = [...document.querySelectorAll<HTMLScriptElement>("script[src]")].slice(0, 20);
-  for (const script of scripts) {
-    const assetPath = resolveWorkspaceReference(filePath, script.getAttribute("src") || "");
-    if (!assetPath) continue;
-    tasks.push(readConversationFile(conversationId, assetPath, signal).then((content) => {
-      if (content.length > 512 * 1024) return;
-      const inline = document.createElement("script");
-      for (const attribute of [...script.attributes]) {
-        if (!ignoredScriptAttributes.has(attribute.name)) inline.setAttribute(attribute.name, attribute.value);
-      }
-      inline.textContent = content;
-      script.replaceWith(inline);
-    }));
-  }
-
-  const images = [...document.querySelectorAll<HTMLImageElement>("img[src]")].slice(0, 20);
-  for (const image of images) {
-    const assetPath = resolveWorkspaceReference(filePath, image.getAttribute("src") || "");
-    if (!assetPath) continue;
-    tasks.push(readConversationFileBytes(conversationId, assetPath, signal).then((content) => {
-      if (content.byteLength > 4 * 1024 * 1024) return;
-      image.src = bytesToDataURL(content, imageMIMEType(assetPath));
-      image.removeAttribute("srcset");
-    }));
-  }
-
-  await Promise.allSettled(tasks);
-  if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-  return `<!doctype html>\n${document.documentElement.outerHTML}`;
-}
-
-function imageMIMEType(path: string) {
-  const extension = fileExtension(path);
-  if (extension === "jpg" || extension === "jpeg") return "image/jpeg";
-  if (extension === "svg") return "image/svg+xml";
-  if (extension === "ico") return "image/x-icon";
-  return `image/${extension || "png"}`;
-}
-
-function bytesToDataURL(bytes: Uint8Array, mimeType: string) {
-  let binary = "";
-  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
-  }
-  return `data:${mimeType};base64,${btoa(binary)}`;
 }
 
 function RecentFileUpdate() {

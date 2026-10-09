@@ -76,7 +76,7 @@ func accountFixture(t *testing.T) *Service {
 			t.Fatalf("%s: %v", file, e)
 		}
 	}
-	s := New(db, nil, time.Hour, false)
+	s := New(db, nil, 2*time.Hour, false)
 	if err = s.Configure(Options{WebOrigin: "http://localhost:13000", RegistrationEnabled: true}); err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func expectStatus(t *testing.T, response *httptest.ResponseRecorder, status int)
 }
 func sessionCookie(response *httptest.ResponseRecorder) *http.Cookie {
 	for _, cookie := range response.Result().Cookies() {
-		if cookie.Name == "lester_session" {
+		if cookie.Name == "lester_access_token" {
 			return cookie
 		}
 	}
@@ -148,7 +148,7 @@ func activeSession(t *testing.T, s *Service, userID uuid.UUID) *http.Cookie {
 	if err = insertSession(context.Background(), s.db, userID, session); err != nil {
 		t.Fatal(err)
 	}
-	return &http.Cookie{Name: "lester_session", Value: base64.RawURLEncoding.EncodeToString(session.raw)}
+	return &http.Cookie{Name: "lester_access_token", Value: base64.RawURLEncoding.EncodeToString(session.raw)}
 }
 
 type capturedMailer struct {
@@ -269,11 +269,14 @@ func oauthRouter(s *Service) *chi.Mux {
 	router.With(s.Middleware).Delete("/me/identities/{provider}", s.UnlinkIdentity)
 	return router
 }
-func startFlow(t *testing.T, s *Service, purpose string, session *http.Cookie) (url.Values, *http.Cookie) {
+func startFlow(t *testing.T, s *Service, purpose string, session *http.Cookie, returnTo ...string) (url.Values, *http.Cookie) {
 	t.Helper()
 	method, path := "GET", "/api/v1/auth/oauth/google/start"
 	if purpose == "link" {
 		method, path = "POST", "/me/identities/google/link"
+	}
+	if len(returnTo) > 0 && purpose == "login" {
+		path += "?returnTo=" + url.QueryEscape(returnTo[0])
 	}
 	req := httptest.NewRequest(method, path, nil)
 	if session != nil {
@@ -356,6 +359,7 @@ func TestOAuthPKCEBrowserBindingAndReplay(t *testing.T) {
 		t.Fatalf("login redirect=%s", response.Header().Get("Location"))
 	}
 	cookie := sessionCookie(response)
+	originalRefresh := responseCookie(t, response, refreshCookieName)
 	if cookie == nil {
 		t.Fatal("no OAuth session")
 	}
@@ -378,6 +382,30 @@ func TestOAuthPKCEBrowserBindingAndReplay(t *testing.T) {
 	if result := callback(s, values.Get("state"), flow, nil); !strings.Contains(result.Header().Get("Location"), "invalid_state") {
 		t.Fatal("expired flow accepted")
 	}
+	target := "/preview/11111111-1111-1111-1111-111111111111?path=index.html"
+	values, flow = startFlow(t, s, "login", nil, target)
+	expectedChallenge = values.Get("code_challenge")
+	redirected := callback(s, values.Get("state"), flow, nil)
+	expectStatus(t, redirected, 303)
+	if redirected.Header().Get("Location") != "http://localhost:13000"+target {
+		t.Fatal("OAuth did not return to private HTML")
+	}
+	values, flow = startFlow(t, s, "login", nil, "//evil.test/app")
+	expectedChallenge = values.Get("code_challenge")
+	redirected = callback(s, values.Get("state"), flow, nil)
+	if redirected.Header().Get("Location") != "http://localhost:13000/app" {
+		t.Fatal("OAuth allowed an external login redirect")
+	}
+
+	values, flow = startFlow(t, s, "link", cookie)
+	expectedChallenge = values.Get("code_challenge")
+	rotated := request(t, s, s.Refresh, "POST", "/api/v1/auth/refresh", nil, originalRefresh, false)
+	expectStatus(t, rotated, 200)
+	linked := callback(s, values.Get("state"), flow, responseCookie(t, rotated, accessCookieName))
+	if linked.Header().Get("Location") != "http://localhost:13000/app/settings/profile?auth=linked" {
+		t.Fatalf("link callback broke across access rotation: %s", linked.Header().Get("Location"))
+	}
+
 }
 func TestOAuthAccountIsolationAndSecurityChanges(t *testing.T) {
 	s := accountFixture(t)

@@ -1,9 +1,9 @@
-// An empty value keeps browser requests same-origin. This is the preferred
-// Compose gateway/Ingress mode; direct development may supply an API origin.
-export const API = process.env.NEXT_PUBLIC_API_URL || "";
+import { API } from "./api-origin";
+import { authenticatedFetch } from "./auth-client";
+export { API } from "./api-origin";
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(API + path, {
+  const response = await authenticatedFetch(API + path, {
     ...init,
     credentials: "include",
     headers: { "Content-Type": "application/json", ...init.headers },
@@ -12,7 +12,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export async function upload<T>(path: string, body: FormData): Promise<T> {
-  const response = await fetch(API + path, { method: "POST", body, credentials: "include" });
+  const response = await authenticatedFetch(API + path, { method: "POST", body, credentials: "include" });
   return parseResponse<T>(response);
 }
 
@@ -27,14 +27,10 @@ export async function readConversationFileBytes(conversationId: string, path: st
 }
 
 async function fetchConversationFile(conversationId: string, path: string, signal?: AbortSignal): Promise<Response> {
-  const response = await fetch(`${API}/api/v1/conversations/${conversationId}/files/content?path=${encodeURIComponent(path)}`, {
+  const response = await authenticatedFetch(`${API}/api/v1/conversations/${conversationId}/files/content?path=${encodeURIComponent(path)}`, {
     credentials: "include",
     signal,
   });
-  if (response.status === 401 && typeof window !== "undefined" && !location.pathname.startsWith("/login")) {
-    window.location.replace("/login");
-    throw new Error("authentication required");
-  }
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: response.statusText }));
     throw new Error(body.error || response.statusText);
@@ -48,10 +44,6 @@ export function conversationFilePreviewURL(conversationId: string, path: string)
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {
-  if (response.status === 401 && typeof window !== "undefined" && !location.pathname.startsWith("/login")) {
-    window.location.replace("/login");
-    throw new Error("authentication required");
-  }
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: response.statusText }));
     throw new Error(body.error || response.statusText);

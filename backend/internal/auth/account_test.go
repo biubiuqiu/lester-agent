@@ -183,3 +183,16 @@ func TestSMTPConfigurationAndDelivery(t *testing.T) {
 		t.Fatal("mail not delivered")
 	}
 }
+
+func TestSafeAuthReturn(t *testing.T) {
+	for _, value := range []string{"https://evil.test/app", "//evil.test/app", "/app/../login", "/app/..", "/app/\\evil", "/preview/nope", "/docs", "/app\r\n"} {
+		if got := safeAuthReturn(value); got != "/app" {
+			t.Fatalf("unsafe return %q -> %q", value, got)
+		}
+	}
+	for _, value := range []string{"/app/settings/profile", "/admin/users", "/preview/11111111-1111-1111-1111-111111111111?path=index.html"} {
+		if got := safeAuthReturn(value); got != value {
+			t.Fatalf("valid return %q -> %q", value, got)
+		}
+	}
+}

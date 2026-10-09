@@ -82,9 +82,10 @@ func TestAdministration(t *testing.T) {
 		t.Fatalf("default project: %d %v", projects, err)
 	}
 	access := func(id uuid.UUID, adminOnly bool) int {
-		raw := []byte(uuid.NewString())
+		rawArray := sha256.Sum256([]byte(uuid.NewString()))
+		raw := rawArray[:]
 		sum := sha256.Sum256(raw)
-		if _, err = db.Exec(ctx, `INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '1 hour')`, id, sum[:]); err != nil {
+		if _, err = db.Exec(ctx, `WITH family AS (INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '30 days') RETURNING id) INSERT INTO auth_access_tokens(token_hash,session_id,expires_at) SELECT $2,id,now()+interval '2 hours' FROM family`, id, sum[:]); err != nil {
 			t.Fatal(err)
 		}
 		handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) }))
@@ -92,7 +93,7 @@ func TestAdministration(t *testing.T) {
 			handler = auth.RequireAdmin(handler)
 		}
 		req := httptest.NewRequest("GET", "/", nil)
-		req.AddCookie(&http.Cookie{Name: "lester_session", Value: base64.RawURLEncoding.EncodeToString(raw)})
+		req.AddCookie(&http.Cookie{Name: "lester_access_token", Value: base64.RawURLEncoding.EncodeToString(raw)})
 		result := httptest.NewRecorder()
 		service.Middleware(handler).ServeHTTP(result, req)
 		return result.Code

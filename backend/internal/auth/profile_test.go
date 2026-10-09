@@ -42,7 +42,7 @@ func TestSessionCookieSecureConfiguration(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	service.setCookie(recorder, session)
 	cookies := recorder.Result().Cookies()
-	if len(cookies) != 1 || !cookies[0].Secure || !cookies[0].HttpOnly {
+	if len(cookies) != 2 || !cookies[0].Secure || !cookies[0].HttpOnly || !cookies[1].Secure || !cookies[1].HttpOnly {
 		t.Fatalf("session cookie = %#v", cookies)
 	}
 }

@@ -9,7 +9,17 @@ import { AuthProviderIcon } from "@/components/auth-provider-icon";
 import { oauthErrors } from "@/lib/auth-ui";
 import { API, api, AuthOptions } from "@/lib/api";
 
+import { safeLoginReturn } from "@/lib/auth-client";
+
 type Mode = "login" | "register" | "forgot" | "reset" | "verify";
+
+function loginURL(initial: URL | null, requestedMode?: string | null) {
+  const params = new URLSearchParams();
+  if (requestedMode === "reset" || requestedMode === "verify") params.set("mode", requestedMode);
+  const returnTo = safeLoginReturn(initial?.searchParams.get("returnTo") ?? null);
+  if (returnTo !== "/app") params.set("returnTo", returnTo);
+  return `/login${params.size ? `?${params}` : ""}`;
+}
 
 export default function Login() {
   const router = useRouter();
@@ -33,7 +43,7 @@ export default function Login() {
     const url = initialURL.current ??= new URL(window.location.href);
     const requestedMode = url.searchParams.get("mode");
     const authError = url.searchParams.get("auth_error");
-    if (url.hash || authError) window.history.replaceState(null, "", `/login${requestedMode === "reset" || requestedMode === "verify" ? `?mode=${requestedMode}` : ""}`);
+    if (url.hash || authError) window.history.replaceState(null, "", loginURL(initialURL.current, requestedMode));
     const applyURL = () => {
       if (!active) return;
       if (requestedMode === "reset" || requestedMode === "verify") {
@@ -49,7 +59,7 @@ export default function Login() {
   function changeMode(next: Mode) {
     if (busy) return;
     setMode(next); setPassword(""); setConfirmation(""); setShowPassword(false); setError(""); setNotice(""); setToken("");
-    window.history.replaceState(null, "", "/login");
+    window.history.replaceState(null, "", loginURL(initialURL.current));
   }
   async function act(action: () => Promise<void>) {
     if (inFlight.current) return;
@@ -67,16 +77,16 @@ export default function Login() {
       if (mode === "verify") {
         if (!token) throw new Error("验证链接缺少令牌，请重新发送验证邮件。");
         await api("/api/v1/auth/verify-email", { method: "POST", body: JSON.stringify({ token }) });
-        setMode("login"); setToken(""); window.history.replaceState(null, "", "/login"); setNotice("邮箱已验证，现在可以登录。"); return;
+        setMode("login"); setToken(""); window.history.replaceState(null, "", loginURL(initialURL.current)); setNotice("邮箱已验证，现在可以登录。"); return;
       }
       if (mode === "reset") {
         if (!token) throw new Error("重设链接无效，请重新申请。");
         await api("/api/v1/auth/reset-password", { method: "POST", body: JSON.stringify({ token, password }) });
-        setMode("login"); setToken(""); setPassword(""); setConfirmation(""); window.history.replaceState(null, "", "/login"); setNotice("密码已重设，其他登录已退出。请用新密码登录。"); return;
+        setMode("login"); setToken(""); setPassword(""); setConfirmation(""); window.history.replaceState(null, "", loginURL(initialURL.current)); setNotice("密码已重设，其他登录已退出。请用新密码登录。"); return;
       }
       const result = await api<{ verification_required?: boolean }>(`/api/v1/auth/${mode}`, { method: "POST", body: JSON.stringify({ email, password, displayName: name }) });
       if (result?.verification_required) { setMode("login"); setPassword(""); setConfirmation(""); setNotice("验证邮件已发送，请验证邮箱后再登录。"); return; }
-      router.replace("/app"); router.refresh();
+      router.replace(safeLoginReturn(initialURL.current?.searchParams.get("returnTo") ?? null)); router.refresh();
     });
   }
   const passwordMode = mode === "login" || mode === "register" || mode === "reset";
@@ -85,7 +95,7 @@ export default function Login() {
     <section className="login-card" aria-labelledby="login-title">
       <Brand />
       <div className="login-copy"><p className="eyebrow">Agent Workspace</p><h1 id="login-title">{title}</h1><p>{mode === "forgot" ? "输入账号邮箱，我们会发送密码重设链接。" : mode === "reset" ? "新密码保存后，其他设备的登录将失效。" : mode === "verify" ? "确认邮箱后，即可进入你的个人工作区。" : "描述目标，让 Lester 完成工作。文件与成果都留在你的工作区。"}</p></div>
-      {(mode === "login" || mode === "register") && options && options.providers.length > 0 && <div className="auth-social"><div aria-label="第三方登录">{options.providers.map(provider => <a className="auth-provider-button" key={provider} href={`${API}/api/v1/auth/oauth/${provider}/start`} aria-disabled={busy} onClick={event => { if (busy) event.preventDefault(); }}><AuthProviderIcon provider={provider} />使用 {provider === "google" ? "Google" : "GitHub"} 继续</a>)}</div><p>或使用邮箱{mode === "register" ? "注册" : "登录"}</p></div>}
+      {(mode === "login" || mode === "register") && options && options.providers.length > 0 && <div className="auth-social"><div aria-label="第三方登录">{options.providers.map(provider => <a className="auth-provider-button" key={provider} href={`${API}/api/v1/auth/oauth/${provider}/start?returnTo=${encodeURIComponent(safeLoginReturn(initialURL.current?.searchParams.get("returnTo") ?? null))}`} aria-disabled={busy} onClick={event => { if (busy) event.preventDefault(); }}><AuthProviderIcon provider={provider} />使用 {provider === "google" ? "Google" : "GitHub"} 继续</a>)}</div><p>或使用邮箱{mode === "register" ? "注册" : "登录"}</p></div>}
       <form onSubmit={submit} aria-busy={busy}>
         {mode === "register" && <label className="field">称呼<input name="displayName" value={name} onChange={event => setName(event.target.value)} required maxLength={60} autoComplete="name" placeholder="我们该怎么称呼你？" disabled={busy} /></label>}
         {mode !== "reset" && mode !== "verify" && <label className="field">邮箱<input name="email" value={email} onChange={event => setEmail(event.target.value)} type="email" required maxLength={254} autoComplete="email" placeholder="you@example.com" disabled={busy} /></label>}

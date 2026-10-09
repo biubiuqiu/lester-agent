@@ -21,6 +21,7 @@ func TestPrivateHTMLBytesCannotExecuteAtApplicationOrigin(t *testing.T) {
 	f := newTranscriptFixture(t, false)
 	applyTestMigration(t, f.service.db, "000005_user_profiles.up.sql")
 	applyTestMigration(t, f.service.db, "000013_account_identity.up.sql")
+	applyTestMigration(t, f.service.db, "000015_rotating_tokens.up.sql")
 	content := "<!doctype html><script>localStorage.getItem('private-data')</script>"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -34,9 +35,10 @@ func TestPrivateHTMLBytesCannotExecuteAtApplicationOrigin(t *testing.T) {
 	}))
 	defer server.Close()
 	f.service.sandboxes = sandbox.NewClient(server.URL, "")
-	raw := []byte(uuid.NewString())
+	rawArray := sha256.Sum256([]byte(uuid.NewString()))
+	raw := rawArray[:]
 	digest := sha256.Sum256(raw)
-	if _, err := f.service.db.Exec(context.Background(), `INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '1 hour')`, f.userID, digest[:]); err != nil {
+	if _, err := f.service.db.Exec(context.Background(), `WITH family AS (INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '30 days') RETURNING id) INSERT INTO auth_access_tokens(token_hash,session_id,expires_at) SELECT $2,id,now()+interval '2 hours' FROM family`, f.userID, digest[:]); err != nil {
 		t.Fatal(err)
 	}
 	handler := &Handler{service: f.service, sandboxes: f.service.sandboxes}
@@ -47,7 +49,7 @@ func TestPrivateHTMLBytesCannotExecuteAtApplicationOrigin(t *testing.T) {
 	call := func(suffix string, authenticated bool) *httptest.ResponseRecorder {
 		request := httptest.NewRequest("GET", "/conversations/"+f.conversationID.String()+suffix, nil)
 		if authenticated {
-			request.AddCookie(&http.Cookie{Name: "lester_session", Value: base64.RawURLEncoding.EncodeToString(raw)})
+			request.AddCookie(&http.Cookie{Name: "lester_access_token", Value: base64.RawURLEncoding.EncodeToString(raw)})
 		}
 		response := httptest.NewRecorder()
 		router.ServeHTTP(response, request)

@@ -5,7 +5,7 @@ This chart deploys Lester Web, API, and a provider-neutral Sandbox Service. It e
 Before installation:
 
 1. Build and push the three Lester service images. For ACS, also build `backend/Dockerfile.sandbox-runtime` or provide another compatible runtime image.
-2. Apply `backend/migrations/*.up.sql` (001–014) to PostgreSQL in numeric order. Existing installations already on 013 must apply `000014_user_guides.up.sql` once before upgrading API/Web. Migration 014 preserves existing accounts as opted out of the automatic welcome; new accounts get the first-use guide. Rollback removes tutorial progress only. Back up first and retain all existing credentials/data.
+2. Apply `backend/migrations/*.up.sql` (001–015) to PostgreSQL in numeric order. Existing installations already on 013 must apply 014 and then `000015_rotating_tokens.up.sql` once before upgrading API/Web; installations on 014 need only 015. Migration 015 invalidates legacy login credentials and requires one sign-in, preserving accounts/workspaces/files. Access cookies expire in 2 hours; rotating refresh cookies last a rolling 30 days with no absolute active-session cutoff. Rollback 015 also signs everyone out and requires a compatible API. Migration 014 preserves existing accounts as opted out of the automatic welcome; new accounts get the first-use guide. Rollback removes tutorial progress only. Back up first and retain all existing credentials/data.
 3. Choose `sandbox.provider: docker` or `sandbox.provider: acs`.
 4. Copy `values.yaml` to a private values file and configure images, service URLs, secrets, Ingress, and provider settings.
 
