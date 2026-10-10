@@ -113,7 +113,34 @@ jobs:
       - name: Run Go static checks
         run: go vet ./...
       - name: Run unit and PostgreSQL integration tests
-        run: go test -count=1 -timeout=10m ./...
+        run: go test -count=1 -timeout=10m -json ./... | tee "$RUNNER_TEMP/backend-tests.jsonl"
+      - name: Report failing Go tests in annotations
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ["RUNNER_TEMP"]) / "backend-tests.jsonl"
+          if not path.exists():
+              raise SystemExit(0)
+          output, failures = {}, []
+          for line in path.read_text().splitlines():
+              try:
+                  event = json.loads(line)
+              except ValueError:
+                  continue
+              key = (event.get("Package", ""), event.get("Test", ""))
+              if event.get("Output"):
+                  output.setdefault(key, []).append(event["Output"])
+              if event.get("Action") == "fail":
+                  failures.append(key)
+          for package, test in failures:
+              message = f"{package} / {test or 'package'}\n" + "".join(output.get((package, test), []))[-6000:]
+              message = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+              print("::error title=Go test failure::" + message)
+          PY
       - name: Build all backend executables
         run: go build ./cmd/...
 
