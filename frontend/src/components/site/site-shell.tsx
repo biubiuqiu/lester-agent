@@ -22,7 +22,7 @@ export function SiteHeader() {
 export function SiteFooter() {
   return <footer className="site-footer">
     <div className="site-container site-footer-inner">
-      <div><SiteBrand /><p>开源，自托管，为你的工作而造。</p></div>
+      <div><SiteBrand /><p>开源，自托管。</p></div>
       <nav aria-label="页脚导航">
         <Link href="/docs">帮助文档</Link>
         <a href={repositoryURL} target="_blank" rel="noopener noreferrer">GitHub<ArrowUpRight size={14} aria-hidden="true" /><span className="site-sr-only">（新窗口）</span></a>

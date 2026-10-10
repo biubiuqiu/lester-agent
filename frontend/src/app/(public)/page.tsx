@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
-import { ArrowDown, ArrowRight, ArrowUpRight } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 
 const description = "一个开源、可自托管的个人 AI 工作区。把目标交给 Lester，在你的 Computer 中执行任务，留下网页、文档与代码。";
 export const metadata: Metadata = {
@@ -19,24 +18,14 @@ export default function Home() {
           <p>一个开源、可自托管的个人 AI 工作区。<br className="site-wide-break" />把目标交给 Lester，留下网页、文档与代码。</p>
           <div className="site-home-actions">
             <Link className="site-button site-button-dark" href="/app" prefetch={false}>开始使用<ArrowUpRight size={20} aria-hidden="true" /></Link>
-            <Link className="site-home-docs-link" href="/docs">阅读文档<ArrowUpRight size={20} aria-hidden="true" /></Link>
           </div>
         </div>
-        <Image className="site-home-art" src="/images/lester-paper-ribbon.png" width={1727} height={911} sizes="(max-width: 900px) 100vw, 64vw" alt="" aria-hidden="true" preload />
       </section>
-      <div className="site-container">
-        <a className="site-home-cue" href="#why-lester"><span>从一个目标，到一份成果。</span><ArrowDown size={21} aria-hidden="true" /><span className="site-sr-only">了解 Lester 名字的来源</span></a>
-      </div>
       <section id="why-lester" className="site-home-story site-container" aria-labelledby="story-heading">
-        <h2 id="story-heading">为什么是<br />Lester？</h2>
+        <h2 id="story-heading">为什么叫 Lester？</h2>
         <div className="site-home-story-copy">
           <p>名字来自 GTA V 的 Lester Crest。<br className="site-wide-break" />那个冷静、机敏，总能找到办法的幕后高手。</p>
-          <p>我们想把这份「总有办法」的劲儿带进日常工作。<br className="site-wide-break" />你说目标，Lester 想办法，让结果落在文件里。</p>
-          <ol className="site-home-process" aria-label="Lester 的工作方式">
-            <li>描述目标<ArrowRight size={25} aria-hidden="true" /></li>
-            <li>执行任务<ArrowRight size={25} aria-hidden="true" /></li>
-            <li>留下成果</li>
-          </ol>
+          <p>你说目标，Lester 想办法，让结果落在文件里。</p>
         </div>
       </section>
     </main>

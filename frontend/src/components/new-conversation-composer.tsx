@@ -78,7 +78,6 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
   return <div className="new-chat-home"><div className="new-chat-content">
     {projectName?<p className="new-project-context">{projectName}</p>:null}
     <h1>有什么想交给 {selectedAgent?.name || "Lester"}？</h1>
-    <p className="new-chat-intro">从一个想法开始，把它变成看得见的成果。</p>
     <form className="composer new-chat-composer" onSubmit={submit} aria-label="开始新对话" aria-busy={busy}>
       <div className="compose-box">
         {missing.length ? <p className="draft-attachment-notice" role="status">请重新选择刷新前的附件：{missing.join("、")}<button type="button" onClick={() => { setMissing([]); updateView(storageKey, { missingFiles: [] }); }}>知道了</button></p> : null}
@@ -91,19 +90,32 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
           <button className="send-button" aria-label="发送消息" disabled={busy || !model || (!text.trim() && !files.length)}><Send /></button>
         </div>
       </div>
-      <details className="agent-options">
+      <div className="new-chat-options"><details className="agent-options" onKeyDown={event => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.currentTarget.open = false;
+          event.currentTarget.querySelector("summary")?.focus();
+        }
+      }}>
         <summary>{selectedAgent?.name || "Lester"} <span>更换 Agent</span></summary>
         <div className="new-agent-picker"><label>选择 Agent <select aria-label="选择 Agent" value={agentSlug} disabled={busy || !agents.length} onChange={event=>{setAgentSlug(event.target.value);updateView(storageKey,{agentSlug:event.target.value});}}>{agents.map(agent=><option key={agent.slug} value={agent.slug}>{agent.name}</option>)}</select></label><Link href={`/app/agents/${encodeURIComponent(agentSlug)}`}>了解这个 Agent</Link><Link href="/app/agents">管理 Agent</Link></div>
       </details>
+      {deployments.length ? <p className="new-chat-hint">Enter 发送 · Shift + Enter 换行</p> : null}</div>
       {agentError ? <p role="alert" className="compose-error">{agentError}</p> : null}
       {busy ? <p role="status" className="composer-status active">正在创建会话并发送消息…</p> : null}
       {error ? <p role="alert" className="compose-error">{error}</p> : null}
-      {!deployments.length ? <div className="model-setup-prompt"><div><strong>再准备一个模型，就可以开始了</strong><p>连接你的模型服务，或使用管理员提供的共享模型。你的草稿会保留。</p></div><Link className="primary-button" href={modelSettingsURL}>配置第一个模型 <ArrowRight size={16} /></Link></div> : <p className="new-chat-hint">Enter 发送 · Shift + Enter 换行</p>}
+      {!deployments.length ? <div className="model-setup-prompt"><div><strong>再准备一个模型，就可以开始了</strong><p>连接你的模型服务，或使用管理员提供的共享模型。你的草稿会保留。</p></div><Link className="primary-button" href={modelSettingsURL}>配置第一个模型 <ArrowRight size={16} /></Link></div> : null}
     </form>
-    <div className="task-examples" aria-label="任务示例"><div>{[
+    <details className="task-examples" onKeyDown={event => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.currentTarget.open = false;
+        event.currentTarget.querySelector("summary")?.focus();
+      }
+    }}><summary>试试一个任务<ChevronDown size={15} aria-hidden="true" /></summary><div aria-label="任务示例">{[
       ["整理需求文档", "帮我整理产品需求，生成一份包含目标、功能范围和验收标准的评审文档。"],
       ["分析一份表格", "分析我上传的表格，找出主要趋势和异常，并整理成简明报告。"],
       ["制作一个网页", "帮我制作一个产品介绍网页，先和我确认目标用户、内容和视觉风格。"],
-    ].map(([title, prompt]) => <button type="button" key={title} disabled={busy} onClick={() => chooseExample(prompt)}>{title}<ArrowRight size={14} /></button>)}</div></div>
+    ].map(([title, prompt]) => <button type="button" key={title} disabled={busy} onClick={() => chooseExample(prompt)}>{title}</button>)}</div></details>
   </div></div>;
 }

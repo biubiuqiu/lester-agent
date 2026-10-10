@@ -13,7 +13,7 @@ export function useGuide() { return useContext(GuideContext); }
 export function GuideLauncher({ label = "新手引导" }: { label?: string }) {
   const guide = useContext(GuideContext);
   if (!guide) return null;
-  return <button className="guide-launcher" type="button" aria-label={label} onClick={guide.open}><BookOpen size={16} /><span>{label}</span></button>;
+  return <button className="guide-launcher" type="button" aria-label={label} title={label} onClick={guide.open}><BookOpen size={16} /><span>{label}</span></button>;
 }
 
 export function GuideProvider({ children }: { children: ReactNode }) {

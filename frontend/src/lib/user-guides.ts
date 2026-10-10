@@ -7,7 +7,7 @@ export const guides: Guide[] = [
   { topic: "welcome", title: "第一次使用 Lester", description: "从一个目标，到一份看得见的成果", steps: [
     { title: "欢迎，把一个想法交给 Lester", body: "Lester 是你的 AI 工作区。描述目标、提供材料，让 Agent 帮你整理文档、分析数据或制作网页，再查看和继续修改成果。", visual: "journey", hint: "大约 1 分钟 · 可以随时退出，稍后继续" },
     { title: "先选择一个模型", body: "模型负责理解任务与生成内容。可以使用管理员提供的共享模型，也可以在「模型」设置中连接自己的服务。没有模型时，先保存草稿，再去配置。", target: ".model-selector", hint: "配置已保存 ≠ 模型已验证。首次实际运行才会确认服务是否可调用。" },
-    { title: "告诉它：你想得到什么", body: "在输入框写下目标、受众和交付形式，例如「为我的咖啡店做一个介绍网页，保存为 index.html」。点任务示例只会填写草稿；你明确发送后，才会创建新会话。", target: ".compose-box", hint: "Enter 发送 · Shift + Enter 换行" },
+    { title: "告诉它：你想得到什么", body: "在输入框写下目标、受众和交付形式，例如「为我的咖啡店做一个介绍网页，保存为 index.html」。展开「试试一个任务」可选择示例，只会填写草稿；你明确发送后，才会创建新会话。", target: ".compose-box", hint: "Enter 发送 · Shift + Enter 换行" },
     { title: "把需要的材料一起交给它", body: "点回形针上传文件，也可以直接粘贴图片。在输入框输入 @，按需引用上下文库中的背景和要求。", target: ".compose-actions", hint: "只会把你主动引用的上下文提供给 Agent。" },
     { title: "看执行进度，必要时调整方向", body: "发送后，可以查看回复和工具执行详情。运行时你仍可以准备下一条草稿；需要中断时点「停止」，再告诉它新的要求。", target: ".conversation-header", hint: "一个会话同时执行一个任务。" },
     { title: "打开文件，看见真正的成果", body: "Agent 写入或编辑文件后，文件会在右侧自动打开，多份文件使用多个标签。HTML 默认显示网页预览，可以切换到源码；你也可以从成果卡片继续修改，展开详情下载文件。", target: ".open-deliverables-button", visual: "files", hint: "生成文件后才会出现文件预览。手机端关闭面板即可回到对话。" },
