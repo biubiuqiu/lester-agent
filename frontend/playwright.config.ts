@@ -12,7 +12,7 @@ export default defineConfig({
   timeout: 45_000,
   expect: { timeout: 10_000 },
   forbidOnly: Boolean(process.env.CI),
-  reporter: [["list"]],
+  reporter: process.env.GITHUB_ACTIONS ? [["list"], ["github"]] : [["list"]],
   outputDir: join(process.env.RUNNER_TEMP || tmpdir(), "lester-browser-tests"),
   use: {
     baseURL,
