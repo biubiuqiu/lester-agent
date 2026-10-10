@@ -10,13 +10,13 @@ export const guides: Guide[] = [
     { title: "告诉它：你想得到什么", body: "在输入框写下目标、受众和交付形式，例如「为我的咖啡店做一个介绍网页，保存为 index.html」。点任务示例只会填写草稿；你明确发送后，才会创建新会话。", target: ".compose-box", hint: "Enter 发送 · Shift + Enter 换行" },
     { title: "把需要的材料一起交给它", body: "点回形针上传文件，也可以直接粘贴图片。在输入框输入 @，按需引用上下文库中的背景和要求。", target: ".compose-actions", hint: "只会把你主动引用的上下文提供给 Agent。" },
     { title: "看执行进度，必要时调整方向", body: "发送后，可以查看回复和工具执行详情。运行时你仍可以准备下一条草稿；需要中断时点「停止」，再告诉它新的要求。", target: ".conversation-header", hint: "一个会话同时执行一个任务。" },
-    { title: "打开文件，看见真正的成果", body: "Agent 写入或编辑文件后，文件会在右侧自动打开，多份文件使用多个标签。HTML 默认显示网页预览，可以切换到源码；你也可以从成果卡片下载或继续修改。", target: ".open-files-button", visual: "files", hint: "生成文件后才会出现文件预览。手机端关闭面板即可回到对话。" },
+    { title: "打开文件，看见真正的成果", body: "Agent 写入或编辑文件后，文件会在右侧自动打开，多份文件使用多个标签。HTML 默认显示网页预览，可以切换到源码；你也可以从成果卡片继续修改，展开详情下载文件。", target: ".open-deliverables-button", visual: "files", hint: "生成文件后才会出现文件预览。手机端关闭面板即可回到对话。" },
     { title: "其他功能，随用随学", body: "项目整理会话；Agent 保存专门的工作方式；上下文库保存常用背景。模型、Computer、Skill 和个人资料各有独立教学，点「新手引导」随时查看。", target: ".guide-launcher", hint: "现在可以开始自己的任务，也可以先看看某个功能的教学。" },
   ] },
   { topic: "models", title: "模型配置", description: "连接服务，添加模型，再开始任务", path: "/app/settings/models", steps: [
-    { title: "模型是 Agent 的思考能力", body: "有共享模型时可以直接使用，凭证由管理员管理。使用自己的模型时，先选择服务商、填写 API Key；兼容接口还需要 Endpoint。", target: ".model-setup-steps", hint: "个人凭证加密保存，不向其他用户公开。" },
-    { title: "服务连接和模型，是两件事", body: "「连接服务商」保存端点与凭证；「添加模型」选择已保存的连接，填写服务商提供的 Model ID。显示名称只是你看到的名字，Azure OpenAI 的 Model ID 使用部署名称。", target: ".settings-grid", hint: "点击页面顶部的步骤可切换表单。云服务的高级参数按服务商要求填写。" },
-    { title: "保存配置，回到你的任务", body: "设为默认模型后，新会话会优先选择它。保存完成，点击「返回并开始任务」继续编辑刚才的草稿。若首次运行报错，检查凭证、模型标识、服务权限和配额。", target: ".saved-section", hint: "教学完成只表示你看过说明，不代表模型服务已经验证。" },
+    { title: "模型是 Agent 的思考能力", body: "有共享模型时可以直接使用，凭证由管理员管理。使用自己的模型时，先选择服务商、填写 API Key；兼容接口还需要 Endpoint。", target: ".settings-main", hint: "个人凭证加密保存，不向其他用户公开。" },
+    { title: "服务连接和模型，是两件事", body: "「连接服务商」保存端点与凭证；「添加模型」选择已保存的连接，填写服务商提供的 Model ID。显示名称只是你看到的名字，Azure OpenAI 的 Model ID 使用部署名称。", target: ".settings-grid", hint: "已有模型时先展示列表，点「添加模型」打开表单；表单顶部的步骤可切换。云服务参数按服务商要求填写。" },
+    { title: "保存配置，回到你的任务", body: "设为默认模型后，新会话会优先选择它。保存完成，点击「返回工作区」继续编辑刚才的草稿。若首次运行报错，检查凭证、模型标识、服务权限和配额。", target: ".saved-section", hint: "教学完成只表示你看过说明，不代表模型服务已经验证。" },
   ] },
   { topic: "projects", title: "项目与会话", description: "按工作组织任务，快速找回历史", steps: [
     { title: "用项目装下同一类工作", body: "会话栏按项目组织。默认项目可以直接使用；点击项目区的 + 为不同产品、客户或主题创建新项目。", target: ".project-rail", hint: "手机端先点左上角菜单打开会话栏。" },
@@ -24,9 +24,9 @@ export const guides: Guide[] = [
     { title: "把重要工作放在手边", body: "项目和会话的更多菜单支持置顶。会话菜单还可以把任务移动到另一个项目；任务的消息和文件仍然保留。", target: ".project-rail" },
   ] },
   { topic: "files", title: "文件与成果", description: "多标签预览、查看代码和下载", steps: [
-    { title: "生成的文件，会自己打开", body: "Agent 写入、编辑或登记文件后，确认文件存在，再自动打开预览。在会话中也可以点击「文件」手动打开右侧面板。", target: ".open-files-button", hint: "还没有会话或生成文件时，可以先了解操作，实际预览会在任务中出现。" },
+    { title: "生成的文件，会自己打开", body: "Agent 写入、编辑或登记文件后，确认文件存在，再自动打开预览。手机顶部点「成果」打开面板，再切换「文件」；也可从更多菜单查看会话文件。", target: ".open-deliverables-button", hint: "还没有会话或生成文件时，可以先了解操作，实际预览会在任务中出现。" },
     { title: "一份文件，一个标签", body: "右侧最多同时保留 8 个文件标签。点击切换，点 × 关闭；再次修改同一文件会刷新它的标签。HTML 默认以隔离的 iframe 预览，也可以切换源码。", target: ".computer-panel", visual: "files", hint: "文件标签支持方向键、Home / End 切换，Delete 关闭。" },
-    { title: "看完，继续把成果做好", body: "在成果页查看和下载文件，或点击「继续修改」补充要求。关闭预览面板后可以继续对话。需要公开网址时，再明确选择发布。", target: ".computer-panel", hint: "工作区内的文件预览需要登录；公开发布是单独的操作。" },
+    { title: "看完，继续把成果做好", body: "点击成果卡片预览，展开详情下载文件，或点击「继续修改」补充要求。关闭预览面板后可以继续对话。需要公开网址时，再明确选择发布。", target: ".computer-panel", hint: "工作区内的文件预览需要登录；公开发布是单独的操作。" },
   ] },
   { topic: "agents", title: "Agent 管理", description: "为不同工作准备专门的助手", path: "/app/agents", steps: [
     { title: "Agent 决定如何工作", body: "模型负责思考，Agent 定义工作方式和可用的 Skill。通用任务用 Lester 即可；经常重复的专业工作，可以创建自己的 Agent。", target: ".agent-page-title" },

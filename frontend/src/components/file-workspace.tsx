@@ -28,6 +28,8 @@ type FileWorkspaceValue = FileState & {
   reference: string | null;
   referenceRevision: number;
   expanded: boolean;
+  treeOpen: boolean;
+  setTreeOpen: (value: boolean) => void;
   panelOpen: boolean;
   panelTab: "files" | "results" | "terminal" | "skills" | "agent";
   setPanelTab: (tab: "files" | "results" | "terminal" | "skills" | "agent") => void;
@@ -78,6 +80,8 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, live
   const [referenceRevision, setReferenceRevision] = useState(0);
   const setReference = useCallback((value: string | null) => { updateView(storageKey, { reference: value }); setReferenceState(value); setReferenceRevision((revision) => revision + 1); }, [storageKey]);
   const [expanded, setExpanded] = useState(Boolean(requestedPreview));
+  const [treeOpen, setTreeOpenState] = useState(() => requestedPreview ? false : readView(storageKey).treeOpen);
+  const setTreeOpen = useCallback((value: boolean) => { updateView(storageKey, { treeOpen: value }); setTreeOpenState(value); }, [storageKey]);
   const [panelOpen, setPanelOpen] = useState(Boolean(requestedPreview));
   const [panelTab, setPanelTab] = useState<"files" | "results" | "terminal" | "skills" | "agent">("files");
   const [modes, setModes] = useState<Record<string, "preview" | "source">>(() => ({ ...readView(storageKey).modes, ...(requestedPreview ? { [requestedPreview]: "preview" } : {}) }));
@@ -232,9 +236,9 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, live
     }
   }, [conversationId, watchDirectory]);
   const open = useCallback((file: FileEntry, mode?: "preview") => {
-    if (mode) setPreviewMode(file.path, mode);
+    if (mode) { setPreviewMode(file.path, mode); setTreeOpen(false); }
     openBatch([file]);
-  }, [openBatch, setPreviewMode]);
+  }, [openBatch, setPreviewMode, setTreeOpen]);
   const close = (path: string) => {
     const index = tabsRef.current.findIndex((file) => file.path === path);
     const next = tabsRef.current.filter((file) => file.path !== path);
@@ -243,6 +247,7 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, live
     setTabs(next);
     updateView(storageKey, { tabs: next.map((file) => file.path), selected: selectedPath === path ? replacement : selectedPath });
     if (selectedPath === path) setSelectedPath(replacement);
+    if (!next.length) setTreeOpen(true);
   };
   const changes = useMemo(() => {
     const entries = new Map<string, Change>();
@@ -257,12 +262,12 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, live
   const selected = state.files.find((file) => file.path === selectedPath)
     ?? Object.values(state.directories).flatMap((directory) => directory.entries).find((file) => !file.is_dir && file.path === selectedPath)
     ?? null;
-  return <Context.Provider value={{ ...state, storageKey, conversationId: conversationId ?? "", loading, running, runOutcome, deliverables, deliverablesError, modes, fileRevisions, setPreviewMode, tabs, selected, changes, reference, referenceRevision, expanded, panelOpen, panelTab, setPanelTab, open, close, refresh, loadDirectory, setExpanded, setPanelOpen, setReference }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ ...state, storageKey, conversationId: conversationId ?? "", loading, running, runOutcome, deliverables, deliverablesError, modes, fileRevisions, setPreviewMode, tabs, selected, changes, reference, referenceRevision, expanded, treeOpen, setTreeOpen, panelOpen, panelTab, setPanelTab, open, close, refresh, loadDirectory, setExpanded, setPanelOpen, setReference }}>{children}</Context.Provider>;
 }
 
-export function OpenFilesButton() {
+export function OpenFilesButton({ menu = false }: { menu?: boolean }) {
   const { setPanelOpen, setPanelTab } = useFileWorkspace();
-  return <button type="button" className="open-files-button" onClick={() => { setPanelTab("files"); setPanelOpen(true); }}><FolderOpen />文件</button>;
+  return <button type="button" className={menu ? "open-files-menu-button" : "open-files-button"} onClick={(event) => { setPanelTab("files"); setPanelOpen(true); const details = event.currentTarget.closest("details"); if (details) details.open = false; }}><FolderOpen />{menu ? "查看会话文件" : "文件"}</button>;
 }
 
 export function FileReferenceChip() {
@@ -281,7 +286,7 @@ export function ArtifactCards() {
   </div>)}</section></details>;
 }
 
-export function FileDownload({ conversationId, file }: { conversationId: string; file: FileEntry }) {
+export function FileDownload({ conversationId, file, label }: { conversationId: string; file: FileEntry; label?: string }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   async function download() {
@@ -295,5 +300,5 @@ export function FileDownload({ conversationId, file }: { conversationId: string;
     } catch (reason) { setError(reason instanceof Error ? reason.message : "下载失败"); }
     finally { setPending(false); }
   }
-  return <span className="file-download"><button type="button" disabled={pending} onClick={() => void download()} aria-label={`下载 ${file.name}`} title="下载"><Download /></button>{error ? <span role="alert">{error}</span> : null}</span>;
+  return <span className="file-download"><button type="button" disabled={pending} onClick={() => void download()} aria-label={`下载 ${file.name}`} title="下载"><Download />{label ? <span>{pending ? "下载中…" : label}</span> : null}</button>{error ? <span role="alert">{error}</span> : null}</span>;
 }

@@ -28,11 +28,13 @@ const providers = [
 
 export function ModelSettings({ admin = false, requestedReturn = "/app" }: { admin?: boolean; requestedReturn?: string }) {
   const returnTo = /^\/app(?:\/p\/[A-Za-z0-9_-]+)?$/.test(requestedReturn) ? requestedReturn : "/app";
-  const [step, setStep] = useState<"connection" | "model">("connection");
+  const [step, setStep] = useState<"connection" | "model" | "list">("connection");
   const [selectedConnectionID, setSelectedConnectionID] = useState("");
   const base = admin ? "/api/v1/admin" : "/api/v1";
   const pending = useRef(false);
   const modelInput = useRef<HTMLInputElement>(null);
+  const connectionInput = useRef<HTMLSelectElement>(null);
+  const addModelButton = useRef<HTMLButtonElement>(null);
   const [editing, setEditing] = useState<Connection | Deployment | null>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [deployments, setDeployments] = useState<Deployment[]>([]);
@@ -41,6 +43,15 @@ export function ModelSettings({ admin = false, requestedReturn = "/app" }: { adm
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<"connection" | "deployment" | "">("");
   const [loading, setLoading] = useState(true);
+
+  function showSetup(next: "connection" | "model") {
+    setStep(next);
+    requestAnimationFrame(() => (next === "connection" ? connectionInput.current : modelInput.current)?.focus());
+  }
+  function showList() {
+    setStep("list");
+    requestAnimationFrame(() => addModelButton.current?.focus());
+  }
 
   async function load() {
     const [c, d] = await Promise.all([
@@ -60,7 +71,7 @@ export function ModelSettings({ admin = false, requestedReturn = "/app" }: { adm
       if (!active) return;
       setConnections(c.connections);
       setDeployments(d.deployments);
-      if (c.connections.length) setStep("model");
+      setStep(d.deployments.some(item => item.enabled !== false) ? "list" : c.connections.length ? "model" : "connection");
     }).catch((reason: unknown) => {
       if (active) setError(reason instanceof Error ? reason.message : "模型配置加载失败");
     }).finally(() => { if (active) setLoading(false); });
@@ -124,6 +135,7 @@ export function ModelSettings({ admin = false, requestedReturn = "/app" }: { adm
       setMessage("模型已保存，可以返回工作区开始任务。");
       try {
         await load();
+        if (!admin) showList();
       } catch {
         setError("模型已保存，但列表刷新失败。请刷新配置，无需再次提交。");
       }
@@ -141,12 +153,48 @@ export function ModelSettings({ admin = false, requestedReturn = "/app" }: { adm
   const cloudConfiguration = ["azure_openai", "bedrock", "vertex", "foundry"].includes(provider);
   const hasAvailableModel = deployments.some(item => item.enabled !== false);
 
+  const savedConnections = (
+        <details className="saved-connections" open={admin ? true : undefined}>
+        <summary>服务商连接 · {connections.length}</summary>
+        <div className="provider-list">
+          {connections.length === 0 ? (
+            <p className="muted-block">{loading ? "正在载入…" : "还没有配置模型连接。"}</p>
+          ) : (
+            connections.map((item) => (
+              <article key={item.id}>
+                <span className="status-dot" aria-label="已保存" />
+                <div>
+                  <strong>{item.name}</strong>
+                  <small>{providers.find((providerItem) => providerItem[0] === item.provider)?.[1] || item.provider}</small>
+                </div>
+                {admin && <button type="button" className="admin-edit" onClick={() => setEditing(item)}>编辑连接</button>}
+              </article>
+            ))
+          )}
+        </div>
+        {!admin ? <button type="button" className="text-button" disabled={loading || busy !== ""} onClick={() => showSetup("connection")}><Plus size={15} />添加连接</button> : null}
+        </details>
+  );
+  const savedDeployments = (
+        <div className="deployment-list">
+          {deployments.map((item) => (
+            <article key={item.id}>
+              <div>
+                <strong>{item.name}</strong>
+                <small>{item.model_id}</small>
+              </div>
+              <div className="admin-model-actions">{item.shared && !admin && <span>共享</span>}{item.is_default && <span>默认</span>}{item.enabled === false && <span>已停用</span>}{admin && <button type="button" className="admin-edit" onClick={() => setEditing(item)}>编辑模型</button>}</div>
+            </article>
+          ))}
+        </div>
+  );
+
   return (
     <>
       <header className="settings-heading">
         <div>
           <p className="eyebrow">{admin ? "Administration / Models" : "Settings / Models"}</p>
-          <h1>{admin ? "共享模型" : "准备你的模型"}</h1>
+          <h1>{admin ? "共享模型" : hasAvailableModel ? "模型" : "准备你的模型"}</h1>
           <p>{admin ? "统一配置供所有成员使用的模型。密钥加密保存，不向成员公开。" : "个人连接仅供自己使用，也可以直接选用管理员提供的共享模型。"}</p>
         </div>
         <span className="secure-badge">
@@ -161,16 +209,19 @@ export function ModelSettings({ admin = false, requestedReturn = "/app" }: { adm
       )}
       {error ? <div className="settings-error" role="alert">{error}<button type="button" className="text-button" disabled={busy !== ""} onClick={async () => { setError(""); try { await load(); } catch { setError("配置刷新失败，请稍后重试。"); } }}>刷新配置</button></div> : null}
       {!admin && <>
+        {step !== "list" && !loading ? <div className="model-setup-navigation">
         <ol className="model-setup-steps" aria-label="模型配置步骤">
-          <li><button type="button" aria-current={step === "connection" ? "step" : undefined} disabled={busy !== "" || loading} onClick={() => setStep("connection")}><span>{connections.length ? <Check size={15} /> : "1"}</span>连接服务商</button></li>
-          <li><button type="button" aria-current={step === "model" ? "step" : undefined} disabled={!connections.length || busy !== "" || loading} onClick={() => setStep("model")}><span>{hasAvailableModel ? <Check size={15} /> : "2"}</span>添加模型</button></li>
+          <li><button type="button" aria-current={step === "connection" ? "step" : undefined} disabled={busy !== "" || loading} onClick={() => showSetup("connection")}><span>{connections.length ? <Check size={15} /> : "1"}</span>连接服务商</button></li>
+          <li><button type="button" aria-current={step === "model" ? "step" : undefined} disabled={!connections.length || busy !== "" || loading} onClick={() => showSetup("model")}><span>{hasAvailableModel ? <Check size={15} /> : "2"}</span>添加模型</button></li>
           <li className={hasAvailableModel ? "complete" : ""}><span>3</span>开始任务</li>
         </ol>
-        {hasAvailableModel && <div className="model-ready"><div><strong>模型配置已保存</strong><p>现在可以返回刚才的任务，继续编辑或发送。模型服务是否可调用，将在首次运行时确认。</p></div><Link className="primary-button" href={returnTo}>返回并开始任务 <ArrowRight size={16} /></Link></div>}
+        {hasAvailableModel ? <button type="button" className="text-button" disabled={busy !== ""} onClick={showList}>返回模型列表</button> : null}
+        </div> : null}
+        {hasAvailableModel && step === "list" && <div className="model-ready"><div><strong>可以开始任务了</strong><p>配置已保存；实际调用将在任务运行时确认。</p></div><Link className="primary-button" href={returnTo}>返回工作区 <ArrowRight size={16} /></Link></div>}
       </>}
       {loading && <p role="status" className="field-help">正在加载模型配置…</p>}
       <section className={admin ? "settings-grid" : "settings-grid model-setup-grid"}>
-        <form className="settings-card" onSubmit={addConnection} hidden={!admin && step !== "connection"} aria-label="服务商连接" aria-busy={busy === "connection"}>
+        <form className="settings-card" onSubmit={addConnection} hidden={loading || (!admin && step !== "connection")} aria-label="服务商连接" aria-busy={busy === "connection"}>
           <header>
             <span className="card-icon">
               <Server />
@@ -182,7 +233,7 @@ export function ModelSettings({ admin = false, requestedReturn = "/app" }: { adm
           </header>
           <label className="field">
             模型服务商
-            <select value={provider} disabled={busy !== "" || loading} onChange={(event) => setProvider(event.target.value)}>
+            <select ref={connectionInput} value={provider} disabled={busy !== "" || loading} onChange={(event) => setProvider(event.target.value)}>
               {providers.map(([value, label, protocol]) => (
                 <option key={value} value={value}>
                   {label} · {protocol}
@@ -209,14 +260,14 @@ export function ModelSettings({ admin = false, requestedReturn = "/app" }: { adm
             <Plus />{busy === "connection" ? "保存中…" : admin ? "保存连接" : "保存连接，继续"}
           </button>
         </form>
-        <form className="settings-card" onSubmit={addDeployment} hidden={!admin && step !== "model"} aria-label="添加模型" aria-busy={busy === "deployment"}>
+        <form className="settings-card" onSubmit={addDeployment} hidden={loading || (!admin && step !== "model")} aria-label="添加模型" aria-busy={busy === "deployment"}>
           <header>
             <span className="card-icon">
               <Cpu />
             </span>
             <div>
-              <h2>可用模型</h2>
-              <p>Agent 可选择的模型</p>
+              <h2>添加模型</h2>
+              <p>选择连接，填写模型标识</p>
             </div>
           </header>
           <label className="field">
@@ -247,35 +298,11 @@ export function ModelSettings({ admin = false, requestedReturn = "/app" }: { adm
           </button>
         </form>
       </section>
-      <section className="saved-section">
-        <h2>已保存的配置</h2>
-        <div className="provider-list">
-          {connections.length === 0 ? (
-            <p className="muted-block">{loading ? "正在载入…" : "还没有配置模型连接。"}</p>
-          ) : (
-            connections.map((item) => (
-              <article key={item.id}>
-                <span className="status-dot" aria-label="已保存" />
-                <div>
-                  <strong>{item.name}</strong>
-                  <small>{providers.find((providerItem) => providerItem[0] === item.provider)?.[1] || item.provider}</small>
-                </div>
-                {admin && <button type="button" className="admin-edit" onClick={() => setEditing(item)}>编辑连接</button>}
-              </article>
-            ))
-          )}
-        </div>
-        <div className="deployment-list">
-          {deployments.map((item) => (
-            <article key={item.id}>
-              <div>
-                <strong>{item.name}</strong>
-                <small>{item.model_id}</small>
-              </div>
-              <div className="admin-model-actions">{item.shared && !admin && <span>共享</span>}{item.is_default && <span>默认</span>}{item.enabled === false && <span>已停用</span>}{admin && <button type="button" className="admin-edit" onClick={() => setEditing(item)}>编辑模型</button>}</div>
-            </article>
-          ))}
-        </div>
+      <section className={`saved-section ${admin ? "" : "personal-model-list"}`}>
+        <header className="model-list-toolbar"><h2>{admin ? "已保存的配置" : "已保存的模型"}</h2>{!admin && step === "list" ? <button type="button" className="primary-button" disabled={loading || busy !== ""} ref={addModelButton} onClick={() => showSetup(connections.length ? "model" : "connection")}><Plus size={16} />添加模型</button> : null}</header>
+        {admin ? savedConnections : null}
+        {savedDeployments}
+        {!admin ? savedConnections : null}
       </section>
       {editing && <ModelEditor item={editing} connections={connections} onClose={() => setEditing(null)} onSaved={async () => { setEditing(null); setMessage("配置已更新"); try { await load(); } catch (reason) { setError(reason instanceof Error ? reason.message : "刷新失败"); } }} />}
     </>

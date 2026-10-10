@@ -68,7 +68,7 @@ const SourcePreview = dynamic(
 );
 
 export function FileExplorer({ conversationId }: { conversationId: string }) {
-  const { storageKey, directories, signature, selected, tabs, changes, files, loading, error, limited, open, close, refresh, loadDirectory, expanded: enlarged, setExpanded, setReference, setPanelOpen, modes, fileRevisions, setPreviewMode: setWorkspacePreviewMode } = useFileWorkspace();
+  const { storageKey, directories, signature, selected, tabs, changes, files, loading, error, limited, open, close, refresh, loadDirectory, treeOpen, setTreeOpen, expanded: enlarged, setExpanded, setReference, setPanelOpen, modes, fileRevisions, setPreviewMode: setWorkspacePreviewMode } = useFileWorkspace();
   const tabPrefix = useId();
   const tabId = (path: string) => `${tabPrefix}-${encodeURIComponent(path)}`;
   const tabList = useRef<HTMLElement>(null);
@@ -76,8 +76,6 @@ export function FileExplorer({ conversationId }: { conversationId: string }) {
     tabList.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [selected?.path]);
   const [expanded, setTreeExpanded] = useState<Set<string>>(() => new Set(readView(storageKey).directories));
-  const [treeOpen, setTreeOpenState] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("preview") ? false : readView(storageKey).treeOpen);
-  const setTreeOpen = useCallback((value: boolean) => { updateView(storageKey, { treeOpen: value }); setTreeOpenState(value); }, [storageKey]);
   const changesMenu = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
     const closeOutside = (event: PointerEvent) => { if (changesMenu.current && !changesMenu.current.contains(event.target as Node)) changesMenu.current.open = false; };

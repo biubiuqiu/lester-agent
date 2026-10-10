@@ -92,15 +92,15 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
         </div>
       </div>
       <details className="agent-options">
-        <summary>本次由 {selectedAgent?.name || "Lester"} 协助 <span>更换 Agent</span></summary>
+        <summary>{selectedAgent?.name || "Lester"} <span>更换 Agent</span></summary>
         <div className="new-agent-picker"><label>选择 Agent <select aria-label="选择 Agent" value={agentSlug} disabled={busy || !agents.length} onChange={event=>{setAgentSlug(event.target.value);updateView(storageKey,{agentSlug:event.target.value});}}>{agents.map(agent=><option key={agent.slug} value={agent.slug}>{agent.name}</option>)}</select></label><Link href={`/app/agents/${encodeURIComponent(agentSlug)}`}>了解这个 Agent</Link><Link href="/app/agents">管理 Agent</Link></div>
       </details>
       {agentError ? <p role="alert" className="compose-error">{agentError}</p> : null}
       {busy ? <p role="status" className="composer-status active">正在创建会话并发送消息…</p> : null}
       {error ? <p role="alert" className="compose-error">{error}</p> : null}
-      {!deployments.length ? <div className="model-setup-prompt"><div><strong>再准备一个模型，就可以开始了</strong><p>连接你的模型服务，或使用管理员提供的共享模型。你的草稿会保留。</p></div><Link className="primary-button" href={modelSettingsURL}>配置第一个模型 <ArrowRight size={16} /></Link></div> : <p className="new-chat-hint">发送后开始新会话 · 可直接粘贴图片 · Enter 发送，Shift + Enter 换行</p>}
+      {!deployments.length ? <div className="model-setup-prompt"><div><strong>再准备一个模型，就可以开始了</strong><p>连接你的模型服务，或使用管理员提供的共享模型。你的草稿会保留。</p></div><Link className="primary-button" href={modelSettingsURL}>配置第一个模型 <ArrowRight size={16} /></Link></div> : <p className="new-chat-hint">Enter 发送 · Shift + Enter 换行</p>}
     </form>
-    <div className="task-examples" aria-label="任务示例"><p>可以从这些任务开始</p><div>{[
+    <div className="task-examples" aria-label="任务示例"><div>{[
       ["整理需求文档", "帮我整理产品需求，生成一份包含目标、功能范围和验收标准的评审文档。"],
       ["分析一份表格", "分析我上传的表格，找出主要趋势和异常，并整理成简明报告。"],
       ["制作一个网页", "帮我制作一个产品介绍网页，先和我确认目标用户、内容和视觉风格。"],

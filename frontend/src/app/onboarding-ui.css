@@ -33,6 +33,23 @@
 .model-ready { margin: 0 0 24px; }
 .model-setup-grid { grid-template-columns: minmax(0, 1fr); }
 .model-setup-grid .settings-card { max-width: 680px; }
+.model-setup-navigation { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.model-setup-navigation > .text-button { min-height: 44px; padding: 0; font-size: 13px; }
+.model-list-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.model-list-toolbar h2 { margin: 0; font-size: 15px; }
+.model-list-toolbar .primary-button { width: auto; min-height: 40px; padding: 8px 14px; font-size: 13px; }
+.personal-model-list { display: flex; flex-direction: column; gap: 18px; }
+.personal-model-list .deployment-list { grid-template-columns: minmax(0, 1fr); margin: 0; }
+.personal-model-list .deployment-list article { min-width: 0; padding: 16px; }
+.personal-model-list .deployment-list article > div:first-child { min-width: 0; overflow-wrap: anywhere; }
+.personal-model-list .deployment-list strong { font-size: 15px; }
+.personal-model-list .deployment-list small { font-size: 13px; }
+.personal-model-list .saved-connections { border-top: 1px solid #e1e7dc; padding-top: 12px; }
+.saved-connections > summary { padding: 8px 0; color: #526657; font-size: 13px; cursor: pointer; }
+.saved-connections > .text-button { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin-top: 8px; }
+.saved-section:not(.personal-model-list) .saved-connections > summary { display: none; }
+.new-chat-composer .new-chat-hint { visibility: hidden; }
+.new-chat-composer:focus-within .new-chat-hint { visibility: visible; }
 .settings-card[hidden] { display: none; }
 .settings-card .field { font-size: 13px; font-weight: 550; }
 .settings-card .field :is(input, select) { min-height: 44px; font-size: 14px; }
@@ -51,6 +68,9 @@
   .login-copy { margin: 28px 0 24px; }
   .model-setup-prompt, .model-ready { flex-direction: column; align-items: stretch; gap: 14px; padding: 16px; }
   .model-setup-steps { gap: 5px; justify-content: space-between; }
+  .model-setup-navigation { flex-direction: column; gap: 0; }
+  .model-setup-navigation .model-setup-steps { width: 100%; margin-bottom: 8px; }
+  .model-list-toolbar { gap: 8px; }
   .model-setup-steps li, .model-setup-steps button { gap: 5px; font-size: 12px; }
   .model-setup-steps button { padding: 5px 3px; }
   .model-setup-steps span { width: 24px; height: 24px; }

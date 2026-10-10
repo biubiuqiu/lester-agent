@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowUpRight, FileText, Globe, MessageSquare, RefreshCw } from "lucide-react";
+import { ArrowUpRight, FileText, Globe, MessageSquare, MoreHorizontal, RefreshCw } from "lucide-react";
 import { deliverableKind } from "@/lib/deliverables";
 import { FileDownload, useFileWorkspace } from "./file-workspace";
 import { PublishFileButton } from "./artifact-manager";
@@ -14,8 +14,7 @@ export function Deliverables({ panel = false }: { panel?: boolean }) {
   if (!panel && (running || loading || !results.length)) return null;
   const updated = new Set(changes.filter((change) => change.kind !== "deleted").map((change) => change.path));
   return <section className={`deliverables ${panel ? "deliverables-panel" : ""}`} aria-label={panel ? "会话成果" : "任务成果"}>
-    <header><div><span className="deliverables-eyebrow">网页与文档</span><h2>会话成果{!running && results.length ? <small>{results.length}</small> : null}</h2></div>{panel ? <button type="button" className="deliverables-refresh" onClick={refresh} aria-label="刷新成果"><RefreshCw size={16} /></button> : null}</header>
-    <p className="deliverables-intro">预览、下载，或围绕具体成果继续修改。展示文件当前版本。</p>
+    <header><h2>会话成果{!running && results.length ? <small>{results.length}</small> : null}</h2>{panel ? <button type="button" className="deliverables-refresh" onClick={refresh} aria-label="刷新成果"><RefreshCw size={16} /></button> : null}</header>
     {error ? <p className="deliverables-notice" role="alert">成果同步失败：{error}<button type="button" onClick={refresh}>重新同步</button></p> : null}
     {deliverablesError ? <p className="deliverables-notice" role="alert">成果记录同步失败：{deliverablesError}。仍可查看已同步文件。<button type="button" onClick={refresh}>重试成果记录</button></p> : null}
     {limited ? <p className="deliverables-notice">目录较大或部分读取失败，仅展示已同步范围；其他文件可在文件面板查找。</p> : null}
@@ -26,10 +25,21 @@ export function Deliverables({ panel = false }: { panel?: boolean }) {
         const kind = record?.kind ?? deliverableKind(file);
         return <article className={`deliverable-card ${kind}`} key={record?.id ?? file.path}>
           <button type="button" className="deliverable-preview" onClick={() => open(file, "preview")} aria-label={`预览成果 ${file.name}`}>
-            <span className="deliverable-cover" aria-hidden="true">{kind === "html" ? <Globe /> : <FileText />}<span>{kind === "html" ? "HTML 网页" : "Markdown 文档"}</span><ArrowUpRight /></span>
-            <span className="deliverable-info"><strong>{record?.title || file.name}</strong>{record?.summary ? <span className="deliverable-summary">{record.summary}</span> : null}<span title={file.path}>{file.path}</span><small>{formatSize(file.size)}{updated.has(file.path) ? " · 本轮更新" : ""}{record ? " · 已登记，内容未验收" : ""}</small></span>
+            <span className="deliverable-cover" aria-hidden="true">{kind === "html" ? <Globe /> : <FileText />}</span>
+            <span className="deliverable-info"><strong>{record?.title || file.name}</strong>{record?.summary ? <span className="deliverable-summary">{record.summary}</span> : null}<span className="deliverable-status"><span>{kind === "html" ? "网页" : "文档"}</span><span className="deliverable-review">待验收</span>{updated.has(file.path) ? <span>本轮更新</span> : null}</span></span>
+            <ArrowUpRight className="deliverable-open-icon" aria-hidden="true" />
           </button>
-          <div className="deliverable-actions"><button type="button" className="deliverable-modify" onClick={() => { setReference(file.path); setExpanded(false); setPanelOpen(false); }} aria-label={`继续修改 ${file.name}`}><MessageSquare size={15} />继续修改</button><FileDownload conversationId={conversationId} file={file} />{kind === "html" ? <PublishFileButton conversationId={conversationId} path={file.path} /> : null}</div>
+          <div className="deliverable-actions">
+            <button type="button" className="deliverable-modify" onClick={() => { setReference(file.path); setExpanded(false); setPanelOpen(false); }} aria-label={`继续修改 ${file.name}`}><MessageSquare size={15} />继续修改</button>
+            <details className="deliverable-more" onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }}>
+              <summary aria-label={`${file.name} 的详情与更多操作`} title="详情与更多操作"><MoreHorizontal size={18} /></summary>
+              <div className="deliverable-details">
+                {record?.summary ? <p>{record.summary}</p> : null}
+                <dl><div><dt>文件</dt><dd>{file.path}</dd></div><div><dt>大小</dt><dd>{formatSize(file.size)}</dd></div><div><dt>状态</dt><dd>{record ? "已登记，内容未验收" : "按文件类型发现，内容未验收"} · 当前版本</dd></div></dl>
+                <div className="deliverable-secondary-actions"><FileDownload conversationId={conversationId} file={file} label="下载" />{kind === "html" ? <PublishFileButton conversationId={conversationId} path={file.path} /> : null}</div>
+              </div>
+            </details>
+          </div>
         </article>;
       })}</div>}
       {results.length > count ? <button type="button" className="deliverables-more" onClick={() => setCount((value) => value + 12)}>显示更多成果（还有 {results.length - count} 个）</button> : null}
