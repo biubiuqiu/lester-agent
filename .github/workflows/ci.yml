@@ -25,6 +25,7 @@ jobs:
       web: ${{ steps.changes.outputs.web }}
       gateway: ${{ steps.changes.outputs.gateway }}
       helm: ${{ steps.changes.outputs.helm }}
+      sandbox_runtime: ${{ steps.changes.outputs.sandbox_runtime }}
       security_go: ${{ steps.changes.outputs.security_go }}
       security_web: ${{ steps.changes.outputs.security_web }}
     steps:
@@ -242,9 +243,41 @@ jobs:
       - name: Check high and critical production vulnerabilities
         run: pnpm audit --prod --audit-level=high
 
+  sandbox-runtime:
+    name: Sandbox runtime image
+    needs: changes
+    if: needs.changes.outputs.sandbox_runtime == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build complete Computer image
+        run: docker build -f backend/Dockerfile.sandbox-runtime -t lester-sandbox-runtime:local backend
+      - name: Check runtime dependencies for high and critical vulnerabilities
+        run: docker run --rm lester-sandbox-runtime:local npm audit --prefix /opt/lester --omit=dev --audit-level=high
+      - name: Verify offline toolchains and both Chromium clients as non-root
+        run: >-
+          docker run --rm --network none --cpus 2 --memory 4g --pids-limit 256
+          --security-opt no-new-privileges
+          --mount type=volume,src=lester-runtime-check-workspace,dst=/workspace
+          lester-sandbox-runtime:local lester-runtime-check
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Verify Docker provider, persistent workspace and interactive terminal
+        working-directory: backend
+        env:
+          LESTER_TEST_RUNTIME_IMAGE: lester-sandbox-runtime:local
+          LESTER_TEST_DOCKER_IMAGE: lester-sandbox-runtime:local
+        run: go test -count=1 -timeout=5m ./internal/sandbox
+      - name: Clean up fixture volume
+        if: always()
+        run: docker volume rm lester-runtime-check-workspace || test "$(docker volume ls -q --filter name=^lester-runtime-check-workspace$)" = ""
+
   checks:
     name: CI result
-    needs: [changes, gateway, go, web, helm, security-go, security-web]
+    needs: [changes, gateway, go, web, helm, sandbox-runtime, security-go, security-web]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -263,7 +296,7 @@ jobs:
           if results["changes"]["result"] != "success":
               failed.append("check selection")
           selected = results["changes"].get("outputs", {})
-          for name in ("gateway", "go", "web", "helm", "security-go", "security-web"):
+          for name in ("gateway", "go", "web", "helm", "sandbox-runtime", "security-go", "security-web"):
               flag = selected.get(name.replace("-", "_"))
               if flag not in ("true", "false") or (flag == "true" and results[name]["result"] != "success"):
                   failed.append(name + " did not complete its selected check")

@@ -350,7 +350,7 @@ Recreating a Docker container does not deliberately delete the user's volume. AC
 
 | Setting | Default or limit |
 | --- | --- |
-| Docker sandbox image | `python:3.12-slim` |
+| Docker sandbox image | `lester-sandbox-runtime:local` (built by Compose) |
 | Docker network | Disabled |
 | Docker resources | 2 CPUs, 4 GB RAM, 256 PIDs, `no-new-privileges` |
 | File operations | 25 MiB |
@@ -358,6 +358,20 @@ Recreating a Docker container does not deliberately delete the user's volume. AC
 | Foreground Bash timeout | 120 seconds; configurable up to 600 |
 | Command stdout / stderr | Independently capped at 256 KiB |
 | Model-visible tool result | Approximately 30,000 characters |
+
+### Preinstalled development environment
+
+Compose builds `backend/Dockerfile.sandbox-runtime` before starting Sandbox Service. New Computers use this image by default. It includes Node.js 22 with npm/pnpm, Python 3.12 with pip/venv, Go 1.26.9, Git, Bash completion, ripgrep, curl/wget, jq, SQLite, SSH client, editors, archive tools, FFmpeg, and C/C++ compilation tools. Node and Python Playwright **1.63.0** share predownloaded Chromium and its OS dependencies; CJK and emoji fonts are included. Python and Node scripts (including ESM) can import the preinstalled Playwright from conversation directories without downloading packages. The Node test runner is also available as `playwright test`.
+
+```bash
+make sandbox-check
+```
+
+This builds the image and checks real Go/C compilation, Python virtual environments, and Node/Python Chromium screenshots as the non-root `sandbox` user with networking disabled. CI additionally checks named-volume write access, Toolbox installation, container recreation with retained files, and interactive terminal behavior. Docker Computers still have no external network by default: preinstalling tools does not enable package downloads or external website access. Project dependencies and other Playwright versions need their own packages/browsers and an appropriate deployment network policy.
+
+For an existing `deploy/.env` using the previous default `SANDBOX_IMAGE=python:3.12-slim`, change it to `SANDBOX_IMAGE=lester-sandbox-runtime:local` and rebuild the Compose services. Intentional custom image tags remain supported. Existing Computers keep their running image; rebuilding services does not replace them or delete their data. An administrator must plan upgrades of existing Computers while retaining volumes and checking ownership (the new runtime uses UID/GID 1000; old root-owned workspaces may need an ownership migration). ACS needs the rebuilt image pushed and its template updated; Helm's Docker provider needs the image loaded on its dedicated worker or `sandbox.image` set to a pushed registry tag.
+
+Restricted build environments may supply a prepopulated Playwright cache with BuildKit `--build-context browser-cache=/path/to/cache`; normal builds download the pinned browser automatically. The cache must contain binaries for the target architecture and the pinned Playwright revision. Optional `--secret id=proxy_ca,src=/path/to/combined-ca-bundle` supplies build-only TLS trust without persisting session certificates.
 
 `bash` accepts `run_in_background: true`, immediately returning a task ID, PID, and `.lester/tasks/{taskId}.log`. Read the log to inspect progress. Starting a background process does not prove it succeeded.
 
@@ -460,7 +474,7 @@ It covers routes/escaped paths, cookies/headers, preview CSP, 25 MiB uploads, in
 
 `deploy/helm/lester` deploys Web, API, Sandbox Service, ClusterIP services, optional Ingress, and NetworkPolicy. Provide external PostgreSQL, Redis, and S3-compatible storage. Apply `backend/migrations/*.up.sql` in numeric order before installation.
 
-Build and push separate Web, API, and Sandbox Service images. For ACS, also supply a compatible runtime image; the included one provides Bash, Python, Node.js, Git, ripgrep, and `lester-toolbox`:
+Build and push separate Web, API, and Sandbox Service images, plus the Computer runtime for Docker workers or ACS templates. The included runtime provides the full development environment above and `lester-toolbox`:
 
 ```bash
 docker build -f backend/Dockerfile.sandbox-runtime -t registry.example.com/lester-sandbox-runtime:v1 backend
@@ -621,6 +635,7 @@ GitHub Actions runs on pushes to `main`, pull requests, and manual dispatch. New
 | Gateway / Compose | Gateway, Compose or deployment environment template changes | Config resolution, routing/cookies, preview isolation, uploads, SSE and WebSocket fixtures |
 | Helm | Chart changes | Chart lint and rendering with artifact ingress |
 | Go dependency security | Backend changes and weekly | Reachable vulnerable symbols via govulncheck |
+| Sandbox runtime image | Runtime/toolbox/provider changes | Build, dependency audit, offline non-root browser/toolchain checks, persistent volume and terminal integration |
 | Frontend dependency security | Package/lockfile/pnpm configuration changes and weekly | High/critical production advisories via pnpm audit |
 
 Browser regressions use the production standalone bundle and fixed REST/SSE fixtures; no live models, OAuth providers or email delivery are involved. After building, run `pnpm exec playwright install chromium` then `pnpm test:e2e` in `frontend/`. Desktop and mobile Chromium cover login errors, explicit first-task creation, preserved drafts, failed sends, live file tabs and isolated HTML previews. They also check all six languages across the homepage and every help chapter, translated server HTML without JavaScript, onboarding, and language switching with retained drafts and attachments. Tests do not retry failures; CI retains failure screenshots/traces for seven days.

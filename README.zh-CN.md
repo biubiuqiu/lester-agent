@@ -103,7 +103,13 @@ User
 
 ### 资源与后台任务
 
-默认 Docker Sandbox 使用 `python:3.12-slim`，便于 Agent 执行用户要求的 Python 任务；Lester 自身的文件工具不依赖该解释器。Computer 默认禁用容器网络，并限制为 2 CPU、4 GB 内存和 256 个 PID，同时启用 `no-new-privileges`。
+默认 Docker Sandbox 使用 Compose 自动构建的 `lester-sandbox-runtime:local`。镜像预装 Node.js 22（npm / pnpm）、Python 3.12（pip / venv）、Go 1.26.9、Git、Bash 补全、ripgrep、curl / wget、jq、SQLite、SSH 客户端、编辑器、压缩工具、FFmpeg 和 C/C++ 编译工具。Node.js 与 Python 的 Playwright **1.63.0** 共用预下载的 Chromium 与系统依赖，包含中日韩字体和 Emoji 字体；在会话目录中可直接导入 Playwright，Node 的 ESM 和 CommonJS 都可用，也可运行 `playwright test`。
+
+运行 `make sandbox-check` 可构建镜像，并在非 root 的 `sandbox` 用户、禁用网络、2 CPU / 4 GB / 256 PID / `no-new-privileges` 条件下实际验证 Go/C 编译、Python 虚拟环境与两种语言的 Chromium 截图。CI 还检查命名卷写入、Toolbox 安装、保留文件的容器重建和交互式终端。预装工具不会开启外网；项目的新依赖、其他版本的 Playwright 及外部网站访问仍需要相应依赖和部署网络配置。
+
+已有 `deploy/.env` 如果沿用旧默认 `SANDBOX_IMAGE=python:3.12-slim`，请改为 `SANDBOX_IMAGE=lester-sandbox-runtime:local` 后重建 Compose 服务；有意使用的自定义镜像仍可保留。重建镜像不会替换已有 Computer，也不会删除工作区。现有 Computer 的升级需由管理员保留卷并安排迁移，新镜像使用 UID/GID 1000，旧 root 所有的目录可能需要迁移文件权限。ACS 需推送新镜像并更新模板；Helm 的 Docker 模式需在专用节点加载镜像，或将 `sandbox.image` 指向已推送的仓库镜像。
+
+构建网络受限时，可用 BuildKit 的 `--build-context browser-cache=/path/to/cache` 提供与目标架构、Playwright 固定版本匹配的浏览器缓存；普通构建自动下载。可选 `--secret id=proxy_ca,src=/path/to/combined-ca-bundle` 只在构建时提供 TLS 信任，不把会话证书写入镜像。
 
 ACS Provider 支持 `native` 与 `private` 两种 E2B 路由。生产默认使用 Native（需要泛域名 DNS/TLS）；Private 使用单域名 `/kruise` 路径，适合内网接入和测试。创建默认启用 `secure` 与 `autoPause`，运行时访问令牌由每次 connect 获取且不会写入 Lester 数据库。
 
@@ -346,7 +352,7 @@ docker build -f backend/Dockerfile.sandbox-runtime -t registry.example.com/leste
 docker push registry.example.com/lester-sandbox-runtime:v1
 ```
 
-该镜像提供 Bash、Python、Node.js、Git、ripgrep 及 `lester-toolbox`，并满足 ACS Agent Runtime 对 `/bin/bash`、`cp`、`mv`、`mkdir` 的要求。
+该镜像提供上述完整开发环境、Playwright / Chromium 及 `lester-toolbox`，并满足 ACS Agent Runtime 对 `/bin/bash`、`cp`、`mv`、`mkdir` 的要求。Docker 专用节点也使用此镜像；Compose 在启动 Sandbox Service 前自动构建它。
 
 基础 values 示例：
 
@@ -487,6 +493,7 @@ CI 在推送 `main`、提交 PR 和手动运行时触发。同一事件下的分
 | 网关 / Compose | 网关、Compose、部署环境模板改动 | 配置解析、路由/Cookie、预览隔离、上传、SSE、WebSocket 模拟服务回归 |
 | Helm | Chart 改动 | lint 与包含产物 Ingress 的模板渲染 |
 | Go 依赖安全 | 后端改动及每周 | govulncheck 检查可调用的漏洞符号 |
+| 沙盒运行镜像 | 运行时、Toolbox、Provider 改动 | 构建、依赖审计、离线非 root 浏览器与编译检查、持久卷和终端集成测试 |
 | 前端依赖安全 | 包清单、锁文件、pnpm 配置改动及每周 | pnpm audit 检查生产依赖的 high/critical 漏洞 |
 
 浏览器回归使用生产 standalone 构建和固定 REST/SSE 服务，不调用真实模型、OAuth 或邮件服务。构建后，在 `frontend/` 运行 `pnpm exec playwright install chromium`，再运行 `pnpm test:e2e`。桌面和手机 Chromium 覆盖登录错误、明确发送首个任务、草稿保留、发送失败、实时多文件标签和隔离 HTML 预览；也检查六语言官网与全部帮助章节、禁用 JavaScript 时的翻译、新手教学，以及切换语言后的草稿和附件保留。失败不自动重试，CI 保留失败截图与 trace 七天。

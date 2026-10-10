@@ -21,6 +21,7 @@ import (
 const (
 	defaultToolboxSourcePath = "/usr/local/libexec/lester-toolbox"
 	toolboxContainerPath     = "/usr/local/bin/lester-toolbox"
+	defaultRuntimeImage      = "lester-sandbox-runtime:local"
 )
 
 type DockerProvider struct {
@@ -32,7 +33,7 @@ type DockerProvider struct {
 
 func NewDockerProvider(image string) *DockerProvider {
 	if image == "" {
-		image = "python:3.12-slim"
+		image = defaultRuntimeImage
 	}
 	return &DockerProvider{Image: image, ToolboxSourcePath: defaultToolboxSourcePath, toolboxInstalled: map[string]bool{}}
 }

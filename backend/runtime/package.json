@@ -1,0 +1,9 @@
+{
+  "name": "lester-sandbox-runtime-tools",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@playwright/test": "1.63.0",
+    "pnpm": "10.34.6"
+  }
+}

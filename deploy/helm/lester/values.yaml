@@ -89,7 +89,8 @@ sandbox:
   # Cloud ACS Agent Sandbox through its E2B-compatible endpoint.
   provider: docker
   replicas: 2
-  image: python:3.12-slim
+  # Build/load on the dedicated Docker worker or use a pushed registry image.
+  image: lester-sandbox-runtime:local
   # Used only by the Docker provider. Pin the service to a dedicated worker.
   dockerSocketPath: /var/run/docker.sock
   nodeSelector: {}

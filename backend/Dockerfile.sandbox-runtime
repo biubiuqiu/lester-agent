@@ -1,20 +1,52 @@
+# syntax=docker/dockerfile:1
+FROM scratch AS browser-cache
+COPY runtime/browser-cache-placeholder /placeholder
+FROM node:22-bookworm-slim AS node-runtime
 FROM golang:1.26.9-alpine AS toolbox-build
 WORKDIR /src
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=secret,id=proxy_ca \
+    if [ -f /run/secrets/proxy_ca ]; then export SSL_CERT_FILE=/run/secrets/proxy_ca; fi; \
+    go mod download
 COPY cmd/lester-toolbox ./cmd/lester-toolbox
 COPY internal/toolboxfs ./internal/toolboxfs
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/lester-toolbox ./cmd/lester-toolbox
 
-FROM python:3.12-slim
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends bash bash-completion ca-certificates curl git jq less ncurses-bin nodejs npm procps ripgrep \
-    && groupadd --system sandbox \
-    && useradd --system --gid sandbox --create-home --home-dir /home/sandbox --shell /bin/bash sandbox \
-    && mkdir -p /workspace \
-    && chown sandbox:sandbox /workspace \
-    && rm -rf /var/lib/apt/lists/*
+FROM python:3.12-slim-bookworm
+COPY --from=node-runtime /usr/local/ /usr/local/
+ENV PATH="/home/sandbox/.local/bin:/opt/lester/node_modules/.bin:/usr/local/go/bin:${PATH}" \
+    PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers \
+    GOPATH=/home/sandbox/go \
+    GOTOOLCHAIN=local \
+    NPM_CONFIG_PREFIX=/home/sandbox/.local \
+    PNPM_HOME=/home/sandbox/.local/bin \
+    PYTHONUNBUFFERED=1
+COPY runtime/ /opt/lester/
 COPY --from=toolbox-build /out/lester-toolbox /usr/local/bin/lester-toolbox
-USER sandbox
 WORKDIR /workspace
+RUN --mount=type=secret,id=proxy_ca \
+    --mount=type=bind,from=browser-cache,target=/tmp/browser-cache \
+    if [ -f /run/secrets/proxy_ca ]; then \
+      export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca PIP_CERT=/run/secrets/proxy_ca; \
+    fi; \
+    apt-get update \
+    && apt-get install -y --no-install-recommends \
+      bash bash-completion build-essential ca-certificates curl ffmpeg git jq less \
+      libffi-dev libssl-dev nano ncurses-bin openssh-client pkg-config procps \
+      ripgrep sqlite3 unzip wget xz-utils zip fonts-noto-cjk fonts-noto-color-emoji \
+    && npm ci --prefix /opt/lester --omit=dev --no-audit --no-fund \
+    && python -m pip install --no-cache-dir -r /opt/lester/requirements.txt \
+    && mkdir -p /opt/playwright-browsers \
+    && cp -a /tmp/browser-cache/. /opt/playwright-browsers/ \
+    && python -m playwright install --with-deps chromium \
+    && ln -s /opt/lester/node_modules /node_modules \
+    && useradd --uid 1000 --user-group --create-home --shell /bin/bash sandbox \
+    && mkdir -p /workspace /home/sandbox/.local/bin /home/sandbox/go \
+    && chown -R sandbox:sandbox /workspace /home/sandbox \
+    && chmod -R a+rX /opt/playwright-browsers \
+    && install -m 644 /opt/lester/profile.sh /etc/profile.d/lester-runtime.sh \
+    && install -m 755 /opt/lester/check.py /usr/local/bin/lester-runtime-check \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=toolbox-build /usr/local/go /usr/local/go
+USER sandbox
 CMD ["sleep", "infinity"]

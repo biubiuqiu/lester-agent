@@ -132,6 +132,12 @@ export const siteDocs: SiteDoc[] = [
         <CodeBlock label="查看服务状态">{"docker compose --env-file deploy/.env -f deploy/docker-compose.yaml ps"}</CodeBlock>
         <p><T>{"日常重启可以使用"}</T><code>up -d</code><T>{"。拉取代码并完成升级步骤后，用"}</T><code>up -d --build</code> <T>{"构建新版服务。只更新源码不会更新已有运行容器。"}</T></p>
       </> },
+      { id: "runtime", title: "沙盒开发环境", content: <>
+        <p><T>{"Compose 会先构建完整沙盒镜像，供新建的 Computer 使用。镜像预装 Node.js、npm、pnpm、Python、pip、venv、Go 和常用编译工具。Node.js 与 Python 的 Playwright 共用预下载的 Chromium，并包含中日韩字体。"}</T></p>
+        <CodeBlock label="运行环境检查">{"make sandbox-check\n# deploy/.env\nSANDBOX_IMAGE=lester-sandbox-runtime:local"}</CodeBlock>
+        <p><T>{"Docker Computer 默认禁用外网。预装浏览器可以测试本地页面；安装新依赖或访问外部网站仍需要部署侧的网络配置。"}</T></p>
+        <Note><T>{"重建镜像不会升级已有 Computer，也不会删除工作区。旧配置需更新 SANDBOX_IMAGE；现有 Computer 请由管理员保留卷并安排迁移，检查非 root 用户的文件权限。ACS 需要推送新镜像并更新模板。"}</T></Note>
+      </> },
       { id: "address", title: "配置应用访问地址", content: <>
         <p><T>{"默认应用端口为"}</T><code>13000</code><T>{"。端口占用或 Windows 保留端口导致启动失败时，选择可用端口，并同时修改两个变量："}</T></p>
         <CodeBlock label="应用地址示例">{"GATEWAY_PORT=13280\nWEB_ORIGIN=http://localhost:13280"}</CodeBlock>

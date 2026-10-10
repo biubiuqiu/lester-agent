@@ -1,4 +1,10 @@
-.PHONY: dev dev-debug test web-check gateway-check hosting-check
+.PHONY: dev dev-debug test web-check gateway-check hosting-check sandbox-image sandbox-check
+
+sandbox-image:
+	docker build -f backend/Dockerfile.sandbox-runtime -t lester-sandbox-runtime:local backend
+
+sandbox-check: sandbox-image
+	docker run --rm --network none --cpus 2 --memory 4g --pids-limit 256 --security-opt no-new-privileges lester-sandbox-runtime:local lester-runtime-check
 
 dev:
 	docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up --build
