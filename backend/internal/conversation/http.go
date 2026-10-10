@@ -535,6 +535,7 @@ func (h *Handler) Terminal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer client.Close()
+	client.SetReadLimit(sandbox.MaxTerminalMessageBytes)
 	target := strings.Replace(h.sandboxURL, "http://", "ws://", 1)
 	target = strings.Replace(target, "https://", "wss://", 1) + "/v1/sandboxes/" + url.PathEscape(computer.SandboxID) + "/terminal?work_dir=" + url.QueryEscape(computer.WorkDir)
 	headers := http.Header{}
@@ -545,6 +546,7 @@ func (h *Handler) Terminal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer upstream.Close()
+	upstream.SetReadLimit(sandbox.MaxTerminalMessageBytes)
 	done := make(chan struct{}, 2)
 	copyMessages := func(destination, source *websocket.Conn) {
 		defer func() { done <- struct{}{} }()

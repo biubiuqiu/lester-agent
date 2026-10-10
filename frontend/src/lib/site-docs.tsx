@@ -136,6 +136,7 @@ export const siteDocs: SiteDoc[] = [
         <CodeBlock label="OAuth 回调地址">{"<WEB_ORIGIN>/api/v1/auth/oauth/google/callback\n<WEB_ORIGIN>/api/v1/auth/oauth/github/callback"}</CodeBlock>
         <p>将 <code>&lt;WEB_ORIGIN&gt;</code> 替换为真实应用地址。Google 创建 Web application 客户端并配置授权页面、测试用户或正式发布；GitHub 创建对应环境的 OAuth App。授权回调需与配置完全一致，并经同源 Gateway / Ingress 转发到 API。</p>
         <p>生产环境使用 HTTPS，并设置 <code>SESSION_COOKIE_SECURE=true</code>；HTTP 仅限 localhost 开发。密钥保存在服务端，API 需能访问 Google / GitHub 的 HTTPS 接口。</p>
+        <p>代理部署设置 <code>AUTH_TRUSTED_PROXY_CIDRS</code> 为实际网关 / Ingress 的可信 IP 范围（逗号分隔 CIDR，禁止 /0）；Helm 对应 <code>config.auth.trustedProxyCIDRs</code>。默认留空会忽略转发头，同一网关后的用户共用网关 IP 的限流桶。Redis 故障时暂停受限认证操作，恢复后重试。</p>
         <CodeBlock label="SMTP 配置示例">{"SMTP_HOST=smtp.example.com\nSMTP_PORT=587\nSMTP_TLS_MODE=starttls\nSMTP_USERNAME=your-mail-account\nSMTP_PASSWORD=your-mail-password\nSMTP_FROM=no-reply@example.com"}</CodeBlock>
         <p>替换为邮件服务实际参数并使用已授权的发件地址。465 端口可用 <code>SMTP_TLS_MODE=tls</code>，STARTTLS 要求服务器支持 TLS 且证书有效。明文 plain 仅允许 localhost 测试。</p>
         <p>SMTP 启用后，新邮箱注册需验证，支持“忘记密码”；旧账号可从资料页补充验证。关闭 SMTP 不会让待验证账号自动获得访问权。设置 <code>AUTH_REGISTRATION_ENABLED=false</code> 可关闭所有新账号注册，同时保留已有账号登录和绑定。</p>

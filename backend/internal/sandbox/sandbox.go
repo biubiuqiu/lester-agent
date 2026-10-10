@@ -13,6 +13,9 @@ var (
 	ErrTerminalResizeUnsupported = errors.New("terminal resize is not supported by this provider")
 )
 
+// Bound decoded WebSocket frames before allocating input or relay buffers.
+const MaxTerminalMessageBytes = 1 << 20
+
 type CreateOptions struct {
 	ID     string `json:"id"`
 	Image  string `json:"image,omitempty"`

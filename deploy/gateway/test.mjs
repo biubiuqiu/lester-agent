@@ -68,7 +68,7 @@ if (process.argv[2] === 'serve') {
     method: 'POST', body: 'fixture', headers: {
       Cookie: 'lester_access_token=fixture', Authorization: 'Bearer fixture',
       Origin: 'http://gateway:8080', 'Last-Event-ID': '42',
-      'X-Forwarded-Proto': 'https', 'X-Forwarded-For': 'spoofed',
+      'X-Forwarded-Proto': 'https', 'X-Forwarded-For': 'spoofed', 'True-Client-IP': '203.0.113.99',
     },
   });
   assert.match(response.headers.get('set-cookie'), /HttpOnly/);
@@ -81,6 +81,7 @@ if (process.argv[2] === 'serve') {
   assert.equal(renewed.headers.cookie, 'lester_refresh_token=refresh-fixture');
   assert.equal(refresh.headers.getSetCookie().length, 2);
   const result = await response.json();
+  assert.equal(result.headers['true-client-ip'], undefined);
   assert.equal(result.method, 'POST');
   assert.equal(result.headers.cookie, 'lester_access_token=fixture');
   assert.equal(result.headers.authorization, 'Bearer fixture');

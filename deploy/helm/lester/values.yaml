@@ -33,6 +33,8 @@ config:
   sessionCookieSecure: true
   auth:
     registrationEnabled: true
+    # Only your actual Ingress/proxy peer ranges. Empty uses the TCP peer IP.
+    trustedProxyCIDRs: ""
     googleClientID: ""
     githubClientID: ""
     smtpHost: ""

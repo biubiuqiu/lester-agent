@@ -110,7 +110,7 @@ func (c *bedrockClient) Generate(ctx context.Context, request modelruntime.Reque
 		return nil, err
 	}
 	c.sign(httpRequest, body, time.Now().UTC(), requestPath)
-	response, err := c.http.Do(httpRequest)
+	response, err := providerHTTPClient(c.http).Do(httpRequest)
 	if err != nil {
 		return nil, err
 	}

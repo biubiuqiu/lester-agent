@@ -473,10 +473,16 @@ make web-check
 
 ## 安全提示
 
+本次扫描与修复见 [2026-10-10 安全报告](docs/security-audit-2026-10-10.md)。Go 构建升级至 1.26.9 以应用当前安全补丁。
+
+网关 / Ingress 部署需将实际可信代理的 CIDR 填入 `AUTH_TRUSTED_PROXY_CIDRS`（逗号分隔），Helm 对应 `config.auth.trustedProxyCIDRs`。用 `docker network inspect <网络名称>` 查看网关 IP / 子网，优先信任专用代理的 `/32` 或 `/128`，或其受控子网；地址变化时更新，并限制 API 只接受该代理。留空会忽略所有转发头，同一网关后的用户共用网关 IP 的限流桶。禁止使用 `/0` 或信任无关服务。只读取可信连接提供的 `X-Forwarded-For`；默认网关覆盖该头并移除 `True-Client-IP`。
+
+模型接口须直接响应 API 请求，不再跟随重定向，避免密钥和对话内容外泄。终端单条消息限制 1 MiB。已建立的终端 / 事件连接每 30 秒复核会话，在退出登录、禁用账号或移除工作区成员后关闭（数据库检查最多另需 5 秒）。
+
 - 不要在生产环境使用示例 `MASTER_KEY_BASE64`
 - 不要在生产环境使用示例 `SANDBOX_SERVICE_TOKEN`；Sandbox Service 不应公开暴露
 - Provider 密钥使用 AES-GCM 加密后存储
-- HTTPS 部署会默认使用 Secure 会话 Cookie；登录和注册按客户端 IP 做分钟级限流
+- HTTPS 部署会默认使用 Secure 会话 Cookie；登录和注册按身份与客户端 IP 做分钟级限流，Redis 故障时拒绝受限操作，默认客户端 IP 为实际 TCP 连接地址；续期按账号与 IP 限制每分钟 60 次
 - Sandbox Service 拥有 Docker Socket 权限，生产部署时应运行在隔离的专用 Worker
 - User Computer 默认禁用网络，并限制 CPU、内存和 PID 数量
 - 文件 API 与终端默认进入 `/workspace/conversations/{conversationId}`，不会把其他会话目录展示为当前会话文件

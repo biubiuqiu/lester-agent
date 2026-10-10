@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/base64"
 	"fmt"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ type Config struct {
 	MasterKey                                                              []byte
 	AccessTokenTTL, SandboxIdleTTL, SandboxMonitorInterval                 time.Duration
 	RegistrationEnabled                                                    bool
+	TrustedProxyCIDRs                                                      []string
 	GoogleClientID, GoogleClientSecret, GitHubClientID, GitHubClientSecret string
 	SMTPHost, SMTPUsername, SMTPPassword, SMTPFrom, SMTPTLSMode            string
 	SMTPPort                                                               int
@@ -50,6 +52,10 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("MASTER_KEY_BASE64 must decode to 32 bytes")
 	}
 	c.MasterKey = key
+	c.TrustedProxyCIDRs, err = parseTrustedProxyCIDRs(os.Getenv("AUTH_TRUSTED_PROXY_CIDRS"))
+	if err != nil {
+		return Config{}, err
+	}
 	c.RegistrationEnabled, err = strconv.ParseBool(env("AUTH_REGISTRATION_ENABLED", "true"))
 	if err != nil {
 		return Config{}, fmt.Errorf("AUTH_REGISTRATION_ENABLED must be a boolean")
@@ -77,6 +83,22 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("SMTP_HOST is required when mail credentials or sender are set")
 	}
 	return c, nil
+}
+
+func parseTrustedProxyCIDRs(raw string) ([]string, error) {
+	var prefixes []string
+	for _, value := range strings.Split(raw, ",") {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		prefix, err := netip.ParsePrefix(value)
+		if err != nil || prefix.Bits() == 0 || prefix.Addr().Is4In6() {
+			return nil, fmt.Errorf("AUTH_TRUSTED_PROXY_CIDRS must contain explicit IPv4/IPv6 CIDRs, never a /0 range")
+		}
+		prefixes = append(prefixes, prefix.Masked().String())
+	}
+	return prefixes, nil
 }
 
 func requiredEnv(name string) (string, error) {

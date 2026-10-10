@@ -563,7 +563,7 @@ The runtime imposes no global model output-token cap. OpenAI-compatible provider
 
 ## Development checks
 
-Backend (Go 1.25):
+Backend (Go 1.26.9):
 
 ```bash
 cd backend
@@ -603,9 +603,15 @@ helm template lester deploy/helm/lester --set secrets.existingSecret=lester-test
 
 ## Security notes
 
+Security audit and fixes: [2026-10-10 report](docs/security-audit-2026-10-10.md). Backend builds now require Go 1.26.9 for current security patches.
+
+Behind a gateway/Ingress, set `AUTH_TRUSTED_PROXY_CIDRS` to the actual proxy peer CIDRs (comma-separated), or Helm `config.auth.trustedProxyCIDRs`. Inspect the gateway address/subnet with `docker network inspect <network-name>`; trust only the dedicated proxy IP (`/32` or `/128`) or its controlled subnet, update after a changed address, and restrict API access to that proxy. An empty value ignores forwarding headers, so users behind the same gateway share its IP rate bucket. Never trust `0.0.0.0/0`, `::/0`, arbitrary client headers, or unrelated workloads. Only `X-Forwarded-For` from a trusted peer is used; the supplied gateway replaces it and strips `True-Client-IP`.
+
+Model endpoints must directly accept API requests: redirects are rejected to keep credentials and conversation content at the configured endpoint. Terminal messages are capped at 1 MiB. Open terminal/event connections recheck their session family every 30 seconds and close on logout, account disabling or workspace removal (up to another five seconds for a pending database check).
+
 - Generate your own `MASTER_KEY_BASE64` and `SANDBOX_SERVICE_TOKEN`. Keep real secrets and local `.env` files out of Git.
 - Model-provider credentials are encrypted at rest with AES-GCM.
-- HTTPS deployments use Secure session cookies by default; sign-in and registration are rate-limited per client IP.
+- HTTPS deployments use Secure session cookies by default; sign-in and registration are rate-limited by identity and client IP; Redis failures deny rate-limited operations. Client IP defaults to the actual TCP peer. Refresh is limited to 60 attempts per minute by account and IP.
 - Keep Sandbox Service private and Docker socket access on an isolated, dedicated worker.
 - User Computers default to disabled networking and CPU, memory, and PID limits.
 - File APIs and terminal working directories are conversation-scoped. HTML preview authentication, CSP, and iframe restrictions remain in force for generated pages.

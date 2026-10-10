@@ -67,10 +67,7 @@ func (c *httpClient) Stream(ctx context.Context, request modelruntime.Request) (
 	for key, value := range c.headers {
 		httpRequest.Header.Set(key, value)
 	}
-	client := c.client
-	if client == nil {
-		client = &http.Client{Timeout: 10 * time.Minute}
-	}
+	client := providerHTTPClient(c.client)
 	response, err := client.Do(httpRequest)
 	if err != nil {
 		return nil, err
@@ -83,6 +80,18 @@ func (c *httpClient) Stream(ctx context.Context, request modelruntime.Request) (
 	events := make(chan modelruntime.Event, 16)
 	go c.readSSE(ctx, response.Body, events)
 	return events, nil
+}
+
+// Provider requests carry credentials and private conversation content. Never
+// replay them at a redirect target, including redirects on the same host.
+// Copy injected clients so this policy does not mutate a shared client.
+func providerHTTPClient(client *http.Client) *http.Client {
+	if client == nil {
+		client = &http.Client{Timeout: 10 * time.Minute}
+	}
+	copy := *client
+	copy.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	return &copy
 }
 
 func (c *httpClient) readSSE(ctx context.Context, body io.ReadCloser, output chan<- modelruntime.Event) {

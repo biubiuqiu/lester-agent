@@ -114,6 +114,10 @@ func (s *Service) Refresh(w http.ResponseWriter, r *http.Request) {
 		httpapi.Error(w, 503, errors.New("登录续期暂时不可用，请稍后重试"))
 		return
 	}
+	if !s.allowAttempt(r, "refresh", userID.String(), 60) {
+		httpapi.Error(w, http.StatusTooManyRequests, errors.New("登录续期过于频繁或限流服务暂时不可用，请稍后重试"))
+		return
+	}
 	tx, err := s.db.Begin(r.Context())
 	if err != nil {
 		httpapi.Error(w, 503, errors.New("登录续期暂时不可用，请稍后重试"))

@@ -8,6 +8,7 @@ data:
   WEB_ORIGIN: {{ required "config.webOrigin is required" .Values.config.webOrigin | trimSuffix "/" | quote }}
   ARTIFACT_PUBLIC_URL: {{ required "config.artifactPublicURL is required" .Values.config.artifactPublicURL | trimSuffix "/" | quote }}
   SESSION_COOKIE_SECURE: {{ .Values.config.sessionCookieSecure | quote }}
+  AUTH_TRUSTED_PROXY_CIDRS: {{ .Values.config.auth.trustedProxyCIDRs | quote }}
   AUTH_REGISTRATION_ENABLED: {{ .Values.config.auth.registrationEnabled | quote }}
   GOOGLE_OAUTH_CLIENT_ID: {{ .Values.config.auth.googleClientID | quote }}
   GITHUB_OAUTH_CLIENT_ID: {{ .Values.config.auth.githubClientID | quote }}

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/biubiuqiu/lester-agent/backend/internal/httpapi"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -292,8 +293,37 @@ func (s *Service) Middleware(next http.Handler) http.Handler {
 		if avatarKey != "" {
 			p.AvatarURL = "/api/v1/me/avatar?v=" + url.QueryEscape(avatarKey)
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), contextKey{}, p)))
+		ctx, cancel := s.guardLongRequest(context.WithValue(r.Context(), contextKey{}, p), p, 30*time.Second)
+		defer cancel()
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// Established terminal/SSE connections outlive their authentication handshake.
+// Recheck the stable family so logout/disable/revocation closes them, while a
+// legitimate rolling refresh can keep an existing connection alive.
+func (s *Service) guardLongRequest(parent context.Context, p Principal, interval time.Duration) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(parent)
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				checkCtx, done := context.WithTimeout(ctx, 5*time.Second)
+				var valid bool
+				err := s.db.QueryRow(checkCtx, `SELECT EXISTS(SELECT 1 FROM sessions s JOIN users u ON u.id=s.user_id JOIN workspace_members wm ON wm.user_id=u.id WHERE s.token_hash=$1 AND u.id=$2 AND wm.workspace_id=$3 AND s.expires_at>now() AND NOT u.disabled AND (NOT u.email_verification_required OR u.email_verified))`, p.SessionHash, p.UserID, p.WorkspaceID).Scan(&valid)
+				done()
+				if err != nil || !valid {
+					cancel()
+					return
+				}
+			}
+		}
+	}()
+	return ctx, cancel
 }
 
 var rateLimitScript = redis.NewScript(`
@@ -306,15 +336,18 @@ func (s *Service) allowAttempt(r *http.Request, action, identity string, limit i
 	if s.redis == nil {
 		return true
 	}
-	ip := r.RemoteAddr
-	if host, _, err := net.SplitHostPort(ip); err == nil {
-		ip = host
+	ip := middleware.GetClientIP(r.Context())
+	if ip == "" {
+		ip = r.RemoteAddr
+		if host, _, err := net.SplitHostPort(ip); err == nil {
+			ip = host
+		}
 	}
 	for _, subject := range []string{"ip:" + ip, "identity:" + identity} {
 		digest := sha256.Sum256([]byte(subject))
 		key := fmt.Sprintf("auth:rate:%s:%x", action, digest[:12])
 		count, err := rateLimitScript.Run(r.Context(), s.redis, []string{key}, 60).Int64()
-		if err == nil && count > limit {
+		if err != nil || count > limit {
 			return false
 		}
 	}

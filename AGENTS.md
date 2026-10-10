@@ -138,9 +138,12 @@ Preserve these behaviors when changing the implementation:
 - Keep `lester-toolbox` model-agnostic and versioned through its CLI protocol. Validate lexical and resolved paths inside the Computer, reject symbolic-link escapes, cap file operations at 25 MiB, and write through a synced same-directory temporary file followed by atomic replacement.
 - `edit` must execute next to the file through `Provider.EditFile`; do not restore the API-side read/replace/write round trip. Preserve exact-string, ambiguity, replacement-count, and replace-all semantics.
 
+- Provider HTTP requests must never follow redirects with credentials or conversation content. Terminal WebSocket frames are bounded to 1 MiB at both the API relay and Sandbox Service.
+- Authentication rate limits use the TCP peer by default. Only `AUTH_TRUSTED_PROXY_CIDRS` peers may supply `X-Forwarded-For`; do not restore unqualified `middleware.RealIP`. Redis errors must not bypass limits. Long authenticated requests recheck session-family/account/workspace validity every 30 seconds and close on revocation or verification failure.
+
 ## Backend conventions
 
-- Use Go `1.25` and keep the module rooted at `backend/`.
+- Use Go `1.26.9` and keep the module rooted at `backend/`.
 - Keep `cmd/*/main.go` focused on dependency wiring and process lifecycle.
 - Put application behavior in the appropriate `backend/internal/*` package.
 - Keep the HTTP transport on standard `net/http` with `chi`. Do not introduce Gin or another HTTP framework unless a measured requirement cannot be met by the current stack.

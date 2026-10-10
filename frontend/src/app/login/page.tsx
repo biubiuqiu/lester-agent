@@ -37,6 +37,7 @@ export default function Login() {
   const inFlight = useRef(false);
   const [showPassword, setShowPassword] = useState(false);
   const initialURL = useRef<URL | null>(null);
+  const [returnTo, setReturnTo] = useState("/app");
 
   useEffect(() => {
     let active = true;
@@ -46,6 +47,7 @@ export default function Login() {
     if (url.hash || authError) window.history.replaceState(null, "", loginURL(initialURL.current, requestedMode));
     const applyURL = () => {
       if (!active) return;
+      setReturnTo(safeLoginReturn(url.searchParams.get("returnTo")));
       if (requestedMode === "reset" || requestedMode === "verify") {
         setMode(requestedMode);
         setToken(new URLSearchParams(url.hash.slice(1)).get("token") || "");
@@ -95,7 +97,7 @@ export default function Login() {
     <section className="login-card" aria-labelledby="login-title">
       <Brand />
       <div className="login-copy"><p className="eyebrow">Agent Workspace</p><h1 id="login-title">{title}</h1><p>{mode === "forgot" ? "输入账号邮箱，我们会发送密码重设链接。" : mode === "reset" ? "新密码保存后，其他设备的登录将失效。" : mode === "verify" ? "确认邮箱后，即可进入你的个人工作区。" : "描述目标，让 Lester 完成工作。文件与成果都留在你的工作区。"}</p></div>
-      {(mode === "login" || mode === "register") && options && options.providers.length > 0 && <div className="auth-social"><div aria-label="第三方登录">{options.providers.map(provider => <a className="auth-provider-button" key={provider} href={`${API}/api/v1/auth/oauth/${provider}/start?returnTo=${encodeURIComponent(safeLoginReturn(initialURL.current?.searchParams.get("returnTo") ?? null))}`} aria-disabled={busy} onClick={event => { if (busy) event.preventDefault(); }}><AuthProviderIcon provider={provider} />使用 {provider === "google" ? "Google" : "GitHub"} 继续</a>)}</div><p>或使用邮箱{mode === "register" ? "注册" : "登录"}</p></div>}
+      {(mode === "login" || mode === "register") && options && options.providers.length > 0 && <div className="auth-social"><div aria-label="第三方登录">{options.providers.map(provider => <a className="auth-provider-button" key={provider} href={`${API}/api/v1/auth/oauth/${provider}/start?returnTo=${encodeURIComponent(returnTo)}`} aria-disabled={busy} onClick={event => { if (busy) event.preventDefault(); }}><AuthProviderIcon provider={provider} />使用 {provider === "google" ? "Google" : "GitHub"} 继续</a>)}</div><p>或使用邮箱{mode === "register" ? "注册" : "登录"}</p></div>}
       <form onSubmit={submit} aria-busy={busy}>
         {mode === "register" && <label className="field">称呼<input name="displayName" value={name} onChange={event => setName(event.target.value)} required maxLength={60} autoComplete="name" placeholder="我们该怎么称呼你？" disabled={busy} /></label>}
         {mode !== "reset" && mode !== "verify" && <label className="field">邮箱<input name="email" value={email} onChange={event => setEmail(event.target.value)} type="email" required maxLength={254} autoComplete="email" placeholder="you@example.com" disabled={busy} /></label>}

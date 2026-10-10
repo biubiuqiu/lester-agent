@@ -19,23 +19,24 @@ import (
 )
 
 type Dependencies struct {
-	Contexts      *contextlibrary.Handler
-	Agents        *agent.Handler
-	AgentBuilder  *agent.BuilderHandler
-	Logger        *slog.Logger
-	WebOrigin     string
-	Auth          *auth.Service
-	Models        *model.Handler
-	Conversations *conversation.Handler
-	Skills        *skill.Handler
-	Projects      *project.Handler
-	Artifacts     *artifact.Handler
-	Deliverables  *deliverable.Handler
+	Contexts          *contextlibrary.Handler
+	Agents            *agent.Handler
+	AgentBuilder      *agent.BuilderHandler
+	Logger            *slog.Logger
+	WebOrigin         string
+	TrustedProxyCIDRs []string
+	Auth              *auth.Service
+	Models            *model.Handler
+	Conversations     *conversation.Handler
+	Skills            *skill.Handler
+	Projects          *project.Handler
+	Artifacts         *artifact.Handler
+	Deliverables      *deliverable.Handler
 }
 
 func Router(deps Dependencies) http.Handler {
 	router := chi.NewRouter()
-	router.Use(middleware.RequestID, middleware.RealIP, httpapi.Recover(deps.Logger), httpapi.AccessLog(deps.Logger), httpapi.CORS(deps.WebOrigin), auth.MutationOrigin(deps.WebOrigin))
+	router.Use(middleware.RequestID, httpapi.ClientIP(deps.TrustedProxyCIDRs), httpapi.Recover(deps.Logger), httpapi.AccessLog(deps.Logger), httpapi.CORS(deps.WebOrigin), auth.MutationOrigin(deps.WebOrigin))
 	router.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { httpapi.JSON(w, 200, map[string]bool{"ok": true}) })
 	router.Route("/api/v1", func(api chi.Router) {
 		api.Get("/auth/options", deps.Auth.Capabilities)

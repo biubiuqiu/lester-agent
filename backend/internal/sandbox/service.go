@@ -171,12 +171,17 @@ func (h *ServiceHandler) terminal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
+	conn.SetReadLimit(MaxTerminalMessageBytes)
 	terminal, err := h.provider.OpenTerminal(r.Context(), chi.URLParam(r, "id"), r.URL.Query().Get("work_dir"))
 	if err != nil {
 		_ = conn.WriteJSON(terminalMessage{Type: "error", Data: err.Error()})
 		return
 	}
 	defer terminal.Close()
+	// ReadJSON blocks until a frame arrives; close it when the request's
+	// upstream connection is cancelled so the shell is released promptly.
+	stopClose := context.AfterFunc(r.Context(), func() { _ = conn.Close() })
+	defer stopClose()
 	_ = terminal.Resize(r.Context(), 120, 32)
 	var writeMu sync.Mutex
 	writeJSON := func(message terminalMessage) error {

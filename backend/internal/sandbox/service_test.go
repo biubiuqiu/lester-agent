@@ -3,10 +3,15 @@ package sandbox
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 func TestServiceRequiresTokenExceptHealth(t *testing.T) {
@@ -24,6 +29,67 @@ func TestServiceRequiresTokenExceptHealth(t *testing.T) {
 		t.Fatalf("protected status = %d, want %d", protected.Code, http.StatusUnauthorized)
 	}
 }
+
+func TestTerminalRejectsOversizedMessage(t *testing.T) {
+	terminal := &boundedTestTerminal{closed: make(chan struct{}), inputs: make(chan string, 2)}
+	server := httptest.NewServer(NewServiceHandler(&terminalTestProvider{terminal: terminal}, "fixture-service-token").Router())
+	defer server.Close()
+	headers := http.Header{"Authorization": []string{"Bearer fixture-service-token"}}
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http")+"/v1/sandboxes/test/terminal", headers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if err := conn.WriteJSON(terminalMessage{Type: "input", Data: "echo hello\n"}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case input := <-terminal.inputs:
+		if input != "echo hello\n" {
+			t.Fatalf("input = %q", input)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("normal terminal input was not delivered")
+	}
+	if err := conn.WriteJSON(terminalMessage{Type: "input", Data: strings.Repeat("x", 1<<20)}); err != nil {
+		t.Fatal(err)
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, _, err = conn.ReadMessage()
+	if !websocket.IsCloseError(err, websocket.CloseMessageTooBig) {
+		t.Fatalf("oversized message must close with 1009, got %v", err)
+	}
+	select {
+	case input := <-terminal.inputs:
+		t.Fatalf("oversized input reached the terminal (%d bytes)", len(input))
+	case <-terminal.closed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("terminal was not closed")
+	}
+}
+
+type terminalTestProvider struct {
+	Provider
+	terminal *boundedTestTerminal
+}
+
+func (p *terminalTestProvider) OpenTerminal(context.Context, string, string) (TerminalSession, error) {
+	return p.terminal, nil
+}
+
+type boundedTestTerminal struct {
+	closed chan struct{}
+	inputs chan string
+	once   sync.Once
+}
+
+func (t *boundedTestTerminal) Read([]byte) (int, error) { <-t.closed; return 0, io.EOF }
+func (t *boundedTestTerminal) Write(data []byte) (int, error) {
+	t.inputs <- string(data)
+	return len(data), nil
+}
+func (t *boundedTestTerminal) Resize(context.Context, int, int) error { return nil }
+func (t *boundedTestTerminal) Close() error                           { t.once.Do(func() { close(t.closed) }); return nil }
 
 func TestServiceEditFileUsesProvider(t *testing.T) {
 	provider := &editFileProvider{result: &FileEditResult{OK: true, Replacements: 2, SHA256: "abc123"}}

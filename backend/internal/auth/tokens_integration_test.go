@@ -83,6 +83,46 @@ func TestAccessExpiryAndIndefiniteRollingRefresh(t *testing.T) {
 	}
 }
 
+func TestLiveRequestsCloseWhenSessionOrAccountIsRevoked(t *testing.T) {
+	for _, action := range []string{"logout", "disable", "membership"} {
+		t.Run(action, func(t *testing.T) {
+			s := accountFixture(t)
+			access, refresh := tokenPair(t, s, "live@example.test")
+			owner := principal(t, s, access)
+			// The public principal JSON intentionally omits the stable family hash.
+			owner.SessionHash = tokenRequestDigest(access)
+			ctx, cancel := s.guardLongRequest(context.Background(), owner, 10*time.Millisecond)
+			defer cancel()
+			// Rotating access/refresh must not revoke an established stream.
+			renewed := request(t, s, s.Refresh, "POST", "/api/v1/auth/refresh", nil, refresh, false)
+			expectStatus(t, renewed, 200)
+			select {
+			case <-ctx.Done():
+				t.Fatal("rolling refresh closed a valid connection")
+			case <-time.After(50 * time.Millisecond):
+			}
+			var err error
+			switch action {
+			case "logout":
+				response := request(t, s, s.Logout, "POST", "/api/v1/auth/logout", nil, responseCookie(t, renewed, accessCookieName), false)
+				expectStatus(t, response, 204)
+			case "disable":
+				_, err = s.db.Exec(context.Background(), `UPDATE users SET disabled=true WHERE id=$1`, owner.UserID)
+			case "membership":
+				_, err = s.db.Exec(context.Background(), `DELETE FROM workspace_members WHERE user_id=$1`, owner.UserID)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case <-ctx.Done():
+			case <-time.After(2 * time.Second):
+				t.Fatal("revoked connection remained active")
+			}
+		})
+	}
+}
+
 func TestConcurrentRefreshGraceAndReplayRevokesOnlyItsFamily(t *testing.T) {
 	s := accountFixture(t)
 	access, refresh := tokenPair(t, s, "replay@example.test")
