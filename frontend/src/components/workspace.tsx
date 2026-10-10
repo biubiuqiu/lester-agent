@@ -19,6 +19,7 @@ import { ArtifactCards, FileReferenceChip, FileWorkspaceProvider, OpenFilesButto
 import { Deliverables } from "./deliverables";
 import { ConversationTimeline } from "./conversation-timeline";
 import { FileExplorer } from "./file-explorer";
+import { ComputerTerminal } from "./computer-terminal";
 import { AgentConfiguration } from "./agent-configuration";
 import { AgentActivityIndicator, RunFailureRecovery, RunNotice, RunNoticeToast, UnreadRunResult } from "./run-awareness";
 import { RunEvent } from "./tool-timeline";
@@ -569,7 +570,7 @@ function ComputerPanel({ conversationId, createdAgentId, agentRevision, width, m
       <span className="sandbox-state" title={`${providerLabel} · 用户级工作区 · ${computerStatusLabel[status]}${state?.last_error ? `：${state.last_error}` : ""}`} aria-label={`工作区${computerStatusLabel[status]}`}><i className={`computer-status ${status}`} /></span>
       {tab === "agent" && createdAgentId ? <button type="button" className="designer-expand-button" onClick={() => setExpanded(!expanded)} aria-label={expanded ? "收起智能体配置" : "放大智能体配置"} title={expanded ? "收起配置" : "放大编辑提示词"}>{expanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button> : null}
       <button type="button" className="close-files-panel" onClick={() => { setExpanded(false); setPanelOpen(false); }} aria-label="关闭文件面板"><X /></button>
-    </header>{tab === "results" ? <Deliverables key={conversationId} panel /> : null}{tab === "files" ? <FileExplorer key={conversationId} conversationId={conversationId} /> : null}{tab === "terminal" ? <Terminal conversationId={conversationId} /> : null}{tab === "skills" ? <ConversationSkills conversationId={conversationId} /> : null}{tab === "agent" && createdAgentId ? <AgentConfiguration agentId={createdAgentId} revision={agentRevision} /> : null}</aside>;
+    </header>{tab === "results" ? <Deliverables key={conversationId} panel /> : null}{tab === "files" ? <FileExplorer key={conversationId} conversationId={conversationId} /> : null}{tab === "terminal" ? <ComputerTerminal key={conversationId} conversationId={conversationId} /> : null}{tab === "skills" ? <ConversationSkills conversationId={conversationId} /> : null}{tab === "agent" && createdAgentId ? <AgentConfiguration agentId={createdAgentId} revision={agentRevision} /> : null}</aside>;
 }
 
 function ConversationSkills({ conversationId }: { conversationId: string }) {
@@ -597,55 +598,4 @@ function ConversationSkills({ conversationId }: { conversationId: string }) {
     finally { setBusy(""); }
   }
   return <div className="conversation-skills"><div className="skills-intro"><strong>会话级 Skills</strong><span>安装到 .agent/skills</span></div>{error ? <p className="skills-error">{error}</p> : null}{catalog.map((skill) => { const active = installedSlugs.has(skill.slug); return <article className="conversation-skill" key={skill.id}><span className="skill-mini-icon">{active ? <Check /> : <Wrench />}</span><div><strong>{skill.name}</strong><p>{skill.description}</p><small>v{skill.version}</small></div><button className={active ? "installed" : ""} disabled={busy === skill.slug} onClick={() => toggle(skill)}>{busy === skill.slug ? "处理中" : active ? "卸载" : "安装"}</button></article>; })}</div>;
-}
-
-function Terminal({ conversationId }: { conversationId: string }) {
-  const [connectionError, setConnectionError] = useState("");
-  const [attempt, setAttempt] = useState(0);
-  const mount = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    let active = true;
-    let socket: WebSocket | undefined;
-    let terminal: { dispose: () => void } | undefined;
-    let resize: ResizeObserver | undefined;
-    let input: { dispose: () => void } | undefined;
-    void (async () => {
-      const [{ Terminal }, { FitAddon }] = await Promise.all([import("@xterm/xterm"), import("@xterm/addon-fit"), ensureSession(true)]);
-      if (!active || !mount.current) return;
-      const instance = new Terminal({ cursorBlink: true, fontSize: 12, theme: { background: "#151a16", foreground: "#dce6dd" } });
-      terminal = instance;
-      const fit = new FitAddon();
-      instance.loadAddon(fit); instance.open(mount.current); fit.fit(); instance.write("Lester Computer\r\n正在连接…\r\n");
-      const endpoint = new URL(`${API}/api/v1/conversations/${conversationId}/terminal`, window.location.origin);
-      endpoint.protocol = endpoint.protocol === "https:" ? "wss:" : "ws:";
-      socket = new WebSocket(endpoint);
-      const fitTerminal = () => {
-        if (!active) return;
-        fit.fit();
-        if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ Type: "resize", Cols: instance.cols, Rows: instance.rows }));
-      };
-      resize = new ResizeObserver(fitTerminal); resize.observe(mount.current);
-      socket.onmessage = event => {
-        try {
-          const message = JSON.parse(event.data);
-          const type = message.Type ?? message.type, data = message.Data ?? message.data;
-          if (type === "output" && typeof data === "string") instance.write(data);
-          else if (type === "error") instance.write("\r\n终端暂不可用，请检查 Computer 状态后重新打开终端。\r\n");
-        } catch { instance.write("\r\n收到无法解析的终端消息。\r\n"); }
-      };
-      socket.onopen = () => {
-        fitTerminal();
-        input = instance.onData(data => { if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ Type: "input", Data: data })); });
-      };
-      socket.onerror = () => { if (active) instance.write("\r\n终端连接失败，请检查 Computer 状态或网络。\r\n"); };
-      socket.onclose = () => { if (active) instance.write("\r\n终端连接已断开，重新打开终端可重连。\r\n"); };
-    })().catch(error => {
-      if (!active) return;
-      resize?.disconnect(); input?.dispose(); socket?.close(); terminal?.dispose();
-      if (error instanceof SessionExpired) redirectToLogin();
-      else setConnectionError("终端暂时无法连接，请检查网络或 Computer 状态后重试。");
-    });
-    return () => { active = false; resize?.disconnect(); input?.dispose(); socket?.close(); terminal?.dispose(); };
-  }, [conversationId, attempt]);
-  return connectionError ? <div className="terminal"><p role="alert">{connectionError}</p><button type="button" className="secondary-button" onClick={() => { setConnectionError(""); setAttempt(value => value + 1); }}>重新连接</button></div> : <div className="terminal" ref={mount} />;
 }

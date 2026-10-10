@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/creack/pty"
+	"github.com/google/uuid"
 )
 
 const (
@@ -358,10 +359,11 @@ func (p *DockerProvider) markToolboxMissing(id string) {
 }
 
 type dockerTerminal struct {
-	file    *os.File
-	command *exec.Cmd
-	once    sync.Once
-	err     error
+	file               *os.File
+	command            *exec.Cmd
+	container, pidFile string
+	once               sync.Once
+	err                error
 }
 
 func (p *DockerProvider) OpenTerminal(ctx context.Context, id, requestedWorkDir string) (TerminalSession, error) {
@@ -376,12 +378,15 @@ func (p *DockerProvider) OpenTerminal(ctx context.Context, id, requestedWorkDir 
 	if err = exec.CommandContext(ctx, "docker", "exec", name, "mkdir", "-p", workDir).Run(); err != nil {
 		return nil, fmt.Errorf("prepare terminal work directory: %w", err)
 	}
-	command := exec.CommandContext(ctx, "docker", "exec", "-it", "-w", workDir, name, "sh")
+	pidFile := "/tmp/.lester-terminal-" + uuid.NewString() + ".pid"
+	args := []string{"exec", "-it", "-e", "TERM=xterm-256color", "-e", "COLORTERM=truecolor", "-w", workDir, name, "sh", "-c", dockerTerminalStart, "lester-terminal", pidFile}
+	command := exec.CommandContext(ctx, "docker", append(args, terminalShellArgs()...)...)
 	file, err := pty.Start(command)
 	if err != nil {
 		return nil, fmt.Errorf("start docker terminal: %w", err)
 	}
-	terminal := &dockerTerminal{file: file, command: command}
+	terminal := &dockerTerminal{file: file, command: command, container: name, pidFile: pidFile}
+	go func() { _ = command.Wait() }()
 	if err = terminal.Resize(ctx, 120, 32); err != nil {
 		_ = terminal.Close()
 		return nil, err
@@ -392,10 +397,18 @@ func (p *DockerProvider) OpenTerminal(ctx context.Context, id, requestedWorkDir 
 func (t *dockerTerminal) Read(data []byte) (int, error)  { return t.file.Read(data) }
 func (t *dockerTerminal) Write(data []byte) (int, error) { return t.file.Write(data) }
 func (t *dockerTerminal) Resize(_ context.Context, cols, rows int) error {
-	return pty.Setsize(t.file, &pty.Winsize{Cols: uint16(max(cols, 1)), Rows: uint16(max(rows, 1))})
+	cols, rows = terminalSize(cols, rows)
+	return pty.Setsize(t.file, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
 }
 func (t *dockerTerminal) Close() error {
 	t.once.Do(func() {
+		if t.container != "" {
+			// Killing the Docker CLI only detaches it; the remote interactive
+			// shell can remain alive. Hang up that shell before detaching.
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			_ = exec.CommandContext(ctx, "docker", "exec", t.container, "sh", "-c", dockerTerminalHangup, "lester-terminal", t.pidFile).Run()
+			cancel()
+		}
 		if t.command != nil && t.command.Process != nil {
 			_ = t.command.Process.Kill()
 		}

@@ -83,6 +83,7 @@ type acsProcess interface {
 	Read([]byte) (int, error)
 	Write([]byte) (int, error)
 	Close() error
+	Resize(context.Context, int, int) error
 }
 
 type acsCommandResult struct {
@@ -411,8 +412,8 @@ type acsTerminal struct{ process acsProcess }
 func (t *acsTerminal) Read(data []byte) (int, error)  { return t.process.Read(data) }
 func (t *acsTerminal) Write(data []byte) (int, error) { return t.process.Write(data) }
 func (t *acsTerminal) Close() error                   { return t.process.Close() }
-func (t *acsTerminal) Resize(context.Context, int, int) error {
-	return ErrTerminalResizeUnsupported
+func (t *acsTerminal) Resize(ctx context.Context, cols, rows int) error {
+	return t.process.Resize(ctx, cols, rows)
 }
 
 type openKruiseBackend struct {
@@ -549,7 +550,8 @@ func (r *openKruiseRuntime) Run(ctx context.Context, command, workDir string, st
 func (r *openKruiseRuntime) StartTerminal(ctx context.Context, workDir string) (acsProcess, error) {
 	cwd, stdin := workDir, true
 	request := connect.NewRequest(&acsprocess.StartRequest{
-		Process: &acsprocess.ProcessConfig{Cmd: "/bin/bash", Args: []string{"-l", "-c", "exec /bin/bash -li"}, Cwd: &cwd},
+		Process: &acsprocess.ProcessConfig{Cmd: "/bin/sh", Args: terminalShellArgs(), Cwd: &cwd, Envs: map[string]string{"TERM": "xterm-256color", "COLORTERM": "truecolor"}},
+		Pty:     &acsprocess.PTY{Size: &acsprocess.PTY_Size{Cols: 120, Rows: 32}},
 		Stdin:   &stdin,
 	})
 	for key, value := range r.client.Config().SandboxHeaders(r.client.SandboxID()) {
@@ -560,6 +562,7 @@ func (r *openKruiseRuntime) StartTerminal(ctx context.Context, workDir string) (
 		return nil, fmt.Errorf("start ACS terminal: %w", err)
 	}
 	if !stream.Receive() {
+		_ = stream.Close()
 		if streamErr := stream.Err(); streamErr != nil {
 			return nil, fmt.Errorf("receive ACS terminal start event: %w", streamErr)
 		}
@@ -567,10 +570,11 @@ func (r *openKruiseRuntime) StartTerminal(ctx context.Context, workDir string) (
 	}
 	start := stream.Msg().GetEvent().GetStart()
 	if start == nil {
+		_ = stream.Close()
 		return nil, errors.New("ACS terminal did not return a process ID")
 	}
 	reader, writer := io.Pipe()
-	process := &openKruiseProcess{reader: reader, writer: writer, commands: r.client.Commands, pid: start.GetPid(), stream: stream}
+	process := &openKruiseProcess{reader: reader, writer: writer, commands: r.client.Commands, headers: r.client.Config().SandboxHeaders(r.client.SandboxID()), pid: start.GetPid(), stream: stream}
 	go process.readStream()
 	return process, nil
 }
@@ -612,6 +616,7 @@ type openKruiseProcess struct {
 	reader   *io.PipeReader
 	writer   *io.PipeWriter
 	commands *acsruntime.Commands
+	headers  map[string]string
 	pid      uint32
 	stream   *connect.ServerStreamForClient[acsprocess.StartResponse]
 	once     sync.Once
@@ -621,10 +626,24 @@ func (p *openKruiseProcess) Read(data []byte) (int, error) { return p.reader.Rea
 func (p *openKruiseProcess) Write(data []byte) (int, error) {
 	writeCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := p.commands.SendStdin(writeCtx, p.pid, string(data)); err != nil {
+	request := connect.NewRequest(&acsprocess.SendInputRequest{Process: &acsprocess.ProcessSelector{Selector: &acsprocess.ProcessSelector_Pid{Pid: p.pid}}, Input: &acsprocess.ProcessInput{Input: &acsprocess.ProcessInput_Pty{Pty: data}}})
+	for key, value := range p.headers {
+		request.Header().Set(key, value)
+	}
+	if _, err := p.commands.Rpc.SendInput(writeCtx, request); err != nil {
 		return 0, err
 	}
 	return len(data), nil
+}
+
+func (p *openKruiseProcess) Resize(ctx context.Context, cols, rows int) error {
+	cols, rows = terminalSize(cols, rows)
+	request := connect.NewRequest(&acsprocess.UpdateRequest{Process: &acsprocess.ProcessSelector{Selector: &acsprocess.ProcessSelector_Pid{Pid: p.pid}}, Pty: &acsprocess.PTY{Size: &acsprocess.PTY_Size{Cols: uint32(cols), Rows: uint32(rows)}}})
+	for key, value := range p.headers {
+		request.Header().Set(key, value)
+	}
+	_, err := p.commands.Rpc.Update(ctx, request)
+	return err
 }
 func (p *openKruiseProcess) Close() error {
 	p.once.Do(func() {
@@ -646,6 +665,9 @@ func (p *openKruiseProcess) readStream() {
 			continue
 		}
 		if data := event.GetData(); data != nil {
+			if len(data.GetPty()) > 0 {
+				_, _ = p.writer.Write(data.GetPty())
+			}
 			if len(data.GetStdout()) > 0 {
 				_, _ = p.writer.Write(data.GetStdout())
 			}

@@ -6,6 +6,7 @@ import "./account.css";
 import "./workspace-errors.css";
 import "./file-workspace.css";
 import "./workspace-ui.css";
+import "./terminal.css";
 import "./agent-designer.css";
 import "./artifacts-projects.css";
 import "./onboarding-ui.css";

@@ -24,6 +24,8 @@
 - 无需选择 Agent，首页直接输入目标即可开始；默认使用 Lester 和已配置的默认模型，也可切换模型、添加附件。首页输入区在大屏下可扩展至 960px，小屏自适应。点击“新对话”只返回输入页，不提前创建空会话。旧会话保留原角色以兼容已有历史。
 - 为每个用户分配一个 Computer（本地 Docker 或阿里云 ACS Agent Sandbox），并以 `/workspace/conversations/{conversationId}` 隔离会话目录
 - Agent 可以在 Computer 中执行命令、读写文件和使用终端
+- 终端连接真实交互式 Bash PTY，支持 Tab 命令/路径补全、↑↓ 历史与前缀查找、Ctrl+R 历史搜索、Ctrl+C 中断、Ctrl+L 清屏和窗口尺寸同步；多行粘贴等待 Enter 执行。选择内容后可用工具栏、Ctrl+Shift+C / ⌘C 复制，Shift+Esc 离开终端焦点。手机提供 Tab、历史、Esc、Ctrl+C 和 Ctrl+D 按钮；断线可重连，但会启动新 Shell，不恢复正在运行的进程。
+- 命令历史保存在各会话的 `.agent/terminal/bash_history`，属于 Computer 私有数据；敏感命令以空格开头可避免记录。自定义镜像未装 Bash 时会提示并回退到 `sh`。提供的 `backend/Dockerfile.sandbox-runtime` 已包含 `bash-completion`、`less` 和终端定义；命令参数补全依赖相应工具的补全脚本。现有包含 Bash 的 Computer 更新 Web 与 Sandbox Service 即可获得行编辑支持；新增镜像包需重建运行时镜像及 ACS 模板 / 新 Computer，不要删除已有工作区来升级。
 - 右侧 Files 提供类似 VS Code 的目录树与文件预览，支持代码/文本行号、图片、PDF，以及受限 iframe 中的 HTML 页面预览、源码切换和独立页面打开；桌面端可拖动调整右侧面板宽度，并可收起左侧会话栏
 - 文件工作区支持最多 8 个打开标签、Markdown 预览/源码、下载、放大预览和窄屏文件面板。聊天下方的任务文件卡片在本轮输出结束（或失败、停止）后才展示已确认存在的当前文件，生成期间不占据回复底部；右侧文件列表和预览仍实时更新。“让 Agent 修改此文件”会给输入框添加可移除的文件引用，发送时只附相对路径提示，不自动注入文件内容。
 - 会话栏支持按标题搜索；文件目录按内容占用高度，变化列表按需展开。专注预览可暂时收起目录，预览/源码与文件操作集中在同一工具栏，为内容留出更多空间。

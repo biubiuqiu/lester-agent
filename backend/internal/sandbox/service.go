@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/biubiuqiu/lester-agent/backend/internal/httpapi"
 	"github.com/go-chi/chi/v5"
@@ -192,15 +193,35 @@ func (h *ServiceHandler) terminal(w http.ResponseWriter, r *http.Request) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
+		defer conn.Close()
+		defer func() {
+			_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "shell exited"), time.Now().Add(time.Second))
+		}()
 		buffer := make([]byte, 4096)
+		var pending []byte
 		for {
 			n, e := terminal.Read(buffer)
 			if n > 0 {
-				if writeJSON(terminalMessage{Type: "output", Data: string(buffer[:n])}) != nil {
+				data := append(pending, buffer[:n]...)
+				end := len(data)
+				start := end - 1
+				for start > 0 && !utf8.RuneStart(data[start]) {
+					start--
+				}
+				// A PTY read may end inside a Chinese character or emoji. Keep
+				// its remaining bytes until the next read before JSON encoding.
+				if !utf8.FullRune(data[start:]) {
+					end = start
+				}
+				pending = append([]byte(nil), data[end:]...)
+				if end > 0 && writeJSON(terminalMessage{Type: "output", Data: string(data[:end])}) != nil {
 					return
 				}
 			}
 			if e != nil {
+				if len(pending) > 0 {
+					_ = writeJSON(terminalMessage{Type: "output", Data: string(pending)})
+				}
 				return
 			}
 		}
@@ -211,7 +232,10 @@ func (h *ServiceHandler) terminal(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		if message.Type == "input" {
-			_, _ = terminal.Write([]byte(message.Data))
+			if _, err := terminal.Write([]byte(message.Data)); err != nil {
+				_ = writeJSON(terminalMessage{Type: "error", Data: "terminal input failed"})
+				break
+			}
 		}
 		if message.Type == "resize" {
 			resizeErr := terminal.Resize(r.Context(), max(message.Cols, 1), max(message.Rows, 1))

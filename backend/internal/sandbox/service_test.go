@@ -70,7 +70,7 @@ func TestTerminalRejectsOversizedMessage(t *testing.T) {
 
 type terminalTestProvider struct {
 	Provider
-	terminal *boundedTestTerminal
+	terminal TerminalSession
 }
 
 func (p *terminalTestProvider) OpenTerminal(context.Context, string, string) (TerminalSession, error) {
@@ -90,6 +90,49 @@ func (t *boundedTestTerminal) Write(data []byte) (int, error) {
 }
 func (t *boundedTestTerminal) Resize(context.Context, int, int) error { return nil }
 func (t *boundedTestTerminal) Close() error                           { t.once.Do(func() { close(t.closed) }); return nil }
+
+func TestTerminalPreservesSplitUTF8AndClosesAtEOF(t *testing.T) {
+	terminal := &chunkedTerminal{chunks: [][]byte{{0xe4}, {0xb8, 0xad, 0xf0, 0x9f}, {0x98, 0x80, '\n'}}}
+	server := httptest.NewServer(NewServiceHandler(&terminalTestProvider{terminal: terminal}, "fixture-service-token").Router())
+	defer server.Close()
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http")+"/v1/sandboxes/test/terminal", http.Header{"Authorization": {"Bearer fixture-service-token"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	var output string
+	for {
+		var message terminalMessage
+		err = conn.ReadJSON(&message)
+		if err != nil {
+			break
+		}
+		if message.Type == "output" {
+			output += message.Data
+		}
+	}
+	if output != "中😀\n" {
+		t.Fatalf("UTF-8 output = %q", output)
+	}
+	if !websocket.IsCloseError(err, websocket.CloseNormalClosure) {
+		t.Fatalf("shell EOF must close WebSocket normally: %v", err)
+	}
+}
+
+type chunkedTerminal struct{ chunks [][]byte }
+
+func (t *chunkedTerminal) Read(data []byte) (int, error) {
+	if len(t.chunks) == 0 {
+		return 0, io.EOF
+	}
+	n := copy(data, t.chunks[0])
+	t.chunks = t.chunks[1:]
+	return n, nil
+}
+func (*chunkedTerminal) Write(data []byte) (int, error)         { return len(data), nil }
+func (*chunkedTerminal) Resize(context.Context, int, int) error { return nil }
+func (*chunkedTerminal) Close() error                           { return nil }
 
 func TestServiceEditFileUsesProvider(t *testing.T) {
 	provider := &editFileProvider{result: &FileEditResult{OK: true, Replacements: 2, SHA256: "abc123"}}

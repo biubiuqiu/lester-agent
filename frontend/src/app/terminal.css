@@ -1,0 +1,20 @@
+.terminal-shell { display: flex; flex: 1; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; background: #151a16; color: #dce6dd; }
+.terminal-toolbar { display: flex; flex: 0 0 auto; flex-wrap: wrap; align-items: center; gap: 4px; border-bottom: 1px solid #303931; padding: 6px 8px; }
+.terminal-toolbar button, .terminal-keybar button { border: 1px solid #39463c; border-radius: 5px; padding: 4px 7px; background: #202a22; color: #dce6dd; font-size: 11px; cursor: pointer; }
+.terminal-toolbar button:hover, .terminal-keybar button:hover { background: #303f34; }
+.terminal-toolbar button:focus-visible, .terminal-keybar button:focus-visible { outline: 2px solid #a3c3a6; outline-offset: 2px; }
+.terminal-toolbar button:disabled, .terminal-keybar button:disabled { opacity: .45; cursor: default; }
+.terminal-connection { display: flex; flex: 1; align-items: center; gap: 6px; font-size: 11px; }
+.terminal-connection::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #aeb5ad; }
+.terminal-connection.connected::before { background: #88bb8d; }
+.terminal-connection.error::before { background: #e69891; }
+.terminal-shell .terminal { flex: 1; min-height: 0; height: auto; padding: 10px 8px; overflow: hidden; }
+.terminal-shell .xterm { height: 100%; }
+.terminal-notice { flex: 0 0 auto; margin: 0; border-top: 1px solid #303931; padding: 8px; color: #bed0c0; font-size: 11px; line-height: 1.5; }
+.terminal-keybar { display: none; flex: 0 0 auto; flex-wrap: wrap; justify-content: space-between; gap: 5px; border-top: 1px solid #303931; padding: 8px; }
+@media (max-width: 800px), (pointer: coarse) {
+  .terminal-keybar { display: flex; }
+  .terminal-keybar button { min-width: 38px; min-height: 38px; }
+  .terminal-toolbar button { min-height: 32px; }
+}
+.terminal-shell .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
