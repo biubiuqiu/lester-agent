@@ -615,11 +615,13 @@ GitHub Actions runs on pushes to `main`, pull requests, and manual dispatch. New
 | Check | When it runs | What it verifies |
 | --- | --- | --- |
 | Backend | Backend changes | Committed module files, gofmt, go vet, uncached unit/PostgreSQL integration tests, all `cmd` builds |
-| Frontend | Frontend changes | Frozen dependencies, tests, ESLint, production build/type checking |
+| Frontend | Frontend changes | Frozen dependencies, tests, ESLint, production build/type checking, desktop/mobile Chromium regressions |
 | Gateway / Compose | Gateway, Compose or deployment environment template changes | Config resolution, routing/cookies, preview isolation, uploads, SSE and WebSocket fixtures |
 | Helm | Chart changes | Chart lint and rendering with artifact ingress |
 | Go dependency security | Backend changes and weekly | Reachable vulnerable symbols via govulncheck |
 | Frontend dependency security | Package/lockfile/pnpm configuration changes and weekly | High/critical production advisories via pnpm audit |
+
+Browser regressions use the production standalone bundle and fixed REST/SSE fixtures; no live models, OAuth providers or email delivery are involved. After building, run `pnpm exec playwright install chromium` then `pnpm test:e2e` in `frontend/`. Desktop and mobile Chromium cover login errors, explicit first-task creation, preserved drafts, failed sends, live file tabs and isolated HTML previews. Tests do not retry failures; CI retains failure screenshots/traces for seven days.
 
 Security scans have their own job names and remain failures when vulnerabilities or scan errors occur. Monday's scheduled run (03:23 UTC) scans dependencies even when code has not changed; **Run workflow** runs everything. Jobs use Ubuntu 24.04, Node 22, the Go version in `backend/go.mod`, and pnpm from `frontend/package.json`. Integration tests use a disposable PostgreSQL service, never production data or live model-provider credentials. CI does not deploy the application.
 

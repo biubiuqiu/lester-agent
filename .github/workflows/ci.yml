@@ -171,6 +171,18 @@ jobs:
         run: pnpm lint
       - name: Build production frontend
         run: pnpm build
+      - name: Install browser for regression tests
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Test login, first task and file previews
+        run: pnpm test:e2e
+      - name: Upload browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: browser-failures
+          path: ${{ runner.temp }}/lester-browser-tests
+          if-no-files-found: ignore
+          retention-days: 7
 
   helm:
     name: Helm configuration

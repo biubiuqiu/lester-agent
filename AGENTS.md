@@ -227,6 +227,8 @@ pnpm install --frozen-lockfile
 pnpm test
 pnpm lint
 pnpm build
+pnpm exec playwright install chromium
+pnpm test:e2e
 ```
 
 Equivalent root commands are available through `make test` and `make web-check`.
@@ -245,6 +247,8 @@ For `sandbox.provider=docker`, Helm keeps `sandbox-service` at one replica and r
 ## Change discipline
 
 - GitHub CI runs on main pushes, PRs and manual dispatch; weekly runs scan dependencies. Keep path selection in `.github/scripts/ci_changes.py` conservative: unavailable comparisons, unknown paths and CI changes run all checks; include both sides of renames and deletions. Preserve real PostgreSQL integration tests, dependency security failures and the stable `CI result` aggregate check. Documentation-only changes may skip unrelated jobs. Validate workflow edits with actionlint and the selection regression tests; do not suppress real failures or introduce live model/OAuth/SMTP credentials into CI.
+
+- Browser regressions exercise the production standalone bundle with fixed REST and native HTTP SSE fixtures on desktop/mobile Chromium. Keep task creation explicit, check draft recovery and private preview isolation, reject unexpected API calls, and do not hide failures with retries. CI retains failure screenshots/traces; these fixtures do not validate live model/OAuth/SMTP integration.
 
 - Make the smallest coherent change that satisfies the request.
 - Preserve unrelated user changes in a dirty worktree.
