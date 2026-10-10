@@ -80,6 +80,13 @@ test("manual switch persists through navigation and reload without losing a draf
 test("English auth and guides stay translated while task content stays as authored", async ({ page, context }, testInfo) => {
   const api = new WorkspaceApi();
   await api.install(context);
+  // Closing the modal persists progress first; exercise a slower save response.
+  await context.route("**/api/v1/me/guides/welcome", async route => {
+    if (route.request().method() === "PATCH" && route.request().postDataJSON()?.status === "skipped") {
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+    await route.fallback();
+  });
   await context.addCookies([{ name: "lester_locale", value: "en", url: "http://127.0.0.1:13020" }]);
   try {
     await page.goto("/login");
@@ -96,6 +103,7 @@ test("English auth and guides stay translated while task content stays as author
     await expect(page.locator("#guide-title")).toHaveText("Choose a model first");
     expect(api.mutations.filter(item => item.path.startsWith("/api/v1/conversations"))).toEqual([]);
     await page.getByRole("button", { name: "Close getting started guide", exact: true }).click();
+    await expect(page.locator(".guide-dialog")).toHaveCount(0);
     const composer = page.getByRole("textbox", { name: "Message input", exact: true });
     await composer.fill(prompt);
     await composer.press("Enter");
