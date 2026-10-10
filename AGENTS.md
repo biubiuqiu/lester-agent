@@ -244,6 +244,8 @@ For `sandbox.provider=docker`, Helm keeps `sandbox-service` at one replica and r
 
 ## Change discipline
 
+- GitHub CI runs on main pushes, PRs and manual dispatch; weekly runs scan dependencies. Keep path selection in `.github/scripts/ci_changes.py` conservative: unavailable comparisons, unknown paths and CI changes run all checks; include both sides of renames and deletions. Preserve real PostgreSQL integration tests, dependency security failures and the stable `CI result` aggregate check. Documentation-only changes may skip unrelated jobs. Validate workflow edits with actionlint and the selection regression tests; do not suppress real failures or introduce live model/OAuth/SMTP credentials into CI.
+
 - Make the smallest coherent change that satisfies the request.
 - Preserve unrelated user changes in a dirty worktree.
 - Do not expand the product scope while fixing or refactoring existing behavior.

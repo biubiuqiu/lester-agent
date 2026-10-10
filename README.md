@@ -608,6 +608,28 @@ helm lint deploy/helm/lester --set secrets.existingSecret=lester-test-secrets
 helm template lester deploy/helm/lester --set secrets.existingSecret=lester-test-secrets
 ```
 
+## Continuous integration
+
+GitHub Actions runs on pushes to `main`, pull requests, and manual dispatch. New commits cancel older runs for the same event/branch or PR. Documentation-only changes skip unrelated builds; unknown paths or an unavailable Git comparison run all checks. CI configuration changes also validate workflows with actionlint and run the full suite.
+
+| Check | When it runs | What it verifies |
+| --- | --- | --- |
+| Backend | Backend changes | Committed module files, gofmt, go vet, uncached unit/PostgreSQL integration tests, all `cmd` builds |
+| Frontend | Frontend changes | Frozen dependencies, tests, ESLint, production build/type checking |
+| Gateway / Compose | Gateway, Compose or deployment environment template changes | Config resolution, routing/cookies, preview isolation, uploads, SSE and WebSocket fixtures |
+| Helm | Chart changes | Chart lint and rendering with artifact ingress |
+| Go dependency security | Backend changes and weekly | Reachable vulnerable symbols via govulncheck |
+| Frontend dependency security | Package/lockfile/pnpm configuration changes and weekly | High/critical production advisories via pnpm audit |
+
+Security scans have their own job names and remain failures when vulnerabilities or scan errors occur. Monday's scheduled run (03:23 UTC) scans dependencies even when code has not changed; **Run workflow** runs everything. Jobs use Ubuntu 24.04, Node 22, the Go version in `backend/go.mod`, and pnpm from `frontend/package.json`. Integration tests use a disposable PostgreSQL service, never production data or live model-provider credentials. CI does not deploy the application.
+
+Use **CI result** as the required branch check if enabling branch protection: it accepts intentionally skipped jobs and rejects failed/cancelled checks or a failed selection job. Existing required check names may need updating to match this workflow. Local workflow validation and selection tests:
+
+```bash
+python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v
+go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+```
+
 ## Security notes
 
 Security audit and fixes: [2026-10-10 report](docs/security-audit-2026-10-10.md). Backend builds now require Go 1.26.9 for current security patches.

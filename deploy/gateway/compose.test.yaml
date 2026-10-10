@@ -18,7 +18,8 @@ services:
     depends_on:
       upstream: {condition: service_healthy}
     healthcheck:
-      test: [CMD, wget, -q, -O, /dev/null, "http://127.0.0.1:8080/healthz"]
+      # This probes the local container, even when Docker injects an HTTP proxy.
+      test: [CMD, wget, -Y, "off", -q, -O, /dev/null, "http://127.0.0.1:8080/healthz"]
       interval: 1s
       timeout: 3s
       retries: 20

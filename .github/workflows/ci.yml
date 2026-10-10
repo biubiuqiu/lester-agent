@@ -2,29 +2,81 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 3 * * 1"
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  changes:
+    name: Select checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      go: ${{ steps.changes.outputs.go }}
+      web: ${{ steps.changes.outputs.web }}
+      gateway: ${{ steps.changes.outputs.gateway }}
+      helm: ${{ steps.changes.outputs.helm }}
+      security_go: ${{ steps.changes.outputs.security_go }}
+      security_web: ${{ steps.changes.outputs.security_web }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Test check selection
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v
+      - name: Select checks from changed files
+        id: changes
+        run: python3 .github/scripts/ci_changes.py
+      - uses: actions/setup-go@v6
+        if: steps.changes.outputs.workflows == 'true'
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Validate GitHub Actions workflows
+        if: steps.changes.outputs.workflows == 'true'
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+
   gateway:
-    runs-on: ubuntu-latest
+    name: Gateway and Compose
+    needs: changes
+    if: needs.changes.outputs.gateway == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     env:
       POSTGRES_PASSWORD: test-only
       MASTER_KEY_BASE64: test-only
       SANDBOX_SERVICE_TOKEN: test-only
       MINIO_ROOT_PASSWORD: test-only
     steps:
-      - uses: actions/checkout@v4
-      - run: docker compose -f deploy/docker-compose.yaml config --quiet
-      - run: docker compose -f deploy/docker-compose.yaml -f deploy/docker-compose.debug.yaml config --quiet
-      - run: docker compose -p lester-gateway-test -f deploy/gateway/compose.test.yaml up --abort-on-container-exit --exit-code-from checks
-      - if: always()
-        run: docker compose -p lester-gateway-test -f deploy/gateway/compose.test.yaml down
+      - uses: actions/checkout@v6
+      - name: Validate Compose configurations
+        run: |
+          docker compose -f deploy/docker-compose.yaml config --quiet
+          docker compose -f deploy/docker-compose.yaml -f deploy/docker-compose.debug.yaml config --quiet
+      - name: Test gateway routing, previews, uploads, SSE and WebSocket
+        run: docker compose -p lester-gateway-test -f deploy/gateway/compose.test.yaml up --abort-on-container-exit --exit-code-from checks
+      - name: Show gateway logs on failure
+        if: failure()
+        run: docker compose -p lester-gateway-test -f deploy/gateway/compose.test.yaml logs --no-color
+      - name: Clean up test containers
+        if: always()
+        run: docker compose -p lester-gateway-test -f deploy/gateway/compose.test.yaml down --volumes --remove-orphans
 
   go:
-    runs-on: ubuntu-latest
+    name: Backend tests and build
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:17-alpine
@@ -42,41 +94,143 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
         with:
-          go-version: "1.26.9"
-          cache: false
-      - run: go mod tidy
-      - run: test -z "$(gofmt -l cmd internal prompts)"
-      - run: go test ./...
-      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Verify committed module files
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+      - name: Check Go formatting
+        run: |
+          unformatted="$(gofmt -l cmd internal prompts)"
+          if [ -n "$unformatted" ]; then
+            printf 'Run gofmt on these files:\n%s\n' "$unformatted"
+            exit 1
+          fi
+      - name: Run Go static checks
+        run: go vet ./...
+      - name: Run unit and PostgreSQL integration tests
+        run: go test -count=1 -timeout=10m ./...
+      - name: Build all backend executables
+        run: go build ./cmd/...
 
   web:
-    runs-on: ubuntu-latest
+    name: Frontend tests and build
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
         with:
-          version: 10.17.1
-      - uses: actions/setup-node@v4
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm audit --prod --audit-level=high
-      - run: pnpm test
-      - run: pnpm lint
-      - run: pnpm build
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run frontend tests
+        run: pnpm test
+      - name: Check frontend lint
+        run: pnpm lint
+      - name: Build production frontend
+        run: pnpm build
 
   helm:
-    runs-on: ubuntu-latest
+    name: Helm configuration
+    needs: changes
+    if: needs.changes.outputs.helm == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: azure/setup-helm@v4.3.0
-      - run: helm lint deploy/helm/lester --set secrets.existingSecret=lester-test-secrets
-      - run: helm template lester deploy/helm/lester --set secrets.existingSecret=lester-test-secrets --set artifactIngress.enabled=true > /dev/null
+      - uses: actions/checkout@v6
+      - uses: azure/setup-helm@v5
+        with:
+          version: v3.19.0
+      - name: Lint Helm chart
+        run: helm lint deploy/helm/lester --set secrets.existingSecret=lester-test-secrets
+      - name: Render Helm chart with artifact ingress
+        run: helm template lester deploy/helm/lester --set secrets.existingSecret=lester-test-secrets --set artifactIngress.enabled=true > /dev/null
+
+  security-go:
+    name: Go dependency security
+    needs: changes
+    if: needs.changes.outputs.security_go == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Check reachable vulnerable Go symbols
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
+  security-web:
+    name: Frontend dependency security
+    needs: changes
+    if: needs.changes.outputs.security_web == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+        with:
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check high and critical production vulnerabilities
+        run: pnpm audit --prod --audit-level=high
+
+  checks:
+    name: CI result
+    needs: [changes, gateway, go, web, helm, security-go, security-web]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require selected checks to pass
+        env:
+          JOB_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          results = json.loads(os.environ["JOB_RESULTS"])
+          failed = [name for name, job in results.items() if job["result"] not in ("success", "skipped")]
+          if results["changes"]["result"] != "success":
+              failed.append("check selection")
+          selected = results["changes"].get("outputs", {})
+          for name in ("gateway", "go", "web", "helm", "security-go", "security-web"):
+              flag = selected.get(name.replace("-", "_"))
+              if flag not in ("true", "false") or (flag == "true" and results[name]["result"] != "success"):
+                  failed.append(name + " did not complete its selected check")
+          for name, job in results.items():
+              print(f"{name}: {job['result']}")
+          if failed:
+              print("Failed checks: " + ", ".join(failed), file=sys.stderr)
+              sys.exit(1)
+          PY

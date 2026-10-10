@@ -462,6 +462,7 @@ go test ./...
 ```bash
 cd frontend
 pnpm install --frozen-lockfile
+pnpm test
 pnpm lint
 pnpm build
 ```
@@ -471,6 +472,28 @@ pnpm build
 ```bash
 make test
 make web-check
+```
+
+## GitHub CI
+
+CI 在推送 `main`、提交 PR 和手动运行时触发。同一事件下的分支或 PR 有新提交时，取消旧的检查。纯文档改动跳过无关构建；新增未知路径或无法获取 Git 比较范围时执行全套。修改 CI 本身会用 actionlint 验证工作流并执行全套。
+
+| 检查 | 触发范围 | 验证内容 |
+| --- | --- | --- |
+| 后端 | 后端改动 | 模块文件一致性、gofmt、go vet、不使用测试缓存的单元/PostgreSQL 集成测试、全部 `cmd` 构建 |
+| 前端 | 前端改动 | 锁定依赖安装、测试、ESLint、生产构建与类型检查 |
+| 网关 / Compose | 网关、Compose、部署环境模板改动 | 配置解析、路由/Cookie、预览隔离、上传、SSE、WebSocket 模拟服务回归 |
+| Helm | Chart 改动 | lint 与包含产物 Ingress 的模板渲染 |
+| Go 依赖安全 | 后端改动及每周 | govulncheck 检查可调用的漏洞符号 |
+| 前端依赖安全 | 包清单、锁文件、pnpm 配置改动及每周 | pnpm audit 检查生产依赖的 high/critical 漏洞 |
+
+安全扫描使用独立任务名，发现漏洞或扫描出错仍会失败，不会忽略错误。每周一 03:23 UTC（北京时间 11:23）即使没有代码改动也扫描依赖；Actions 的 **Run workflow** 可手动执行全套。固定 Ubuntu 24.04、Node 22，从 `backend/go.mod` 与 `frontend/package.json` 读取 Go/pnpm 版本。集成测试使用临时 PostgreSQL，不访问生产数据或真实模型服务凭据。CI 不会部署应用。
+
+开启分支保护时建议将 **CI result** 设为必需检查：它接受按范围跳过的任务，但拒绝失败、取消或检查选择失败。已有必需检查名称可能需要与新版任务名对齐。工作流和范围选择可在本地验证：
+
+```bash
+python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v
+go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 ```
 
 ## 安全提示
