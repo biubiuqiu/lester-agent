@@ -1,4 +1,6 @@
 "use client";
+import { T, useI18n } from "@/components/i18n";
+
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Pencil, Plus, Search, Users, X } from "lucide-react";
@@ -6,6 +8,8 @@ import { api, type UserProfile } from "@/lib/api";
 
 type ManagedUser = { id: string; email: string; display_name: string; role: "member" | "admin"; disabled: boolean; created_at: string };
 export default function UsersPage() {
+  const { locale, t } = useI18n();
+
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [self, setSelf] = useState("");
   const [query, setQuery] = useState("");
@@ -47,26 +51,26 @@ export default function UsersPage() {
   const selected = editing && editing !== "new" ? editing : null;
   const filtered = users.filter((u) => `${u.display_name} ${u.email}`.toLowerCase().includes(query.trim().toLowerCase()));
   return <>
-    <header className="settings-heading"><div><p className="eyebrow">Administration / People</p><h1>人员管理</h1><p>管理成员账号、管理员权限与访问状态。</p></div><button className="primary-button" onClick={() => edit("new")}><Plus size={16} />新增人员</button></header>
-    <div className="admin-summary"><Users size={20} /><strong>{users.length}</strong><span>位成员</span><span className="admin-summary-detail">{users.filter((u) => u.role === "admin" && !u.disabled).length} 位管理员 · {users.filter((u) => u.disabled).length} 位已停用</span></div>
+    <header className="settings-heading"><div><p className="eyebrow">Administration / People</p><h1><T>{"人员管理"}</T></h1><p><T>{"管理成员账号、管理员权限与访问状态。"}</T></p></div><button className="primary-button" onClick={() => edit("new")}><Plus size={16} /><T>{"新增人员"}</T></button></header>
+    <div className="admin-summary"><Users size={20} /><strong>{users.length}</strong><span><T>{"位成员"}</T></span><span className="admin-summary-detail">{users.filter((u) => u.role === "admin" && !u.disabled).length} <T>{"位管理员 ·"}</T>{users.filter((u) => u.disabled).length} <T>{"位已停用"}</T></span></div>
     {message && <p className="success-banner" role="status">{message}</p>}
-    {error && !editing && <p className="settings-error" role="alert">{error}<button onClick={() => { setError(""); void load().catch((e: Error) => setError(e.message)); }}>重试</button></p>}
-    <section className="admin-table-card"><label className="admin-search"><Search size={17} /><input aria-label="搜索人员" placeholder="搜索姓名或邮箱…" value={query} onChange={(e) => setQuery(e.target.value)} /></label>
-      <div className="admin-table-scroll"><table className="admin-table"><thead><tr><th>成员</th><th>角色</th><th>状态</th><th>加入时间</th><th><span className="sr-only">操作</span></th></tr></thead><tbody>
-        {filtered.map((u) => <tr key={u.id}><td><strong>{u.display_name}{u.id === self && <small>（你）</small>}</strong><small>{u.email}</small></td><td>{u.role === "admin" ? "管理员" : "成员"}</td><td><span className={`admin-badge ${u.disabled ? "disabled" : ""}`}>{u.disabled ? "已停用" : "正常"}</span></td><td>{new Date(u.created_at).toLocaleDateString("zh-CN")}</td><td><button className="admin-edit" onClick={() => edit(u)} aria-label={`编辑 ${u.display_name}`}><Pencil size={14} />编辑</button></td></tr>)}
+    {error && !editing && <p className="settings-error" role="alert">{t(error)}<button onClick={() => { setError(""); void load().catch((e: Error) => setError(e.message)); }}><T>{"重试"}</T></button></p>}
+    <section className="admin-table-card"><label className="admin-search"><Search size={17} /><input aria-label={t("搜索人员")} placeholder={t("搜索姓名或邮箱…")} value={query} onChange={(e) => setQuery(e.target.value)} /></label>
+      <div className="admin-table-scroll"><table className="admin-table"><thead><tr><th><T>{"成员"}</T></th><th><T>{"角色"}</T></th><th><T>{"状态"}</T></th><th><T>{"加入时间"}</T></th><th><span className="sr-only"><T>{"操作"}</T></span></th></tr></thead><tbody>
+        {filtered.map((u) => <tr key={u.id}><td><strong>{u.display_name}{u.id === self && <small><T>{"（你）"}</T></small>}</strong><small>{u.email}</small></td><td>{u.role === "admin" ? t("管理员") : t("成员")}</td><td><span className={`admin-badge ${u.disabled ? "disabled" : ""}`}>{u.disabled ? t("已停用") : t("正常")}</span></td><td>{new Date(u.created_at).toLocaleDateString(locale)}</td><td><button className="admin-edit" onClick={() => edit(u)} aria-label={t("编辑 {0}", [u.display_name])}><Pencil size={14} /><T>{"编辑"}</T></button></td></tr>)}
       </tbody></table></div>
-      {!filtered.length && <p className="muted-block">{loading ? "正在加载人员…" : query ? "没有匹配的人员。" : "暂无人员。"}</p>}
+      {!filtered.length && <p className="muted-block">{loading ? t("正在加载人员…") : query ? t("没有匹配的人员。") : t("暂无人员。")}</p>}
     </section>
     <dialog ref={dialog} className="admin-dialog" onCancel={(e) => { e.preventDefault(); close(); }}>
-      {editing && <form key={selected?.id || "new"} onSubmit={save}><header><div><p className="eyebrow">Account</p><h2>{selected ? "编辑人员" : "新增人员"}</h2></div><button type="button" aria-label="关闭" disabled={busy} onClick={close}><X size={20} /></button></header>
-        {error && <p className="settings-error" role="alert">{error}</p>}
-        <label className="field">姓名<input name="name" required maxLength={60} defaultValue={selected?.display_name} autoFocus /></label>
-        <label className="field">邮箱<input name="email" type="email" required disabled={!!selected} defaultValue={selected?.email} autoComplete="off" /></label>
-        <label className="field">角色<select name="role" defaultValue={selected?.role || "member"} disabled={selected?.id === self}><option value="member">成员</option><option value="admin">管理员</option></select></label>
-        <label className="field">{selected ? "重置密码（留空保留原密码）" : "初始密码"}<input name="password" type="password" minLength={10} maxLength={1024} required={!selected} autoComplete="new-password" placeholder="至少 10 个字符" /></label>
-        {selected && <label className="check-field"><input type="checkbox" name="disabled" defaultChecked={selected.disabled} disabled={selected.id === self} />停用此账号</label>}
-        <p className="admin-help">{selected ? "停用、重置密码或调整角色会使该账号的已有登录失效。" : "新成员会获得独立的工作区和默认项目。请通过安全渠道交付初始密码。"}</p>
-        <footer><button type="button" disabled={busy} onClick={close}>取消</button><button className="primary-button" disabled={busy}>{busy ? "保存中…" : "保存"}</button></footer>
+      {editing && <form key={selected?.id || "new"} onSubmit={save}><header><div><p className="eyebrow">Account</p><h2>{selected ? t("编辑人员") : t("新增人员")}</h2></div><button type="button" aria-label={t("关闭")} disabled={busy} onClick={close}><X size={20} /></button></header>
+        {error && <p className="settings-error" role="alert">{t(error)}</p>}
+        <label className="field"><T>{"姓名"}</T><input name="name" required maxLength={60} defaultValue={selected?.display_name} autoFocus /></label>
+        <label className="field"><T>{"邮箱"}</T><input name="email" type="email" required disabled={!!selected} defaultValue={selected?.email} autoComplete="off" /></label>
+        <label className="field"><T>{"角色"}</T><select name="role" defaultValue={selected?.role || "member"} disabled={selected?.id === self}><option value="member"><T>{"成员"}</T></option><option value="admin"><T>{"管理员"}</T></option></select></label>
+        <label className="field">{selected ? t("重置密码（留空保留原密码）") : t("初始密码")}<input name="password" type="password" minLength={10} maxLength={1024} required={!selected} autoComplete="new-password" placeholder={t("至少 10 个字符")} /></label>
+        {selected && <label className="check-field"><input type="checkbox" name="disabled" defaultChecked={selected.disabled} disabled={selected.id === self} /><T>{"停用此账号"}</T></label>}
+        <p className="admin-help">{selected ? t("停用、重置密码或调整角色会使该账号的已有登录失效。") : t("新成员会获得独立的工作区和默认项目。请通过安全渠道交付初始密码。")}</p>
+        <footer><button type="button" disabled={busy} onClick={close}><T>{"取消"}</T></button><button className="primary-button" disabled={busy}>{busy ? t("保存中…") : t("保存")}</button></footer>
       </form>}
     </dialog>
   </>;

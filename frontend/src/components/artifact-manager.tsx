@@ -1,4 +1,6 @@
 "use client";
+import { T, useI18n, useT } from "@/components/i18n";
+
 
 import { ArtifactIcon } from "./workspace-icons";
 import Link from "next/link";
@@ -34,11 +36,13 @@ export function DeployDialog({
   onClose: () => void;
   onPublished?: (item: Artifact) => void;
 }) {
+  const t = useT();
+
   const dialog = useRef<HTMLDialogElement>(null);
   const [conversation, setConversation] = useState(choice.conversationId);
   const [source, setSource] = useState(choice.sourcePath);
   const [name, setName] = useState(
-    choice.name || choice.sourcePath.split("/").pop() || "我的站点",
+    choice.name || choice.sourcePath.split("/").pop() || t("我的站点"),
   );
   const [entry, setEntry] = useState(
     choice.artifact && !/\.html?$/i.test(choice.sourcePath)
@@ -99,17 +103,17 @@ export function DeployDialog({
           <p className="eyebrow">PUBLISH</p>
           <h2>
             {result
-              ? "站点已部署"
+              ? t("站点已部署")
               : choice.artifact
-                ? "更新部署"
-                : "部署 HTML 站点"}
+                ? t("更新部署")
+                : t("部署 HTML 站点")}
           </h2>
         </div>
         <button
           type="button"
           className="icon-button"
           disabled={busy}
-          aria-label="关闭部署窗口"
+          aria-label={t("关闭部署窗口")}
           onClick={onClose}
         >
           <X />
@@ -118,15 +122,15 @@ export function DeployDialog({
       {result ? (
         <div className="deploy-result">
           <ArtifactIcon />
-          <p>页面和本地资源已保存。拥有链接的人可以直接访问。</p>
+          <p><T>{"页面和本地资源已保存。拥有链接的人可以直接访问。"}</T></p>
           <a href={result.url} target="_blank" rel="noopener noreferrer">
-            打开站点 <ExternalLink size={14} />
+            <T>{"打开站点"}</T><ExternalLink size={14} />
           </a>
           <div className="site-url">
             <code>{result.url}</code>
             <button
               className="icon-button"
-              aria-label="复制站点链接"
+              aria-label={t("复制站点链接")}
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(result.url);
@@ -145,9 +149,9 @@ export function DeployDialog({
             </p>
           ))}
           <p>
-            {result.file_count} 个文件 · {formatSize(result.size_bytes)}
+            {result.file_count} <T>{"个文件 ·"}</T>{formatSize(result.size_bytes)}
           </p>
-          <Link href={`/app/artifacts?returnTo=${encodeURIComponent(`/app/c/${conversation}`)}`}>查看所有产物</Link>
+          <Link href={`/app/artifacts?returnTo=${encodeURIComponent(`/app/c/${conversation}`)}`}><T>{"查看所有产物"}</T></Link>
         </div>
       ) : (
         <form
@@ -157,18 +161,16 @@ export function DeployDialog({
           }}
         >
           <p className="deployment-note">
-            部署后生成公开链接，可在产物管理中下线。只选择你希望分享的页面和资源。
-          </p>
+            <T>{"部署后生成公开链接，可在产物管理中下线。只选择你希望分享的页面和资源。"}</T></p>
           {conversations ? (
             <label className="field">
-              来源会话
-              <select
-                aria-label="来源会话"
+              <T>{"来源会话"}</T><select
+                aria-label={t("来源会话")}
                 value={conversation}
                 disabled={busy || !!choice.artifact}
                 onChange={(e) => setConversation(e.target.value)}
               >
-                <option value="">选择会话</option>
+                <option value=""><T>{"选择会话"}</T></option>
                 {conversations.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.title}
@@ -178,9 +180,8 @@ export function DeployDialog({
             </label>
           ) : null}
           <label className="field">
-            站点名称
-            <input
-              aria-label="站点名称"
+            <T>{"站点名称"}</T><input
+              aria-label={t("站点名称")}
               required
               maxLength={120}
               value={name}
@@ -189,21 +190,19 @@ export function DeployDialog({
             />
           </label>
           <label className="field">
-            HTML 文件或站点目录
-            <input
-              aria-label="部署源路径"
+            <T>{"HTML 文件或站点目录"}</T><input
+              aria-label={t("部署源路径")}
               required
               value={source}
               disabled={busy}
-              placeholder="index.html 或 website"
+              placeholder={t("index.html 或 website")}
               onChange={(e) => setSource(e.target.value)}
             />
           </label>
           {!/\.html?$/i.test(source) ? (
             <label className="field">
-              目录入口
-              <input
-                aria-label="站点入口"
+              <T>{"目录入口"}</T><input
+                aria-label={t("站点入口")}
                 required
                 value={entry}
                 disabled={busy}
@@ -212,9 +211,7 @@ export function DeployDialog({
             </label>
           ) : null}
           <p className="deployment-note">
-            单文件会收集其本地引用；目录会包含静态资源。支持图片、视频、CSS 和
-            JavaScript。单文件上限 25 MiB，站点上限 100 MiB / 256 个文件。
-          </p>
+            <T>{"单文件会收集其本地引用；目录会包含静态资源。支持图片、视频、CSS 和 JavaScript。单文件上限 25 MiB，站点上限 100 MiB / 256 个文件。"}</T></p>
           <button
             className="primary-button"
             disabled={busy || !conversation || !source.trim() || !name.trim()}
@@ -225,16 +222,16 @@ export function DeployDialog({
               <ArtifactIcon size={16} />
             )}{" "}
             {busy
-              ? "正在收集资源并部署…"
+              ? t("正在收集资源并部署…")
               : choice.artifact
-                ? "更新并发布"
-                : "部署并生成链接"}
+                ? t("更新并发布")
+                : t("部署并生成链接")}
           </button>
         </form>
       )}
       {error ? (
         <p role="alert" className="form-error">
-          {error}
+          {t(error)}
         </p>
       ) : null}
     </dialog>
@@ -247,18 +244,20 @@ export function PublishFileButton({
   conversationId: string;
   path: string;
 }) {
+  const t = useT();
+
   const [open, setOpen] = useState(false);
   return (
     <>
       <button
         type="button"
         className="file-ask-agent"
-        aria-label="部署 HTML 站点"
-        title="部署并生成公开链接"
+        aria-label={t("部署 HTML 站点")}
+        title={t("部署并生成公开链接")}
         onClick={() => setOpen(true)}
       >
         <ArtifactIcon size={15} />
-        <span>部署</span>
+        <span><T>{"部署"}</T></span>
       </button>
       {open ? (
         <DeployDialog
@@ -276,6 +275,8 @@ export function ArtifactManager({
   projects: Project[];
   conversations: Conversation[];
 }) {
+  const { locale, t } = useI18n();
+
   const [items, setItems] = useState<Artifact[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -330,8 +331,8 @@ export function ArtifactManager({
       <header className="artifact-heading">
         <div>
           <p className="eyebrow">YOUR PUBLISHED WORK</p>
-          <h1>产物管理</h1>
-          <p>把对话中的成果变成可分享的页面。</p>
+          <h1><T>{"产物管理"}</T></h1>
+          <p><T>{"把对话中的成果变成可分享的页面。"}</T></p>
         </div>
         <button
           className="primary-button"
@@ -344,27 +345,26 @@ export function ArtifactManager({
           }
         >
           <Plus size={16} />
-          部署站点
-        </button>
+          <T>{"部署站点"}</T></button>
       </header>
-      <div className="artifact-summary" aria-label="部署概况">
-        <span><strong>{items.length}</strong> 全部产物</span>
-        <span><i /> <strong>{items.filter(a => a.status === "published").length}</strong> 已发布</span>
-        <span><strong>{items.filter(a => a.status === "unpublished").length}</strong> 已下线</span>
+      <div className="artifact-summary" aria-label={t("部署概况")}>
+        <span><strong>{items.length}</strong> <T>{"全部产物"}</T></span>
+        <span><i /> <strong>{items.filter(a => a.status === "published").length}</strong> <T>{"已发布"}</T></span>
+        <span><strong>{items.filter(a => a.status === "unpublished").length}</strong> <T>{"已下线"}</T></span>
       </div>
       <div className="artifact-filters">
         <input
-          aria-label="搜索产物"
-          placeholder="搜索站点名称"
+          aria-label={t("搜索产物")}
+          placeholder={t("搜索站点名称")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         <select
-          aria-label="按项目筛选产物"
+          aria-label={t("按项目筛选产物")}
           value={project}
           onChange={(e) => setProject(e.target.value)}
         >
-          <option value="">所有项目</option>
+          <option value=""><T>{"所有项目"}</T></option>
           {projects.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
@@ -373,7 +373,7 @@ export function ArtifactManager({
         </select>
         <button
           className="icon-button"
-          aria-label="刷新产物"
+          aria-label={t("刷新产物")}
           onClick={() => void refresh()}
         >
           <RefreshCw />
@@ -381,22 +381,20 @@ export function ArtifactManager({
       </div>
       {error ? (
         <p role="alert" className="workspace-error">
-          {error}
-          <button onClick={() => void refresh()}>重试</button>
+          {t(error)}
+          <button onClick={() => void refresh()}><T>{"重试"}</T></button>
         </p>
       ) : null}
       {loading ? (
         <div className="artifact-empty">
           <LoaderCircle />
-          正在载入产物…
-        </div>
+          <T>{"正在载入产物…"}</T></div>
       ) : !filtered.length ? (
         <div className="artifact-empty">
           <ArtifactIcon size={38} />
-          <h2>{items.length ? "没有匹配的产物" : "让成果拥有自己的链接"}</h2>
+          <h2>{items.length ? t("没有匹配的产物") : t("让成果拥有自己的链接")}</h2>
           <p>
-            在对话中生成 HTML 后，点击文件工具栏的“部署”，或让 Lester 帮你发布。
-          </p>
+            <T>{"在对话中生成 HTML 后，点击文件工具栏的“部署”，或让 Lester 帮你发布。"}</T></p>
         </div>
       ) : (
         <div className="artifact-grid">
@@ -404,18 +402,18 @@ export function ArtifactManager({
             <article className="published-site-card" key={a.id}>
               <div className={`artifact-cover ${a.status}`}>
                 <span className="artifact-cover-icon"><ArtifactIcon size={30} /></span>
-                <span className={`site-status ${a.status}`}>{a.status === "published" ? "已发布" : "已下线"}</span>
-                {a.status === "published" ? <button className="artifact-preview-button" onClick={() => setPreview(a)} aria-label={`预览 ${a.name}`}><Eye size={15} />预览页面</button> : <span className="artifact-offline-note">站点已下线</span>}
+                <span className={`site-status ${a.status}`}>{a.status === "published" ? t("已发布") : t("已下线")}</span>
+                {a.status === "published" ? <button className="artifact-preview-button" onClick={() => setPreview(a)} aria-label={t("预览 {0}", [a.name])}><Eye size={15} /><T>{"预览页面"}</T></button> : <span className="artifact-offline-note"><T>{"站点已下线"}</T></span>}
               </div>
               <div className="artifact-card-body">
-              <p className="artifact-project"><Folder size={13} />{projects.find(p => p.id === a.project_id)?.name || "项目"}</p>
+              <p className="artifact-project"><Folder size={13} />{projects.find(p => p.id === a.project_id)?.name || t("项目")}</p>
               <h2>{a.name}</h2>
-              <p className="artifact-date">更新于 {new Date(a.updated_at).toLocaleDateString()}</p>
+              <p className="artifact-date"><T>{"更新于"}</T>{new Date(a.updated_at).toLocaleDateString(locale)}</p>
               <div className="artifact-actions">
                 {a.status === "published" ? (
                   <>
                     <a href={a.url} target="_blank" rel="noopener noreferrer">
-                      打开页面 <ExternalLink size={13} />
+                      <T>{"打开页面"}</T><ExternalLink size={13} />
                     </a>
                     <button
                       onClick={async () => {
@@ -427,14 +425,14 @@ export function ArtifactManager({
                         }
                       }}
                     >
-                      {copied === a.id ? "已复制" : "复制链接"}
+                      {copied === a.id ? t("已复制") : t("复制链接")}
                     </button>
                   </>
                 ) : null}
                 <details className="artifact-more" name="artifact-actions" onClick={e => { if ((e.target as Element).closest("button, a")) e.currentTarget.open = false; }}>
-                  <summary aria-label={`${a.name} 的更多操作`}><MoreHorizontal size={18} /></summary>
+                  <summary aria-label={t("{0} 的更多操作", [a.name])}><MoreHorizontal size={18} /></summary>
                   <div>
-                <Link href={`/app/c/${a.conversation_id}`}>来源会话</Link>
+                <Link href={`/app/c/${a.conversation_id}`}><T>{"来源会话"}</T></Link>
                 <button
                   disabled={!!busy}
                   onClick={() =>
@@ -446,7 +444,7 @@ export function ArtifactManager({
                     })
                   }
                 >
-                  {a.status === "published" ? "更新部署" : "重新部署"}
+                  {a.status === "published" ? t("更新部署") : t("重新部署")}
                 </button>
                 {a.status === "published" ? (
                   <button
@@ -454,10 +452,10 @@ export function ArtifactManager({
                     disabled={!!busy}
                     onClick={() => void unpublish(a)}
                   >
-                    {busy === a.id ? "正在下线…" : "下线"}
+                    {busy === a.id ? t("正在下线…") : t("下线")}
                   </button>
                 ) : null}
-                  <p className="artifact-file-detail" title={a.source_path}>{a.source_path}<br />{a.file_count} 个文件 · {formatSize(a.size_bytes)}</p>
+                  <p className="artifact-file-detail" title={a.source_path}>{a.source_path}<br />{a.file_count} <T>{"个文件 ·"}</T>{formatSize(a.size_bytes)}</p>
                   </div>
                 </details>
               </div>
@@ -487,10 +485,12 @@ function formatSize(n: number) {
 }
 
 function ArtifactPreview({ artifact, onClose }: { artifact: Artifact; onClose: () => void }) {
+  const t = useT();
+
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => { dialog.current?.showModal(); }, []);
   return <dialog className="artifact-preview-dialog" ref={dialog} onCancel={e => { e.preventDefault(); onClose(); }}>
-    <header><strong>{artifact.name}</strong><a href={artifact.url} target="_blank" rel="noopener noreferrer">打开页面 <ExternalLink size={14} /></a><button className="icon-button" aria-label="关闭预览" onClick={onClose}><X /></button></header>
-    <iframe src={artifact.url} title={`${artifact.name} 的预览`} sandbox="allow-scripts" referrerPolicy="no-referrer" />
+    <header><strong>{artifact.name}</strong><a href={artifact.url} target="_blank" rel="noopener noreferrer"><T>{"打开页面"}</T><ExternalLink size={14} /></a><button className="icon-button" aria-label={t("关闭预览")} onClick={onClose}><X /></button></header>
+    <iframe src={artifact.url} title={t("{0} 的预览", [artifact.name])} sandbox="allow-scripts" referrerPolicy="no-referrer" />
   </dialog>;
 }

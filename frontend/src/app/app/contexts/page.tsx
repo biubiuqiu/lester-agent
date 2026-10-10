@@ -1,4 +1,6 @@
 "use client";
+import { T, useT } from "@/components/i18n";
+
 import { GuideLauncher } from "@/components/user-guide";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
@@ -7,6 +9,8 @@ import { ArrowLeft, BookOpen, Plus, Search } from "lucide-react";
 import { api, type ContextEntry } from "@/lib/api";
 
 export default function ContextLibrary() {
+  const t = useT();
+
   const [entries, setEntries] = useState<ContextEntry[]>([]);
   const [query, setQuery] = useState(""); const [editing, setEditing] = useState<ContextEntry | "new" | null>(null);
   const [error, setError] = useState(""); const [notice, setNotice] = useState("");
@@ -14,7 +18,7 @@ export default function ContextLibrary() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [dirty, setDirty] = useState(false);
   const pending = useRef(false); const request = useRef(0);
-  function canLeave() { return !dirty || window.confirm("尚有未保存的修改，确定放弃吗？"); }
+  function canLeave() { return !dirty || window.confirm(t("尚有未保存的修改，确定放弃吗？")); }
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); };
@@ -51,25 +55,25 @@ export default function ContextLibrary() {
   const selected = editing && editing !== "new" ? editing : null;
   const visible = entries.filter((e) => `${e.title} ${e.description}`.toLowerCase().includes(query.trim().toLowerCase()));
   return <main className="context-library">
-    <header className="context-library-header"><Link href="/app" onClick={(e) => { if (busy || !canLeave()) e.preventDefault(); }}><ArrowLeft size={16} />返回工作区</Link><span><BookOpen size={17} />个人上下文库</span><GuideLauncher /></header>
+    <header className="context-library-header"><Link href="/app" onClick={(e) => { if (busy || !canLeave()) e.preventDefault(); }}><ArrowLeft size={16} /><T>{"返回工作区"}</T></Link><span><BookOpen size={17} /><T>{"个人上下文库"}</T></span><GuideLauncher /></header>
     <section className="context-library-main">
-      <div className="settings-heading"><div><p className="eyebrow">Context library</p><h1>把常用背景，留在手边</h1><p>维护术语、项目背景与写作要求。在聊天中输入 @，按需引用。</p></div><button className="primary-button" disabled={busy} onClick={() => { if (!canLeave()) return; setDirty(false); request.current++; setLoading(false); setEditing("new"); setConfirmDelete(false); setError(""); setNotice(""); }}><Plus size={16} />新建词条</button></div>
-      {error && <p className="settings-error" role="alert">{error}</p>}{notice && <p className="success-banner" role="status">{notice}</p>}
+      <div className="settings-heading"><div><p className="eyebrow">Context library</p><h1><T>{"把常用背景，留在手边"}</T></h1><p><T>{"维护术语、项目背景与写作要求。在聊天中输入 @，按需引用。"}</T></p></div><button className="primary-button" disabled={busy} onClick={() => { if (!canLeave()) return; setDirty(false); request.current++; setLoading(false); setEditing("new"); setConfirmDelete(false); setError(""); setNotice(""); }}><Plus size={16} /><T>{"新建词条"}</T></button></div>
+      {error && <p className="settings-error" role="alert">{t(error)}</p>}{notice && <p className="success-banner" role="status">{t(notice)}</p>}
       <div className="context-library-grid">
-        <aside className="context-library-list"><label className="admin-search"><Search size={16} /><input aria-label="搜索上下文" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索名称或简介…" /></label><p className="context-list-count">{entries.length} 个词条 · 仅自己可见</p>
-          {visible.map((entry) => <button type="button" key={entry.id} disabled={busy} className={selected?.id === entry.id ? "active" : ""} onClick={() => void open(entry.id)}><strong>{entry.title}</strong><small>{entry.description || "无简介"}</small></button>)}
-          {!visible.length && <p className="muted-block">{loading ? "正在加载…" : entries.length ? "没有匹配的词条" : "还没有词条。可以从团队术语、产品介绍或输出格式开始。"}</p>}
+        <aside className="context-library-list"><label className="admin-search"><Search size={16} /><input aria-label={t("搜索上下文")} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("搜索名称或简介…")} /></label><p className="context-list-count">{entries.length} <T>{"个词条 · 仅自己可见"}</T></p>
+          {visible.map((entry) => <button type="button" key={entry.id} disabled={busy} className={selected?.id === entry.id ? "active" : ""} onClick={() => void open(entry.id)}><strong>{entry.title}</strong><small>{entry.description || t("无简介")}</small></button>)}
+          {!visible.length && <p className="muted-block">{loading ? t("正在加载…") : entries.length ? t("没有匹配的词条") : t("还没有词条。可以从团队术语、产品介绍或输出格式开始。")}</p>}
         </aside>
         <section className="context-library-editor">
           {editing ? <form key={selected ? `${selected.id}:${selected.version}` : "new"} onSubmit={save} onChange={() => setDirty(true)}>
-            <header><h2>{selected ? "编辑词条" : "新建词条"}</h2><small>{selected ? `版本 ${selected.version}` : "支持纯文本与 Markdown"}</small></header>
-            <label className="field">名称<input disabled={busy} name="title" defaultValue={selected?.title || ""} required maxLength={80} placeholder="例如：品牌写作规范" /></label>
-            <label className="field">简介<input disabled={busy} name="description" defaultValue={selected?.description || ""} maxLength={240} placeholder="用一句话说明何时使用" /></label>
-            <label className="field">正文<textarea disabled={busy} name="content" defaultValue={selected?.content || ""} required maxLength={20000} rows={14} placeholder="输入需要提供给 Agent 的背景、术语定义或要求…" /></label>
-            <p className="admin-help">发送消息时会保存词条的完整快照。每条正文最多 20,000 字，每次最多引用 8 条，合计最多 40,000 字。</p>
-            <footer>{selected && <button type="button" disabled={busy} className="context-delete" onClick={() => setConfirmDelete(true)}>删除词条</button>}<button className="primary-button" disabled={busy}>{busy ? "保存中…" : "保存词条"}</button></footer>
-            {confirmDelete && <div className="context-delete-confirm" role="alert"><p>删除“{selected?.title}”？此操作无法撤销，历史消息快照会保留。</p><button type="button" disabled={busy} onClick={() => setConfirmDelete(false)}>取消</button><button type="button" disabled={busy} onClick={() => void remove()}>确认删除</button></div>}
-          </form> : <div className="context-library-empty"><BookOpen size={32} /><h2>{loading ? "正在加载…" : "选择一个词条，或新建上下文"}</h2><p>只在聊天中主动引用的词条，才会提供给 Agent。</p></div>}
+            <header><h2>{selected ? t("编辑词条") : t("新建词条")}</h2><small>{selected ? t("版本 {0}", [selected.version]) : t("支持纯文本与 Markdown")}</small></header>
+            <label className="field"><T>{"名称"}</T><input disabled={busy} name="title" defaultValue={selected?.title || ""} required maxLength={80} placeholder={t("例如：品牌写作规范")} /></label>
+            <label className="field"><T>{"简介"}</T><input disabled={busy} name="description" defaultValue={selected?.description || ""} maxLength={240} placeholder={t("用一句话说明何时使用")} /></label>
+            <label className="field"><T>{"正文"}</T><textarea disabled={busy} name="content" defaultValue={selected?.content || ""} required maxLength={20000} rows={14} placeholder={t("输入需要提供给 Agent 的背景、术语定义或要求…")} /></label>
+            <p className="admin-help"><T>{"发送消息时会保存词条的完整快照。每条正文最多 20,000 字，每次最多引用 8 条，合计最多 40,000 字。"}</T></p>
+            <footer>{selected && <button type="button" disabled={busy} className="context-delete" onClick={() => setConfirmDelete(true)}><T>{"删除词条"}</T></button>}<button className="primary-button" disabled={busy}>{busy ? t("保存中…") : t("保存词条")}</button></footer>
+            {confirmDelete && <div className="context-delete-confirm" role="alert"><p><T>{"删除“"}</T>{selected?.title}<T>{"”？此操作无法撤销，历史消息快照会保留。"}</T></p><button type="button" disabled={busy} onClick={() => setConfirmDelete(false)}><T>{"取消"}</T></button><button type="button" disabled={busy} onClick={() => void remove()}><T>{"确认删除"}</T></button></div>}
+          </form> : <div className="context-library-empty"><BookOpen size={32} /><h2>{loading ? t("正在加载…") : t("选择一个词条，或新建上下文")}</h2><p><T>{"只在聊天中主动引用的词条，才会提供给 Agent。"}</T></p></div>}
         </section>
       </div>
     </section>

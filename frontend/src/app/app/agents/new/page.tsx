@@ -1,4 +1,6 @@
 "use client";
+import { T, useT } from "@/components/i18n";
+
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -6,6 +8,8 @@ import { useRouter } from "next/navigation";
 import { api, type Conversation, type Deployment, type Project } from "@/lib/api";
 
 export default function NewAgentPage() {
+  const t = useT();
+
   const router = useRouter();
   const started = useRef(false);
   const [error, setError] = useState("");
@@ -31,5 +35,5 @@ export default function NewAgentPage() {
       }
     })();
   }, [router]);
-  return <main className="agent-start-page"><div><h1>正在邀请智能体设计师…</h1><p>{error || "会话将保存在默认项目中。先聊聊你的想法，再一起完成配置。"}</p>{error ? <Link href="/app/agents">返回 Agent 管理</Link> : null}</div></main>;
+  return <main className="agent-start-page"><div><h1><T>{"正在邀请智能体设计师…"}</T></h1><p>{error || t("会话将保存在默认项目中。先聊聊你的想法，再一起完成配置。")}</p>{error ? <Link href="/app/agents"><T>{"返回 Agent 管理"}</T></Link> : null}</div></main>;
 }

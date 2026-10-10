@@ -1,4 +1,6 @@
 "use client";
+import { useT } from "@/components/i18n";
+
 
 import { startTransition, useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { ThemedToken } from "@shikijs/core";
@@ -42,6 +44,8 @@ const languageByExtension: Record<string, SyntaxLanguage> = {
 };
 
 export function SourcePreview({ content, fileName, storageKey = "", filePath = fileName }: { content: string; fileName: string; storageKey?: string; filePath?: string }) {
+  const t = useT();
+
   const scroll = usePreviewScroll(storageKey, `source:${filePath}`);
   const lines = useMemo(() => content.split("\n"), [content]);
   const source = useMemo(() => lines.slice(0, maxRenderedLines).join("\n"), [lines]);
@@ -76,7 +80,7 @@ export function SourcePreview({ content, fileName, storageKey = "", filePath = f
     highlighted && language && highlighted.language === language && highlighted.source === source
       ? highlighted.lines
       : fallbackLines;
-  return <div ref={scroll} className="file-source-scroll" aria-label={`${fileName} 源代码`}>
+  return <div ref={scroll} className="file-source-scroll" aria-label={t("{0} 源代码", [fileName])}>
     <div className="file-source-code">
       {renderedLines.map((tokens, lineIndex) => <div className="file-source-line" key={lineIndex}>
         <span>{lineIndex + 1}</span>
@@ -85,7 +89,7 @@ export function SourcePreview({ content, fileName, storageKey = "", filePath = f
           : tokens.map((token, tokenIndex) => <span key={`${lineIndex}-${tokenIndex}`} style={tokenStyle(token)}>{token.content || " "}</span>)}</code>
       </div>)}
     </div>
-    {lines.length > maxRenderedLines ? <p className="file-source-truncated">仅显示前 {maxRenderedLines} 行，共 {lines.length} 行。</p> : null}
+    {lines.length > maxRenderedLines ? <p className="file-source-truncated">{t("仅显示前 {0} 行，共 {1} 行。", [maxRenderedLines, lines.length])}</p> : null}
   </div>;
 }
 

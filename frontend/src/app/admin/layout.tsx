@@ -1,4 +1,6 @@
 "use client";
+import { T, useT } from "@/components/i18n";
+
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
@@ -10,6 +12,8 @@ import { api, type UserProfile } from "@/lib/api";
 import { AuthSessionKeeper } from "@/components/auth-session-keeper";
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
+  const t = useT();
+
   const path = usePathname();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [error, setError] = useState("");
@@ -24,16 +28,16 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   }, []);
   return <main className="settings-shell admin-shell"><AuthSessionKeeper />
     <aside className="settings-sidebar admin-sidebar">
-      <Brand /><div className="admin-label"><ShieldCheck size={15} />管理后台</div>
-      <nav aria-label="后台导航">
-        <Link href="/admin/users" className={path === "/admin/users" ? "active" : ""} aria-current={path === "/admin/users" ? "page" : undefined}><Users />人员管理</Link>
-        <Link href="/admin/models" className={path === "/admin/models" ? "active" : ""} aria-current={path === "/admin/models" ? "page" : undefined}><Cpu />共享模型</Link>
+      <Brand /><div className="admin-label"><ShieldCheck size={15} /><T>{"管理后台"}</T></div>
+      <nav aria-label={t("后台导航")}>
+        <Link href="/admin/users" className={path === "/admin/users" ? "active" : ""} aria-current={path === "/admin/users" ? "page" : undefined}><Users /><T>{"人员管理"}</T></Link>
+        <Link href="/admin/models" className={path === "/admin/models" ? "active" : ""} aria-current={path === "/admin/models" ? "page" : undefined}><Cpu /><T>{"共享模型"}</T></Link>
       </nav>
-      <Link className="back-button" href="/app"><ArrowLeft size={16} />返回工作区</Link>
-      {user && <small className="admin-identity">{user.display_name}<br />系统管理员</small>}
+      <Link className="back-button" href="/app"><ArrowLeft size={16} /><T>{"返回工作区"}</T></Link>
+      {user && <small className="admin-identity">{user.display_name}<br /><T>{"系统管理员"}</T></small>}
     </aside>
     <section className="settings-main">
-      {error ? <p className="settings-error" role="alert">{error}</p> : user ? children : <p role="status">正在验证权限…</p>}
+      {error ? <p className="settings-error" role="alert">{t(error)}</p> : user ? children : <p role="status"><T>{"正在验证权限…"}</T></p>}
     </section>
   </main>;
 }

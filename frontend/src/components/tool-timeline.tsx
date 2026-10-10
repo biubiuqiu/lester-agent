@@ -1,3 +1,8 @@
+"use client";
+import { T, useT } from "@/components/i18n";
+
+
+
 import { Check, ChevronDown, CircleX, FileText, LoaderCircle, Square, TerminalSquare, Wrench } from "lucide-react";
 import { MessageContent } from "./message-content";
 
@@ -24,6 +29,8 @@ type NarrativeItem =
   | { kind: "cancellation"; event: RunEvent };
 
 export function RunNarrative({ events, hideFinalText = false }: { events: RunEvent[]; hideFinalText?: boolean }) {
+  const t = useT();
+
   const status = runStatus(events);
   let items = narrativeItems(events);
   if (status === "completed" && hideFinalText) {
@@ -33,7 +40,7 @@ export function RunNarrative({ events, hideFinalText = false }: { events: RunEve
   if (items.length === 0) return null;
 
   return (
-    <section className="run-narrative" aria-label="工具执行过程">
+    <section className="run-narrative" aria-label={t("工具执行过程")}>
       {items.map((item) => {
         if (item.kind === "text") {
           const text = String(item.event.payload.text ?? "");
@@ -48,8 +55,9 @@ export function RunNarrative({ events, hideFinalText = false }: { events: RunEve
 }
 
 function ToolActivityRow({ activity }: { activity: ToolActivity }) {
-  const label = activityLabel(activity);
-  const details = activityDetails(activity);
+  const t = useT();
+  const label = activityLabel(activity, t);
+  const details = activityDetails(activity, t);
   return (
     <details className={`tool-activity ${activity.status}`}>
       <summary>
@@ -67,17 +75,19 @@ function ToolActivityRow({ activity }: { activity: ToolActivity }) {
 }
 
 function RunFailure({ event }: { event: RunEvent }) {
-  const error = String(event.payload.error ?? "任务执行失败");
+  const t = useT();
+
+  const error = String(event.payload.error ?? t("任务执行失败"));
   return (
     <details className="run-status-line failed">
-      <summary><CircleX /><span>运行失败</span><ChevronDown /></summary>
-      <code>{error}</code>
+      <summary><CircleX /><span><T>{"运行失败"}</T></span><ChevronDown /></summary>
+      <code>{t(error)}</code>
     </details>
   );
 }
 
 function RunCancellation() {
-  return <div className="run-status-line cancelled"><Square /><span>已停止生成</span></div>;
+  return <div className="run-status-line cancelled"><Square /><span><T>{"已停止生成"}</T></span></div>;
 }
 
 function narrativeItems(events: RunEvent[]): NarrativeItem[] {
@@ -149,8 +159,8 @@ function runStatus(events: RunEvent[]) {
   return "running";
 }
 
-function activityLabel(activity: ToolActivity) {
-  const verb = activity.status === "running" ? "正在" : activity.status === "failed" ? "未能" : activity.status === "cancelled" ? "已停止" : "已";
+function activityLabel(activity: ToolActivity, t: ReturnType<typeof useT>) {
+  const verb = activity.status === "running" ? "正在：{0}" : activity.status === "failed" ? "未能：{0}" : activity.status === "cancelled" ? "已停止：{0}" : "已完成：{0}";
   const action = ({
     bash: "运行命令",
     read: "读取文件",
@@ -162,7 +172,7 @@ function activityLabel(activity: ToolActivity) {
     computer_read_file: "读取文件",
     computer_write_file: "编辑文件",
   } as Record<string, string>)[activity.tool] ?? "调用工具";
-  return `${verb}${action}`;
+  return t(verb, [t(action)]);
 }
 
 function activityIcon(activity: ToolActivity) {
@@ -175,7 +185,7 @@ function activityIcon(activity: ToolActivity) {
   return activity.status === "completed" ? <Check /> : <Wrench />;
 }
 
-function activityDetails(activity: ToolActivity) {
+function activityDetails(activity: ToolActivity, t: ReturnType<typeof useT>) {
   const details: Array<{ kind: "code" | "output"; value: string }> = [];
   const started = activity.events.find((event) => event.type === "TOOL_STARTED");
   const command = activity.events.find((event) => event.type === "COMMAND_STARTED");
@@ -183,13 +193,13 @@ function activityDetails(activity: ToolActivity) {
   const background = activity.events.find((event) => event.type === "BACKGROUND_STARTED");
   const file = activity.events.find((event) => event.type === "FILE_UPDATED");
   const failed = activity.events.find((event) => event.type === "TOOL_FAILED" || event.type === "RUN_FAILED");
-  const argumentsDetail = formatArguments(activity.tool, started?.payload.arguments);
+  const argumentsDetail = formatArguments(activity.tool, started?.payload.arguments, t);
   if (command?.payload.command) details.push({ kind: "code", value: String(command.payload.command) });
   else if (argumentsDetail) details.push({ kind: "code", value: argumentsDetail });
   const updatedPath = file?.payload.path ? String(file.payload.path) : "";
   if (updatedPath && !argumentsDetail.startsWith(updatedPath)) details.push({ kind: "code", value: updatedPath });
-  if (file?.payload.replacements) details.push({ kind: "code", value: `已替换 ${String(file.payload.replacements)} 处` });
-  if (background?.payload.log_path) details.push({ kind: "code", value: `后台日志：${String(background.payload.log_path)}` });
+  if (file?.payload.replacements) details.push({ kind: "code", value: t("已替换 {0} 处", [String(file.payload.replacements)]) });
+  if (background?.payload.log_path) details.push({ kind: "code", value: t("后台日志：{0}", [String(background.payload.log_path)]) });
   if (output) {
     const value = [output.payload.stdout, output.payload.stderr].filter(Boolean).join("\n").trim();
     if (value) details.push({ kind: "output", value });
@@ -198,13 +208,13 @@ function activityDetails(activity: ToolActivity) {
   return details;
 }
 
-function formatArguments(tool: string, value: unknown) {
+function formatArguments(tool: string, value: unknown, t: ReturnType<typeof useT>) {
   if (typeof value !== "string" || value === "{}") return "";
   try {
     const parsed = JSON.parse(value) as Record<string, unknown>;
     if (tool === "bash" || tool === "computer_exec") return String(parsed.command ?? "");
     const filePath = String(parsed.file_path ?? parsed.path ?? "");
-    if (tool === "edit") return `${filePath}${parsed.replace_all ? " · 替换全部匹配" : " · 精确替换"}`;
+    if (tool === "edit") return `${filePath}${t(parsed.replace_all ? " · 替换全部匹配" : " · 精确替换")}`;
     if (tool === "load_skill") return String(parsed.name ?? "");
     if (tool === "write" || tool === "read" || tool.startsWith("computer_")) return filePath;
     return Object.values(parsed).map((item) => typeof item === "string" ? item : JSON.stringify(item)).join(" · ");

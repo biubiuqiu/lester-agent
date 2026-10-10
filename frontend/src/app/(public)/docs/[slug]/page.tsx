@@ -1,3 +1,4 @@
+import { getI18n } from "@/lib/i18n/server";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { DocsArticle } from "@/components/site/docs-article";
@@ -9,7 +10,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const doc = getSiteDoc(slug);
   if (!doc) notFound();
-  return { title: `${doc.navTitle} · Lester Agent 帮助文档`, description: doc.description };
+  const { t } = await getI18n();
+  return { title: t("{0} · Lester Agent 帮助文档", [t(doc.navTitle)]), description: t(doc.description) };
 }
 
 export default async function DocumentationChapter({ params }: { params: Promise<{ slug: string }> }) {

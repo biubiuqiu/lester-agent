@@ -79,6 +79,9 @@ export class WorkspaceApi {
     if (path === "/api/v1/auth/session") return reply({ access_expires_at: new Date(Date.now() + 7200000).toISOString(), refresh_expires_at: new Date(Date.now() + 2592000000).toISOString() });
     if (path === "/api/v1/me") return reply(user);
     if (path === "/api/v1/me/guides") return reply({ guides: ["welcome", "models", "projects", "files", "agents", "contexts", "computer", "skills", "profile", "publishing"].map(topic => ({ topic, step: 0, status: "completed" })) });
+    if (/^\/api\/v1\/me\/guides\/(welcome|models|projects|files|agents|contexts|computer|skills|profile|publishing)$/.test(path) && method === "PATCH") {
+      const body = request.postDataJSON(); this.mutations.push({ path, body }); return reply({ topic: path.split("/").at(-1), ...body });
+    }
     if (path === "/api/v1/projects") return reply({ projects: [{ ...project, conversation_count: this.conversation ? 1 : 0 }] });
     if (path === "/api/v1/model-deployments") return reply({ deployments: this.hasModel ? [deployment] : [] });
     if (path === "/api/v1/model-connections") return reply({ connections: [] });

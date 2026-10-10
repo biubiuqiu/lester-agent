@@ -24,12 +24,20 @@ Implementation phase labels are internal planning terms. Do not expose labels su
 
 ## Public website and documentation
 
-- `/` is the anonymous, server-rendered project homepage; `/docs` and its static chapters are public help. `/app` remains the authenticated conversation-first workspace. Keep public pages independent of API availability and session state; do not redirect public visitors to login or fetch workspace data there.
+- `/` is the anonymous, server-rendered project homepage; `/docs` and its authored chapters are public help. `/app` remains the authenticated conversation-first workspace. Keep public pages independent of API availability and session state; do not redirect public visitors to login or fetch workspace data there.
 - Public-site routes live under `frontend/src/app/(public)/`; scope their styles so workspace, login, and settings layouts remain independent. Small client components support labeled examples and clipboard controls; do not ship design images as interactive UI.
 - Keep the homepage minimal: a centered opening statement, one primary action, and a short name story, with detailed capabilities/setup in `/docs`. The name is inspired by GTA V's Lester Crest; describe resourcefulness without promising omnipotence. Text and controls stay native HTML; do not add decorative artwork or competing section headlines by default.
 - Homepage examples are explicitly illustrative, never real model runs, test results, or evidence of validation. Workspace entry must use the existing login flow and never auto-send. Link the actual `biubiuqiu/lester-agent` repository/Issues; do not fabricate a hosted demo, metrics, a licence, or unavailable Memory/connector/scheduling/browser capabilities.
 - Maintain `frontend/src/lib/site-docs.tsx` with README when supported behavior, environment variables, or migration requirements change. Distinguish fresh initialization from existing-volume upgrades, preserve the encryption key/data, and accurately explain model configuration versus actual provider verification.
 - Verify anonymous access, documentation navigation, copy success/error, desktop/mobile layout, and the existing workspace/login entry after public-site changes.
+
+## Internationalization contract
+
+- Support `zh-CN`, `en`, `ja`, `ko`, `fr` and `es` across interface copy, full public help and feature guides. Select language per request from a validated `lester_locale` cookie, then weighted `Accept-Language`, with English fallback. Public pages now render per request for language selection and must still work anonymously without API access or JavaScript. Never cache a mutable global locale across users.
+- Use `useT` / `T` for interface copy and matching source keys in `frontend/src/lib/i18n/messages/*.json`. Keep all six catalogues complete, use numeric placeholders for natural sentence ordering, and dynamically load only the selected foreign dictionary. Chinese source copy remains the identity language. Translate known stored interface notices at display time so they follow language changes.
+- Never translate user-authored messages, editable profile/project/Agent fields, model replies, paths or file bytes. Preserve code, commands and configuration identifiers in help. Localize built-in interface labels, dates and accessible names.
+- Language switching updates the provider and refreshes server content without a full reload. Preserve drafts, local File objects and terminal sessions; a locale change must not restart sockets, trigger mutations or resend a task. Keep the selector compact and keyboard accessible, including mobile layouts and long translations.
+- `pnpm test` runs `scripts/check-i18n.mjs` before unit tests. Catalogue checks reject missing source keys, unequal language key sets, empty translations and changed placeholders. Browser checks cover six-language public pages and all help chapters, server HTML without JavaScript, translated auth/onboarding and preserved drafts/attachments during switching.
 
 ## Account and authentication contract
 

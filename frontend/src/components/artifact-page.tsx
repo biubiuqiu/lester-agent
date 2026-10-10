@@ -1,4 +1,6 @@
 "use client";
+import { T, useT } from "@/components/i18n";
+
 
 import { ArrowLeft, LoaderCircle } from "lucide-react";
 import Link from "next/link";
@@ -9,6 +11,8 @@ import { Brand } from "./brand";
 import { GuideLauncher } from "./user-guide";
 
 export function ArtifactPage({ returnTo = "/app" }: { returnTo?: string }) {
+  const t = useT();
+
   const [attempt, setAttempt] = useState(0);
   const [projects, setProjects] = useState<Project[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -43,23 +47,21 @@ export function ArtifactPage({ returnTo = "/app" }: { returnTo?: string }) {
     <main className="artifacts-page-shell">
       <header className="artifacts-page-topbar">
         <GuideLauncher />
-        <Link className="artifacts-page-brand" href={returnTo} aria-label="返回 Lester 工作区">
+        <Link className="artifacts-page-brand" href={returnTo} aria-label={t("返回 Lester 工作区")}>
           <Brand />
         </Link>
         <Link className="artifacts-page-back" href={returnTo}>
           <ArrowLeft size={16} />
-          返回工作区
-        </Link>
+          <T>{"返回工作区"}</T></Link>
       </header>
       {loading ? (
         <div className="artifact-page-loading">
           <LoaderCircle className="spin" size={20} />
-          正在载入产物管理…
-        </div>
+          <T>{"正在载入产物管理…"}</T></div>
       ) : error ? (
         <div className="artifact-page-error" role="alert">
-          {error}
-          <button type="button" onClick={() => { setError(""); setLoading(true); setAttempt(value => value + 1); }}>重新加载</button>
+          {t(error)}
+          <button type="button" onClick={() => { setError(""); setLoading(true); setAttempt(value => value + 1); }}><T>{"重新加载"}</T></button>
         </div>
       ) : (
         <ArtifactManager projects={projects} conversations={conversations} />

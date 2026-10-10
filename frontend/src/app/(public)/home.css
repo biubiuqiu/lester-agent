@@ -60,3 +60,7 @@
   .public-site:has(.site-home) .site-footer p { font-size: 12px; }
   .public-site:has(.site-home) .site-footer nav { gap: 25px; font-size: 12px; }
 }
+
+.site-sentence-space { display: none; }
+html:not([lang="zh-CN"]):not([lang="ja"]) .site-sentence-space { display: inline; }
+.public-site .site-header nav { flex-wrap: wrap; }

@@ -1,4 +1,6 @@
 "use client";
+import { T, useT } from "@/components/i18n";
+
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Download, FileText, FolderOpen, X } from "lucide-react";
@@ -59,6 +61,7 @@ export function useOptionalFileWorkspace() {
 export function FileWorkspaceProvider({ conversationId, storageKey, events, liveFileEvents, runId, running, runOutcome, children }: {
   conversationId?: string; storageKey: string; events: RunEvent[]; liveFileEvents: RunEvent[]; runId?: string; running: boolean; runOutcome?: "failed" | "cancelled"; children: React.ReactNode;
 }) {
+
   const [requestedPreview] = useState(() => {
     if (!conversationId || typeof window === "undefined" || window.location.pathname !== `/app/c/${conversationId}`) return "";
     const path = new URLSearchParams(window.location.search).get("preview") || "";
@@ -266,27 +269,35 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, live
 }
 
 export function OpenFilesButton({ menu = false }: { menu?: boolean }) {
+  const t = useT();
+
   const { setPanelOpen, setPanelTab } = useFileWorkspace();
-  return <button type="button" className={menu ? "open-files-menu-button" : "open-files-button"} onClick={(event) => { setPanelTab("files"); setPanelOpen(true); const details = event.currentTarget.closest("details"); if (details) details.open = false; }}><FolderOpen />{menu ? "查看会话文件" : "文件"}</button>;
+  return <button type="button" className={menu ? "open-files-menu-button" : "open-files-button"} onClick={(event) => { setPanelTab("files"); setPanelOpen(true); const details = event.currentTarget.closest("details"); if (details) details.open = false; }}><FolderOpen />{menu ? t("查看会话文件") : t("文件")}</button>;
 }
 
 export function FileReferenceChip() {
+  const t = useT();
+
   const { reference, setReference } = useFileWorkspace();
-  return reference ? <div className="file-reference"><FileText /><span title={reference}>{reference}</span><button type="button" onClick={() => setReference(null)} aria-label="移除文件引用"><X /></button></div> : null;
+  return reference ? <div className="file-reference"><FileText /><span title={reference}>{reference}</span><button type="button" onClick={() => setReference(null)} aria-label={t("移除文件引用")}><X /></button></div> : null;
 }
 
 export function ArtifactCards() {
+  const t = useT();
+
   const { files, changes, open, conversationId, running, deliverables } = useFileWorkspace();
   const registeredPaths = new Set(deliverables.map((item) => item.entry_path));
   const verified = artifactFiles(files.filter((file) => !deliverableKind(file) && !registeredPaths.has(file.path)), changes, running);
   if (!verified.length) return null;
-  return <details className="related-files"><summary>其他相关文件 · {verified.length}</summary><section className="artifact-cards" aria-label="任务文件">{verified.map((file) => <div className="artifact-card" key={file.path}>
-    <button type="button" onClick={() => open(file)} title={file.path} aria-label={`查看 ${file.name}`}><FileText /><span><strong>{file.name}</strong><small>{file.name.includes(".") ? file.name.split(".").at(-1)?.toUpperCase() : "文件"} · {file.size < 1024 ? `${file.size} B` : file.size < 1048576 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / 1048576).toFixed(1)} MB`}</small></span><span>查看</span></button>
+  return <details className="related-files"><summary><T>{"其他相关文件 ·"}</T>{verified.length}</summary><section className="artifact-cards" aria-label={t("任务文件")}>{verified.map((file) => <div className="artifact-card" key={file.path}>
+    <button type="button" onClick={() => open(file)} title={file.path} aria-label={t("查看 {0}", [file.name])}><FileText /><span><strong>{file.name}</strong><small>{file.name.includes(".") ? file.name.split(".").at(-1)?.toUpperCase() : t("文件")} · {file.size < 1024 ? `${file.size} B` : file.size < 1048576 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / 1048576).toFixed(1)} MB`}</small></span><span><T>{"查看"}</T></span></button>
     <FileDownload conversationId={conversationId} file={file} />
   </div>)}</section></details>;
 }
 
 export function FileDownload({ conversationId, file, label }: { conversationId: string; file: FileEntry; label?: string }) {
+  const t = useT();
+
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   async function download() {
@@ -300,5 +311,5 @@ export function FileDownload({ conversationId, file, label }: { conversationId: 
     } catch (reason) { setError(reason instanceof Error ? reason.message : "下载失败"); }
     finally { setPending(false); }
   }
-  return <span className="file-download"><button type="button" disabled={pending} onClick={() => void download()} aria-label={`下载 ${file.name}`} title="下载"><Download />{label ? <span>{pending ? "下载中…" : label}</span> : null}</button>{error ? <span role="alert">{error}</span> : null}</span>;
+  return <span className="file-download"><button type="button" disabled={pending} onClick={() => void download()} aria-label={t("下载 {0}", [file.name])} title={t("下载")}><Download />{label ? <span>{pending ? t("下载中…") : label}</span> : null}</button>{error ? <span role="alert">{t(error)}</span> : null}</span>;
 }

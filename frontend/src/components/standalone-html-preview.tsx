@@ -1,4 +1,7 @@
 "use client";
+import { formatMessage } from "@/lib/i18n";
+import { T, useT } from "@/components/i18n";
+
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -12,10 +15,12 @@ function validPath(path: string) {
 }
 
 export function StandaloneHTMLPreview({ conversationId }: { conversationId: string }) {
+  const t = useT();
+
   const router = useRouter();
   const path = useSearchParams().get("path") ?? "";
   const frame = useRef<HTMLIFrameElement>(null);
-  useEffect(() => { if (validPath(path)) document.title = `${path.split("/").at(-1)} · Lester 预览`; }, [path]);
+  useEffect(() => { if (validPath(path)) document.title = formatMessage("{0} · Lester 预览", [path.split("/").at(-1)]); }, [path]);
   const [attempt, setAttempt] = useState(0);
   const [preview, setPreview] = useState({ path: "", content: "", error: "" });
   useEffect(() => {
@@ -49,5 +54,5 @@ export function StandaloneHTMLPreview({ conversationId }: { conversationId: stri
     return () => { active = false; controller.abort(); window.removeEventListener("message", navigate); };
   }, [conversationId, path, router]);
   const ready = preview.path === path;
-  return <main className="standalone-preview"><AuthSessionKeeper />{ready && preview.content ? <iframe ref={frame} title={`HTML 预览：${path}`} srcDoc={preview.content} sandbox="allow-scripts" /> : <div className="standalone-preview-state" role={ready && preview.error ? "alert" : "status"}>{ready && preview.error ? <><p>{preview.error}</p><button type="button" className="secondary-button" onClick={() => setAttempt(value => value + 1)}>重新加载</button></> : <p>正在加载 HTML 预览…</p>}</div>}</main>;
+  return <main className="standalone-preview"><AuthSessionKeeper />{ready && preview.content ? <iframe ref={frame} title={t("HTML 预览：{0}", [path])} srcDoc={preview.content} sandbox="allow-scripts" /> : <div className="standalone-preview-state" role={ready && preview.error ? "alert" : "status"}>{ready && preview.error ? <><p>{t(preview.error)}</p><button type="button" className="secondary-button" onClick={() => setAttempt(value => value + 1)}><T>{"重新加载"}</T></button></> : <p><T>{"正在加载 HTML 预览…"}</T></p>}</div>}</main>;
 }

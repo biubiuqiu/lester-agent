@@ -1,4 +1,7 @@
 "use client";
+import { formatMessage } from "@/lib/i18n";
+import { T, useT } from "@/components/i18n";
+
 
 import { ContextInput, useContextReferences } from "./context-input";
 import { useEffect, useRef, useState, type FormEvent } from "react";
@@ -11,6 +14,8 @@ import { readView, updateView, viewKey } from "@/lib/conversation-view-state";
 import { startConversation } from "@/lib/start-conversation";
 
 export function NewConversationComposer({ deployments, user, projectId, projectName, initialAgentSlug }: { deployments: Deployment[]; user: UserProfile; projectId?:string; projectName?:string; initialAgentSlug?: string }) {
+  const t = useT();
+
   const router = useRouter();
   const storageKey = viewKey(user.user_id, user.workspace_id, `new.${projectId || "default"}`);
   const [contexts, setContexts] = useContextReferences(storageKey);
@@ -63,9 +68,9 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
       clear();
       if (mounted.current) router.push(`/app/c/${conversation.id}`);
     } catch (reason) {
-      const message = reason instanceof Error ? reason.message : "发送失败";
+      const message = reason instanceof Error ? reason.message : t("发送失败");
       if (created) {
-        updateView(viewKey(user.user_id, user.workspace_id, created.id), { sendNotice: `会话已创建，但首条消息未确认发送成功：${message}。草稿已保留，请先检查消息和运行状态，再决定是否重新发送。` });
+        updateView(viewKey(user.user_id, user.workspace_id, created.id), { sendNotice: formatMessage("会话已创建，但首条消息未确认发送成功：{0}。草稿已保留，请先检查消息和运行状态，再决定是否重新发送。", [message]) });
         clear();
         if (mounted.current) router.push(`/app/c/${created.id}`);
       } else {
@@ -77,17 +82,17 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
 
   return <div className="new-chat-home"><div className="new-chat-content">
     {projectName?<p className="new-project-context">{projectName}</p>:null}
-    <h1>有什么想交给 {selectedAgent?.name || "Lester"}？</h1>
-    <form className="composer new-chat-composer" onSubmit={submit} aria-label="开始新对话" aria-busy={busy}>
+    <h1>{t("有什么想交给 {0}？", [selectedAgent?.builtin ? t(selectedAgent.name) : selectedAgent?.name || "Lester"])}</h1>
+    <form className="composer new-chat-composer" onSubmit={submit} aria-label={t("开始新对话")} aria-busy={busy}>
       <div className="compose-box">
-        {missing.length ? <p className="draft-attachment-notice" role="status">请重新选择刷新前的附件：{missing.join("、")}<button type="button" onClick={() => { setMissing([]); updateView(storageKey, { missingFiles: [] }); }}>知道了</button></p> : null}
-        {files.length ? <div className="pending-attachments">{files.map((file, index) => <span key={`${file.name}-${index}`}><FileText />{file.name}<button type="button" disabled={busy} aria-label={`移除 ${file.name}`} onClick={() => changeFiles(files.filter((_, i) => i !== index))}><X /></button></span>)}</div> : null}
-        <ContextInput inputRef={messageInput} references={contexts} onReferences={setContexts} rows={3} autoFocus aria-label="消息输入框" placeholder="描述你的目标，上传文件或粘贴图片…" value={text} disabled={busy} onText={(value) => { setText(value); updateView(storageKey, { text: value }); }} onPaste={(event) => { const images = pastedImageFiles(event); if (images.length) { event.preventDefault(); changeFiles([...files, ...images]); } }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
+        {missing.length ? <p className="draft-attachment-notice" role="status"><T>{"请重新选择刷新前的附件："}</T>{missing.join("、")}<button type="button" onClick={() => { setMissing([]); updateView(storageKey, { missingFiles: [] }); }}><T>{"知道了"}</T></button></p> : null}
+        {files.length ? <div className="pending-attachments">{files.map((file, index) => <span key={`${file.name}-${index}`}><FileText />{file.name}<button type="button" disabled={busy} aria-label={t("移除 {0}", [file.name])} onClick={() => changeFiles(files.filter((_, i) => i !== index))}><X /></button></span>)}</div> : null}
+        <ContextInput inputRef={messageInput} references={contexts} onReferences={setContexts} rows={3} autoFocus aria-label={t("消息输入框")} placeholder={t("描述你的目标，上传文件或粘贴图片…")} value={text} disabled={busy} onText={(value) => { setText(value); updateView(storageKey, { text: value }); }} onPaste={(event) => { const images = pastedImageFiles(event); if (images.length) { event.preventDefault(); changeFiles([...files, ...images]); } }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
         <div className="compose-actions">
           <input ref={input} type="file" multiple hidden onChange={(event) => { changeFiles([...files, ...Array.from(event.target.files || [])]); event.target.value = ""; }} />
-          <button type="button" className="icon-button upload-button" aria-label="添加附件" title="添加附件或直接粘贴图片" disabled={busy} onClick={() => input.current?.click()}><Paperclip /></button>
-          <label className="model-selector"><select aria-label="当前模型" value={model} disabled={busy || !deployments.length} onChange={(event) => setModel(event.target.value)}>{!deployments.length ? <option value="">请先配置模型</option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown /></label>
-          <button className="send-button" aria-label="发送消息" disabled={busy || !model || (!text.trim() && !files.length)}><Send /></button>
+          <button type="button" className="icon-button upload-button" aria-label={t("添加附件")} title={t("添加附件或直接粘贴图片")} disabled={busy} onClick={() => input.current?.click()}><Paperclip /></button>
+          <label className="model-selector"><select aria-label={t("当前模型")} value={model} disabled={busy || !deployments.length} onChange={(event) => setModel(event.target.value)}>{!deployments.length ? <option value=""><T>{"请先配置模型"}</T></option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown /></label>
+          <button className="send-button" aria-label={t("发送消息")} disabled={busy || !model || (!text.trim() && !files.length)}><Send /></button>
         </div>
       </div>
       <div className="new-chat-options"><details className="agent-options" onKeyDown={event => {
@@ -97,14 +102,14 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
           event.currentTarget.querySelector("summary")?.focus();
         }
       }}>
-        <summary>{selectedAgent?.name || "Lester"} <span>更换 Agent</span></summary>
-        <div className="new-agent-picker"><label>选择 Agent <select aria-label="选择 Agent" value={agentSlug} disabled={busy || !agents.length} onChange={event=>{setAgentSlug(event.target.value);updateView(storageKey,{agentSlug:event.target.value});}}>{agents.map(agent=><option key={agent.slug} value={agent.slug}>{agent.name}</option>)}</select></label><Link href={`/app/agents/${encodeURIComponent(agentSlug)}`}>了解这个 Agent</Link><Link href="/app/agents">管理 Agent</Link></div>
+        <summary>{selectedAgent?.builtin ? t(selectedAgent.name) : selectedAgent?.name || "Lester"} <span><T>{"更换 Agent"}</T></span></summary>
+        <div className="new-agent-picker"><label><T>{"选择 Agent"}</T><select aria-label={t("选择 Agent")} value={agentSlug} disabled={busy || !agents.length} onChange={event=>{setAgentSlug(event.target.value);updateView(storageKey,{agentSlug:event.target.value});}}>{agents.map(agent=><option key={agent.slug} value={agent.slug}>{agent.builtin ? t(agent.name) : agent.name}</option>)}</select></label><Link href={`/app/agents/${encodeURIComponent(agentSlug)}`}><T>{"了解这个 Agent"}</T></Link><Link href="/app/agents"><T>{"管理 Agent"}</T></Link></div>
       </details>
-      {deployments.length ? <p className="new-chat-hint">Enter 发送 · Shift + Enter 换行</p> : null}</div>
-      {agentError ? <p role="alert" className="compose-error">{agentError}</p> : null}
-      {busy ? <p role="status" className="composer-status active">正在创建会话并发送消息…</p> : null}
-      {error ? <p role="alert" className="compose-error">{error}</p> : null}
-      {!deployments.length ? <div className="model-setup-prompt"><div><strong>再准备一个模型，就可以开始了</strong><p>连接你的模型服务，或使用管理员提供的共享模型。你的草稿会保留。</p></div><Link className="primary-button" href={modelSettingsURL}>配置第一个模型 <ArrowRight size={16} /></Link></div> : null}
+      {deployments.length ? <p className="new-chat-hint"><T>{"Enter 发送 · Shift + Enter 换行"}</T></p> : null}</div>
+      {agentError ? <p role="alert" className="compose-error">{t(agentError)}</p> : null}
+      {busy ? <p role="status" className="composer-status active"><T>{"正在创建会话并发送消息…"}</T></p> : null}
+      {error ? <p role="alert" className="compose-error">{t(error)}</p> : null}
+      {!deployments.length ? <div className="model-setup-prompt"><div><strong><T>{"再准备一个模型，就可以开始了"}</T></strong><p><T>{"连接你的模型服务，或使用管理员提供的共享模型。你的草稿会保留。"}</T></p></div><Link className="primary-button" href={modelSettingsURL}><T>{"配置第一个模型"}</T><ArrowRight size={16} /></Link></div> : null}
     </form>
     <details className="task-examples" onKeyDown={event => {
       if (event.key === "Escape") {
@@ -112,10 +117,10 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
         event.currentTarget.open = false;
         event.currentTarget.querySelector("summary")?.focus();
       }
-    }}><summary>试试一个任务<ChevronDown size={15} aria-hidden="true" /></summary><div aria-label="任务示例">{[
-      ["整理需求文档", "帮我整理产品需求，生成一份包含目标、功能范围和验收标准的评审文档。"],
-      ["分析一份表格", "分析我上传的表格，找出主要趋势和异常，并整理成简明报告。"],
-      ["制作一个网页", "帮我制作一个产品介绍网页，先和我确认目标用户、内容和视觉风格。"],
+    }}><summary><T>{"试试一个任务"}</T><ChevronDown size={15} aria-hidden="true" /></summary><div aria-label={t("任务示例")}>{[
+      [t("整理需求文档"), t("帮我整理产品需求，生成一份包含目标、功能范围和验收标准的评审文档。")],
+      [t("分析一份表格"), t("分析我上传的表格，找出主要趋势和异常，并整理成简明报告。")],
+      [t("制作一个网页"), t("帮我制作一个产品介绍网页，先和我确认目标用户、内容和视觉风格。")],
     ].map(([title, prompt]) => <button type="button" key={title} disabled={busy} onClick={() => chooseExample(prompt)}>{title}</button>)}</div></details>
   </div></div>;
 }

@@ -1,4 +1,6 @@
 "use client";
+import { T, useT } from "@/components/i18n";
+
 
 import { useEffect, useState } from "react";
 import { Box, CheckCircle2, HardDrive } from "lucide-react";
@@ -6,6 +8,8 @@ import { SettingsShell } from "@/components/settings-shell";
 import { api, Skill } from "@/lib/api";
 
 export default function SkillMarketplace() {
+  const t = useT();
+
   const [skills, setSkills] = useState<Skill[]>([]);
   const [error, setError] = useState("");
 
@@ -19,15 +23,15 @@ export default function SkillMarketplace() {
 
   return <SettingsShell active="skills">
     <header className="settings-heading">
-      <div><p className="eyebrow">Settings / Skills</p><h1>Skill 广场</h1><p>浏览可复用能力，并在具体会话的 Computer 面板中按需安装。</p></div>
+      <div><p className="eyebrow">Settings / Skills</p><h1><T>{"Skill 广场"}</T></h1><p><T>{"浏览可复用能力，并在具体会话的 Computer 面板中按需安装。"}</T></p></div>
       <span className="secure-badge"><HardDrive />MinIO · S3 compatible</span>
     </header>
-    {error ? <p className="settings-error">加载失败：{error}</p> : null}
+    {error ? <p className="settings-error"><T>{"加载失败："}</T>{t(error)}</p> : null}
     <section className="skill-market-grid">
       {skills.map((skill) => <article className="skill-market-card" key={skill.id}>
         <span className="card-icon"><Box /></span>
-        <div className="skill-card-copy"><span className="skill-source">{skill.source === "builtin" ? "官方内置" : "工作区"}</span><h2>{skill.name}</h2><p>{skill.description}</p></div>
-        <footer><span>v{skill.version}</span><span><CheckCircle2 />会话级安装</span></footer>
+        <div className="skill-card-copy"><span className="skill-source">{skill.source === "builtin" ? t("官方内置") : t("工作区")}</span><h2>{skill.name}</h2><p>{skill.description}</p></div>
+        <footer><span>v{skill.version}</span><span><CheckCircle2 /><T>{"会话级安装"}</T></span></footer>
       </article>)}
     </section>
   </SettingsShell>;

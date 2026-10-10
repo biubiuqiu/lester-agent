@@ -1,4 +1,7 @@
 "use client";
+import { LanguageSelect } from "@/components/i18n";
+import { T, useT } from "@/components/i18n";
+
 
 import { useEffect, useRef, useState } from "react";
 import { BookOpen, Bot, Boxes, Cpu, House, LogOut, MonitorCog, MoreHorizontal, ShieldCheck, UserRound } from "lucide-react";
@@ -20,6 +23,8 @@ const menuItems = [
 ];
 
 export function UserMenu({ user }: { user: UserProfile | null }) {
+  const t = useT();
+
   const router = useRouter();
   const guide = useGuide();
   const root = useRef<HTMLDivElement>(null);
@@ -65,19 +70,19 @@ export function UserMenu({ user }: { user: UserProfile | null }) {
 
   const name = user?.display_name || "Lester User";
   return <div className="user-menu" ref={root}>
-    {open ? <div className="user-menu-popover" role="menu" aria-label="账户与设置">
-      <header><UserAvatar displayName={name} avatarKey={user?.avatar_key} avatarURL={user?.avatar_url} /><span><strong>{name}</strong><small>{user?.email || "正在加载账户…"}</small></span></header>
-      <div className="user-menu-items">
-        {guide && <button type="button" role="menuitem" onClick={() => { setOpen(false); guide.open(); }}><BookOpen /><span>新手引导</span></button>}
-        {user?.role === "admin" && <button type="button" role="menuitem" onClick={() => navigate("/admin/users")}><ShieldCheck /><span>管理后台</span></button>}
-        {menuItems.map((item) => <button key={item.path} type="button" role="menuitem" onClick={() => navigate(item.path)}><item.icon /><span>{item.label}</span></button>)}
+    {open ? <div className="user-menu-popover" role="menu" aria-label={t("账户与设置")}>
+      <header><UserAvatar displayName={name} avatarKey={user?.avatar_key} avatarURL={user?.avatar_url} /><span><strong>{name}</strong><small>{user?.email || t("正在加载账户…")}</small></span></header>
+      <LanguageSelect /><div className="user-menu-items">
+        {guide && <button type="button" role="menuitem" onClick={() => { setOpen(false); guide.open(); }}><BookOpen /><span><T>{"新手引导"}</T></span></button>}
+        {user?.role === "admin" && <button type="button" role="menuitem" onClick={() => navigate("/admin/users")}><ShieldCheck /><span><T>{"管理后台"}</T></span></button>}
+        {menuItems.map((item) => <button key={item.path} type="button" role="menuitem" onClick={() => navigate(item.path)}><item.icon /><span>{t(item.label)}</span></button>)}
       </div>
-      {error ? <p className="settings-error" role="alert">{error}</p> : null}
-      <button type="button" className="user-menu-logout" role="menuitem" onClick={logout} disabled={loggingOut}><LogOut /><span>{loggingOut ? "正在退出…" : "退出登录"}</span></button>
+      {error ? <p className="settings-error" role="alert">{t(error)}</p> : null}
+      <button type="button" className="user-menu-logout" role="menuitem" onClick={logout} disabled={loggingOut}><LogOut /><span>{loggingOut ? t("正在退出…") : t("退出登录")}</span></button>
     </div> : null}
     <button type="button" className="user-menu-trigger" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
       <UserAvatar displayName={name} avatarKey={user?.avatar_key} avatarURL={user?.avatar_url} />
-      <span><strong>{name}</strong><small>{user?.email || "个人账户"}</small></span>
+      <span><strong>{name}</strong><small>{user?.email || t("个人账户")}</small></span>
       <MoreHorizontal />
     </button>
   </div>;

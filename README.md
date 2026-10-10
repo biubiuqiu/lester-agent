@@ -8,11 +8,13 @@ Describe a goal, choose a model, and let Lester work with files and commands in 
 
 ## Public website and help
 
-The deployment root `/` is Lester's minimal public homepage: the centered statement “想清楚。做出来。”, one primary action, a short introduction, and the story behind its name. Lester takes inspiration from GTA V's resourceful behind-the-scenes hacker, Lester Crest. Quiet navigation links to the workspace, documentation, actual GitHub repository and Issues. `/docs` provides Chinese help for quick start, everyday usage, model setup, deployment/upgrades, and troubleshooting. Both surfaces are statically rendered and work without authentication or API access. `/app` remains the conversation workspace; the login page and account menu link back to the website/help.
+The deployment root `/` is Lester's minimal public homepage: the centered statement “想清楚。做出来。”, one primary action, a short introduction, and the story behind its name. Lester takes inspiration from GTA V's resourceful behind-the-scenes hacker, Lester Crest. Quiet navigation links to the workspace, documentation, actual GitHub repository and Issues. `/docs` provides help for quick start, everyday usage, model setup, deployment/upgrades, and troubleshooting. The homepage, complete help chapters, workspace, authentication, settings and step-by-step guides support Chinese, English, Japanese, Korean, French and Spanish. Public pages render on each request using the selected language and work without authentication or API access, including with JavaScript disabled. `/app` remains the conversation workspace; the login page and account menu link back to the website/help.
 
 Documentation content lives in `frontend/src/lib/site-docs.tsx`; shared public-site components live in `frontend/src/components/site/`. Update the help content alongside changes to capabilities, environment variables, and migrations. Workspace entry uses the existing login flow and never starts a task automatically. Existing deployments must rebuild Web and reload the page. No additional database migration or deployment service is needed for the website.
 
 The new-task screen keeps one 760px-wide composer, with quiet model/attachment controls and an on-demand Agent picker. Expand **试试一个任务** to choose an example; it only fills the draft. Desktop project/conversation action icons appear on hover or keyboard focus and stay visible on touch devices. Header help and artifact controls retain accessible names and tooltips; previews, terminal access, draft persistence and account tutorials remain available.
+
+Language follows the browser preference on first visit, with English as the fallback for unsupported languages. Use the language selector in the public header, login page, account menu or settings sidebar to choose explicitly; a one-year cookie remembers the choice in that browser. Switching language preserves drafts and local attachments during navigation. User messages, project/Agent names, model responses, file contents and deployment commands remain as authored.
 
 ## Step-by-step user guides
 
@@ -583,7 +585,7 @@ Frontend (pnpm 10.17.1):
 ```bash
 cd frontend
 pnpm install --frozen-lockfile
-pnpm test
+pnpm test # includes six-language catalogue validation
 pnpm lint
 pnpm build
 ```
@@ -621,7 +623,7 @@ GitHub Actions runs on pushes to `main`, pull requests, and manual dispatch. New
 | Go dependency security | Backend changes and weekly | Reachable vulnerable symbols via govulncheck |
 | Frontend dependency security | Package/lockfile/pnpm configuration changes and weekly | High/critical production advisories via pnpm audit |
 
-Browser regressions use the production standalone bundle and fixed REST/SSE fixtures; no live models, OAuth providers or email delivery are involved. After building, run `pnpm exec playwright install chromium` then `pnpm test:e2e` in `frontend/`. Desktop and mobile Chromium cover login errors, explicit first-task creation, preserved drafts, failed sends, live file tabs and isolated HTML previews. Tests do not retry failures; CI retains failure screenshots/traces for seven days.
+Browser regressions use the production standalone bundle and fixed REST/SSE fixtures; no live models, OAuth providers or email delivery are involved. After building, run `pnpm exec playwright install chromium` then `pnpm test:e2e` in `frontend/`. Desktop and mobile Chromium cover login errors, explicit first-task creation, preserved drafts, failed sends, live file tabs and isolated HTML previews. They also check all six languages across the homepage and every help chapter, translated server HTML without JavaScript, onboarding, and language switching with retained drafts and attachments. Tests do not retry failures; CI retains failure screenshots/traces for seven days.
 
 Security scans have their own job names and remain failures when vulnerabilities or scan errors occur. Monday's scheduled run (03:23 UTC) scans dependencies even when code has not changed; **Run workflow** runs everything. Jobs use Ubuntu 24.04, Node 22, the Go version in `backend/go.mod`, and pnpm from `frontend/package.json`. Integration tests use a disposable PostgreSQL service, never production data or live model-provider credentials. CI does not deploy the application.
 

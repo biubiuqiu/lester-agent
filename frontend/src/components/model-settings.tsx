@@ -1,4 +1,6 @@
 "use client";
+import { T, useT } from "@/components/i18n";
+
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -27,6 +29,8 @@ const providers = [
 ];
 
 export function ModelSettings({ admin = false, requestedReturn = "/app" }: { admin?: boolean; requestedReturn?: string }) {
+  const t = useT();
+
   const returnTo = /^\/app(?:\/p\/[A-Za-z0-9_-]+)?$/.test(requestedReturn) ? requestedReturn : "/app";
   const [step, setStep] = useState<"connection" | "model" | "list">("connection");
   const [selectedConnectionID, setSelectedConnectionID] = useState("");
@@ -155,24 +159,24 @@ export function ModelSettings({ admin = false, requestedReturn = "/app" }: { adm
 
   const savedConnections = (
         <details className="saved-connections" open={admin ? true : undefined}>
-        <summary>服务商连接 · {connections.length}</summary>
+        <summary><T>{"服务商连接 ·"}</T>{connections.length}</summary>
         <div className="provider-list">
           {connections.length === 0 ? (
-            <p className="muted-block">{loading ? "正在载入…" : "还没有配置模型连接。"}</p>
+            <p className="muted-block">{loading ? t("正在载入…") : t("还没有配置模型连接。")}</p>
           ) : (
             connections.map((item) => (
               <article key={item.id}>
-                <span className="status-dot" aria-label="已保存" />
+                <span className="status-dot" aria-label={t("已保存")} />
                 <div>
                   <strong>{item.name}</strong>
                   <small>{providers.find((providerItem) => providerItem[0] === item.provider)?.[1] || item.provider}</small>
                 </div>
-                {admin && <button type="button" className="admin-edit" onClick={() => setEditing(item)}>编辑连接</button>}
+                {admin && <button type="button" className="admin-edit" onClick={() => setEditing(item)}><T>{"编辑连接"}</T></button>}
               </article>
             ))
           )}
         </div>
-        {!admin ? <button type="button" className="text-button" disabled={loading || busy !== ""} onClick={() => showSetup("connection")}><Plus size={15} />添加连接</button> : null}
+        {!admin ? <button type="button" className="text-button" disabled={loading || busy !== ""} onClick={() => showSetup("connection")}><Plus size={15} /><T>{"添加连接"}</T></button> : null}
         </details>
   );
   const savedDeployments = (
@@ -183,7 +187,7 @@ export function ModelSettings({ admin = false, requestedReturn = "/app" }: { adm
                 <strong>{item.name}</strong>
                 <small>{item.model_id}</small>
               </div>
-              <div className="admin-model-actions">{item.shared && !admin && <span>共享</span>}{item.is_default && <span>默认</span>}{item.enabled === false && <span>已停用</span>}{admin && <button type="button" className="admin-edit" onClick={() => setEditing(item)}>编辑模型</button>}</div>
+              <div className="admin-model-actions">{item.shared && !admin && <span><T>{"共享"}</T></span>}{item.is_default && <span><T>{"默认"}</T></span>}{item.enabled === false && <span><T>{"已停用"}</T></span>}{admin && <button type="button" className="admin-edit" onClick={() => setEditing(item)}><T>{"编辑模型"}</T></button>}</div>
             </article>
           ))}
         </div>
@@ -194,12 +198,11 @@ export function ModelSettings({ admin = false, requestedReturn = "/app" }: { adm
       <header className="settings-heading">
         <div>
           <p className="eyebrow">{admin ? "Administration / Models" : "Settings / Models"}</p>
-          <h1>{admin ? "共享模型" : hasAvailableModel ? "模型" : "准备你的模型"}</h1>
-          <p>{admin ? "统一配置供所有成员使用的模型。密钥加密保存，不向成员公开。" : "个人连接仅供自己使用，也可以直接选用管理员提供的共享模型。"}</p>
+          <h1>{admin ? t("共享模型") : hasAvailableModel ? t("模型") : t("准备你的模型")}</h1>
+          <p>{admin ? t("统一配置供所有成员使用的模型。密钥加密保存，不向成员公开。") : t("个人连接仅供自己使用，也可以直接选用管理员提供的共享模型。")}</p>
         </div>
         <span className="secure-badge">
-          <ShieldCheck />凭证加密保存
-        </span>
+          <ShieldCheck /><T>{"凭证加密保存"}</T></span>
       </header>
       {message && (
         <p className="success-banner" role="status">
@@ -207,33 +210,32 @@ export function ModelSettings({ admin = false, requestedReturn = "/app" }: { adm
           {message}
         </p>
       )}
-      {error ? <div className="settings-error" role="alert">{error}<button type="button" className="text-button" disabled={busy !== ""} onClick={async () => { setError(""); try { await load(); } catch { setError("配置刷新失败，请稍后重试。"); } }}>刷新配置</button></div> : null}
+      {error ? <div className="settings-error" role="alert">{t(error)}<button type="button" className="text-button" disabled={busy !== ""} onClick={async () => { setError(""); try { await load(); } catch { setError("配置刷新失败，请稍后重试。"); } }}><T>{"刷新配置"}</T></button></div> : null}
       {!admin && <>
         {step !== "list" && !loading ? <div className="model-setup-navigation">
-        <ol className="model-setup-steps" aria-label="模型配置步骤">
-          <li><button type="button" aria-current={step === "connection" ? "step" : undefined} disabled={busy !== "" || loading} onClick={() => showSetup("connection")}><span>{connections.length ? <Check size={15} /> : "1"}</span>连接服务商</button></li>
-          <li><button type="button" aria-current={step === "model" ? "step" : undefined} disabled={!connections.length || busy !== "" || loading} onClick={() => showSetup("model")}><span>{hasAvailableModel ? <Check size={15} /> : "2"}</span>添加模型</button></li>
-          <li className={hasAvailableModel ? "complete" : ""}><span>3</span>开始任务</li>
+        <ol className="model-setup-steps" aria-label={t("模型配置步骤")}>
+          <li><button type="button" aria-current={step === "connection" ? "step" : undefined} disabled={busy !== "" || loading} onClick={() => showSetup("connection")}><span>{connections.length ? <Check size={15} /> : "1"}</span><T>{"连接服务商"}</T></button></li>
+          <li><button type="button" aria-current={step === "model" ? "step" : undefined} disabled={!connections.length || busy !== "" || loading} onClick={() => showSetup("model")}><span>{hasAvailableModel ? <Check size={15} /> : "2"}</span><T>{"添加模型"}</T></button></li>
+          <li className={hasAvailableModel ? "complete" : ""}><span>3</span><T>{"开始任务"}</T></li>
         </ol>
-        {hasAvailableModel ? <button type="button" className="text-button" disabled={busy !== ""} onClick={showList}>返回模型列表</button> : null}
+        {hasAvailableModel ? <button type="button" className="text-button" disabled={busy !== ""} onClick={showList}><T>{"返回模型列表"}</T></button> : null}
         </div> : null}
-        {hasAvailableModel && step === "list" && <div className="model-ready"><div><strong>可以开始任务了</strong><p>配置已保存；实际调用将在任务运行时确认。</p></div><Link className="primary-button" href={returnTo}>返回工作区 <ArrowRight size={16} /></Link></div>}
+        {hasAvailableModel && step === "list" && <div className="model-ready"><div><strong><T>{"可以开始任务了"}</T></strong><p><T>{"配置已保存；实际调用将在任务运行时确认。"}</T></p></div><Link className="primary-button" href={returnTo}><T>{"返回工作区"}</T><ArrowRight size={16} /></Link></div>}
       </>}
-      {loading && <p role="status" className="field-help">正在加载模型配置…</p>}
+      {loading && <p role="status" className="field-help"><T>{"正在加载模型配置…"}</T></p>}
       <section className={admin ? "settings-grid" : "settings-grid model-setup-grid"}>
-        <form className="settings-card" onSubmit={addConnection} hidden={loading || (!admin && step !== "connection")} aria-label="服务商连接" aria-busy={busy === "connection"}>
+        <form className="settings-card" onSubmit={addConnection} hidden={loading || (!admin && step !== "connection")} aria-label={t("服务商连接")} aria-busy={busy === "connection"}>
           <header>
             <span className="card-icon">
               <Server />
             </span>
             <div>
-              <h2>服务商连接</h2>
-              <p>端点、协议与密钥</p>
+              <h2><T>{"服务商连接"}</T></h2>
+              <p><T>{"端点、协议与密钥"}</T></p>
             </div>
           </header>
           <label className="field">
-            模型服务商
-            <select ref={connectionInput} value={provider} disabled={busy !== "" || loading} onChange={(event) => setProvider(event.target.value)}>
+            <T>{"模型服务商"}</T><select ref={connectionInput} value={provider} disabled={busy !== "" || loading} onChange={(event) => setProvider(event.target.value)}>
               {providers.map(([value, label, protocol]) => (
                 <option key={value} value={value}>
                   {label} · {protocol}
@@ -242,38 +244,36 @@ export function ModelSettings({ admin = false, requestedReturn = "/app" }: { adm
             </select>
           </label>
           <label className="field">
-            连接名称（可选）
-            <input name="name" maxLength={120} disabled={busy !== "" || loading} placeholder={providers.find(item => item[0] === provider)?.[1]} />
+            <T>{"连接名称（可选）"}</T><input name="name" maxLength={120} disabled={busy !== "" || loading} placeholder={providers.find(item => item[0] === provider)?.[1]} />
           </label>
-          {needsEndpoint && <label className="field">服务地址（Endpoint）<input name="endpoint" type="url" required disabled={busy !== "" || loading} placeholder="https://你的模型服务地址" /><small className="field-help">填写服务商提供的完整接口地址。</small></label>}
+          {needsEndpoint && <label className="field"><T>{"服务地址（Endpoint）"}</T><input name="endpoint" type="url" required disabled={busy !== "" || loading} placeholder={t("https://你的模型服务地址")} /><small className="field-help"><T>{"填写服务商提供的完整接口地址。"}</T></small></label>}
           <label className="field">
-            {structuredCredential ? "服务商凭证（JSON）" : provider === "vertex" ? "Access Token" : "API Key"}
-            {structuredCredential ? <textarea name="credential" required rows={4} disabled={busy !== "" || loading} autoComplete="off" placeholder="填写服务商要求的 JSON 凭证" /> : <input name="credential" type="password" required disabled={busy !== "" || loading} autoComplete="off" placeholder="粘贴你的 API Key" />}
-            <small className="field-help">凭证加密保存，仅用于调用你配置的模型服务。</small>
+            {structuredCredential ? t("服务商凭证（JSON）") : provider === "vertex" ? "Access Token" : "API Key"}
+            {structuredCredential ? <textarea name="credential" required rows={4} disabled={busy !== "" || loading} autoComplete="off" placeholder={t("填写服务商要求的 JSON 凭证")} /> : <input name="credential" type="password" required disabled={busy !== "" || loading} autoComplete="off" placeholder={t("粘贴你的 API Key")} />}
+            <small className="field-help"><T>{"凭证加密保存，仅用于调用你配置的模型服务。"}</T></small>
           </label>
           <details className="model-advanced" key={provider} open={cloudConfiguration ? true : undefined}>
-            <summary>高级设置<span>自定义地址与服务商参数</span></summary>
-            {!needsEndpoint && <label className="field">自定义服务地址（可选）<input name="endpoint" type="url" disabled={busy !== "" || loading} placeholder={cloudConfiguration ? "留空由服务商参数生成" : "留空使用官方地址"} /></label>}
-            <label className="field">服务商参数（JSON）<textarea name="config" rows={3} defaultValue="{}" disabled={busy !== "" || loading} /><small className="field-help">按服务商要求填写，例如云服务的区域、项目或 API 版本；无需额外参数时保留空对象。</small></label>
+            <summary><T>{"高级设置"}</T><span><T>{"自定义地址与服务商参数"}</T></span></summary>
+            {!needsEndpoint && <label className="field"><T>{"自定义服务地址（可选）"}</T><input name="endpoint" type="url" disabled={busy !== "" || loading} placeholder={cloudConfiguration ? t("留空由服务商参数生成") : t("留空使用官方地址")} /></label>}
+            <label className="field"><T>{"服务商参数（JSON）"}</T><textarea name="config" rows={3} defaultValue="{}" disabled={busy !== "" || loading} /><small className="field-help"><T>{"按服务商要求填写，例如云服务的区域、项目或 API 版本；无需额外参数时保留空对象。"}</T></small></label>
           </details>
           <button className="primary-button" disabled={busy !== "" || loading}>
-            <Plus />{busy === "connection" ? "保存中…" : admin ? "保存连接" : "保存连接，继续"}
+            <Plus />{busy === "connection" ? t("保存中…") : admin ? t("保存连接") : t("保存连接，继续")}
           </button>
         </form>
-        <form className="settings-card" onSubmit={addDeployment} hidden={loading || (!admin && step !== "model")} aria-label="添加模型" aria-busy={busy === "deployment"}>
+        <form className="settings-card" onSubmit={addDeployment} hidden={loading || (!admin && step !== "model")} aria-label={t("添加模型")} aria-busy={busy === "deployment"}>
           <header>
             <span className="card-icon">
               <Cpu />
             </span>
             <div>
-              <h2>添加模型</h2>
-              <p>选择连接，填写模型标识</p>
+              <h2><T>{"添加模型"}</T></h2>
+              <p><T>{"选择连接，填写模型标识"}</T></p>
             </div>
           </header>
           <label className="field">
-            连接
-            <select name="connection" required disabled={busy !== "" || loading} value={selectedConnection?.id || ""} onChange={event => setSelectedConnectionID(event.target.value)}>
-              <option value="">选择连接</option>
+            <T>{"连接"}</T><select name="connection" required disabled={busy !== "" || loading} value={selectedConnection?.id || ""} onChange={event => setSelectedConnectionID(event.target.value)}>
+              <option value=""><T>{"选择连接"}</T></option>
               {connections.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.name}
@@ -282,24 +282,23 @@ export function ModelSettings({ admin = false, requestedReturn = "/app" }: { adm
             </select>
           </label>
           <label className="field">
-            显示名称（可选）
-            <input name="name" maxLength={120} disabled={busy !== "" || loading} placeholder="留空使用 Model ID，例如 Claude Sonnet" />
+            <T>{"显示名称（可选）"}</T><input name="name" maxLength={120} disabled={busy !== "" || loading} placeholder={t("留空使用 Model ID，例如 Claude Sonnet")} />
           </label>
           <label className="field">
             Model ID
-            <input ref={modelInput} name="model" required maxLength={240} disabled={busy !== "" || loading} placeholder="填写服务商提供的模型标识" />
-            <small className="field-help">从服务商控制台复制模型标识。Azure OpenAI 使用部署名称；它与上面的显示名称不同。</small>
+            <input ref={modelInput} name="model" required maxLength={240} disabled={busy !== "" || loading} placeholder={t("填写服务商提供的模型标识")} />
+            <small className="field-help"><T>{"从服务商控制台复制模型标识。Azure OpenAI 使用部署名称；它与上面的显示名称不同。"}</T></small>
           </label>
           <label className="check-field">
-            <input key={deployments.length === 0 ? "first-model" : "additional-model"} type="checkbox" name="default" defaultChecked={deployments.length === 0} disabled={busy !== "" || loading} />{admin ? "设为系统默认模型" : "设为个人默认模型"}
+            <input key={deployments.length === 0 ? "first-model" : "additional-model"} type="checkbox" name="default" defaultChecked={deployments.length === 0} disabled={busy !== "" || loading} />{admin ? t("设为系统默认模型") : t("设为个人默认模型")}
           </label>
           <button className="primary-button" disabled={busy !== "" || loading || connections.length === 0}>
-            <Plus />{busy === "deployment" ? "保存中…" : "保存模型"}
+            <Plus />{busy === "deployment" ? t("保存中…") : t("保存模型")}
           </button>
         </form>
       </section>
       <section className={`saved-section ${admin ? "" : "personal-model-list"}`}>
-        <header className="model-list-toolbar"><h2>{admin ? "已保存的配置" : "已保存的模型"}</h2>{!admin && step === "list" ? <button type="button" className="primary-button" disabled={loading || busy !== ""} ref={addModelButton} onClick={() => showSetup(connections.length ? "model" : "connection")}><Plus size={16} />添加模型</button> : null}</header>
+        <header className="model-list-toolbar"><h2>{admin ? t("已保存的配置") : t("已保存的模型")}</h2>{!admin && step === "list" ? <button type="button" className="primary-button" disabled={loading || busy !== ""} ref={addModelButton} onClick={() => showSetup(connections.length ? "model" : "connection")}><Plus size={16} /><T>{"添加模型"}</T></button> : null}</header>
         {admin ? savedConnections : null}
         {savedDeployments}
         {!admin ? savedConnections : null}

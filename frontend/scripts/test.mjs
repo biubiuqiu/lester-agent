@@ -10,7 +10,7 @@ const require = createRequire(import.meta.url);
 const tests = readdirSync(join(root, "src/lib")).filter(name => name.endsWith(".test.ts"));
 const output = mkdtempSync(join(tmpdir(), "lester-web-tests-"));
 try {
-  execFileSync(process.execPath, [require.resolve("typescript/bin/tsc"), "--module", "commonjs", "--moduleResolution", "node", "--target", "es2023", "--esModuleInterop", "--skipLibCheck", "--strict", "--outDir", output, ...tests.map(name => join(root, "src/lib", name))], { cwd: root, stdio: "inherit" });
+  execFileSync(process.execPath, [require.resolve("typescript/bin/tsc"), "--module", "commonjs", "--moduleResolution", "node", "--target", "es2023", "--esModuleInterop", "--resolveJsonModule", "--skipLibCheck", "--strict", "--outDir", output, ...tests.map(name => join(root, "src/lib", name))], { cwd: root, stdio: "inherit" });
   execFileSync(process.execPath, ["--test", ...tests.map(name => join(output, name.replace(/\.ts$/, ".js")))], { cwd: root, stdio: "inherit" });
 } catch (error) {
   process.exitCode = error.status || 1;

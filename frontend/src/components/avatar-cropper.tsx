@@ -1,10 +1,14 @@
 "use client";
+import { T, useT } from "@/components/i18n";
+
 
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { RotateCw, Undo2, X } from "lucide-react";
 import { cropGeometry, cropSize, drawAvatarCrop, initialCrop, type Crop } from "@/lib/avatar-crop";
 
 export function AvatarCropper({ file, onCancel, onSave }: { file: File; onCancel: () => void; onSave: (file: File) => Promise<void> }) {
+  const t = useT();
+
   const dialog = useRef<HTMLDialogElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [image, setImage] = useState<ImageBitmap | null>(null);
@@ -73,16 +77,16 @@ export function AvatarCropper({ file, onCancel, onSave }: { file: File; onCancel
     finally { pending.current = false; setBusy(false); }
   }
   return <dialog ref={dialog} className="avatar-crop-dialog" aria-labelledby="avatar-crop-title" onKeyDown={event => { if (event.key === "Escape") event.stopPropagation(); }} onCancel={event => { event.preventDefault(); if (!busy) onCancel(); }}>
-    <header><div><h2 id="avatar-crop-title">裁剪头像</h2><p id="avatar-crop-help">拖动调整位置，缩放选择范围。手机支持双指缩放。</p></div><button type="button" className="icon-button" aria-label="取消裁剪" disabled={busy} onClick={onCancel}><X aria-hidden="true" /></button></header>
-    <div className="avatar-crop-viewport"><canvas ref={canvas} width={cropSize} height={cropSize} role="img" tabIndex={0} aria-label="头像裁剪预览，使用方向键移动图片" aria-describedby="avatar-crop-help" onPointerDown={event => { if (!busy && image) { event.currentTarget.setPointerCapture(event.pointerId); pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY }); } }} onPointerMove={move} onPointerUp={event => pointers.current.delete(event.pointerId)} onPointerCancel={event => pointers.current.delete(event.pointerId)} onLostPointerCapture={event => pointers.current.delete(event.pointerId)} onKeyDown={event => {
+    <header><div><h2 id="avatar-crop-title"><T>{"裁剪头像"}</T></h2><p id="avatar-crop-help"><T>{"拖动调整位置，缩放选择范围。手机支持双指缩放。"}</T></p></div><button type="button" className="icon-button" aria-label={t("取消裁剪")} disabled={busy} onClick={onCancel}><X aria-hidden="true" /></button></header>
+    <div className="avatar-crop-viewport"><canvas ref={canvas} width={cropSize} height={cropSize} role="img" tabIndex={0} aria-label={t("头像裁剪预览，使用方向键移动图片")} aria-describedby="avatar-crop-help" onPointerDown={event => { if (!busy && image) { event.currentTarget.setPointerCapture(event.pointerId); pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY }); } }} onPointerMove={move} onPointerUp={event => pointers.current.delete(event.pointerId)} onPointerCancel={event => pointers.current.delete(event.pointerId)} onLostPointerCapture={event => pointers.current.delete(event.pointerId)} onKeyDown={event => {
       if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
       event.preventDefault(); const step = event.shiftKey ? 20 : 5;
       update(value => ({ ...value, x: value.x + (event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0), y: value.y + (event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0) }));
     }} /><span className="avatar-crop-mask" aria-hidden="true" /></div>
-    {!image && !error && <p role="status">正在读取图片…</p>}
-    <label className="avatar-crop-zoom">缩放 <input type="range" min="1" max="4" step="0.01" value={crop.zoom} disabled={!image || busy} onChange={event => update(value => ({ ...value, zoom: Number(event.target.value) }))} /><output>{Math.round(crop.zoom * 100)}%</output></label>
-    <div className="avatar-crop-tools"><button type="button" className="secondary-button" disabled={!image || busy} onClick={() => update(value => ({ ...value, rotation: (value.rotation + 90) % 360, x: 0, y: 0 }))}><RotateCw size={16} aria-hidden="true" />旋转</button><button type="button" className="text-button" disabled={!image || busy} onClick={() => setCrop(initialCrop)}><Undo2 size={16} aria-hidden="true" />重置</button></div>
-    {error && <p className="settings-error" role="alert">{error}</p>}
-    <footer><button type="button" className="secondary-button" disabled={busy} onClick={onCancel}>取消</button><button type="button" className="primary-button" disabled={!image || busy} onClick={() => void save()}>{busy ? "保存中…" : "保存头像"}</button></footer>
+    {!image && !error && <p role="status"><T>{"正在读取图片…"}</T></p>}
+    <label className="avatar-crop-zoom"><T>{"缩放"}</T><input type="range" min="1" max="4" step="0.01" value={crop.zoom} disabled={!image || busy} onChange={event => update(value => ({ ...value, zoom: Number(event.target.value) }))} /><output>{Math.round(crop.zoom * 100)}%</output></label>
+    <div className="avatar-crop-tools"><button type="button" className="secondary-button" disabled={!image || busy} onClick={() => update(value => ({ ...value, rotation: (value.rotation + 90) % 360, x: 0, y: 0 }))}><RotateCw size={16} aria-hidden="true" /><T>{"旋转"}</T></button><button type="button" className="text-button" disabled={!image || busy} onClick={() => setCrop(initialCrop)}><Undo2 size={16} aria-hidden="true" /><T>{"重置"}</T></button></div>
+    {error && <p className="settings-error" role="alert">{t(error)}</p>}
+    <footer><button type="button" className="secondary-button" disabled={busy} onClick={onCancel}><T>{"取消"}</T></button><button type="button" className="primary-button" disabled={!image || busy} onClick={() => void save()}>{busy ? t("保存中…") : t("保存头像")}</button></footer>
   </dialog>;
 }

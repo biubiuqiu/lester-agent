@@ -1,3 +1,5 @@
+import { getI18n } from "@/lib/i18n/server";
+import { I18nProvider } from "@/components/i18n";
 import type { Metadata } from "next";
 import "./globals.css";
 import "./preview.css";
@@ -14,4 +16,4 @@ import "./user-guide.css";
 import "./deliverables.css";
 import "@xterm/xterm/css/xterm.css";
 export const metadata:Metadata={title:"Lester",description:"Open-source AI Agent Workspace"};
-export default function RootLayout({children}:{children:React.ReactNode}){return <html lang="zh-CN"><body>{children}</body></html>}
+export default async function RootLayout({children}:{children:React.ReactNode}){const {locale,messages}=await getI18n();return <html lang={locale}><body><I18nProvider locale={locale} messages={messages}>{children}</I18nProvider></body></html>}
