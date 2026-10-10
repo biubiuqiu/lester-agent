@@ -52,18 +52,18 @@ test("manual switch persists through navigation and reload without losing a draf
     await page.getByRole("button", { name: "登录", exact: true }).click();
     await page.getByRole("textbox", { name: "消息输入框", exact: true }).fill(prompt);
     await page.locator('.new-chat-composer input[type="file"]').setInputFiles({ name: "材料.txt", mimeType: "text/plain", buffer: Buffer.from("用户文件保持原样") });
-    // Open the account menu; native language selection remains keyboard accessible.
+    // Open the account menu and choose from the SVG language menu.
     if (!await page.locator(".user-menu-trigger").isVisible()) await page.getByRole("button", { name: "打开会话栏", exact: true }).click();
     await page.locator(".user-menu-trigger").click();
-    const select = page.locator(".user-menu-popover select");
-    await select.selectOption("fr");
+    await page.locator(".user-menu-popover .language-trigger").click();
+    await page.getByRole("menuitemradio", { name: "Français", exact: true }).click();
     await expect(page.locator("html")).toHaveAttribute("lang", "fr");
     const composer = page.getByRole("textbox", { name: "Saisie du message", exact: true });
     await expect(composer).toHaveValue(prompt);
     await expect(page.locator(".pending-attachments")).toContainText("材料.txt");
     await page.getByRole("menuitem", { name: "Modèles", exact: true }).click();
     await expect(page).toHaveURL(/settings\/models/);
-    await expect(page.locator(".settings-sidebar select")).toHaveValue("fr");
+    await expect(page.locator(".settings-sidebar .language-trigger")).toContainText("Français");
     await page.goBack();
     await page.screenshot({ path: testInfo.outputPath("fr-workspace.png") });
     await expect(composer).toHaveValue(prompt);

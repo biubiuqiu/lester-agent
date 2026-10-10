@@ -1,7 +1,7 @@
 import { createServer, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { BrowserContext, Route } from "@playwright/test";
-import type { Conversation, FileEntry, Message } from "../src/lib/api";
+import type { Conversation, ContextEntry, FileEntry, Message } from "../src/lib/api";
 
 export const conversationId = "11111111-1111-4111-8111-111111111111";
 export const prompt = "制作一个介绍 Lester 的网页，并保存一份说明。";
@@ -20,6 +20,7 @@ export class WorkspaceApi {
   conversation: Conversation | null = null;
   messages: Message[] = [];
   files: FileEntry[] = [];
+  contextEntries: ContextEntry[] = [];
   private completed = false;
   private streams = new Set<ServerResponse>();
   private server = createServer((_request, response) => {
@@ -116,7 +117,7 @@ export class WorkspaceApi {
       return route.fulfill({ status: 200, contentType: "application/octet-stream", body: file === "index.html" ? html : "纯文本说明：请人工验收生成文件。" });
     }
     if (path === `${prefix}/deliverables`) return reply({ deliverables: this.completed ? [{ id: "fixture-deliverable", conversation_id: conversationId, run_id: "fixture-run", title: "Lester 介绍页", summary: "固定模拟任务成果，需要人工验收。", entry_path: "index.html", kind: "html", content_sha256: "a".repeat(64), created_at: new Date().toISOString(), updated_at: new Date().toISOString() }] : [] });
-    if (path === "/api/v1/contexts" || path === `${prefix}/contexts`) return reply({ entries: [] });
+    if (path === "/api/v1/contexts" || path === `${prefix}/contexts`) return reply({ entries: this.contextEntries });
     if (path === "/api/v1/skills" || path === `${prefix}/skills`) return reply({ skills: [] });
     if (path === `${prefix}/artifacts`) return reply({ artifacts: [] });
     this.unexpected.push(`${method} ${path}`);

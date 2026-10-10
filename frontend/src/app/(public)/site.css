@@ -23,9 +23,7 @@
 .site-header { display: flex; min-height: 90px; align-items: center; gap: 40px; }
 .site-brand { display: inline-flex; flex-shrink: 0; align-items: center; gap: 5px; font-size: 25px; font-weight: 700; letter-spacing: -.035em; }
 .site-brand .brand { gap: 12px; color: var(--site-ink); font-size: inherit; }
-.site-brand .brand-mark { width: 55px; height: 42px; }
-.site-brand .brand-mark i:first-child { width: 34px; height: 34px; left: 0; top: 4px; background: #3e7750; }
-.site-brand .brand-mark i:last-child { width: 34px; height: 34px; right: 0; bottom: 4px; background: #28563b; opacity: .92; }
+.site-brand .brand-mark { width: 42px; height: 42px; }
 .site-header nav { display: flex; align-items: center; gap: 34px; margin-left: auto; font-size: 14px; font-weight: 550; }
 .site-header nav a { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
 .site-header nav a:hover, .site-footer a:hover { color: #3e7750; }
@@ -174,8 +172,7 @@
 .site-footer { border-top: 1px solid var(--site-line); background: white; }
 .site-footer-inner { display: flex; min-height: 114px; align-items: center; justify-content: space-between; gap: 30px; padding-block: 24px; }
 .site-footer .site-brand { font-size: 21px; }
-.site-footer .site-brand .brand-mark { width: 45px; height: 34px; }
-.site-footer .site-brand .brand-mark i { width: 29px; height: 29px; }
+.site-footer .site-brand .brand-mark { width: 34px; height: 34px; }
 .site-footer p { margin-left: 57px; color: var(--site-muted); font-size: 13px; }
 .site-footer nav { display: flex; gap: 30px; font-size: 13px; }
 .site-footer nav a { display: flex; align-items: center; gap: 5px; }
@@ -249,8 +246,7 @@
 }
 @media (max-width: 900px) {
   .site-brand { font-size: 21px; }
-  .site-brand .brand-mark { width: 45px; height: 35px; }
-  .site-brand .brand-mark i { width: 29px; height: 29px; }
+  .site-brand .brand-mark { width: 35px; height: 35px; }
   .site-header { flex-wrap: wrap; justify-content: space-between; gap: 10px; padding-block: 17px 14px; }
   .site-header nav { order: 3; width: 100%; justify-content: center; gap: 35px; border-top: 1px solid var(--site-line); margin: 10px 0 0; padding-top: 14px; }
   .site-hero { grid-template-columns: 1fr; gap: 34px; padding-block: 40px 46px; }
@@ -288,11 +284,7 @@
   .site-workspace-link { min-height: 40px; padding: 8px 12px; font-size: 12px; }
   .site-brand { gap: 4px; font-size: 19px; }
   .site-brand .brand { gap: 8px; }
-  .site-brand .brand-mark { width: 36px; height: 29px; }
-  .site-brand .brand-mark i:first-child,
-  .site-brand .brand-mark i:last-child { width: 24px; height: 24px; }
-  .site-brand .brand-mark i:first-child { top: 3px; }
-  .site-brand .brand-mark i:last-child { bottom: 2px; }
+  .site-brand .brand-mark { width: 29px; height: 29px; }
   .site-hero { padding-block: 37px 30px; gap: 29px; }
   .site-hero-copy h1 { font-size: clamp(32px, 8.8vw, 48px); letter-spacing: -.055em; line-height: 1.45; }
   .site-hero-copy > p { margin-top: 18px; font-size: 15px; line-height: 1.85; }

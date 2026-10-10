@@ -1,10 +1,7 @@
 /* One typographic focal point, quiet navigation, and a short name story. */
 .public-site .site-header { min-height: 96px; }
 .public-site .site-header .site-brand { font-size: 22px; }
-.public-site .site-header .brand-mark { width: 38px; height: 28px; }
-.public-site .site-header .brand-mark i { width: 24px; height: 24px; }
-.public-site .site-header .brand-mark i:first-child { top: 2px; }
-.public-site .site-header .brand-mark i:last-child { bottom: 2px; }
+.public-site .site-header .brand-mark { width: 28px; height: 28px; }
 .public-site .site-header nav { gap: 32px; }
 .public-site .site-header nav a { min-height: 44px; }
 .public-site .site-header .site-workspace-link { min-height: 44px; border: 0; background: transparent; padding: 8px 0; color: var(--site-ink) !important; font-weight: 550; transform: none; }
@@ -23,8 +20,7 @@
 .public-site:has(.site-home) .site-footer { border-top: 0; background: var(--site-bg); }
 .public-site:has(.site-home) .site-footer-inner { min-height: 150px; border-top: 1px solid var(--site-line); padding-block: 28px 40px; }
 .public-site:has(.site-home) .site-footer .site-brand { font-size: 22px; }
-.public-site:has(.site-home) .site-footer .brand-mark { width: 38px; height: 28px; }
-.public-site:has(.site-home) .site-footer .brand-mark i { width: 24px; height: 24px; }
+.public-site:has(.site-home) .site-footer .brand-mark { width: 28px; height: 28px; }
 .public-site:has(.site-home) .site-footer p { margin-left: 50px; font-size: 13px; }
 .public-site:has(.site-home) .site-footer nav { gap: 32px; font-size: 14px; }
 .public-site:has(.site-home) .site-footer nav a { min-height: 44px; }
@@ -42,8 +38,7 @@
 @media (max-width: 650px) {
   .public-site:has(.site-home) .site-container { width: calc(100% - 40px); }
   .public-site .site-header .site-brand { font-size: 18px; }
-  .public-site .site-header .brand-mark { width: 30px; height: 24px; }
-  .public-site .site-header .brand-mark i { width: 20px; height: 20px; }
+  .public-site .site-header .brand-mark { width: 24px; height: 24px; }
   .public-site .site-header .site-workspace-link { font-size: 12px; }
   .public-site .site-header nav { gap: 30px; font-size: 13px; }
   .site-home-hero { min-height: 460px; padding-block: 48px 56px; }

@@ -1,9 +1,11 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Globe } from "lucide-react";
-import { loadMessages, localeCookie, localeNames, locales, supportedLocale, translator, type Locale, type Messages } from "@/lib/i18n";
+import { Check, ChevronDown, Globe } from "lucide-react";
+import { loadMessages, localeCookie, localeNames, locales, translator, type Locale, type Messages } from "@/lib/i18n";
+import { FloatingPopover } from "./floating-popover";
+import { LanguageFlag } from "./language-flag";
 
 type I18nValue = { locale: Locale; t: ReturnType<typeof translator>; changeLanguage: (locale: Locale) => Promise<void>; pending: boolean; error: boolean };
 const I18nContext = createContext<I18nValue | null>(null);
@@ -40,8 +42,41 @@ export function useT() { return useI18n().t; }
 export function T({ children }: { children: string }) { const t = useT(); return t(children); }
 export function LanguageSelect({ compact = false }: { compact?: boolean }) {
   const { locale, t, changeLanguage, pending, error } = useI18n();
+  const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const options = useRef<Array<HTMLButtonElement | null>>([]);
+  const id = useId();
+  useEffect(() => {
+    if (!open) return;
+    const frame = requestAnimationFrame(() => options.current[locales.indexOf(locale)]?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [open, locale]);
+  async function choose(next: Locale) {
+    setOpen(false);
+    await changeLanguage(next);
+    trigger.current?.focus();
+  }
   return <div className={`language-control${compact ? " compact" : ""}`}>
-    <label><Globe size={16} aria-hidden="true" /><span className="visually-hidden">{t("界面语言")}</span><select aria-label={t("界面语言")} value={locale} disabled={pending} onChange={event => { const next = supportedLocale(event.target.value); if (next) void changeLanguage(next); }}>{locales.map(value => <option key={value} value={value} lang={value}>{localeNames[value]}</option>)}</select></label>
+    <button ref={trigger} type="button" className="language-trigger" aria-label={[t("界面语言"), localeNames[locale]].join(" · ")} title={t("界面语言")} aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined} disabled={pending} onClick={() => setOpen(value => !value)} onKeyDown={event => {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); setOpen(true); }
+    }}>
+      <LanguageFlag locale={locale} /><span className="language-trigger-name" lang={locale}>{localeNames[locale]}</span><span className="language-trigger-code" aria-hidden="true">{locale === "zh-CN" ? "ZH" : locale.toUpperCase()}</span><ChevronDown size={13} aria-hidden="true" />
+    </button>
+    {open && <FloatingPopover id={id} className="language-picker" role="menu" aria-label={t("界面语言")} anchor={trigger} side="below" align="end" width={208} onClose={reason => { setOpen(false); if (reason === "escape") trigger.current?.focus(); }} onKeyDown={event => {
+      const current = options.current.findIndex(option => option === document.activeElement);
+      let next: number | undefined;
+      if (event.key === "ArrowDown") next = (current + 1) % locales.length;
+      if (event.key === "ArrowUp") next = (current + locales.length - 1) % locales.length;
+      if (event.key === "Home") next = 0;
+      if (event.key === "End") next = locales.length - 1;
+      if (next !== undefined) { event.preventDefault(); options.current[next]?.focus(); }
+      if (event.key === "Tab") { setOpen(false); trigger.current?.focus(); }
+    }}>
+      <div className="language-picker-heading"><Globe size={14} aria-hidden="true" />{t("界面语言")}</div>
+      <div className="language-picker-options">{locales.map((value, index) => <button ref={element => { options.current[index] = element; }} key={value} type="button" role="menuitemradio" tabIndex={-1} aria-checked={value === locale} disabled={pending} className={value === locale ? "selected" : undefined} onClick={() => void choose(value)}>
+        <LanguageFlag locale={value} /><span lang={value}>{localeNames[value]}</span>{value === locale && <Check size={15} aria-hidden="true" />}
+      </button>)}</div>
+    </FloatingPopover>}
     {error ? <span role="alert">{t("语言加载失败，请重试")}</span> : null}
   </div>;
 }
