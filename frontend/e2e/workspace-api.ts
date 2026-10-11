@@ -15,6 +15,7 @@ export class WorkspaceApi {
   mutations: { path: string; body: Record<string, unknown> }[] = [];
   unexpected: string[] = [];
   hasModel = true;
+  modelName = deployment.name;
   failCreate = false;
   failSend = false;
   waitForCreate?: Promise<void>;
@@ -96,7 +97,7 @@ export class WorkspaceApi {
       const body = request.postDataJSON(); this.mutations.push({ path, body }); return reply({ topic: path.split("/").at(-1), ...body });
     }
     if (path === "/api/v1/projects") return reply({ projects: [{ ...project, conversation_count: this.conversation ? 1 : 0 }] });
-    if (path === "/api/v1/model-deployments") return reply({ deployments: this.hasModel ? [deployment] : [] });
+    if (path === "/api/v1/model-deployments") return reply({ deployments: this.hasModel ? [{ ...deployment, name: this.modelName }] : [] });
     if (path === "/api/v1/model-connections") return reply({ connections: [] });
     if (path === "/api/v1/agents") return reply({ agents: [{ id: "fixture-agent", slug: "lester", name: "Lester", description: "模拟 Agent", instructions: "", skill_slugs: [], version: 1, builtin: true, updated_at: project.created_at }] });
     if (path === "/api/v1/conversations") {
@@ -112,6 +113,12 @@ export class WorkspaceApi {
     }
     const prefix = `/api/v1/conversations/${conversationId}`;
     if (path === prefix && this.conversation) {
+      if (method === "PATCH") {
+        const body = request.postDataJSON();
+        this.mutations.push({ path, body });
+        this.conversation.model_deployment_id = String(body.model_deployment_id);
+        return reply(this.conversation);
+      }
       await this.waitForConversation;
       return reply({ conversation: this.conversation, messages: this.messages, active_run: this.conversation.run_status === "running" ? { id: "fixture-run", status: "running" } : null });
     }

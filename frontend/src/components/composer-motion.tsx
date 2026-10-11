@@ -92,7 +92,10 @@ export function ComposerMotionProvider({ children }: { children: ReactNode }) {
   }, [pathname, clear]);
   useEffect(() => {
     window.addEventListener("resize", clear);
-    return () => { window.removeEventListener("resize", clear); clear(); };
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const reduce = () => { if (media.matches) clear(); };
+    media.addEventListener("change", reduce);
+    return () => { window.removeEventListener("resize", clear); media.removeEventListener("change", reduce); clear(); };
   }, [clear]);
   return <MotionContext.Provider value={{ handoff, arrive }}>{children}</MotionContext.Provider>;
 }

@@ -35,6 +35,12 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
   const composeBox = useRef<HTMLDivElement>(null);
   const capturePosition = useComposerDock(busy, composeBox);
   const { handoff } = useComposerMotion();
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const cancel = () => { if (media.matches) composeBox.current?.getAnimations().forEach(animation => animation.cancel()); };
+    media.addEventListener("change", cancel);
+    return () => media.removeEventListener("change", cancel);
+  }, []);
   const [error, setError] = useState("");
   const submitting = useRef(false);
   const mounted = useRef(true);
@@ -48,6 +54,9 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
     setText(prompt);
     updateView(storageKey, { text: prompt });
     messageInput.current?.focus();
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      try { composeBox.current?.animate([{ boxShadow: "0 0 0 5px #52755d18" }, { boxShadow: "0 0 0 0px #52755d00" }], { duration: 420, easing: "ease-out" }); } catch { /* Visual feedback never changes the draft or sends it. */ }
+    }
   }
   const changeFiles = (next: File[]) => { setFiles(next); updateView(storageKey, { files: next }); };
 

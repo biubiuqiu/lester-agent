@@ -60,7 +60,6 @@
 .model-advanced summary { cursor: pointer; padding: 4px 0; color: #344c38; font-size: 13px; }
 .model-advanced summary span { margin-left: 10px; color: #5c6b60; font-size: 12px; }
 .model-advanced > .field { margin-top: 14px; }
-.mobile-conversation-options { display: none; }
 .message-file-link { border: 0; border-radius: 4px; padding: 0; background: transparent; color: #36573e; font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .message-file-link:focus-visible { outline: 2px solid #506c57; outline-offset: 3px; }
 @media (max-width: 700px) {
@@ -84,12 +83,6 @@
   .agent-avatar { flex-shrink: 0; }
   .conversation-header .mobile-menu, .open-files-button { min-width: 44px; min-height: 44px; flex-shrink: 0; }
   .open-files-button { white-space: nowrap; padding: 8px 12px; }
-  .mobile-conversation-options { display: block; flex-shrink: 0; }
-  .mobile-conversation-options > summary { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid #dde4dc; border-radius: 9px; cursor: pointer; list-style: none; }
-  .mobile-conversation-options > summary::-webkit-details-marker { display: none; }
-  .mobile-conversation-options > summary svg { width: 20px; height: 20px; }
-  .mobile-conversation-options > div { position: absolute; z-index: 12; top: 60px; right: 12px; width: min(280px, calc(100vw - 24px)); display: grid; gap: 16px; padding: 16px; border: 1px solid #dde4dc; border-radius: 12px; background: #fff; box-shadow: 0 8px 30px #233c2720; }
-  .mobile-conversation-options a { display: flex; align-items: center; min-height: 44px; color: #36573e; }
   .composer .compose-box { padding: 10px 12px; }
   .composer .compose-box textarea { min-height: 42px; }
   .composer .upload-button, .composer .send-button { width: 44px; height: 44px; }

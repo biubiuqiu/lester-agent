@@ -4,6 +4,7 @@ import { T } from "@/components/i18n";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
+import { OutcomeSketch } from "@/components/site/outcome-sketch";
 
 const description = "一个开源、可自托管的个人 AI 工作区。把目标交给 Lester，在你的 Computer 中执行任务，留下网页、文档与代码。";
 export async function generateMetadata(): Promise<Metadata> {
@@ -17,11 +18,12 @@ export default function Home() {
     <main id="site-main" className="site-home" tabIndex={-1}>
       <section className="site-home-hero site-container" aria-labelledby="home-heading">
         <div className="site-home-copy">
-          <h1 id="home-heading"><T>{"想清楚。"}</T><br /><T>{"做出来。"}</T></h1>
+          <h1 id="home-heading"><span className="site-home-line"><T>{"想清楚。"}</T></span><br /><span className="site-home-line"><T>{"做出来。"}</T></span></h1>
           <p><T>{"一个开源、可自托管的个人 AI 工作区。"}</T><br className="site-wide-break" /><span className="site-sentence-space">{" "}</span><T>{"把目标交给 Lester，留下网页、文档与代码。"}</T></p>
           <div className="site-home-actions">
             <Link className="site-button site-button-dark" href="/app" prefetch={false}><T>{"开始使用"}</T><ArrowUpRight size={20} aria-hidden="true" /></Link>
           </div>
+          <OutcomeSketch />
         </div>
       </section>
       <section id="why-lester" className="site-home-story site-container" aria-labelledby="story-heading">

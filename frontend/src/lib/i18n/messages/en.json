@@ -1262,5 +1262,7 @@
   "聊天区保留简短的成果入口；右侧成果面板提供完整摘要、待验收状态和修改操作。手机面板支持“返回对话”与 Escape 关闭，并恢复原来的键盘焦点。": "The conversation keeps a brief link to results; the results panel shows full summaries, pending-review status and editing actions. On mobile, use Back to conversation or Escape to close the panel and restore keyboard focus.",
   "工具": "Tools",
   "终端和技能可从面板的“工具”菜单打开。": "Open Terminal and Skills from the panel’s Tools menu.",
-  "发送首条消息时，输入框会平滑移到底部；创建失败会回到居中位置并保留草稿，系统的减少动态效果设置会跳过动画。": "When you send the first message, the composer smoothly moves to the bottom. If conversation creation fails, it returns to the center and keeps your draft. The system’s reduced-motion setting skips the animation."
+  "发送首条消息时，输入框会平滑移到底部；创建失败会回到居中位置并保留草稿，系统的减少动态效果设置会跳过动画。": "When you send the first message, the composer smoothly moves to the bottom. If conversation creation fails, it returns to the center and keeps your draft. The system’s reduced-motion setting skips the animation.",
+  "代码": "Code",
+  "成果示例": "Example outputs"
 }

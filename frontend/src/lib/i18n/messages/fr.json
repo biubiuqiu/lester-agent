@@ -1262,5 +1262,7 @@
   "聊天区保留简短的成果入口；右侧成果面板提供完整摘要、待验收状态和修改操作。手机面板支持“返回对话”与 Escape 关闭，并恢复原来的键盘焦点。": "La conversation conserve un lien succinct vers les résultats ; le panneau affiche les résumés complets, le statut à vérifier et les actions de modification. Sur mobile, Retour à la conversation ou Échap ferme le panneau et rétablit le focus du clavier.",
   "工具": "Outils",
   "终端和技能可从面板的“工具”菜单打开。": "Ouvrez le terminal et les compétences depuis le menu Outils du panneau.",
-  "发送首条消息时，输入框会平滑移到底部；创建失败会回到居中位置并保留草稿，系统的减少动态效果设置会跳过动画。": "À l’envoi du premier message, la zone de saisie descend en douceur. Si la création de la conversation échoue, elle revient au centre et conserve votre brouillon. Le réglage système de réduction des animations permet de les ignorer."
+  "发送首条消息时，输入框会平滑移到底部；创建失败会回到居中位置并保留草稿，系统的减少动态效果设置会跳过动画。": "À l’envoi du premier message, la zone de saisie descend en douceur. Si la création de la conversation échoue, elle revient au centre et conserve votre brouillon. Le réglage système de réduction des animations permet de les ignorer.",
+  "代码": "Code",
+  "成果示例": "Exemples de résultats"
 }
