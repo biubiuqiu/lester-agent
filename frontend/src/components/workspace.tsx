@@ -9,7 +9,7 @@ import { ContextInput, useContextReferences } from "./context-input";
 import { CSSProperties, FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bot, Check, ChevronDown, FileText, Folder, GripVertical, Maximize2, Menu, Minimize2, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Paperclip, Plus, Send, Square, TerminalSquare, Wrench, X } from "lucide-react";
+import { ArrowLeft, Bot, Check, ChevronDown, FileText, Folder, GripVertical, Maximize2, Menu, Minimize2, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Paperclip, Plus, Send, Square, TerminalSquare, Wrench, X } from "lucide-react";
 import { readView, updateView, viewKey, resumeViewState } from "@/lib/conversation-view-state";
 import { useConversationScroll } from "./use-conversation-scroll";
 import { ArtifactIcon } from "./workspace-icons";
@@ -19,6 +19,7 @@ import { Brand } from "./brand";
 import { NewConversationComposer } from "./new-conversation-composer";
 import { ArtifactCards, FileReferenceChip, FileWorkspaceProvider, OpenFilesButton, useFileWorkspace } from "./file-workspace";
 import { Deliverables } from "./deliverables";
+import { WorkspaceSurface, useWorkspaceDialog } from "./workspace-layout";
 import { ConversationTimeline } from "./conversation-timeline";
 import { FileExplorer } from "./file-explorer";
 import { ComputerTerminal } from "./computer-terminal";
@@ -44,21 +45,27 @@ type ConversationData = {
   active_run?: { id: string; status: "running" | "cancelling" } | null;
 };
 const sidebarPreferenceKey = "lester.workspace.sidebar-collapsed.v1";
-const panelWidthPreferenceKey = "lester.workspace.computer-panel-width.v1";
+const panelWidthPreferenceKey = "lester.workspace.computer-panel-width.v2";
 const eventCursorKey = (workspaceId: string) => `lester.workspace.event-cursor.v1.${workspaceId}`;
 const unreadRunResultsKey = (workspaceId: string) => `lester.workspace.unread-run-results.v2.${workspaceId}`;
 const runNoticeReplayToleranceMs = 30_000;
 const fileScanEvents = new Set(["FILE_UPDATED", "DELIVERABLE_REGISTERED", "TOOL_COMPLETED", "TOOL_FAILED", "RUN_COMPLETED", "RUN_FAILED", "RUN_CANCELLED"]);
-const defaultPanelWidth = 420;
+const defaultPanelWidth = 680;
 const minPanelWidth = 320;
 const maxPanelWidth = 1600;
 const conversationSidebarWidth = 252;
-const compactConversationWidth = 420;
-const fullConversationWidth = 780;
+const compactConversationWidth = 360;
+const fullConversationWidth = 420;
 const wideLayoutBreakpoint = 1440;
 const subscribeToHydration = () => () => {};
 const getClientSnapshot = () => true;
 const getServerSnapshot = () => false;
+const subscribeToViewport = (notify: () => void) => {
+  window.addEventListener("resize", notify);
+  return () => window.removeEventListener("resize", notify);
+};
+const getViewportWidth = () => window.innerWidth;
+const getServerWidth = () => 0;
 
 function clampPanelWidth(width: number, sidebarCollapsed: boolean) {
   if (typeof window === "undefined") return Math.min(maxPanelWidth, Math.max(minPanelWidth, width));
@@ -138,6 +145,7 @@ export function Workspace({ conversationId, projectId, initialAgentSlug }: { con
   const [streamError, setStreamError] = useState({ conversationId: "", message: "" });
   const panelWidthRef = useRef(panelWidth);
   const layoutHydrated = useSyncExternalStore(subscribeToHydration, getClientSnapshot, getServerSnapshot);
+  const viewportWidth = useSyncExternalStore(subscribeToViewport, getViewportWidth, getServerWidth);
 
   useEffect(() => {
     panelWidthRef.current = panelWidth;
@@ -188,7 +196,6 @@ export function Workspace({ conversationId, projectId, initialAgentSlug }: { con
   function setConversationSidebar(collapsed: boolean) {
     setSidebarCollapsed(collapsed);
     window.localStorage.setItem(sidebarPreferenceKey, String(collapsed));
-    setPanelWidth((width) => clampPanelWidth(width, collapsed));
   }
 
   function updatePanelWidth(width: number) {
@@ -439,12 +446,12 @@ export function Workspace({ conversationId, projectId, initialAgentSlug }: { con
     setCurrent(prev => prev?.id === id ? {...prev, ...patch} : prev);
   }
   const visibleError = pageError || (streamError.conversationId === "*" || streamError.conversationId === conversationId ? streamError.message : "");
-  const activeLabel = runState === "sending" ? t("发送中") : runState === "running" ? t("正在工作") : runState === "stopping" ? t("正在停止") : runState === "cancelled" ? t("已停止") : runState === "failed" ? t("上次运行失败") : t("在线");
+  const activeLabel = runState === "sending" ? t("发送中") : runState === "running" ? t("正在工作") : runState === "stopping" ? t("正在停止") : runState === "cancelled" ? t("已停止") : runState === "failed" ? t("上次运行失败") : t("已就绪");
   const renderedSidebarCollapsed = layoutHydrated && sidebarCollapsed;
-  const renderedPanelWidth = layoutHydrated ? panelWidth : defaultPanelWidth;
+  const renderedPanelWidth = layoutHydrated && viewportWidth ? clampPanelWidth(panelWidth, renderedSidebarCollapsed) : defaultPanelWidth;
   const renderedPanelMaxWidth = layoutHydrated ? currentPanelMaxWidth(renderedSidebarCollapsed) : maxPanelWidth;
   const shellStyle = { "--computer-panel-width": `${renderedPanelWidth}px` } as CSSProperties;
-  return <FileWorkspaceProvider key={`${user?.user_id ?? "pending"}:${displayedCurrent?.id ?? "empty"}`} conversationId={displayedCurrent?.id} storageKey={user && displayedCurrent ? viewKey(user.user_id, user.workspace_id, displayedCurrent.id) : ""} liveFileEvents={liveFiles.events} events={eventsByConversation[displayedCurrent?.id ?? ""] ?? []} runId={runStatus.conversationId === conversationId ? runStatus.runId : undefined} running={runState === "running" || runState === "sending" || runState === "stopping"} runOutcome={runState === "failed" || runState === "cancelled" ? runState : undefined}><main className={`workspace-shell ${renderedSidebarCollapsed ? "sidebar-collapsed" : ""} ${panelResize ? "panel-resizing" : ""}`} style={shellStyle}>
+  return <FileWorkspaceProvider key={`${user?.user_id ?? "pending"}:${displayedCurrent?.id ?? "empty"}`} conversationId={displayedCurrent?.id} storageKey={user && displayedCurrent ? viewKey(user.user_id, user.workspace_id, displayedCurrent.id) : ""} liveFileEvents={liveFiles.events} events={eventsByConversation[displayedCurrent?.id ?? ""] ?? []} runId={runStatus.conversationId === conversationId ? runStatus.runId : undefined} running={runState === "running" || runState === "sending" || runState === "stopping"} runOutcome={runState === "failed" || runState === "cancelled" ? runState : undefined}><WorkspaceSurface className={`workspace-shell ${renderedSidebarCollapsed ? "sidebar-collapsed" : ""} ${panelResize ? "panel-resizing" : ""}`} style={shellStyle}>
     <aside className={`conversation-sidebar ${mobileMenu ? "mobile-open" : ""}`}>
       <div className="sidebar-top"><div className="sidebar-brand-row"><Brand /><button type="button" className="sidebar-collapse-button" onClick={() => setConversationSidebar(true)} title={t("收起会话栏")} aria-label={t("收起会话栏")}><PanelLeftClose /></button></div><button className="icon-button mobile-close" onClick={() => setMobileMenu(false)} aria-label={t("关闭")}><X /></button></div>
 
@@ -454,13 +461,13 @@ export function Workspace({ conversationId, projectId, initialAgentSlug }: { con
       <div className="sidebar-footer"><UserMenu user={user} /></div>
     </aside>
     <section className={`conversation-main ${displayedCurrent ? "" : "empty-conversation"}`}>
-      <header className="conversation-header"><div className="conversation-header-leading"><button className="icon-button mobile-menu" onClick={() => setMobileMenu(true)} aria-label={t("打开会话栏")}><Menu /></button><button type="button" className="sidebar-restore-button" onClick={() => setConversationSidebar(false)} title={t("展开会话栏")} aria-label={t("展开会话栏")}><PanelLeftOpen /></button>{displayedCurrent ? <div className="agent-heading"><span className="agent-avatar">{agentName(displayedCurrent.agent_slug,displayedCurrent.agent_name,t)[0]}</span><span><strong>{agentName(displayedCurrent.agent_slug,displayedCurrent.agent_name,t)}</strong><small className={`run-state ${runState}`}>{activeLabel}</small></span></div> : <Brand />}</div>{displayedCurrent ? <label className="model-selector conversation-model-selector"><select aria-label={t("当前模型")} value={displayedCurrent.model_deployment_id || ""} onChange={(event) => chooseModel(event.target.value)}>{deployments.length === 0 ? <option value=""><T>{"请先配置模型"}</T></option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown /></label> : <button className="new-button mobile-new" onClick={() => { setMobileMenu(false); router.push(newConversationPath); }}><Plus /><T>{"新会话"}</T></button>}<GuideLauncher /><Link className="workspace-artifacts-link" href={`/app/artifacts?returnTo=${encodeURIComponent(conversationId ? `/app/c/${conversationId}` : newConversationPath)}`} aria-label={t("打开产物管理")} title={t("产物管理")}><ArtifactIcon size={18}/><span><T>{"产物管理"}</T></span></Link>{displayedCurrent?.created_agent_id ? <OpenAgentButton /> : null}{displayedCurrent ? <OpenResultsButton compact /> : null}{displayedCurrent ? <details className="mobile-conversation-options"><summary aria-label={t("更多会话选项")} title={t("更多会话选项")}><MoreHorizontal /></summary><div><label className="field"><T>{"当前模型"}</T><select aria-label={t("切换模型")} value={displayedCurrent.model_deployment_id || ""} onChange={event => { void chooseModel(event.target.value); const menu = event.currentTarget.closest("details"); if (menu) menu.open = false; }}>{deployments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><OpenFilesButton menu /><Link href={`/app/artifacts?returnTo=${encodeURIComponent(`/app/c/${displayedCurrent.id}`)}`}><T>{"管理已发布的产物"}</T></Link></div></details> : null}</header>
+      <header className="conversation-header"><div className="conversation-header-leading"><button className="icon-button mobile-menu" onClick={() => setMobileMenu(true)} aria-label={t("打开会话栏")}><Menu /></button><button type="button" className="sidebar-restore-button" onClick={() => setConversationSidebar(false)} title={t("展开会话栏")} aria-label={t("展开会话栏")}><PanelLeftOpen /></button>{displayedCurrent ? <div className="agent-heading"><span className="agent-avatar">{agentName(displayedCurrent.agent_slug,displayedCurrent.agent_name,t)[0]}</span><span><strong title={displayedCurrent.title}>{displayedCurrent.title}</strong><small className={`run-state ${runState}`}>{agentName(displayedCurrent.agent_slug,displayedCurrent.agent_name,t)}<span aria-hidden="true"> · </span>{activeLabel}</small></span></div> : <Brand />}</div>{displayedCurrent ? <label className="model-selector conversation-model-selector"><select aria-label={t("当前模型")} value={displayedCurrent.model_deployment_id || ""} onChange={(event) => chooseModel(event.target.value)}>{deployments.length === 0 ? <option value=""><T>{"请先配置模型"}</T></option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown /></label> : <button className="new-button mobile-new" onClick={() => { setMobileMenu(false); router.push(newConversationPath); }}><Plus /><T>{"新会话"}</T></button>}<GuideLauncher /><Link className="workspace-artifacts-link" href={`/app/artifacts?returnTo=${encodeURIComponent(conversationId ? `/app/c/${conversationId}` : newConversationPath)}`} aria-label={t("打开产物管理")} title={t("产物管理")}><ArtifactIcon size={18}/><span><T>{"产物管理"}</T></span></Link>{displayedCurrent?.created_agent_id ? <OpenAgentButton /> : null}{displayedCurrent ? <><OpenResultsButton compact /><OpenFilesButton /></> : null}{displayedCurrent ? <details className="mobile-conversation-options"><summary aria-label={t("更多会话选项")} title={t("更多会话选项")}><MoreHorizontal /></summary><div><label className="field"><T>{"当前模型"}</T><select aria-label={t("切换模型")} value={displayedCurrent.model_deployment_id || ""} onChange={event => { void chooseModel(event.target.value); const menu = event.currentTarget.closest("details"); if (menu) menu.open = false; }}>{deployments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><OpenFilesButton menu /><GuideLauncher /><Link href={`/app/artifacts?returnTo=${encodeURIComponent(`/app/c/${displayedCurrent.id}`)}`}><T>{"管理已发布的产物"}</T></Link></div></details> : null}</header>
       {visibleError ? <div className="workspace-error" role="alert">{visibleError}</div> : null}
       {displayedCurrent ? <ConversationView key={displayedCurrent.id} conversation={displayedCurrent} messages={messages} events={eventsByConversation[displayedCurrent.id] ?? []} runState={runState} runId={runStatus.conversationId === conversationId ? runStatus.runId : undefined} onSend={sendMessage} onStop={stopRun} /> : loading || conversationId ? <div className="workspace-loading"><T>{"正在载入对话…"}</T></div> : user ? <NewConversationComposer key={`${selectedProject}:${initialAgentSlug||"lester"}`} deployments={deployments} user={user} projectId={selectedProject} projectName={projects.find(p=>p.id===selectedProject)?.name} initialAgentSlug={initialAgentSlug} /> : null}
     </section>
     {displayedCurrent ? <ComputerPanel conversationId={displayedCurrent.id} createdAgentId={displayedCurrent.agent_slug === "agent-designer" ? displayedCurrent.created_agent_id : undefined} agentRevision={eventsByConversation[displayedCurrent.id]?.findLast(event => event.type === "AGENT_SAVED")?.id ?? 0} width={renderedPanelWidth} maxWidth={renderedPanelMaxWidth} resizing={Boolean(panelResize)} onResizeStart={(clientX) => setPanelResize({ startX: clientX, startWidth: renderedPanelWidth })} onWidthChange={updatePanelWidth} /> : null}
     {runNotice ? <RunNoticeToast notice={runNotice} onOpen={() => openConversation(runNotice.conversationId)} onDismiss={() => setRunNotice(null)} /> : null}
-  </main></FileWorkspaceProvider>;
+  </WorkspaceSurface></FileWorkspaceProvider>;
 }
 
 function ConversationView({ conversation, messages, events, runState, runId, onSend, onStop }: { conversation: Conversation; messages: Message[]; events: RunEvent[]; runState: RunState; runId?: string; onSend: (content: string, attachments: Attachment[], contextIds: string[]) => Promise<void>; onStop: () => Promise<void> }) {
@@ -482,7 +489,11 @@ function ConversationView({ conversation, messages, events, runState, runId, onS
   const { thread, content: threadContent, unseen, jump } = useConversationScroll(storageKey, `${messages.at(-1)?.id}:${messages.length}:${events.at(-1)?.id}:${runState}`);
   const fileInput = useRef<HTMLInputElement>(null);
   const textInput = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => { if (reference) textInput.current?.focus(); }, [reference, referenceRevision]);
+  useEffect(() => {
+    if (!reference) return;
+    const frame = window.requestAnimationFrame(() => textInput.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [reference, referenceRevision]);
 
 
   async function submit(event: FormEvent) {
@@ -523,8 +534,8 @@ function ConversationView({ conversation, messages, events, runState, runId, onS
     setText(content);
     window.requestAnimationFrame(() => textInput.current?.focus());
   };
-  const helper = uploading ? t("正在上传 {0} 个附件…", [files.length]) : runState === "sending" ? t("消息已发送，正在创建任务…") : runState === "running" ? t("{0} 正在工作，可随时停止", [agentName(conversation.agent_slug,conversation.agent_name,t)]) : runState === "stopping" ? t("正在安全停止当前任务…") : runState === "cancelled" ? t("已停止；已产生的文件修改不会撤销") : reference ? t("围绕已引用的文件继续修改") : "";
-  return <><div className="thread" ref={thread}><div ref={threadContent} className="thread-content">{conversation.agent_slug === "agent-designer" && messages.length === 0 ? <div className="designer-welcome"><span><Bot size={22}/></span><h2><T>{"先聊聊，你想创建怎样的智能体？"}</T></h2><p><T>{"我是智能体设计师。告诉我它要帮谁做什么，平时会收到哪些材料，以及你希望它如何交付结果。我会先了解需求，再和你一起确定配置。"}</T></p></div> : null}<ConversationTimeline messages={messages} events={events} /><Deliverables /><ArtifactCards />{runActive ? <AgentActivityIndicator agent={agentName(conversation.agent_slug,conversation.agent_name,t)} state={runState} runId={runId} events={events} /> : null}</div></div><form className="composer" onSubmit={submit}>{unseen ? <button type="button" className="new-content-button" onClick={jump}><ChevronDown /><T>{"有新内容 · 回到底部"}</T></button> : null}{runState === "failed" && failure ? <RunFailureRecovery reason={String(failure.payload.error ?? t("任务执行失败"))} lastPrompt={lastPrompt} onPrepare={prepareRecovery} /> : null}{helper ? <p className={busy ? "composer-status active" : "composer-status"}>{helper}</p> : null}<div className="compose-box"><FileReferenceChip />{missingFiles.length ? <p className="draft-attachment-notice" role="status"><T>{"草稿已恢复；刷新前的本地附件需要重新选择："}</T>{missingFiles.join("、")}<button type="button" onClick={() => { setMissingFiles([]); updateView(storageKey, { missingFiles: [] }); }}><T>{"知道了"}</T></button></p> : null}{files.length > 0 ? <div className="pending-attachments">{files.map((file, index) => <span key={`${file.name}-${file.lastModified}`}><FileText />{file.name}<button type="button" onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={t("移除 {0}", [file.name])}><X /></button></span>)}</div> : null}<ContextInput references={contexts} onReferences={setContexts} inputRef={textInput} rows={2} value={text} onText={setText} onPaste={(event) => { const images = pastedImageFiles(event); if (images.length) { event.preventDefault(); setFiles((current) => [...current, ...images]); } }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} aria-label={t("消息输入框")} placeholder={reference ? t("描述要如何修改这个文件…") : conversation.agent_slug === "agent-designer" ? t("描述你想创建的智能体…") : t("给 {0} 一个目标…", [agentName(conversation.agent_slug,conversation.agent_name,t)])} disabled={uploading || runState === "sending"} /><div className="compose-actions"><input ref={fileInput} type="file" multiple hidden onChange={(event) => setFiles((current) => [...current, ...Array.from(event.target.files || [])])} /><button type="button" className="icon-button upload-button" onClick={() => fileInput.current?.click()} disabled={busy} aria-label={t("添加附件")} title={t("添加附件或直接粘贴图片；文件保存在当前会话，Agent 按需读取，不会自动解析进上下文")}><Paperclip /></button><span className="composer-keyboard-hint"><T>{"Shift + Enter 换行"}</T></span>{runActive ? <button type="button" className={`send-button stop-button ${runState === "stopping" ? "stopping" : ""}`} onClick={() => void onStop()} disabled={!runId || runState === "sending" || runState === "stopping"} title={runState === "stopping" ? t("正在停止") : t("停止生成")} aria-label={runState === "stopping" ? t("正在停止任务") : t("停止生成")}><Square /></button> : <button className="send-button" disabled={busy || (!text.trim() && files.length === 0)} aria-label={t("发送消息")}><Send /></button>}</div>{error ? <p className="compose-error">{t(error)}</p> : null}</div></form></>;
+  const helper = uploading ? t("正在上传 {0} 个附件…", [files.length]) : runState === "sending" ? t("消息已发送，正在创建任务…") : runState === "stopping" ? t("正在安全停止当前任务…") : runState === "cancelled" ? t("已停止；已产生的文件修改不会撤销") : reference ? t("围绕已引用的文件继续修改") : "";
+  return <><div className="thread" ref={thread}><div ref={threadContent} className="thread-content">{conversation.agent_slug === "agent-designer" && messages.length === 0 ? <div className="designer-welcome"><span><Bot size={22}/></span><h2><T>{"先聊聊，你想创建怎样的智能体？"}</T></h2><p><T>{"我是智能体设计师。告诉我它要帮谁做什么，平时会收到哪些材料，以及你希望它如何交付结果。我会先了解需求，再和你一起确定配置。"}</T></p></div> : null}<ConversationTimeline messages={messages} events={events} /><Deliverables /><ArtifactCards />{runActive ? <AgentActivityIndicator agent={agentName(conversation.agent_slug,conversation.agent_name,t)} state={runState} runId={runId} events={events} /> : null}</div></div><form className="composer" onSubmit={submit}>{unseen ? <button type="button" className="new-content-button" onClick={jump}><ChevronDown /><T>{"有新内容 · 回到底部"}</T></button> : null}{runState === "failed" && failure ? <RunFailureRecovery reason={String(failure.payload.error ?? t("任务执行失败"))} lastPrompt={lastPrompt} onPrepare={prepareRecovery} /> : null}{helper ? <p className={busy ? "composer-status active" : "composer-status"}>{helper}</p> : null}<div className="compose-box"><FileReferenceChip />{missingFiles.length ? <p className="draft-attachment-notice" role="status"><T>{"草稿已恢复；刷新前的本地附件需要重新选择："}</T>{missingFiles.join("、")}<button type="button" onClick={() => { setMissingFiles([]); updateView(storageKey, { missingFiles: [] }); }}><T>{"知道了"}</T></button></p> : null}{files.length > 0 ? <div className="pending-attachments">{files.map((file, index) => <span key={`${file.name}-${file.lastModified}`}><FileText />{file.name}<button type="button" onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={t("移除 {0}", [file.name])}><X /></button></span>)}</div> : null}<ContextInput references={contexts} onReferences={setContexts} inputRef={textInput} rows={2} value={text} onText={setText} onPaste={(event) => { const images = pastedImageFiles(event); if (images.length) { event.preventDefault(); setFiles((current) => [...current, ...images]); } }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} aria-label={t("消息输入框")} placeholder={reference ? t("描述要如何修改这个文件…") : conversation.agent_slug === "agent-designer" ? t("描述你想创建的智能体…") : t("给 {0} 一个目标…", [agentName(conversation.agent_slug,conversation.agent_name,t)])} disabled={uploading || runState === "sending"} tools={<> <input ref={fileInput} type="file" multiple hidden onChange={(event) => setFiles((current) => [...current, ...Array.from(event.target.files || [])])} /><button type="button" className="icon-button upload-button" onClick={() => fileInput.current?.click()} disabled={busy} aria-label={t("添加附件")} title={t("添加附件或直接粘贴图片；文件保存在当前会话，Agent 按需读取，不会自动解析进上下文")}><Paperclip /></button><span className="composer-keyboard-hint"><T>{"Shift + Enter 换行"}</T></span>{runActive ? <button type="button" className={`send-button stop-button ${runState === "stopping" ? "stopping" : ""}`} onClick={() => void onStop()} disabled={!runId || runState === "sending" || runState === "stopping"} title={runState === "stopping" ? t("正在停止") : t("停止生成")} aria-label={runState === "stopping" ? t("正在停止任务") : t("停止生成")}><Square /></button> : <button className="send-button" disabled={busy || (!text.trim() && files.length === 0)} aria-label={t("发送消息")}><Send /></button>} </>} />{error ? <p className="compose-error">{t(error)}</p> : null}</div></form></>;
 }
 
 const computerStatusLabel: Record<ComputerState["status"], string> = { not_created: "未创建", creating: "创建中", running: "运行中", suspended: "已暂停", stopped: "已停止", unhealthy: "异常", missing: "待恢复", error: "连接异常" };
@@ -532,8 +543,8 @@ const computerStatusLabel: Record<ComputerState["status"], string> = { not_creat
 function OpenResultsButton({ compact = false }: { compact?: boolean }) {
   const t = useT();
 
-  const { setPanelTab, setPanelOpen } = useFileWorkspace();
-  return <button type="button" className={compact ? "open-deliverables-button" : "open-results-button"} onClick={(event) => { setPanelTab("results"); setPanelOpen(true); const menu = event.currentTarget.closest("details"); if (menu) menu.open = false; }}>{compact ? <><FileText size={16} /><T>{"成果"}</T></> : t("查看会话成果")}</button>;
+  const { setPanelTab, setPanelOpen, panelOpen, panelTab } = useFileWorkspace();
+  return <button type="button" className={compact ? "open-deliverables-button" : "open-results-button"} aria-pressed={panelOpen && panelTab === "results"} onClick={(event) => { setPanelTab("results"); setPanelOpen(true); const menu = event.currentTarget.closest("details"); if (menu) menu.open = false; }}>{compact ? <><FileText size={16} /><T>{"成果"}</T></> : t("查看会话成果")}</button>;
 }
 
 function OpenAgentButton() {
@@ -553,11 +564,7 @@ function ComputerPanel({ conversationId, createdAgentId, agentRevision, width, m
     if (createdAgentId) { setTab("agent"); setPanelOpen(true); }
     else { setTab("files"); setPanelOpen(false); }
   }, [createdAgentId, setTab, setPanelOpen]);
-  useEffect(() => {
-    const onEscape = (event: KeyboardEvent) => { if (event.key === "Escape") { setExpanded(false); setPanelOpen(false); } };
-    window.addEventListener("keydown", onEscape);
-    return () => window.removeEventListener("keydown", onEscape);
-  }, [setExpanded, setPanelOpen]);
+  const { dialog, overlay } = useWorkspaceDialog(panelOpen || expanded, expanded);
   const [state, setState] = useState<ComputerState | null>(null);
   useEffect(() => {
     let active = true;
@@ -568,19 +575,17 @@ function ComputerPanel({ conversationId, createdAgentId, agentRevision, width, m
   }, [conversationId]);
   const status = state?.status || "not_created";
   const providerLabel = state?.provider === "acs" ? "Alibaba Cloud ACS" : state?.provider === "docker" ? "Docker" : "Computer";
-  return <aside className={`computer-panel ${expanded ? "preview-expanded" : ""} ${panelOpen ? "files-open" : ""}`}><button type="button" className={`panel-resizer ${resizing ? "active" : ""}`} onPointerDown={(event) => { event.preventDefault(); onResizeStart(event.clientX); }} onKeyDown={(event) => { if (event.key === "ArrowLeft") onWidthChange(width + 24); if (event.key === "ArrowRight") onWidthChange(width - 24); }} role="separator" aria-label={t("调整 Computer 面板宽度")} aria-orientation="vertical" aria-valuemin={minPanelWidth} aria-valuemax={Math.round(maxWidth)} aria-valuenow={Math.round(width)} title={t("拖动调整面板宽度")}><GripVertical /></button><header className="computer-panel-header">
+  return <dialog ref={dialog} role={overlay ? "dialog" : "complementary"} aria-modal={overlay && panelOpen ? true : undefined} aria-label={t("工作区功能")} onCancel={event => { if (event.target !== event.currentTarget) return; event.preventDefault(); setExpanded(false); setPanelOpen(false); }} className={`computer-panel ${expanded ? "preview-expanded" : ""} ${panelOpen ? "files-open" : ""}`}><button type="button" className={`panel-resizer ${resizing ? "active" : ""}`} onPointerDown={(event) => { event.preventDefault(); onResizeStart(event.clientX); }} onKeyDown={(event) => { if (event.key === "ArrowLeft") onWidthChange(width + 24); if (event.key === "ArrowRight") onWidthChange(width - 24); }} role="separator" aria-label={t("调整 Computer 面板宽度")} aria-orientation="vertical" aria-valuemin={minPanelWidth} aria-valuemax={Math.round(maxWidth)} aria-valuenow={Math.round(width)} title={t("拖动调整面板宽度")}><GripVertical /></button><header className="computer-panel-header">
       <nav className="computer-tabs" aria-label={t("工作区功能")}>
         <button aria-pressed={tab === "results"} className={tab === "results" ? "active" : ""} onClick={() => setTab("results")}><ArtifactIcon size={15} /><T>{"成果"}</T></button>
         <button aria-pressed={tab === "files"} className={tab === "files" ? "active" : ""} onClick={() => setTab("files")}><Folder /><T>{"文件"}</T></button>
-        <button aria-pressed={tab === "terminal"} className={tab === "terminal" ? "active" : ""} onClick={() => setTab("terminal")}><TerminalSquare /><T>{"终端"}</T></button>
-        <button aria-pressed={tab === "skills"} className={tab === "skills" ? "active" : ""} onClick={() => setTab("skills")}><Wrench /><T>{"技能"}</T></button>
-        {createdAgentId ? <button aria-pressed={tab === "agent"} className={tab === "agent" ? "active" : ""} onClick={() => setTab("agent")}><Bot /><T>{"智能体"}</T></button> : null}
+        <WorkspaceTools createdAgentId={createdAgentId} />
       </nav>
       <GuideLauncher label={t("功能教学")} />
       <span className="sandbox-state" title={t("{0} · 用户级工作区 · {1}{2}", [providerLabel, t(computerStatusLabel[status]), state?.last_error ? `：${state.last_error}` : ""])} aria-label={t("工作区{0}", [t(computerStatusLabel[status])])}><i className={`computer-status ${status}`} /></span>
       {tab === "agent" && createdAgentId ? <button type="button" className="designer-expand-button" onClick={() => setExpanded(!expanded)} aria-label={expanded ? t("收起智能体配置") : t("放大智能体配置")} title={expanded ? t("收起配置") : t("放大编辑提示词")}>{expanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button> : null}
-      <button type="button" className="close-files-panel" onClick={() => { setExpanded(false); setPanelOpen(false); }} aria-label={t("关闭文件面板")}><X /></button>
-    </header>{tab === "results" ? <Deliverables key={conversationId} panel /> : null}{tab === "files" ? <FileExplorer key={conversationId} conversationId={conversationId} /> : null}{tab === "terminal" ? <ComputerTerminal key={conversationId} conversationId={conversationId} /> : null}{tab === "skills" ? <ConversationSkills conversationId={conversationId} /> : null}{tab === "agent" && createdAgentId ? <AgentConfiguration agentId={createdAgentId} revision={agentRevision} /> : null}</aside>;
+      <button type="button" className="close-files-panel" onClick={() => { setExpanded(false); setPanelOpen(false); }} aria-label={overlay ? t("返回对话") : t("关闭工作区面板")}>{overlay ? <ArrowLeft /> : <X />}<span><T>{"返回对话"}</T></span></button>
+    </header>{tab === "results" ? <Deliverables key={conversationId} panel /> : null}{tab === "files" ? <FileExplorer key={conversationId} conversationId={conversationId} /> : null}{tab === "terminal" ? <ComputerTerminal key={conversationId} conversationId={conversationId} /> : null}{tab === "skills" ? <ConversationSkills conversationId={conversationId} /> : null}{tab === "agent" && createdAgentId ? <AgentConfiguration agentId={createdAgentId} revision={agentRevision} /> : null}</dialog>;
 }
 
 function ConversationSkills({ conversationId }: { conversationId: string }) {
@@ -610,4 +615,36 @@ function ConversationSkills({ conversationId }: { conversationId: string }) {
     finally { setBusy(""); }
   }
   return <div className="conversation-skills"><div className="skills-intro"><strong><T>{"会话级 Skills"}</T></strong><span><T>{"安装到 .agent/skills"}</T></span></div>{error ? <p className="skills-error">{t(error)}</p> : null}{catalog.map((skill) => { const active = installedSlugs.has(skill.slug); return <article className="conversation-skill" key={skill.id}><span className="skill-mini-icon">{active ? <Check /> : <Wrench />}</span><div><strong>{skill.name}</strong><p>{skill.description}</p><small>v{skill.version}</small></div><button className={active ? "installed" : ""} disabled={busy === skill.slug} onClick={() => toggle(skill)}>{busy === skill.slug ? t("处理中") : active ? t("卸载") : t("安装")}</button></article>; })}</div>;
+}
+
+function WorkspaceTools({ createdAgentId }: { createdAgentId?: string }) {
+  const t = useT();
+  const { panelTab, setPanelTab } = useFileWorkspace();
+  const menu = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const closeOutside = (event: PointerEvent) => {
+      if (menu.current && !menu.current.contains(event.target as Node)) menu.current.open = false;
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, []);
+  const active = panelTab !== "files" && panelTab !== "results";
+  const label = panelTab === "terminal" ? t("终端") : panelTab === "skills" ? t("技能") : panelTab === "agent" ? t("智能体") : t("工具");
+  const choose = (tab: "terminal" | "skills" | "agent") => {
+    setPanelTab(tab);
+    if (menu.current) menu.current.open = false;
+  };
+  return <details ref={menu} className={`workspace-tools ${active ? "active" : ""}`} onKeyDown={event => {
+    if (event.key === "Escape" && event.currentTarget.open) {
+      event.preventDefault(); event.stopPropagation(); event.currentTarget.open = false;
+      event.currentTarget.querySelector("summary")?.focus();
+    }
+  }}>
+    <summary title={t("工作区功能")}><Wrench size={15} /><span>{label}</span><ChevronDown size={12} /></summary>
+    <div className="workspace-tools-menu">
+      <button type="button" aria-pressed={panelTab === "terminal"} onClick={() => choose("terminal")}><TerminalSquare /><T>{"终端"}</T></button>
+      <button type="button" aria-pressed={panelTab === "skills"} onClick={() => choose("skills")}><Wrench /><T>{"技能"}</T></button>
+      {createdAgentId ? <button type="button" aria-pressed={panelTab === "agent"} onClick={() => choose("agent")}><Bot /><T>{"智能体"}</T></button> : null}
+    </div>
+  </details>;
 }

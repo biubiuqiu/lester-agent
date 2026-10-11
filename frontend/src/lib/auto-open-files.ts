@@ -60,11 +60,10 @@ export class AutoOpenFiles {
   }
 }
 
-export function mergeFileTabs(tabs: FileEntry[], opened: FileEntry[]) {
+export function mergeFileTabs(tabs: FileEntry[], opened: FileEntry[], selected = opened.at(-1)?.path) {
   const next = new Map(tabs.map((file) => [file.path, file]));
   for (const file of opened) next.set(file.path, file);
   // Reopening an existing tab keeps its position, and it must survive the cap.
-  const selected = opened.at(-1)?.path;
   while (next.size > 8) {
     const oldest = [...next.keys()].find((path) => path !== selected)!;
     next.delete(oldest);

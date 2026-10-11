@@ -79,14 +79,18 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, live
   const pendingRunScans = useRef(new Map<string, number>());
   const [fileRevisions, setFileRevisions] = useState<Record<string, number>>({});
   const [selectedPath, setSelectedPath] = useState<string | null>(() => requestedPreview || readView(storageKey).selected);
+  const selectedPathRef = useRef(selectedPath);
   const [reference, setReferenceState] = useState<string | null>(() => readView(storageKey).reference);
   const [referenceRevision, setReferenceRevision] = useState(0);
   const setReference = useCallback((value: string | null) => { updateView(storageKey, { reference: value }); setReferenceState(value); setReferenceRevision((revision) => revision + 1); }, [storageKey]);
   const [expanded, setExpanded] = useState(Boolean(requestedPreview));
   const [treeOpen, setTreeOpenState] = useState(() => requestedPreview ? false : readView(storageKey).treeOpen);
   const setTreeOpen = useCallback((value: boolean) => { updateView(storageKey, { treeOpen: value }); setTreeOpenState(value); }, [storageKey]);
-  const [panelOpen, setPanelOpen] = useState(Boolean(requestedPreview));
-  const [panelTab, setPanelTab] = useState<"files" | "results" | "terminal" | "skills" | "agent">("files");
+  const panelIntent = useRef(Boolean(requestedPreview || readView(storageKey).selected));
+  const [panelOpen, setPanelOpenState] = useState(() => Boolean(requestedPreview || readView(storageKey).selected));
+  const [panelTab, setPanelTabState] = useState<"files" | "results" | "terminal" | "skills" | "agent">("files");
+  const setPanelOpen = useCallback((value: boolean) => { panelIntent.current = true; setPanelOpenState(value); }, []);
+  const setPanelTab = useCallback((value: "files" | "results" | "terminal" | "skills" | "agent") => { panelIntent.current = true; setPanelTabState(value); }, []);
   const [modes, setModes] = useState<Record<string, "preview" | "source">>(() => ({ ...readView(storageKey).modes, ...(requestedPreview ? { [requestedPreview]: "preview" } : {}) }));
   const setPreviewMode = useCallback((path: string, mode: "preview" | "source") => {
     const next = Object.fromEntries(Object.entries({ ...readView(storageKey).modes, [path]: mode }).slice(-16));
@@ -105,15 +109,23 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, live
   const runningRef = useRef(running);
   useEffect(() => { runRef.current = runId; runningRef.current = running; }, [runId, running]);
   const revision = events.findLast((event) => refreshEvents.has(event.type))?.id ?? 0;
-  const openBatch = useCallback((files: FileEntry[]) => {
-    const selected = files.at(-1);
+  const openBatch = useCallback((files: FileEntry[], automatic = false) => {
+    // Live updates add tabs and refresh bytes, but keep the user's selection.
+    const current = selectedPathRef.current;
+    const selected = automatic && current ? files.find(file => file.path === current) ?? tabsRef.current.find(file => file.path === current) : files.at(-1);
     if (!selected) return;
-    const next = mergeFileTabs(tabsRef.current, files);
+    const next = mergeFileTabs(tabsRef.current, files, selected.path);
     tabsRef.current = next;
     for (const file of files) watchDirectory(file.path.split("/").slice(0, -1).join("/"));
     updateView(storageKey, { tabs: next.map((file) => file.path), selected: selected.path });
-    setTabs(next); setSelectedPath(selected.path); setPanelTab("files"); setPanelOpen(true);
-  }, [storageKey, watchDirectory]);
+    selectedPathRef.current = selected.path;
+    setTabs(next); setSelectedPath(selected.path);
+    if (!automatic || (!current && !panelIntent.current)) {
+      if (!automatic) panelIntent.current = true;
+      setPanelTabState("files"); setPanelOpenState(true);
+      if (automatic) setTreeOpen(false);
+    }
+  }, [storageKey, watchDirectory, setTreeOpen]);
 
   useEffect(() => {
     const paths = autoOpen.current!.receive(liveFileEvents);
@@ -195,7 +207,7 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, live
         if (owner && pendingEvent !== undefined && pendingRunScans.current.get(owner) === pendingEvent) pendingRunScans.current.delete(owner);
         const ready = autoOpen.current!.take(next.files);
         if (ready.length) {
-          openBatch(ready);
+          openBatch(ready, true);
           // An explicit edit can keep both size and timestamp unchanged.
           setFileRevisions((value) => Object.fromEntries(Object.entries({ ...value, ...Object.fromEntries(ready.map((file) => [file.path, (value[file.path] ?? 0) + 1])) }).slice(-2000)));
         }
@@ -243,13 +255,14 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, live
     openBatch([file]);
   }, [openBatch, setPreviewMode, setTreeOpen]);
   const close = (path: string) => {
+    panelIntent.current = true;
     const index = tabsRef.current.findIndex((file) => file.path === path);
     const next = tabsRef.current.filter((file) => file.path !== path);
     const replacement = next[Math.min(index, next.length - 1)]?.path ?? null;
     tabsRef.current = next;
     setTabs(next);
-    updateView(storageKey, { tabs: next.map((file) => file.path), selected: selectedPath === path ? replacement : selectedPath });
-    if (selectedPath === path) setSelectedPath(replacement);
+    updateView(storageKey, { tabs: next.map((file) => file.path), selected: selectedPathRef.current === path ? replacement : selectedPathRef.current });
+    if (selectedPathRef.current === path) { selectedPathRef.current = replacement; setSelectedPath(replacement); }
     if (!next.length) setTreeOpen(true);
   };
   const changes = useMemo(() => {
@@ -271,8 +284,8 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, live
 export function OpenFilesButton({ menu = false }: { menu?: boolean }) {
   const t = useT();
 
-  const { setPanelOpen, setPanelTab } = useFileWorkspace();
-  return <button type="button" className={menu ? "open-files-menu-button" : "open-files-button"} onClick={(event) => { setPanelTab("files"); setPanelOpen(true); const details = event.currentTarget.closest("details"); if (details) details.open = false; }}><FolderOpen />{menu ? t("查看会话文件") : t("文件")}</button>;
+  const { setPanelOpen, setPanelTab, panelOpen, panelTab } = useFileWorkspace();
+  return <button type="button" className={menu ? "open-files-menu-button" : "open-files-button"} aria-pressed={panelOpen && panelTab === "files"} onClick={(event) => { setPanelTab("files"); setPanelOpen(true); const details = event.currentTarget.closest("details"); if (details) details.open = false; }}><FolderOpen />{menu ? t("查看会话文件") : t("文件")}</button>;
 }
 
 export function FileReferenceChip() {

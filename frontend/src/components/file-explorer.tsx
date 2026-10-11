@@ -137,11 +137,11 @@ export function FileExplorer({ conversationId }: { conversationId: string }) {
     open(file);
   }, [open]);
 
-  return <div className="file-explorer">
+  return <div className={`file-explorer ${selected && !treeOpen ? "preview-focused" : ""}`}>
     <section className={`file-tree-pane ${treeOpen ? "" : "collapsed"} ${selected ? "has-preview" : ""}`} aria-label={t("会话文件资源管理器")}>
       <header className="file-explorer-toolbar">
         <button type="button" onClick={() => setTreeOpen(!treeOpen)} aria-expanded={treeOpen}>{treeOpen ? <ChevronDown /> : <ChevronRight />}<strong><T>{"目录"}</T></strong></button>
-        {changes.length || limited ? <details ref={changesMenu} className="file-changes" onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }}><summary aria-label={t("查看文件变化")}><T>{"变化"}</T>{changes.length ? ` · ${changes.length}` : ""}</summary>
+        {changes.length || limited ? <details ref={changesMenu} className="file-changes" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }}><summary aria-label={t("查看文件变化")}><T>{"变化"}</T>{changes.length ? ` · ${changes.length}` : ""}</summary>
       <div className="file-changes-popover"><strong><T>{"文件变化"}</T></strong><p><T>{"包含本轮文件操作及本次打开期间检测到的变化；不是完整历史或回滚快照。"}</T>{limited ? t("目录较大或部分读取失败，仅展示已同步范围。") : ""}</p>
       <div>{changes.map((change) => <button key={change.path} type="button" disabled={change.kind === "deleted" || !files.some((file) => file.path === change.path)} onClick={() => { const file = files.find((file) => file.path === change.path); if (file) selectFile(file); if (changesMenu.current) changesMenu.current.open = false; }}><span data-kind={change.kind}>{change.kind === "added" ? t("新增") : change.kind === "deleted" ? t("删除") : t("更新")}</span><span>{change.path}</span></button>)}</div>
     </div></details> : null}
@@ -149,12 +149,12 @@ export function FileExplorer({ conversationId }: { conversationId: string }) {
         <button type="button" onClick={refresh} title={t("刷新文件")} aria-label={t("刷新文件")}><RefreshCw /></button>
         <button type="button" onClick={() => { setExpanded(!enlarged); if (!enlarged) setTreeOpen(false); }} title={enlarged ? t("还原布局") : t("专注预览")} aria-label={enlarged ? t("还原布局") : t("专注预览")}>{enlarged ? <Minimize2 /> : <Maximize2 />}</button>
       </header>
-      {error ? <FileError detail={t(error)} onRetry={refresh} /> : null}
       {treeOpen ? <div className="file-tree-scroll" role="tree" aria-label="Files">
         {loading ? <div className="file-tree-status"><T>{"正在同步文件…"}</T></div> : <FileTreeItems directoryPath="" depth={0} directories={directories} expanded={expanded} selectedPath={selected?.path || ""} onToggle={toggleDirectory} onSelect={selectFile} />}
       </div> : null}
     </section>
-    {tabs.length ? <nav ref={tabList} className="open-file-tabs" role="tablist" aria-label={t("已打开文件")}>{tabs.map((file, index) => <div key={file.path} className={selected?.path === file.path ? "active" : ""}><button id={tabId(file.path)} role="tab" type="button" onClick={() => selectFile(file)} title={file.path} aria-selected={selected?.path === file.path} aria-controls={`${tabPrefix}-panel`} tabIndex={selected?.path === file.path || (!selected && index === 0) ? 0 : -1} onKeyDown={(event) => {
+    {error ? <FileError detail={t(error)} onRetry={refresh} /> : null}
+    {tabs.length ? <div className="file-tab-strip"><button type="button" className="file-directory-toggle" aria-label={t("目录")} title={t("目录")} aria-expanded={treeOpen} onClick={() => setTreeOpen(!treeOpen)}><Folder /></button><nav ref={tabList} className="open-file-tabs" role="tablist" aria-label={t("已打开文件")}>{tabs.map((file, index) => <div key={file.path} className={selected?.path === file.path ? "active" : ""}><button id={tabId(file.path)} role="tab" type="button" onClick={() => selectFile(file)} title={file.path} aria-selected={selected?.path === file.path} aria-controls={`${tabPrefix}-panel`} tabIndex={selected?.path === file.path || (!selected && index === 0) ? 0 : -1} onKeyDown={(event) => {
       let next: FileEntry | undefined;
       if (event.key === "ArrowRight") next = tabs[(index + 1) % tabs.length];
       if (event.key === "ArrowLeft") next = tabs[(index - 1 + tabs.length) % tabs.length];
@@ -162,7 +162,7 @@ export function FileExplorer({ conversationId }: { conversationId: string }) {
       if (event.key === "End") next = tabs.at(-1);
       if (next) { event.preventDefault(); selectFile(next); document.getElementById(tabId(next.path))?.focus(); }
       if (event.key === "Delete") { event.preventDefault(); close(file.path); const neighbor = tabs[index + 1] ?? tabs[index - 1]; if (neighbor) document.getElementById(tabId(neighbor.path))?.focus(); }
-    }}>{file.name}</button><button type="button" onClick={() => close(file.path)} aria-label={t("关闭 {0}", [file.name])}><X /></button></div>)}</nav> : null}
+    }}>{file.name}</button><button type="button" onClick={() => close(file.path)} aria-label={t("关闭 {0}", [file.name])}><X /></button></div>)}</nav><button type="button" className="file-focus-toggle" onClick={() => { setExpanded(!enlarged); if (!enlarged) setTreeOpen(false); }} aria-label={enlarged ? t("还原布局") : t("专注预览")} title={enlarged ? t("还原布局") : t("专注预览")}>{enlarged ? <Minimize2 /> : <Maximize2 />}</button></div> : null}
     <div id={`${tabPrefix}-panel`} className="file-tab-panel" role={selected ? "tabpanel" : undefined} aria-labelledby={selected ? tabId(selected.path) : undefined}><FilePreview key={`${selected?.path ?? "empty"}:${previewMode}`} onRetry={() => { setPreview((value) => ({ ...value, key: "", error: "" })); setPreviewAttempt((value) => value + 1); }} storageKey={storageKey} conversationId={conversationId} file={selected} kind={selectedKind} mode={previewMode} preview={activePreview} onModeChange={setPreviewMode} onReference={() => { if (selected) setReference(selected.path); setExpanded(false); setPanelOpen(false); }} /></div>
   </div>;
 }

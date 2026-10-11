@@ -21,6 +21,8 @@ export class WorkspaceApi {
   messages: Message[] = [];
   files: FileEntry[] = [];
   contextEntries: ContextEntry[] = [];
+  private fileContents = new Map<string, string>();
+  private nextEventId = 5;
   private completed = false;
   private streams = new Set<ServerResponse>();
   private server = createServer((_request, response) => {
@@ -63,6 +65,14 @@ export class WorkspaceApi {
   private emit(id: number, type: string, payload: Record<string, unknown>) {
     const event = { id, type, payload, conversation_id: conversationId, run_id: "fixture-run", created_at: new Date().toISOString() };
     for (const stream of this.streams) stream.write(`id: ${id}\ndata: ${JSON.stringify(event)}\n\n`);
+  }
+
+  writeFile(path: string, content: string) {
+    const id = this.nextEventId++;
+    this.fileContents.set(path, content);
+    const file = { path, name: path.split("/").at(-1)!, is_dir: false, size: Buffer.byteLength(content), modified_at: new Date(Date.now() + id * 1000).toISOString() };
+    this.files = [...this.files.filter(item => item.path !== path), file];
+    this.emit(id, "FILE_UPDATED", { path });
   }
 
   private async respond(route: Route) {
@@ -114,7 +124,7 @@ export class WorkspaceApi {
     if (path === `${prefix}/files/content`) {
       const file = url.searchParams.get("path");
       if (!this.files.some(item => item.path === file)) return reply({ error: "模拟文件不存在" }, 404);
-      return route.fulfill({ status: 200, contentType: "application/octet-stream", body: file === "index.html" ? html : "纯文本说明：请人工验收生成文件。" });
+      return route.fulfill({ status: 200, contentType: "application/octet-stream", body: this.fileContents.get(file ?? "") ?? (file === "index.html" ? html : "纯文本说明：请人工验收生成文件。") });
     }
     if (path === `${prefix}/deliverables`) return reply({ deliverables: this.completed ? [{ id: "fixture-deliverable", conversation_id: conversationId, run_id: "fixture-run", title: "Lester 介绍页", summary: "固定模拟任务成果，需要人工验收。", entry_path: "index.html", kind: "html", content_sha256: "a".repeat(64), created_at: new Date().toISOString(), updated_at: new Date().toISOString() }] : [] });
     if (path === "/api/v1/contexts" || path === `${prefix}/contexts`) return reply({ entries: this.contextEntries });

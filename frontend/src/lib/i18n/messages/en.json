@@ -1254,5 +1254,12 @@
   "运行环境检查": "Check the runtime",
   "Compose 会先构建完整沙盒镜像，供新建的 Computer 使用。镜像预装 Node.js、npm、pnpm、Python、pip、venv、Go 和常用编译工具。Node.js 与 Python 的 Playwright 共用预下载的 Chromium，并包含中日韩字体。": "Compose first builds the complete sandbox image for new Computers. It includes Node.js, npm, pnpm, Python, pip, venv, Go and common build tools. Node.js and Python Playwright share predownloaded Chromium, with Chinese, Japanese and Korean fonts included.",
   "Docker Computer 默认禁用外网。预装浏览器可以测试本地页面；安装新依赖或访问外部网站仍需要部署侧的网络配置。": "Docker Computers have external networking disabled by default. The preinstalled browser can test local pages; installing new dependencies or visiting external websites still requires deployment network configuration.",
-  "重建镜像不会升级已有 Computer，也不会删除工作区。旧配置需更新 SANDBOX_IMAGE；现有 Computer 请由管理员保留卷并安排迁移，检查非 root 用户的文件权限。ACS 需要推送新镜像并更新模板。": "Rebuilding the image does not upgrade existing Computers or delete workspaces. Update SANDBOX_IMAGE in older configurations; an administrator must retain volumes, plan migration of existing Computers and check file permissions for the non-root user. ACS requires pushing the new image and updating its template."
+  "重建镜像不会升级已有 Computer，也不会删除工作区。旧配置需更新 SANDBOX_IMAGE；现有 Computer 请由管理员保留卷并安排迁移，检查非 root 用户的文件权限。ACS 需要推送新镜像并更新模板。": "Rebuilding the image does not upgrade existing Computers or delete workspaces. Update SANDBOX_IMAGE in older configurations; an administrator must retain volumes, plan migration of existing Computers and check file permissions for the non-root user. ACS requires pushing the new image and updating its template.",
+  "已就绪": "Ready",
+  "返回对话": "Back to conversation",
+  "关闭工作区面板": "Close workspace panel",
+  "开始任务时先专注对话；第一份文件出现后展开预览并收起目录。顶部“文件”可随时打开工作区，“成果”集中查看交付内容。浏览中的标签不会因后台文件更新而切换。": "Start with the conversation. The preview opens and the directory collapses when the first file appears. Use Files in the header to open the workspace at any time, or Results to see deliverables. Background file updates do not switch the tab you are reading.",
+  "聊天区保留简短的成果入口；右侧成果面板提供完整摘要、待验收状态和修改操作。手机面板支持“返回对话”与 Escape 关闭，并恢复原来的键盘焦点。": "The conversation keeps a brief link to results; the results panel shows full summaries, pending-review status and editing actions. On mobile, use Back to conversation or Escape to close the panel and restore keyboard focus.",
+  "工具": "Tools",
+  "终端和技能可从面板的“工具”菜单打开。": "Open Terminal and Skills from the panel’s Tools menu."
 }

@@ -4,7 +4,8 @@ import { T, useT } from "@/components/i18n";
 
 
 import { ContextInput, useContextReferences } from "./context-input";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { FloatingPopover } from "./floating-popover";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, ChevronDown, FileText, Paperclip, Send, X } from "lucide-react";
@@ -87,24 +88,16 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
       <div className="compose-box">
         {missing.length ? <p className="draft-attachment-notice" role="status"><T>{"请重新选择刷新前的附件："}</T>{missing.join("、")}<button type="button" onClick={() => { setMissing([]); updateView(storageKey, { missingFiles: [] }); }}><T>{"知道了"}</T></button></p> : null}
         {files.length ? <div className="pending-attachments">{files.map((file, index) => <span key={`${file.name}-${index}`}><FileText />{file.name}<button type="button" disabled={busy} aria-label={t("移除 {0}", [file.name])} onClick={() => changeFiles(files.filter((_, i) => i !== index))}><X /></button></span>)}</div> : null}
-        <ContextInput inputRef={messageInput} references={contexts} onReferences={setContexts} rows={3} autoFocus aria-label={t("消息输入框")} placeholder={t("描述你的目标，上传文件或粘贴图片…")} value={text} disabled={busy} onText={(value) => { setText(value); updateView(storageKey, { text: value }); }} onPaste={(event) => { const images = pastedImageFiles(event); if (images.length) { event.preventDefault(); changeFiles([...files, ...images]); } }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
-        <div className="compose-actions">
+        <ContextInput inputRef={messageInput} references={contexts} onReferences={setContexts} rows={3} autoFocus aria-label={t("消息输入框")} placeholder={t("描述你的目标，上传文件或粘贴图片…")} value={text} disabled={busy} onText={(value) => { setText(value); updateView(storageKey, { text: value }); }} onPaste={(event) => { const images = pastedImageFiles(event); if (images.length) { event.preventDefault(); changeFiles([...files, ...images]); } }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} tools={<>
+
           <input ref={input} type="file" multiple hidden onChange={(event) => { changeFiles([...files, ...Array.from(event.target.files || [])]); event.target.value = ""; }} />
           <button type="button" className="icon-button upload-button" aria-label={t("添加附件")} title={t("添加附件或直接粘贴图片")} disabled={busy} onClick={() => input.current?.click()}><Paperclip /></button>
           <label className="model-selector"><select aria-label={t("当前模型")} value={model} disabled={busy || !deployments.length} onChange={(event) => setModel(event.target.value)}>{!deployments.length ? <option value=""><T>{"请先配置模型"}</T></option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown /></label>
+          <AgentPicker agents={agents} selected={agentSlug} disabled={busy} onSelect={value => { setAgentSlug(value); updateView(storageKey, { agentSlug: value }); }} />
           <button className="send-button" aria-label={t("发送消息")} disabled={busy || !model || (!text.trim() && !files.length)}><Send /></button>
-        </div>
+        </>} />
       </div>
-      <div className="new-chat-options"><details className="agent-options" onKeyDown={event => {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          event.currentTarget.open = false;
-          event.currentTarget.querySelector("summary")?.focus();
-        }
-      }}>
-        <summary>{selectedAgent?.builtin ? t(selectedAgent.name) : selectedAgent?.name || "Lester"} <span><T>{"更换 Agent"}</T></span></summary>
-        <div className="new-agent-picker"><label><T>{"选择 Agent"}</T><select aria-label={t("选择 Agent")} value={agentSlug} disabled={busy || !agents.length} onChange={event=>{setAgentSlug(event.target.value);updateView(storageKey,{agentSlug:event.target.value});}}>{agents.map(agent=><option key={agent.slug} value={agent.slug}>{agent.builtin ? t(agent.name) : agent.name}</option>)}</select></label><Link href={`/app/agents/${encodeURIComponent(agentSlug)}`}><T>{"了解这个 Agent"}</T></Link><Link href="/app/agents"><T>{"管理 Agent"}</T></Link></div>
-      </details>
+      <div className="new-chat-options">
       {deployments.length ? <p className="new-chat-hint"><T>{"Enter 发送 · Shift + Enter 换行"}</T></p> : null}</div>
       {agentError ? <p role="alert" className="compose-error">{t(agentError)}</p> : null}
       {busy ? <p role="status" className="composer-status active"><T>{"正在创建会话并发送消息…"}</T></p> : null}
@@ -123,4 +116,18 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
       [t("制作一个网页"), t("帮我制作一个产品介绍网页，先和我确认目标用户、内容和视觉风格。")],
     ].map(([title, prompt]) => <button type="button" key={title} disabled={busy} onClick={() => chooseExample(prompt)}>{title}</button>)}</div></details>
   </div></div>;
+}
+
+function AgentPicker({ agents, selected, disabled, onSelect }: { agents: Agent[]; selected: string; disabled: boolean; onSelect: (slug: string) => void }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const anchor = useRef<HTMLButtonElement>(null);
+  const id = useId();
+  const agent = agents.find(item => item.slug === selected);
+  return <><button type="button" ref={anchor} className="composer-agent-picker" disabled={disabled || !agents.length} aria-label={t("选择 Agent")} aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(value => !value)}>{agent?.builtin ? t(agent.name) : agent?.name || "Lester"}<ChevronDown size={13} /></button>
+    {open ? <FloatingPopover anchor={anchor} className="composer-agent-popover" onClose={reason => { setOpen(false); if (reason === "escape") anchor.current?.focus(); }}>
+      <div id={id}><label className="field"><T>{"选择 Agent"}</T><select autoFocus aria-label={t("选择 Agent")} value={selected} onChange={event => { onSelect(event.target.value); setOpen(false); anchor.current?.focus(); }}>{agents.map(item => <option key={item.id} value={item.slug}>{item.builtin ? t(item.name) : item.name}</option>)}</select></label>
+        <Link href={`/app/agents/${encodeURIComponent(selected)}`}><T>{"了解这个 Agent"}</T></Link><Link href="/app/agents"><T>{"管理 Agent"}</T></Link>
+      </div>
+    </FloatingPopover> : null}</>;
 }

@@ -62,4 +62,7 @@ test("tabs reuse paths, retain positions/metadata and cap without dropping the s
   assert(next.some((file) => file.path === "new.md"));
   assert.equal(next[0].path, "0.html");
   assert.equal(next[0].modified_at, "3");
+  const burst = mergeFileTabs(tabs, Array.from({ length: 12 }, (_, i) => file(`new-${i}.txt`)), "0.html");
+  assert.equal(burst.length, 8);
+  assert(burst.some(file => file.path === "0.html"), "background writes must not evict the file being read");
 });

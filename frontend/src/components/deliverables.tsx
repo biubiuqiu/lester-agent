@@ -11,12 +11,21 @@ import { PublishFileButton } from "./artifact-manager";
 export function Deliverables({ panel = false }: { panel?: boolean }) {
   const t = useT();
 
-  const { files, running, runOutcome, loading, error, limited, changes, deliverables, deliverablesError, open, refresh, conversationId, setReference, setExpanded, setPanelOpen } = useFileWorkspace();
+  const { files, running, runOutcome, loading, error, limited, changes, deliverables, deliverablesError, open, refresh, conversationId, setReference, setExpanded, setPanelOpen, setPanelTab } = useFileWorkspace();
   const [count, setCount] = useState(6);
   const registered = useMemo(() => new Map(deliverables.map((item) => [item.entry_path, item])), [deliverables]);
   const results = useMemo(() => files.filter((file) => !file.is_dir && (registered.has(file.path) || deliverableKind(file))).toSorted((a, b) => Number(registered.has(b.path)) - Number(registered.has(a.path)) || b.modified_at.localeCompare(a.modified_at) || a.path.localeCompare(b.path)), [files, registered]);
   if (!panel && (running || loading || !results.length)) return null;
   const updated = new Set(changes.filter((change) => change.kind !== "deleted").map((change) => change.path));
+  if (!panel) return <section className="delivery-receipt" aria-label={t("任务成果")}>
+    <div className="delivery-receipt-heading"><FileText size={16} /><strong><T>{"会话成果"}</T><span>{results.length}</span></strong><small><T>{"待验收"}</T></small>
+      <button type="button" onClick={() => { setPanelTab("results"); setPanelOpen(true); }}><T>{"查看会话成果"}</T><ArrowUpRight size={14} /></button>
+    </div>
+    <div className="delivery-receipt-files">{results.slice(0, 3).map(file => <button type="button" key={file.path} title={file.path} aria-label={t("查看 {0}", [file.name])} onClick={() => open(file, "preview")}>{registered.get(file.path)?.title || file.name}</button>)}</div>
+    {error || deliverablesError ? <p className="delivery-receipt-notice" role="alert">{error ? t("成果同步失败：") : t("成果记录同步失败：")}{t(error || deliverablesError)}<button type="button" onClick={refresh}><T>{"重新同步"}</T></button></p> : null}
+    {limited ? <p className="delivery-receipt-notice"><T>{"目录较大或部分读取失败，仅展示已同步范围。"}</T></p> : null}
+    {runOutcome ? <p className="delivery-receipt-notice">{runOutcome === "failed" ? t("上次任务执行失败") : t("上次任务已停止")}<T>{"。已有文件可查看，完整性与内容仍需检查。"}</T></p> : null}
+  </section>;
   return <section className={`deliverables ${panel ? "deliverables-panel" : ""}`} aria-label={panel ? t("会话成果") : t("任务成果")}>
     <header><h2><T>{"会话成果"}</T>{!running && results.length ? <small>{results.length}</small> : null}</h2>{panel ? <button type="button" className="deliverables-refresh" onClick={refresh} aria-label={t("刷新成果")}><RefreshCw size={16} /></button> : null}</header>
     {error ? <p className="deliverables-notice" role="alert"><T>{"成果同步失败："}</T>{t(error)}<button type="button" onClick={refresh}><T>{"重新同步"}</T></button></p> : null}
@@ -35,7 +44,7 @@ export function Deliverables({ panel = false }: { panel?: boolean }) {
           </button>
           <div className="deliverable-actions">
             <button type="button" className="deliverable-modify" onClick={() => { setReference(file.path); setExpanded(false); setPanelOpen(false); }} aria-label={t("继续修改 {0}", [file.name])}><MessageSquare size={15} /><T>{"继续修改"}</T></button>
-            <details className="deliverable-more" onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }}>
+            <details className="deliverable-more" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }}>
               <summary aria-label={t("{0} 的详情与更多操作", [file.name])} title={t("详情与更多操作")}><MoreHorizontal size={18} /></summary>
               <div className="deliverable-details">
                 {record?.summary ? <p>{record.summary}</p> : null}

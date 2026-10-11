@@ -1254,5 +1254,12 @@
   "运行环境检查": "Vérifier l’environnement d’exécution",
   "Compose 会先构建完整沙盒镜像，供新建的 Computer 使用。镜像预装 Node.js、npm、pnpm、Python、pip、venv、Go 和常用编译工具。Node.js 与 Python 的 Playwright 共用预下载的 Chromium，并包含中日韩字体。": "Compose construit d’abord l’image complète du sandbox pour les nouveaux Computers. Elle inclut Node.js, npm, pnpm, Python, pip, venv, Go et les outils de compilation courants. Playwright pour Node.js et Python partage un Chromium préchargé, avec des polices chinoises, japonaises et coréennes.",
   "Docker Computer 默认禁用外网。预装浏览器可以测试本地页面；安装新依赖或访问外部网站仍需要部署侧的网络配置。": "L’accès réseau externe des Computers Docker est désactivé par défaut. Le navigateur préinstallé peut tester des pages locales ; l’installation de nouvelles dépendances ou l’accès à des sites externes nécessite une configuration réseau du déploiement.",
-  "重建镜像不会升级已有 Computer，也不会删除工作区。旧配置需更新 SANDBOX_IMAGE；现有 Computer 请由管理员保留卷并安排迁移，检查非 root 用户的文件权限。ACS 需要推送新镜像并更新模板。": "Reconstruire l’image ne met pas à niveau les Computers existants et ne supprime pas les espaces de travail. Mettez à jour SANDBOX_IMAGE dans les anciennes configurations ; un administrateur doit conserver les volumes, organiser la migration et vérifier les permissions du compte non-root. ACS nécessite de publier la nouvelle image et de mettre à jour son modèle."
+  "重建镜像不会升级已有 Computer，也不会删除工作区。旧配置需更新 SANDBOX_IMAGE；现有 Computer 请由管理员保留卷并安排迁移，检查非 root 用户的文件权限。ACS 需要推送新镜像并更新模板。": "Reconstruire l’image ne met pas à niveau les Computers existants et ne supprime pas les espaces de travail. Mettez à jour SANDBOX_IMAGE dans les anciennes configurations ; un administrateur doit conserver les volumes, organiser la migration et vérifier les permissions du compte non-root. ACS nécessite de publier la nouvelle image et de mettre à jour son modèle.",
+  "已就绪": "Prêt",
+  "返回对话": "Retour à la conversation",
+  "关闭工作区面板": "Fermer le panneau de travail",
+  "开始任务时先专注对话；第一份文件出现后展开预览并收起目录。顶部“文件”可随时打开工作区，“成果”集中查看交付内容。浏览中的标签不会因后台文件更新而切换。": "Commencez par la conversation. L’aperçu s’ouvre et le répertoire se replie dès qu’un premier fichier apparaît. Utilisez Fichiers en haut pour ouvrir l’espace de travail, ou Résultats pour consulter les livrables. Les mises à jour en arrière-plan ne changent pas l’onglet que vous lisez.",
+  "聊天区保留简短的成果入口；右侧成果面板提供完整摘要、待验收状态和修改操作。手机面板支持“返回对话”与 Escape 关闭，并恢复原来的键盘焦点。": "La conversation conserve un lien succinct vers les résultats ; le panneau affiche les résumés complets, le statut à vérifier et les actions de modification. Sur mobile, Retour à la conversation ou Échap ferme le panneau et rétablit le focus du clavier.",
+  "工具": "Outils",
+  "终端和技能可从面板的“工具”菜单打开。": "Ouvrez le terminal et les compétences depuis le menu Outils du panneau."
 }

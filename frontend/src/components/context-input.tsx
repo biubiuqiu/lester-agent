@@ -2,10 +2,10 @@
 import { T, useT } from "@/components/i18n";
 
 
-import { useEffect, useId, useRef, useState, type RefObject, type TextareaHTMLAttributes } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject, type TextareaHTMLAttributes } from "react";
 import Link from "next/link";
 import { FloatingPopover } from "./floating-popover";
-import { BookOpen, X } from "lucide-react";
+import { AtSign, X } from "lucide-react";
 import { api, type ContextEntry, type ContextReference } from "@/lib/api";
 import { readView, updateView } from "@/lib/conversation-view-state";
 
@@ -16,9 +16,9 @@ export function useContextReferences(key: string) {
 }
 
 type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "onChange" | "value"> & {
-  value: string; onText: (text: string) => void; references: ContextReference[]; onReferences: (items: ContextReference[]) => void; inputRef?: RefObject<HTMLTextAreaElement | null>;
+  value: string; onText: (text: string) => void; references: ContextReference[]; onReferences: (items: ContextReference[]) => void; inputRef?: RefObject<HTMLTextAreaElement | null>; tools?: ReactNode;
 };
-export function ContextInput({ value, onText, references, onReferences, inputRef, onKeyDown, ...props }: Props) {
+export function ContextInput({ value, onText, references, onReferences, inputRef, onKeyDown, tools, ...props }: Props) {
   const t = useT();
 
   const listId = useId();
@@ -55,7 +55,7 @@ export function ContextInput({ value, onText, references, onReferences, inputRef
     input.current?.focus();
   }
   return <div className="context-input" ref={anchor}>
-    <div className="context-references"><button type="button" className="context-add" disabled={props.disabled} onClick={() => { mention.current = null; if (!open) { setLoading(true); setError(""); } setQuery(open ? null : ""); setIndex(0); input.current?.focus(); }}><BookOpen size={14} /><T>{"@ 引用上下文"}</T></button>{references.map((r) => <span key={r.id}>@{r.title}<button type="button" disabled={props.disabled} aria-label={t("移除上下文 {0}", [r.title])} onClick={() => onReferences(references.filter((item) => item.id !== r.id))}><X size={12} /></button></span>)}</div>
+    {references.length ? <div className="context-references">{references.map((r) => <span key={r.id}>@{r.title}<button type="button" disabled={props.disabled} aria-label={t("移除上下文 {0}", [r.title])} onClick={() => onReferences(references.filter((item) => item.id !== r.id))}><X size={12} /></button></span>)}</div> : null}
     {open && <FloatingPopover className="context-picker" anchor={anchor} matchAnchor onClose={reason => { setQuery(null); if (reason === "escape") input.current?.focus(); }}>
       <header><strong><T>{"上下文库"}</T></strong><Link href="/app/contexts"><T>{"管理词条"}</T></Link><button type="button" aria-label={t("关闭上下文选择")} onClick={() => setQuery(null)}><X size={14} /></button></header>
       {error ? <p role="alert">{t(error)}<button type="button" onClick={() => { setLoading(true); setError(""); setRetry((n) => n + 1); }}><T>{"重试"}</T></button></p> : loading ? <p role="status"><T>{"正在加载…"}</T></p> : <div id={listId} role="listbox" aria-label={t("上下文词条")}>{matches.map((entry, i) => <button type="button" role="option" id={`${listId}-${i}`} aria-selected={i === index} key={entry.id} className={i === index ? "selected" : ""} onMouseDown={(e) => e.preventDefault()} onClick={() => choose(entry)}><strong>{entry.title}</strong><small>{entry.description || t("无简介")}</small></button>)}</div>}
@@ -71,5 +71,6 @@ export function ContextInput({ value, onText, references, onReferences, inputRef
       }
       onKeyDown?.(e);
     }} />
+    <div className="compose-actions"><button type="button" className="context-add" aria-label={t("@ 引用上下文")} title={t("@ 引用上下文")} disabled={props.disabled} onClick={() => { mention.current = null; if (!open) { setLoading(true); setError(""); } setQuery(open ? null : ""); setIndex(0); input.current?.focus(); }}><AtSign size={17} /></button>{tools}</div>
   </div>;
 }
