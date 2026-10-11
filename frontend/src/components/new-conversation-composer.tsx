@@ -13,6 +13,7 @@ import { api, type Agent, type Conversation, type Deployment, type UserProfile }
 import { pastedImageFiles } from "@/lib/clipboard";
 import { readView, updateView, viewKey } from "@/lib/conversation-view-state";
 import { startConversation } from "@/lib/start-conversation";
+import { useComposerDock, useComposerMotion } from "./composer-motion";
 
 export function NewConversationComposer({ deployments, user, projectId, projectName, initialAgentSlug }: { deployments: Deployment[]; user: UserProfile; projectId?:string; projectName?:string; initialAgentSlug?: string }) {
   const t = useT();
@@ -31,12 +32,16 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
   useEffect(() => { updateView(storageKey,{agentSlug}); }, [storageKey,agentSlug]);
   const selectedAgent = agents.find(a=>a.slug===agentSlug);
   const [busy, setBusy] = useState(false);
+  const composeBox = useRef<HTMLDivElement>(null);
+  const capturePosition = useComposerDock(busy, composeBox);
+  const { handoff } = useComposerMotion();
   const [error, setError] = useState("");
   const submitting = useRef(false);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const input = useRef<HTMLInputElement>(null);
   const messageInput = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => { if (!busy && error) messageInput.current?.focus({ preventScroll: true }); }, [busy, error]);
   const returnTo = projectId ? `/app/p/${encodeURIComponent(projectId)}` : "/app";
   const modelSettingsURL = `/app/settings/models?returnTo=${encodeURIComponent(returnTo)}`;
   function chooseExample(prompt: string) {
@@ -50,6 +55,7 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
     event.preventDefault();
     if (submitting.current || (!text.trim() && !files.length) || !model) return;
     submitting.current = true;
+    capturePosition();
     setBusy(true); setError("");
     let created: Conversation | undefined;
     const clear = () => {
@@ -67,25 +73,33 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
       },projectId,contexts.map((c) => c.id),agentSlug);
       updateView(viewKey(user.user_id, user.workspace_id, conversation.id), { contexts: [], text: "", files: [], missingFiles: [], sendNotice: "" });
       clear();
-      if (mounted.current) router.push(`/app/c/${conversation.id}`);
+      if (mounted.current) {
+        if (composeBox.current) handoff(conversation.id, composeBox.current);
+        router.push(`/app/c/${conversation.id}`);
+      }
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : t("发送失败");
       if (created) {
         updateView(viewKey(user.user_id, user.workspace_id, created.id), { sendNotice: formatMessage("会话已创建，但首条消息未确认发送成功：{0}。草稿已保留，请先检查消息和运行状态，再决定是否重新发送。", [message]) });
         clear();
-        if (mounted.current) router.push(`/app/c/${created.id}`);
+        if (mounted.current) {
+          if (composeBox.current) handoff(created.id, composeBox.current);
+          router.push(`/app/c/${created.id}`);
+        }
       } else {
+        capturePosition();
         setError(message);
         submitting.current = false; setBusy(false);
       }
     }
   }
 
-  return <div className="new-chat-home"><div className="new-chat-content">
+  return <div className={`new-chat-home ${busy ? "composer-docked" : ""}`}><div className="new-chat-content">
     {projectName?<p className="new-project-context">{projectName}</p>:null}
     <h1>{t("有什么想交给 {0}？", [selectedAgent?.builtin ? t(selectedAgent.name) : selectedAgent?.name || "Lester"])}</h1>
     <form className="composer new-chat-composer" onSubmit={submit} aria-label={t("开始新对话")} aria-busy={busy}>
-      <div className="compose-box">
+      {busy ? <p role="status" className="composer-status active"><T>{"正在创建会话并发送消息…"}</T></p> : null}
+      <div className="compose-box" ref={composeBox}>
         {missing.length ? <p className="draft-attachment-notice" role="status"><T>{"请重新选择刷新前的附件："}</T>{missing.join("、")}<button type="button" onClick={() => { setMissing([]); updateView(storageKey, { missingFiles: [] }); }}><T>{"知道了"}</T></button></p> : null}
         {files.length ? <div className="pending-attachments">{files.map((file, index) => <span key={`${file.name}-${index}`}><FileText />{file.name}<button type="button" disabled={busy} aria-label={t("移除 {0}", [file.name])} onClick={() => changeFiles(files.filter((_, i) => i !== index))}><X /></button></span>)}</div> : null}
         <ContextInput inputRef={messageInput} references={contexts} onReferences={setContexts} rows={3} autoFocus aria-label={t("消息输入框")} placeholder={t("描述你的目标，上传文件或粘贴图片…")} value={text} disabled={busy} onText={(value) => { setText(value); updateView(storageKey, { text: value }); }} onPaste={(event) => { const images = pastedImageFiles(event); if (images.length) { event.preventDefault(); changeFiles([...files, ...images]); } }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} tools={<>
@@ -100,7 +114,6 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
       <div className="new-chat-options">
       {deployments.length ? <p className="new-chat-hint"><T>{"Enter 发送 · Shift + Enter 换行"}</T></p> : null}</div>
       {agentError ? <p role="alert" className="compose-error">{t(agentError)}</p> : null}
-      {busy ? <p role="status" className="composer-status active"><T>{"正在创建会话并发送消息…"}</T></p> : null}
       {error ? <p role="alert" className="compose-error">{t(error)}</p> : null}
       {!deployments.length ? <div className="model-setup-prompt"><div><strong><T>{"再准备一个模型，就可以开始了"}</T></strong><p><T>{"连接你的模型服务，或使用管理员提供的共享模型。你的草稿会保留。"}</T></p></div><Link className="primary-button" href={modelSettingsURL}><T>{"配置第一个模型"}</T><ArrowRight size={16} /></Link></div> : null}
     </form>

@@ -17,6 +17,8 @@ export class WorkspaceApi {
   hasModel = true;
   failCreate = false;
   failSend = false;
+  waitForCreate?: Promise<void>;
+  waitForConversation?: Promise<void>;
   conversation: Conversation | null = null;
   messages: Message[] = [];
   files: FileEntry[] = [];
@@ -102,13 +104,17 @@ export class WorkspaceApi {
       if (method === "POST") {
         const body = request.postDataJSON();
         this.mutations.push({ path, body });
+        await this.waitForCreate;
         if (this.failCreate) return reply({ error: "模拟会话创建失败" }, 503);
         this.conversation = { id: conversationId, workspace_id: user.workspace_id, created_by: user.user_id, project_id: project.id, agent_slug: "lester", agent_name: "Lester", model_deployment_id: deployment.id, title: String(body.title), pinned: false, run_status: "idle", created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
         return reply(this.conversation, 201);
       }
     }
     const prefix = `/api/v1/conversations/${conversationId}`;
-    if (path === prefix && this.conversation) return reply({ conversation: this.conversation, messages: this.messages, active_run: this.conversation.run_status === "running" ? { id: "fixture-run", status: "running" } : null });
+    if (path === prefix && this.conversation) {
+      await this.waitForConversation;
+      return reply({ conversation: this.conversation, messages: this.messages, active_run: this.conversation.run_status === "running" ? { id: "fixture-run", status: "running" } : null });
+    }
     if (path === `${prefix}/messages` && method === "POST") {
       const body = request.postDataJSON();
       this.mutations.push({ path, body });

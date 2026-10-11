@@ -6,7 +6,7 @@ import { ensureSession, redirectToLogin, SessionExpired } from "@/lib/auth-clien
 import { GuideLauncher } from "./user-guide";
 
 import { ContextInput, useContextReferences } from "./context-input";
-import { CSSProperties, FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { CSSProperties, FormEvent, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Bot, Check, ChevronDown, FileText, Folder, GripVertical, Maximize2, Menu, Minimize2, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Paperclip, Plus, Send, Square, TerminalSquare, Wrench, X } from "lucide-react";
@@ -29,6 +29,7 @@ import { RunEvent } from "./tool-timeline";
 import { UserMenu } from "./user-menu";
 import { API, api, Attachment, ComputerState, Conversation, ConversationRunStatus, Deployment, Message, Skill, upload, UserProfile } from "@/lib/api";
 import { pastedImageFiles } from "@/lib/clipboard";
+import { useComposerMotion } from "./composer-motion";
 
 const agents = [
   { slug: "lester", name: "Lester", initial: "L", copy: "冷静、聪明、务实" },
@@ -489,6 +490,11 @@ function ConversationView({ conversation, messages, events, runState, runId, onS
   const { thread, content: threadContent, unseen, jump } = useConversationScroll(storageKey, `${messages.at(-1)?.id}:${messages.length}:${events.at(-1)?.id}:${runState}`);
   const fileInput = useRef<HTMLInputElement>(null);
   const textInput = useRef<HTMLTextAreaElement>(null);
+  const { arrive } = useComposerMotion();
+  useLayoutEffect(() => {
+    const box = textInput.current?.closest<HTMLDivElement>(".compose-box");
+    if (box) arrive(conversation.id, box, textInput.current);
+  }, [arrive, conversation.id]);
   useEffect(() => {
     if (!reference) return;
     const frame = window.requestAnimationFrame(() => textInput.current?.focus());
