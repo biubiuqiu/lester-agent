@@ -11,7 +11,7 @@ import (
 
 func TestDefaultRegistryDefinitions(t *testing.T) {
 	definitions := NewDefaultRegistry(nil).Definitions()
-	want := []string{"bash", "read", "write", "edit", "load_skill"}
+	want := []string{"bash", "read", "write", "edit", "load_skill", "read_conversation"}
 	if len(definitions) != len(want) {
 		t.Fatalf("definitions = %d, want %d", len(definitions), len(want))
 	}

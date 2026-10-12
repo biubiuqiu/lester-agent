@@ -166,6 +166,7 @@ function activityLabel(activity: ToolActivity, t: ReturnType<typeof useT>) {
     read: "读取文件",
     write: "写入文件",
     edit: "编辑文件",
+    read_conversation: "读取引用会话",
     load_skill: "加载 Skill",
     computer_exec: "运行命令",
     computer_list_files: "查看文件",

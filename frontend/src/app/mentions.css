@@ -1,0 +1,24 @@
+.context-references .context-chip-preview { display: flex; align-items: center; gap: 5px; }
+.context-chip-preview > svg { flex-shrink: 0; }
+.context-chip-preview > span { min-width: 0; overflow-wrap: anywhere; }
+.mention-picker header { justify-content: space-between; }
+.mention-categories { display: flex; flex-shrink: 0; gap: 3px; padding: 2px 6px 8px; }
+.mention-categories button { flex: 1; min-width: 0; border: 0; border-radius: 6px; background: transparent; padding: 6px 8px; color: #73806e; font: inherit; font-size: 12px; cursor: pointer; }
+.mention-categories button[aria-pressed=true] { background: #edf3e7; color: #3d5d43; }
+.mention-picker .mention-item-heading { display: flex; align-items: center; gap: 7px; }
+.mention-item-heading svg { flex-shrink: 0; color: #71826b; }
+.mention-item-heading strong { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.mention-item-heading em { flex-shrink: 0; color: #788570; font-style: normal; font-size: 10px; }
+.mention-picker footer { display: flex; flex-shrink: 0; flex-wrap: wrap; gap: 6px 12px; align-items: center; padding: 8px; border-top: 1px solid #edf0e7; font-size: 11px; color: #7d8976; }
+.mention-picker footer small { flex: 1; min-width: 0; line-height: 1.5; }
+.mention-picker footer a { color: #5b7754; }
+.reference-conversation-preview { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 8px 10px; border-radius: 7px; background: #f6f8f1; }
+.reference-conversation-preview section + section { margin-top: 12px; padding-top: 10px; border-top: 1px solid #e4eadb; }
+.reference-conversation-preview section p { margin-top: 4px; white-space: pre-wrap; }
+.context-reference-preview > a { color: #587a52; font-size: 12px; }
+.message-reference-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.message-reference-list > a, .message-reference-list > span { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 5px 7px; border: 1px solid #dce5d5; border-radius: 6px; background: #f2f6ed; color: #50694b; text-decoration: none; font-size: 12px; }
+.message-reference-list svg { flex-shrink: 0; }
+.message-reference-list > a > span, .message-reference-list > span > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.message-reference-list small { color: #809076; font-size: 10px; flex-shrink: 0; }
+.mention-categories button:focus-visible, .message-reference-list a:focus-visible { outline: 2px solid #668263; outline-offset: 2px; }

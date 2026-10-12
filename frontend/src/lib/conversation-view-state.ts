@@ -34,7 +34,7 @@ export function readView(key: string): ViewState {
   try {
     const saved = JSON.parse(window.sessionStorage.getItem(prefix + key) ?? "null");
     if (saved && saved.version === 1) {
-      value.contexts = Array.isArray(saved.contexts) ? saved.contexts.filter((v: unknown) => v && typeof v === "object" && "id" in v && typeof v.id === "string" && "title" in v && typeof v.title === "string").slice(0, 8) : [];
+      value.contexts = Array.isArray(saved.contexts) ? saved.contexts.filter((v: unknown) => v && typeof v === "object" && "id" in v && typeof v.id === "string" && "title" in v && typeof v.title === "string" && (!("type" in v) || v.type === "context" || v.type === "conversation" || v.type === "skill")).map((item: ContextReference) => ({ id: item.id, title: item.title, ...(item.type ? { type: item.type } : {}) })).slice(0, 8) : [];
       value.agentSlug = typeof saved.agentSlug === "string" && saved.agentSlug.length <= 50 ? saved.agentSlug : "lester";
       value.sendNotice = typeof saved.sendNotice === "string" ? saved.sendNotice.slice(0, 2000) : "";
       value.text = typeof saved.text === "string" ? saved.text.slice(0, 100_000) : "";

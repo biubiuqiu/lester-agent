@@ -14,6 +14,7 @@ import { pastedImageFiles } from "@/lib/clipboard";
 import { appendAttachments } from "@/lib/attachments";
 import { PendingAttachments } from "./pending-attachments";
 import { readView, updateView, viewKey } from "@/lib/conversation-view-state";
+import { mentionPayload } from "@/lib/mentions";
 import { startConversation } from "@/lib/start-conversation";
 import { useComposerDock, useComposerMotion } from "./composer-motion";
 
@@ -96,7 +97,7 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
         created = item;
         // Preserve the submitted draft before uploads/send; never auto-resend on reload.
         updateView(viewKey(user.user_id, user.workspace_id, item.id), { contexts, text, files, missingFiles: missing });
-      },projectId,contexts.map((c) => c.id),agentSlug);
+      },projectId,mentionPayload(contexts).context_ids,agentSlug,mentionPayload(contexts).references || []);
       updateView(viewKey(user.user_id, user.workspace_id, conversation.id), { contexts: [], text: "", files: [], missingFiles: [], sendNotice: "" });
       clear();
       if (mounted.current) {

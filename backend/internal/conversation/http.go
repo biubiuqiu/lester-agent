@@ -15,6 +15,7 @@ import (
 
 	"github.com/biubiuqiu/lester-agent/backend/internal/auth"
 	"github.com/biubiuqiu/lester-agent/backend/internal/httpapi"
+	"github.com/biubiuqiu/lester-agent/backend/internal/reference"
 	"github.com/biubiuqiu/lester-agent/backend/internal/sandbox"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -109,14 +110,15 @@ func (h *Handler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Content       string      `json:"content"`
-		AttachmentIDs []uuid.UUID `json:"attachment_ids"`
-		ContextIDs    []uuid.UUID `json:"context_ids"`
+		Content       string            `json:"content"`
+		AttachmentIDs []uuid.UUID       `json:"attachment_ids"`
+		ContextIDs    []uuid.UUID       `json:"context_ids"`
+		References    []reference.Input `json:"references"`
 	}
 	if !httpapi.Decode(w, r, &req) {
 		return
 	}
-	runID, err := h.service.Send(r.Context(), p.WorkspaceID, p.UserID, id, req.Content, req.AttachmentIDs, req.ContextIDs)
+	runID, err := h.service.SendWithReferences(r.Context(), p.WorkspaceID, p.UserID, id, req.Content, req.AttachmentIDs, req.ContextIDs, req.References)
 	if err != nil {
 		if errors.Is(err, ErrRunInProgress) {
 			httpapi.Error(w, http.StatusConflict, err)

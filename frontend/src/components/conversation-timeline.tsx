@@ -1,9 +1,10 @@
 "use client";
 import { useI18n, useT } from "@/components/i18n";
 import type { Message } from "@/lib/api";
+import Link from "next/link";
 import { MessageContent } from "./message-content";
 import { RunEvent, RunNarrative } from "./tool-timeline";
-import { FileText } from "lucide-react";
+import { FileText, MessageSquare, Puzzle } from "lucide-react";
 
 type TimelineItem =
   | { kind: "message"; id: string; timestamp: number; message: Message }
@@ -27,6 +28,10 @@ function ChatMessage({ message }: { message: Message }) {
         <MessageContent content={message.content} linkFiles={!isUser} actions={!isUser} quoteSource={!isUser ? t("引用回答") : undefined} />
         {message.metadata?.attachments?.length ? <div className="message-attachments">{message.metadata.attachments.map((attachment) => <span key={attachment.id}><FileText /><span><strong>{attachment.original_name}</strong><small>{formatBytes(attachment.size_bytes)} · .agent/upload</small></span></span>)}</div> : null}
         {message.metadata?.contexts?.map((entry) => <details className="message-context" key={entry.id}><summary>@{entry.title} · v{entry.version}</summary><pre>{entry.content}</pre></details>)}
+        {message.metadata?.conversations?.length || message.metadata?.skills?.length ? <div className="message-reference-list">
+          {message.metadata.conversations?.map(entry => <Link key={`conversation:${entry.id}`} href={`/app/c/${encodeURIComponent(entry.id)}`} target="_blank" rel="noopener noreferrer" title={t("会话引用 · 截至消息序号 {0}", [entry.max_seq])}><MessageSquare size={13} aria-hidden="true" /><span>@{entry.title}</span><small>{t("会话")}</small></Link>)}
+          {message.metadata.skills?.map(entry => <span key={`skill:${entry.id}`} title={`${entry.slug} · v${entry.version}`}><Puzzle size={13} aria-hidden="true" /><span>@{entry.name}</span><small>Skill</small></span>)}
+        </div> : null}
         <time>{new Date(message.created_at).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}</time>
       </div>
     </article>

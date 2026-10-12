@@ -56,6 +56,7 @@ var defaults = []defaultSkill{
 	{Slug: "code-review", Name: "Code Review", Description: "检查代码正确性、回归风险、安全问题和测试缺口。", Version: "1.0.0"},
 	{Slug: "project-planner", Name: "Project Planner", Description: "把产品或工程目标拆成可验证、依赖清晰的执行计划。", Version: "1.0.0"},
 	{Slug: "data-explorer", Name: "Data Explorer", Description: "安全探索本地结构化数据，并给出可复现的证据和结论。", Version: "1.0.0"},
+	{Slug: "conversation-reader", Name: "Conversation Reader", Description: "读取明确引用的会话，整理背景、已确认的决定和待办。", Version: "1.0.0"},
 }
 
 func New(db *pgxpool.Pool, objects blob.Store, sandboxes *sandbox.Client) *Service {

@@ -67,7 +67,7 @@ test("selected context inspection uses current contents and keyboard removal pre
   await login(page);
   const input = page.getByRole("textbox", { name: "消息输入框", exact: true });
   await input.fill("保留草稿 ");
-  await page.getByRole("button", { name: "@ 引用上下文", exact: true }).click();
+  await page.getByRole("button", { name: "@ 添加引用", exact: true }).click();
   await page.getByRole("option", { name: /项目背景/ }).click();
   api.contextEntries[0] = { ...api.contextEntries[0], version: 2, content: "更新后的背景资料" };
   const chip = page.getByRole("button", { name: "查看上下文 项目背景", exact: true });
@@ -125,11 +125,15 @@ test("response copying confirms real clipboard writes; quoting appends without s
   await reply.getByRole("button", { name: "复制代码", exact: true }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("print('Lester')\n");
   await reply.getByRole("button", { name: "保留格式复制", exact: true }).click();
-  const rich = await page.evaluate(async () => {
-    const [item] = await navigator.clipboard.read();
-    return (await item.getType("text/html")).text();
-  });
-  expect(rich).toContain("<h2>"); expect(rich).not.toContain("复制代码");
+  let rich = "";
+  await expect.poll(async () => {
+    rich = await page.evaluate(async () => {
+      const [item] = await navigator.clipboard.read();
+      return item?.types.includes("text/html") ? (await item.getType("text/html")).text() : "";
+    });
+    return rich;
+  }).toContain("<h2>");
+  expect(rich).not.toContain("复制代码");
   await page.screenshot({ path: info.outputPath("copy-success.png") });
   await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => { throw Error("fixture clipboard denied"); } } }));
   await reply.getByRole("button", { name: "复制回答", exact: true }).click();

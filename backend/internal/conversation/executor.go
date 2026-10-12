@@ -130,6 +130,10 @@ func (e *runExecutor) execute(ctx context.Context, workspaceID, conversationID, 
 			return
 		}
 	}
+	if err = s.installSelectedSkills(ctx, workspaceID, conversation, runID, messages, computer); err != nil {
+		s.finishExecutionError(ctx, runID, conversationID, err)
+		return
+	}
 	skills, err := s.installedSkills(ctx, workspaceID, conversationID)
 	if err != nil {
 		s.finishExecutionError(ctx, runID, conversationID, err)

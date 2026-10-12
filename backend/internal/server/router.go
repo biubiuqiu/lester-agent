@@ -13,12 +13,14 @@ import (
 	"github.com/biubiuqiu/lester-agent/backend/internal/httpapi"
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
 	"github.com/biubiuqiu/lester-agent/backend/internal/project"
+	"github.com/biubiuqiu/lester-agent/backend/internal/reference"
 	"github.com/biubiuqiu/lester-agent/backend/internal/skill"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
 
 type Dependencies struct {
+	References        *reference.Handler
 	Contexts          *contextlibrary.Handler
 	Agents            *agent.Handler
 	AgentBuilder      *agent.BuilderHandler
@@ -56,6 +58,11 @@ func Router(deps Dependencies) http.Handler {
 			private.Get("/me", deps.Auth.Me)
 			private.Get("/me/guides", deps.Auth.Guides)
 			private.Patch("/me/guides/{topic}", deps.Auth.SaveGuide)
+			if deps.References != nil {
+				private.Get("/references", deps.References.Search)
+				private.Get("/references/conversations/{id}", deps.References.Preview)
+				private.Get("/references/skills/{id}", deps.References.Skill)
+			}
 			if deps.Contexts != nil {
 				private.Get("/contexts", deps.Contexts.List)
 				private.Post("/contexts", deps.Contexts.Save)

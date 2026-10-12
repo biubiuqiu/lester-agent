@@ -51,6 +51,7 @@ func NewDefaultRegistry(db *pgxpool.Pool) *Registry {
 	registry.Register(Write{}, "computer_write_file")
 	registry.Register(Edit{})
 	registry.Register(LoadSkill{DB: db})
+	registry.Register(ReadConversation{DB: db})
 	registry.RegisterHidden(ListFiles{}, "computer_list_files")
 	return registry
 }

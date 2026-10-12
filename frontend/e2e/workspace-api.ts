@@ -24,6 +24,11 @@ export class WorkspaceApi {
   messages: Message[] = [];
   files: FileEntry[] = [];
   contextEntries: ContextEntry[] = [];
+  referenceConversations: Conversation[] = [];
+  referenceMessages: Record<string, Message[]> = {};
+  skillCatalog: { id: string; slug: string; name: string; description: string; version: string; source: string; size_bytes: number }[] = [];
+  installedSkillSlugs = new Set<string>();
+  failReferenceSearch = false;
   private fileContents = new Map<string, string>();
   private nextEventId = 5;
   private completed = false;
@@ -53,6 +58,11 @@ export class WorkspaceApi {
   }
 
   get streamCount() { return this.streams.size; }
+
+  skillInstalled(slug: string) {
+    this.installedSkillSlugs.add(slug);
+    this.emit(this.nextEventId++, "SKILL_INSTALLED", { slug });
+  }
 
   finish() {
     if (!this.conversation) throw new Error("A task must be explicitly created first");
@@ -111,6 +121,29 @@ export class WorkspaceApi {
         return reply(this.conversation, 201);
       }
     }
+    if (path === "/api/v1/references") {
+      if (this.failReferenceSearch) return reply({ error: "引用对象加载失败，请重试。" }, 503);
+      const kind = url.searchParams.get("type") || "all", q = (url.searchParams.get("q") || "").toLowerCase();
+      const items = [
+        ...this.contextEntries.map(item => ({ type: "context", id: item.id, title: item.title, description: item.description, version: String(item.version) })),
+        ...[...this.referenceConversations, ...(this.conversation ? [this.conversation] : [])].filter(item => item.id !== url.searchParams.get("exclude_conversation")).map(item => ({ type: "conversation", id: item.id, title: item.title, description: "个人项目", project: "个人项目" })),
+        ...this.skillCatalog.map(item => ({ type: "skill", id: item.id, title: item.name, description: item.description, slug: item.slug, version: item.version, source: item.source })),
+      ].filter(item => (kind === "all" || kind === item.type) && `${item.title} ${item.description} ${"slug" in item ? item.slug : ""}`.toLowerCase().includes(q)).slice(0, 24);
+      return reply({ items });
+    }
+    if (path.startsWith("/api/v1/contexts/")) {
+      const item = this.contextEntries.find(item => item.id === path.split("/").at(-1));
+      return item ? reply(item) : reply({ error: "引用对象已不可用，请移除后重新选择。" }, 404);
+    }
+    if (path.startsWith("/api/v1/references/conversations/")) {
+      const source = this.referenceConversations.find(item => item.id === path.split("/").at(-1));
+      const messages = source ? this.referenceMessages[source.id] || [] : [];
+      return source ? reply({ conversation: { id: source.id, title: source.title, project: "个人项目", max_seq: messages.length }, messages: messages.slice(0, 5), has_more: messages.length > 5 }) : reply({ error: "引用的会话已删除或不可访问，请移除后重新选择" }, 404);
+    }
+    if (path.startsWith("/api/v1/references/skills/")) {
+      const item = this.skillCatalog.find(item => item.id === path.split("/").at(-1));
+      return item ? reply({ ...item, type: "skill", title: item.name }) : reply({ error: "引用对象已不可用，请移除后重新选择。" }, 404);
+    }
     const prefix = `/api/v1/conversations/${conversationId}`;
     if (path === prefix && this.conversation) {
       if (method === "PATCH") {
@@ -128,7 +161,11 @@ export class WorkspaceApi {
       if (this.failSend) return reply({ error: "模拟首条消息发送失败" }, 503);
       if (!this.conversation) throw new Error("Message sent before creating a conversation");
       this.conversation.run_status = "running"; this.conversation.run_id = "fixture-run";
-      this.messages = [{ id: "fixture-user-message", role: "user", content: String(body.content), created_at: new Date().toISOString() }];
+      const references = (body.references || []) as { type: string; id: string }[];
+      const contexts = this.contextEntries.filter(item => ((body.context_ids || []) as string[]).includes(item.id));
+      const conversations = this.referenceConversations.filter(item => references.some(ref => ref.type === "conversation" && ref.id === item.id)).map(item => ({ id: item.id, title: item.title, project: "个人项目", max_seq: (this.referenceMessages[item.id] || []).length, updated_at: item.updated_at }));
+      const skills = this.skillCatalog.filter(item => references.some(ref => ref.type === "skill" && ref.id === item.id));
+      this.messages = [{ id: "fixture-user-message", role: "user", content: String(body.content), metadata: JSON.parse(JSON.stringify({ contexts, conversations, skills })), created_at: new Date().toISOString() }];
       return reply({ run_id: "fixture-run" });
     }
     if (path === `${prefix}/events/history`) return reply({ events: [] });
@@ -141,7 +178,8 @@ export class WorkspaceApi {
     }
     if (path === `${prefix}/deliverables`) return reply({ deliverables: this.completed ? [{ id: "fixture-deliverable", conversation_id: conversationId, run_id: "fixture-run", title: "Lester 介绍页", summary: "固定模拟任务成果，需要人工验收。", entry_path: "index.html", kind: "html", content_sha256: "a".repeat(64), created_at: new Date().toISOString(), updated_at: new Date().toISOString() }] : [] });
     if (path === "/api/v1/contexts" || path === `${prefix}/contexts`) return reply({ entries: this.contextEntries });
-    if (path === "/api/v1/skills" || path === `${prefix}/skills`) return reply({ skills: [] });
+    if (path === "/api/v1/skills") return reply({ skills: this.skillCatalog });
+    if (path === `${prefix}/skills`) return reply({ skills: this.skillCatalog.filter(item => this.installedSkillSlugs.has(item.slug)) });
     if (path === `${prefix}/artifacts`) return reply({ artifacts: [] });
     this.unexpected.push(`${method} ${path}`);
     return reply({ error: "Unexpected browser fixture request" }, 501);
