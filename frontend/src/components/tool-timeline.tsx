@@ -44,7 +44,7 @@ export function RunNarrative({ events, hideFinalText = false }: { events: RunEve
       {items.map((item) => {
         if (item.kind === "text") {
           const text = String(item.event.payload.text ?? "");
-          return text ? <div className="assistant-progress" key={`text-${item.event.id}`}><MessageContent content={text} /></div> : null;
+          return text ? <div className="assistant-progress" key={`text-${item.event.id}`}><MessageContent content={text} quoteSource={t("引用回答")} /></div> : null;
         }
         if (item.kind === "failure") return <RunFailure event={item.event} key={`failure-${item.event.id}`} />;
         if (item.kind === "cancellation") return <RunCancellation key={`cancellation-${item.event.id}`} />;

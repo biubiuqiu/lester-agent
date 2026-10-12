@@ -145,6 +145,13 @@ The executor is separated from the conversation service but still runs inside AP
 
 Task-file cards appear after a run finishes, fails, or stops, and only reference files confirmed to exist. The right-hand file inventory and previews keep updating during execution. You can draft the next message during a run, but cannot send overlapping runs in the same conversation.
 
+The composer grows with the draft up to about six lines. During a run, text, selected context and attachments stay in a draft with an explicit reminder to send after completion; no automatic message queue is used. Pending attachments show file size, raster-image thumbnails and an enlarged preview. Files over 25 MiB are rejected before submission, and identical repeated selections are skipped. Click a selected context chip to inspect its current content/version; Delete or Backspace removes a focused chip, and Backspace in an empty composer focuses the last chip first.
+
+Assistant replies support plain and formatted copying, and code blocks and source previews have separate copy actions. Success appears only after clipboard writing completes; failures provide a manual-copy fallback. Select text in a response, Markdown preview or source preview and choose **Quote and ask** to append a visible quotation to the existing draft and focus the composer without sending. Source quotes include the path and line range; selections over 6,000 characters explicitly quote only the first 6,000.
+
+Unseen file updates have a tab dot that clears after successful reading and viewing. **Reopen the last closed tab** restores a still-existing verified file and its preview mode/source or Markdown reading position. Up to eight closed tabs are retained per conversation in tab-local view state; reopening never reverts file edits.
+
+
 ### Projects and published artifacts
 
 The sidebar shows a collapsible project/conversation tree. Each project has its own **+** button for starting a conversation and a menu for renaming or pinning. Project headings expand or collapse their conversations without navigating away. Each project initially shows five recent conversations; expand the history to see all, and the current conversation remains visible. Search displays matching conversations under their projects. Conversation menus support pinning and moving between projects. New drafts only become conversations when you send a message.

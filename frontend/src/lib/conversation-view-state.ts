@@ -10,6 +10,8 @@ export type ViewState = {
   missingFiles: string[];
   reference: string | null;
   tabs: string[];
+  closedTabs: string[];
+  unreadFiles: string[];
   selected: string | null;
   treeOpen: boolean;
   directories: string[];
@@ -21,7 +23,7 @@ const prefix = "lester.view.v1.";
 const cache = new Map<string, ViewState>();
 let writeScope: string | null = "";
 export function resumeViewState(scope: string) { writeScope = scope; }
-const defaults = (): ViewState => ({ contexts: [], agentSlug: "lester", sendNotice: "", text: "", files: [], missingFiles: [], reference: null, tabs: [], selected: null, treeOpen: true, directories: [""], modes: {}, positions: {}, thread: { top: 0, following: true } });
+const defaults = (): ViewState => ({ contexts: [], agentSlug: "lester", sendNotice: "", text: "", files: [], missingFiles: [], reference: null, tabs: [], closedTabs: [], unreadFiles: [], selected: null, treeOpen: true, directories: [""], modes: {}, positions: {}, thread: { top: 0, following: true } });
 export const viewKey = (userId: string, workspaceId: string, conversationId: string) => `${userId}.${workspaceId}.${conversationId}`;
 
 export function readView(key: string): ViewState {
@@ -38,6 +40,8 @@ export function readView(key: string): ViewState {
       value.text = typeof saved.text === "string" ? saved.text.slice(0, 100_000) : "";
       value.reference = typeof saved.reference === "string" ? saved.reference : null;
       value.tabs = Array.isArray(saved.tabs) ? saved.tabs.filter((p: unknown) => typeof p === "string").slice(-8) : [];
+      value.closedTabs = Array.isArray(saved.closedTabs) ? saved.closedTabs.filter((p: unknown) => typeof p === "string").slice(-8) : [];
+      value.unreadFiles = Array.isArray(saved.unreadFiles) ? saved.unreadFiles.filter((p: unknown) => typeof p === "string").slice(-200) : [];
       value.selected = value.tabs.includes(saved.selected) ? saved.selected : null;
       value.treeOpen = saved.treeOpen !== false;
       value.directories = Array.isArray(saved.directories) ? saved.directories.filter((p: unknown) => typeof p === "string").slice(-64) : [""];

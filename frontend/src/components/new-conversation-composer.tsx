@@ -8,9 +8,11 @@ import { FloatingPopover } from "./floating-popover";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, BarChart3, ChevronDown, FileText, Globe, Paperclip, Send, X } from "lucide-react";
+import { ArrowRight, BarChart3, ChevronDown, FileText, Globe, Paperclip, Send } from "lucide-react";
 import { api, type Agent, type Conversation, type Deployment, type UserProfile } from "@/lib/api";
 import { pastedImageFiles } from "@/lib/clipboard";
+import { appendAttachments } from "@/lib/attachments";
+import { PendingAttachments } from "./pending-attachments";
 import { readView, updateView, viewKey } from "@/lib/conversation-view-state";
 import { startConversation } from "@/lib/start-conversation";
 import { useComposerDock, useComposerMotion } from "./composer-motion";
@@ -42,6 +44,7 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
     return () => media.removeEventListener("change", cancel);
   }, []);
   const [error, setError] = useState("");
+  const [attachmentNotice, setAttachmentNotice] = useState("");
   const submitting = useRef(false);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -67,6 +70,12 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
     { title: t("制作一个网页"), label: t("网页"), prompt: t("帮我制作一个产品介绍网页，先和我确认目标用户、内容和视觉风格。"), icon: Globe },
   ];
   const changeFiles = (next: File[]) => { setFiles(next); updateView(storageKey, { files: next }); };
+  const addFiles = (incoming: File[]) => {
+    if (busy) return;
+    const next = appendAttachments(readView(storageKey).files, incoming);
+    changeFiles(next.files);
+    setAttachmentNotice([...next.oversized.map(name => t("{0} 超过 25 MiB，请选择更小的文件。", [name])), ...next.duplicates.map(name => t("已忽略重复附件：{0}", [name]))].join(" "));
+  };
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -118,10 +127,11 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
       {busy ? <p role="status" className="composer-status active"><T>{"正在创建会话并发送消息…"}</T></p> : null}
       <div className="compose-box" ref={composeBox}>
         {missing.length ? <p className="draft-attachment-notice" role="status"><T>{"请重新选择刷新前的附件："}</T>{missing.join("、")}<button type="button" onClick={() => { setMissing([]); updateView(storageKey, { missingFiles: [] }); }}><T>{"知道了"}</T></button></p> : null}
-        {files.length ? <div className="pending-attachments">{files.map((file, index) => <span key={`${file.name}-${index}`}><FileText />{file.name}<button type="button" disabled={busy} aria-label={t("移除 {0}", [file.name])} onClick={() => changeFiles(files.filter((_, i) => i !== index))}><X /></button></span>)}</div> : null}
-        <ContextInput inputRef={messageInput} references={contexts} onReferences={setContexts} rows={3} autoFocus aria-label={t("消息输入框")} placeholder={t("描述你的目标，上传文件或粘贴图片…")} value={text} disabled={busy} onText={(value) => { setText(value); updateView(storageKey, { text: value }); }} onPaste={(event) => { const images = pastedImageFiles(event); if (images.length) { event.preventDefault(); changeFiles([...files, ...images]); } }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} tools={<>
+        <PendingAttachments files={files} disabled={busy} onRemove={index => { changeFiles(files.filter((_, i) => i !== index)); setAttachmentNotice(""); }} />
+        {attachmentNotice ? <p className="attachment-notice" role="status">{attachmentNotice}</p> : null}
+        <ContextInput inputRef={messageInput} references={contexts} onReferences={setContexts} rows={3} autoFocus aria-label={t("消息输入框")} placeholder={t("描述你的目标，上传文件或粘贴图片…")} value={text} disabled={busy} onText={(value) => { setText(value); updateView(storageKey, { text: value }); }} onPaste={(event) => { const images = pastedImageFiles(event); if (images.length) { event.preventDefault(); addFiles(images); } }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} tools={<>
 
-          <input ref={input} type="file" multiple hidden onChange={(event) => { changeFiles([...files, ...Array.from(event.target.files || [])]); event.target.value = ""; }} />
+          <input ref={input} type="file" multiple hidden onChange={(event) => { addFiles(Array.from(event.target.files || [])); event.target.value = ""; }} />
           <button type="button" className="icon-button upload-button" aria-label={t("添加附件")} title={t("添加附件或直接粘贴图片")} disabled={busy} onClick={() => input.current?.click()}><Paperclip /></button>
           <label className="model-selector"><select aria-label={t("当前模型")} value={model} disabled={busy || !deployments.length} onChange={(event) => setModel(event.target.value)}>{!deployments.length ? <option value=""><T>{"请先配置模型"}</T></option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown /></label>
           <AgentPicker agents={agents} selected={agentSlug} disabled={busy} onSelect={value => { setAgentSlug(value); updateView(storageKey, { agentSlug: value }); }} />

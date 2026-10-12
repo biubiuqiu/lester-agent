@@ -81,7 +81,8 @@ test("new-task entry, example disclosure and focus feedback preserve explicit su
     await disclosure.locator("summary").press("Escape");
     await expect(disclosure).not.toHaveAttribute("open", "");
     await page.emulateMedia({ reducedMotion: "reduce" });
-    expect(await page.locator(".new-chat-content").evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+    // Media-query change events are delivered asynchronously to Web Animations listeners.
+    await expect.poll(() => page.locator(".new-chat-content").evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
     await disclosure.locator("summary").click();
     await page.getByRole("button", { name: "制作一个网页", exact: true }).click();
     await expect(composer).toHaveValue("帮我制作一个产品介绍网页，先和我确认目标用户、内容和视觉风格。");

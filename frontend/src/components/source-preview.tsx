@@ -6,6 +6,7 @@ import { startTransition, useEffect, useMemo, useState, type CSSProperties } fro
 import type { ThemedToken } from "@shikijs/core";
 import { highlightSource, type SyntaxLanguage } from "@/lib/syntax-highlighter";
 import { usePreviewScroll } from "./use-preview-scroll";
+import { SelectionQuote } from "./selection-quote";
 
 const maxRenderedLines = 3000;
 const languageByExtension: Record<string, SyntaxLanguage> = {
@@ -80,17 +81,29 @@ export function SourcePreview({ content, fileName, storageKey = "", filePath = f
     highlighted && language && highlighted.language === language && highlighted.source === source
       ? highlighted.lines
       : fallbackLines;
-  return <div ref={scroll} className="file-source-scroll" aria-label={t("{0} 源代码", [fileName])}>
+  function selectionSource(range: Range) {
+    const element = (node: Node) => node.nodeType === Node.ELEMENT_NODE ? node as Element : node.parentElement;
+    const start = element(range.startContainer)?.closest<HTMLElement>(".file-source-line")?.dataset.line;
+    const end = element(range.endContainer)?.closest<HTMLElement>(".file-source-line")?.dataset.line;
+    return start && end ? `${filePath}:${start}–${end}` : filePath;
+  }
+  function selectionText(range: Range) {
+    const fragment = range.cloneContents();
+    fragment.querySelectorAll("[data-line-number]").forEach(node => node.remove());
+    fragment.querySelectorAll(".file-source-line").forEach(node => node.append(document.createTextNode("\n")));
+    return fragment.textContent || "";
+  }
+  return <SelectionQuote source={selectionSource} extractText={selectionText}><div ref={scroll} className="file-source-scroll" aria-label={t("{0} 源代码", [fileName])}>
     <div className="file-source-code">
-      {renderedLines.map((tokens, lineIndex) => <div className="file-source-line" key={lineIndex}>
-        <span>{lineIndex + 1}</span>
+      {renderedLines.map((tokens, lineIndex) => <div className="file-source-line" data-line={lineIndex + 1} key={lineIndex}>
+        <span data-line-number="true">{lineIndex + 1}</span>
         <code>{tokens.length === 0
           ? " "
           : tokens.map((token, tokenIndex) => <span key={`${lineIndex}-${tokenIndex}`} style={tokenStyle(token)}>{token.content || " "}</span>)}</code>
       </div>)}
     </div>
     {lines.length > maxRenderedLines ? <p className="file-source-truncated">{t("仅显示前 {0} 行，共 {1} 行。", [maxRenderedLines, lines.length])}</p> : null}
-  </div>;
+  </div></SelectionQuote>;
 }
 
 function tokenStyle(token: ThemedToken): CSSProperties {

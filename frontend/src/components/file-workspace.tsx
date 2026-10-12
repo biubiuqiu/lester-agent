@@ -37,6 +37,12 @@ type FileWorkspaceValue = FileState & {
   setPanelTab: (tab: "files" | "results" | "terminal" | "skills" | "agent") => void;
   open: (file: FileEntry, mode?: "preview") => void;
   close: (path: string) => void;
+  unreadFiles: string[];
+  markFileRead: (path: string) => void;
+  canReopenClosed: boolean;
+  reopenClosed: () => void;
+  quoteRevision: number;
+  quoteSelection: (text: string, source: string) => void;
   refresh: () => void;
   loadDirectory: (path: string) => Promise<void>;
   setExpanded: (value: boolean) => void;
@@ -73,6 +79,28 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, live
   const [deliverablesError, setDeliverablesError] = useState("");
   const [tabs, setTabs] = useState<FileEntry[]>(() => [...new Set([...readView(storageKey).tabs, ...(requestedPreview ? [requestedPreview] : [])])].slice(-8).map((path) => ({ path, name: path.split("/").at(-1) ?? path, is_dir: false, size: 0, modified_at: "" })));
   const tabsRef = useRef(tabs);
+  const [closedTabs, setClosedTabs] = useState(() => readView(storageKey).closedTabs);
+  const [unreadFiles, setUnreadFiles] = useState(() => readView(storageKey).unreadFiles);
+  const markFilesUpdated = useCallback((paths: string[]) => {
+    if (!paths.length) return;
+    const next = [...new Set([...readView(storageKey).unreadFiles, ...paths])].slice(-200);
+    updateView(storageKey, { unreadFiles: next }); setUnreadFiles(next);
+  }, [storageKey]);
+  const markFileRead = useCallback((path: string) => {
+    const before = readView(storageKey).unreadFiles;
+    if (!before.includes(path)) return;
+    const next = before.filter(item => item !== path);
+    updateView(storageKey, { unreadFiles: next }); setUnreadFiles(next);
+  }, [storageKey]);
+  const [quoteRevision, setQuoteRevision] = useState(0);
+  const quoteSelection = useCallback((text: string, source: string) => {
+    const draft = readView(storageKey).text;
+    const quote = `> ${source}\n${text.split("\n").map(line => `> ${line}`).join("\n")}\n\n`;
+    updateView(storageKey, { text: `${draft}${draft ? "\n\n" : ""}${quote}` });
+    setQuoteRevision(value => value + 1);
+    setExpanded(false); setPanelOpenState(false);
+    panelIntent.current = true;
+  }, [storageKey]);
   const autoOpen = useRef<AutoOpenFiles | null>(null);
   if (!autoOpen.current) autoOpen.current = new AutoOpenFiles(conversationId ?? "");
   const liveScanCursor = useRef(0);
@@ -98,7 +126,7 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, live
   }, [storageKey]);
   const [observed, setObserved] = useState<{ runId?: string; changes: Change[] }>({ changes: [] });
   const refreshRef = useRef<() => void>(() => {});
-  const watchedDirectories = useRef(new Set<string>([...readView(storageKey).directories, ...tabs.map((file) => file.path.split("/").slice(0, -1).join("/"))].slice(-63)));
+  const watchedDirectories = useRef(new Set<string>([...readView(storageKey).directories, ...[...tabs.map(file => file.path), ...closedTabs].map(path => path.split("/").slice(0, -1).join("/"))].slice(-63)));
   const watchDirectory = useCallback((path: string) => {
     const watched = watchedDirectories.current;
     watched.delete(path); watched.add(path);
@@ -120,6 +148,10 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, live
     updateView(storageKey, { tabs: next.map((file) => file.path), selected: selected.path });
     selectedPathRef.current = selected.path;
     setTabs(next); setSelectedPath(selected.path);
+    if (!automatic) {
+      const recent = readView(storageKey).closedTabs.filter(path => !files.some(file => file.path === path));
+      updateView(storageKey, { closedTabs: recent }); setClosedTabs(recent);
+    }
     if (!automatic || (!current && !panelIntent.current)) {
       if (!automatic) panelIntent.current = true;
       setPanelTabState("files"); setPanelOpenState(true);
@@ -197,6 +229,7 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, live
             }
             return { runId: owner, changes: [...merged.values()].slice(-200) };
           });
+          markFilesUpdated(changes.filter(change => change.kind !== "deleted").map(change => change.path));
           // Shell-created outputs have no FILE_UPDATED notification. Open only
           // proved changes observed during this run, never the initial listing.
           if (owner && (wasRunning || pendingEvent !== undefined)) {
@@ -207,6 +240,7 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, live
         if (owner && pendingEvent !== undefined && pendingRunScans.current.get(owner) === pendingEvent) pendingRunScans.current.delete(owner);
         const ready = autoOpen.current!.take(next.files);
         if (ready.length) {
+          markFilesUpdated(ready.map(file => file.path));
           openBatch(ready, true);
           // An explicit edit can keep both size and timestamp unchanged.
           setFileRevisions((value) => Object.fromEntries(Object.entries({ ...value, ...Object.fromEntries(ready.map((file) => [file.path, (value[file.path] ?? 0) + 1])) }).slice(-2000)));
@@ -231,7 +265,7 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, live
     document.addEventListener("visibilitychange", onVisible);
     void scan();
     return () => { stopped = true; controller.abort(); clearTimeout(timer); document.removeEventListener("visibilitychange", onVisible); refreshRef.current = () => {}; };
-  }, [conversationId, openBatch]);
+  }, [conversationId, openBatch, markFilesUpdated]);
 
   useEffect(() => {
     if (!revision) return;
@@ -257,6 +291,9 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, live
   const close = (path: string) => {
     panelIntent.current = true;
     const index = tabsRef.current.findIndex((file) => file.path === path);
+    if (index < 0) return;
+    const recent = [...readView(storageKey).closedTabs.filter(item => item !== path), path].slice(-8);
+    updateView(storageKey, { closedTabs: recent }); setClosedTabs(recent);
     const next = tabsRef.current.filter((file) => file.path !== path);
     const replacement = next[Math.min(index, next.length - 1)]?.path ?? null;
     tabsRef.current = next;
@@ -278,7 +315,9 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, live
   const selected = state.files.find((file) => file.path === selectedPath)
     ?? Object.values(state.directories).flatMap((directory) => directory.entries).find((file) => !file.is_dir && file.path === selectedPath)
     ?? null;
-  return <Context.Provider value={{ ...state, storageKey, conversationId: conversationId ?? "", loading, running, runOutcome, deliverables, deliverablesError, modes, fileRevisions, setPreviewMode, tabs, selected, changes, reference, referenceRevision, expanded, treeOpen, setTreeOpen, panelOpen, panelTab, setPanelTab, open, close, refresh, loadDirectory, setExpanded, setPanelOpen, setReference }}>{children}</Context.Provider>;
+  const closedFile = [...closedTabs].reverse().map(path => state.files.find(file => file.path === path) ?? Object.values(state.directories).flatMap(directory => directory.entries).find(file => file.path === path && !file.is_dir)).find(file => file && !tabs.some(tab => tab.path === file.path));
+  const reopenClosed = () => { if (closedFile) open(closedFile); };
+  return <Context.Provider value={{ ...state, storageKey, conversationId: conversationId ?? "", loading, running, runOutcome, deliverables, deliverablesError, modes, fileRevisions, setPreviewMode, tabs, selected, changes, reference, referenceRevision, expanded, treeOpen, setTreeOpen, panelOpen, panelTab, setPanelTab, open, close, unreadFiles, markFileRead, canReopenClosed: Boolean(closedFile), reopenClosed, quoteRevision, quoteSelection, refresh, loadDirectory, setExpanded, setPanelOpen, setReference }}>{children}</Context.Provider>;
 }
 
 export function OpenFilesButton({ menu = false }: { menu?: boolean }) {

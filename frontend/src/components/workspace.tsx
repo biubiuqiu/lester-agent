@@ -29,6 +29,8 @@ import { RunEvent } from "./tool-timeline";
 import { UserMenu } from "./user-menu";
 import { API, api, Attachment, ComputerState, Conversation, ConversationRunStatus, Deployment, Message, Skill, upload, UserProfile } from "@/lib/api";
 import { pastedImageFiles } from "@/lib/clipboard";
+import { appendAttachments } from "@/lib/attachments";
+import { PendingAttachments } from "./pending-attachments";
 import { useComposerMotion } from "./composer-motion";
 import { ConversationOptions } from "./conversation-options";
 
@@ -475,7 +477,7 @@ export function Workspace({ conversationId, projectId, initialAgentSlug }: { con
 function ConversationView({ conversation, messages, events, runState, runId, onSend, onStop }: { conversation: Conversation; messages: Message[]; events: RunEvent[]; runState: RunState; runId?: string; onSend: (content: string, attachments: Attachment[], contextIds: string[]) => Promise<void>; onStop: () => Promise<void> }) {
   const t = useT();
 
-  const { reference, referenceRevision, setReference, storageKey } = useFileWorkspace();
+  const { reference, referenceRevision, quoteRevision, setReference, storageKey } = useFileWorkspace();
   const [contexts, setContexts] = useContextReferences(storageKey);
   const [text, setTextState] = useState(() => readView(storageKey).text);
   const [files, setFilesState] = useState<File[]>(() => readView(storageKey).files);
@@ -486,6 +488,13 @@ function ConversationView({ conversation, messages, events, runState, runId, onS
     updateView(storageKey, { files: next }); setFilesState(next);
   };
   const [uploading, setUploading] = useState(false);
+  const [attachmentNotice, setAttachmentNotice] = useState("");
+  const addFiles = (incoming: File[]) => {
+    if (uploading || runState === "sending") return;
+    const next = appendAttachments(readView(storageKey).files, incoming);
+    setFiles(next.files);
+    setAttachmentNotice([...next.oversized.map(name => t("{0} 超过 25 MiB，请选择更小的文件。", [name])), ...next.duplicates.map(name => t("已忽略重复附件：{0}", [name]))].join(" "));
+  };
   const submitPending = useRef(false);
   const [error, setError] = useState(() => readView(storageKey).sendNotice);
   const { thread, content: threadContent, unseen, jump } = useConversationScroll(storageKey, `${messages.at(-1)?.id}:${messages.length}:${events.at(-1)?.id}:${runState}`);
@@ -501,6 +510,12 @@ function ConversationView({ conversation, messages, events, runState, runId, onS
     const frame = window.requestAnimationFrame(() => textInput.current?.focus());
     return () => window.cancelAnimationFrame(frame);
   }, [reference, referenceRevision]);
+
+  useEffect(() => {
+    if (!quoteRevision) return;
+    const frame = requestAnimationFrame(() => { setTextState(readView(storageKey).text); textInput.current?.focus({ preventScroll: true }); });
+    return () => cancelAnimationFrame(frame);
+  }, [quoteRevision, storageKey]);
 
 
   async function submit(event: FormEvent) {
@@ -541,8 +556,8 @@ function ConversationView({ conversation, messages, events, runState, runId, onS
     setText(content);
     window.requestAnimationFrame(() => textInput.current?.focus());
   };
-  const helper = uploading ? t("正在上传 {0} 个附件…", [files.length]) : runState === "sending" ? t("消息已发送，正在创建任务…") : runState === "stopping" ? t("正在安全停止当前任务…") : runState === "cancelled" ? t("已停止；已产生的文件修改不会撤销") : reference ? t("围绕已引用的文件继续修改") : "";
-  return <><div className="thread" ref={thread}><div ref={threadContent} className="thread-content">{conversation.agent_slug === "agent-designer" && messages.length === 0 ? <div className="designer-welcome"><span><Bot size={22}/></span><h2><T>{"先聊聊，你想创建怎样的智能体？"}</T></h2><p><T>{"我是智能体设计师。告诉我它要帮谁做什么，平时会收到哪些材料，以及你希望它如何交付结果。我会先了解需求，再和你一起确定配置。"}</T></p></div> : null}<ConversationTimeline messages={messages} events={events} /><Deliverables /><ArtifactCards />{runActive ? <AgentActivityIndicator agent={agentName(conversation.agent_slug,conversation.agent_name,t)} state={runState} runId={runId} events={events} /> : null}</div></div><form className="composer" onSubmit={submit}>{unseen ? <button type="button" className="new-content-button" onClick={jump}><ChevronDown /><T>{"有新内容 · 回到底部"}</T></button> : null}{runState === "failed" && failure ? <RunFailureRecovery reason={String(failure.payload.error ?? t("任务执行失败"))} lastPrompt={lastPrompt} onPrepare={prepareRecovery} /> : null}{helper ? <p className={busy ? "composer-status active" : "composer-status"}>{helper}</p> : null}<div className="compose-box"><FileReferenceChip />{missingFiles.length ? <p className="draft-attachment-notice" role="status"><T>{"草稿已恢复；刷新前的本地附件需要重新选择："}</T>{missingFiles.join("、")}<button type="button" onClick={() => { setMissingFiles([]); updateView(storageKey, { missingFiles: [] }); }}><T>{"知道了"}</T></button></p> : null}{files.length > 0 ? <div className="pending-attachments">{files.map((file, index) => <span key={`${file.name}-${file.lastModified}`}><FileText />{file.name}<button type="button" onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={t("移除 {0}", [file.name])}><X /></button></span>)}</div> : null}<ContextInput references={contexts} onReferences={setContexts} inputRef={textInput} rows={2} value={text} onText={setText} onPaste={(event) => { const images = pastedImageFiles(event); if (images.length) { event.preventDefault(); setFiles((current) => [...current, ...images]); } }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} aria-label={t("消息输入框")} placeholder={reference ? t("描述要如何修改这个文件…") : conversation.agent_slug === "agent-designer" ? t("描述你想创建的智能体…") : t("给 {0} 一个目标…", [agentName(conversation.agent_slug,conversation.agent_name,t)])} disabled={uploading || runState === "sending"} tools={<> <input ref={fileInput} type="file" multiple hidden onChange={(event) => setFiles((current) => [...current, ...Array.from(event.target.files || [])])} /><button type="button" className="icon-button upload-button" onClick={() => fileInput.current?.click()} disabled={busy} aria-label={t("添加附件")} title={t("添加附件或直接粘贴图片；文件保存在当前会话，Agent 按需读取，不会自动解析进上下文")}><Paperclip /></button><span className="composer-keyboard-hint"><T>{"Shift + Enter 换行"}</T></span>{runActive ? <button type="button" className={`send-button stop-button ${runState === "stopping" ? "stopping" : ""}`} onClick={() => void onStop()} disabled={!runId || runState === "sending" || runState === "stopping"} title={runState === "stopping" ? t("正在停止") : t("停止生成")} aria-label={runState === "stopping" ? t("正在停止任务") : t("停止生成")}><Square /></button> : <button className="send-button" disabled={busy || (!text.trim() && files.length === 0)} aria-label={t("发送消息")}><Send /></button>} </>} />{error ? <p className="compose-error">{t(error)}</p> : null}</div></form></>;
+  const helper = uploading ? t("正在上传 {0} 个附件…", [files.length]) : runState === "sending" ? t("消息已发送，正在创建任务…") : runState === "stopping" ? t("正在安全停止当前任务…") : runActive && (text.trim() || files.length || contexts.length || reference) ? t("草稿已保留，当前任务结束后可发送。") : runState === "cancelled" ? t("已停止；已产生的文件修改不会撤销") : reference ? t("围绕已引用的文件继续修改") : "";
+  return <><div className="thread" ref={thread}><div ref={threadContent} className="thread-content">{conversation.agent_slug === "agent-designer" && messages.length === 0 ? <div className="designer-welcome"><span><Bot size={22}/></span><h2><T>{"先聊聊，你想创建怎样的智能体？"}</T></h2><p><T>{"我是智能体设计师。告诉我它要帮谁做什么，平时会收到哪些材料，以及你希望它如何交付结果。我会先了解需求，再和你一起确定配置。"}</T></p></div> : null}<ConversationTimeline messages={messages} events={events} /><Deliverables /><ArtifactCards />{runActive ? <AgentActivityIndicator agent={agentName(conversation.agent_slug,conversation.agent_name,t)} state={runState} runId={runId} events={events} /> : null}</div></div><form className="composer" onSubmit={submit}>{unseen ? <button type="button" className="new-content-button" onClick={jump}><ChevronDown /><T>{"有新内容 · 回到底部"}</T></button> : null}{runState === "failed" && failure ? <RunFailureRecovery reason={String(failure.payload.error ?? t("任务执行失败"))} lastPrompt={lastPrompt} onPrepare={prepareRecovery} /> : null}{helper ? <p role="status" className={busy ? "composer-status active" : "composer-status"}>{helper}</p> : null}<div className="compose-box"><FileReferenceChip />{missingFiles.length ? <p className="draft-attachment-notice" role="status"><T>{"草稿已恢复；刷新前的本地附件需要重新选择："}</T>{missingFiles.join("、")}<button type="button" onClick={() => { setMissingFiles([]); updateView(storageKey, { missingFiles: [] }); }}><T>{"知道了"}</T></button></p> : null}<PendingAttachments files={files} disabled={uploading || runState === "sending"} onRemove={index => { setFiles(current => current.filter((_, itemIndex) => itemIndex !== index)); setAttachmentNotice(""); }} />{attachmentNotice ? <p className="attachment-notice" role="status">{attachmentNotice}</p> : null}<ContextInput references={contexts} onReferences={setContexts} inputRef={textInput} rows={2} value={text} onText={setText} onPaste={(event) => { const images = pastedImageFiles(event); if (images.length) { event.preventDefault(); addFiles(images); } }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} aria-label={t("消息输入框")} placeholder={reference ? t("描述要如何修改这个文件…") : conversation.agent_slug === "agent-designer" ? t("描述你想创建的智能体…") : t("给 {0} 一个目标…", [agentName(conversation.agent_slug,conversation.agent_name,t)])} disabled={uploading || runState === "sending"} tools={<> <input ref={fileInput} type="file" multiple hidden onChange={(event) => { addFiles(Array.from(event.target.files || [])); event.target.value = ""; }} /><button type="button" className="icon-button upload-button" onClick={() => fileInput.current?.click()} disabled={uploading || runState === "sending"} aria-label={t("添加附件")} title={t("添加附件或直接粘贴图片；文件保存在当前会话，Agent 按需读取，不会自动解析进上下文")}><Paperclip /></button><span className="composer-keyboard-hint"><T>{"Shift + Enter 换行"}</T></span>{runActive ? <button type="button" className={`send-button stop-button ${runState === "stopping" ? "stopping" : ""}`} onClick={() => void onStop()} disabled={!runId || runState === "sending" || runState === "stopping"} title={runState === "stopping" ? t("正在停止") : t("停止生成")} aria-label={runState === "stopping" ? t("正在停止任务") : t("停止生成")}><Square /></button> : <button className="send-button" disabled={busy || (!text.trim() && files.length === 0)} aria-label={t("发送消息")}><Send /></button>} </>} />{error ? <p className="compose-error">{t(error)}</p> : null}</div></form></>;
 }
 
 const computerStatusLabel: Record<ComputerState["status"], string> = { not_created: "未创建", creating: "创建中", running: "运行中", suspended: "已暂停", stopped: "已停止", unhealthy: "异常", missing: "待恢复", error: "连接异常" };
