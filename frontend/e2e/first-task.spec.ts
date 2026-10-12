@@ -19,6 +19,33 @@ async function login(page: Page) {
   await expect(page.getByRole("textbox", { name: "消息输入框", exact: true })).toBeVisible();
 }
 
+test("login waits for hydration before accepting credentials", async ({ page, api }, info) => {
+  let release!: () => void;
+  const scripts = new Promise<void>(resolve => { release = resolve; });
+  await page.route("**/_next/static/**/*.js", async route => { await scripts; await route.continue(); });
+  try {
+    await page.goto("/login", { waitUntil: "commit" });
+    const email = page.getByLabel("邮箱", { exact: true });
+    const password = page.getByLabel("密码", { exact: true });
+    const submit = page.getByRole("button", { name: "登录", exact: true });
+    await expect(email).toBeDisabled();
+    await expect(password).toBeDisabled();
+    await expect(submit).toBeDisabled();
+    expect(api.mutations).toEqual([]);
+    await page.screenshot({ path: info.outputPath("login-before-hydration.png") });
+    release();
+    await email.fill("browser@example.test");
+    await password.fill("fixture-password-123");
+    await expect(email).toHaveValue("browser@example.test");
+    await expect(submit).toBeEnabled();
+    await page.screenshot({ path: info.outputPath("login-ready.png") });
+    await submit.click();
+    await expect(page.getByRole("textbox", { name: "消息输入框", exact: true })).toBeVisible();
+    expect(api.mutations.filter(item => item.path === "/api/v1/auth/login")).toHaveLength(1);
+    expect(api.mutations.some(item => item.path.startsWith("/api/v1/conversations"))).toBe(false);
+  } finally { release(); }
+});
+
 test("login, explicit first task, live file tabs and independent HTML preview", async ({ page, context, api }, testInfo) => {
   const errors: string[] = [];
   context.on("page", opened => opened.on("pageerror", error => errors.push(error.message)));

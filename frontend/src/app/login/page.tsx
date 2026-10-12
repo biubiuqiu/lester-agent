@@ -3,7 +3,7 @@ import { LanguageSelect } from "@/components/i18n";
 import { T, useT } from "@/components/i18n";
 
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle2, Eye, EyeOff, Mail } from "lucide-react";
@@ -15,6 +15,9 @@ import { API, api, AuthOptions } from "@/lib/api";
 import { safeLoginReturn } from "@/lib/auth-client";
 
 type Mode = "login" | "register" | "forgot" | "reset" | "verify";
+const subscribeToHydration = () => () => {};
+const getClientSnapshot = () => true;
+const getServerSnapshot = () => false;
 
 function loginURL(initial: URL | null, requestedMode?: string | null) {
   const params = new URLSearchParams();
@@ -26,6 +29,8 @@ function loginURL(initial: URL | null, requestedMode?: string | null) {
 
 export default function Login() {
   const t = useT();
+  // Native form controls must not accept edits before React can retain them.
+  const hydrated = useSyncExternalStore(subscribeToHydration, getClientSnapshot, getServerSnapshot);
 
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("login");
@@ -39,6 +44,7 @@ export default function Login() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const disabled = busy || !hydrated;
   const inFlight = useRef(false);
   const [showPassword, setShowPassword] = useState(false);
   const initialURL = useRef<URL | null>(null);
@@ -64,7 +70,7 @@ export default function Login() {
   }, []);
 
   function changeMode(next: Mode) {
-    if (busy) return;
+    if (disabled) return;
     setMode(next); setPassword(""); setConfirmation(""); setShowPassword(false); setError(""); setNotice(""); setToken("");
     window.history.replaceState(null, "", loginURL(initialURL.current));
   }
@@ -76,6 +82,7 @@ export default function Login() {
   }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!hydrated) return;
     if ((mode === "register" || mode === "reset") && password !== confirmation) { setError("两次输入的密码不一致"); return; }
     await act(async () => {
       if (mode === "forgot") {
@@ -102,20 +109,20 @@ export default function Login() {
     <section className="login-card" aria-labelledby="login-title">
       <div className="login-brand"><Brand /><LanguageSelect compact /></div>
       <div className="login-copy"><p className="eyebrow">Agent Workspace</p><h1 id="login-title">{title}</h1><p>{mode === "forgot" ? t("输入账号邮箱，我们会发送密码重设链接。") : mode === "reset" ? t("新密码保存后，其他设备的登录将失效。") : mode === "verify" ? t("确认邮箱后，即可进入你的个人工作区。") : t("描述目标，让 Lester 完成工作。文件与成果都留在你的工作区。")}</p></div>
-      {(mode === "login" || mode === "register") && options && options.providers.length > 0 && <div className="auth-social"><div aria-label={t("第三方登录")}>{options.providers.map(provider => <a className="auth-provider-button" key={provider} href={`${API}/api/v1/auth/oauth/${provider}/start?returnTo=${encodeURIComponent(returnTo)}`} aria-disabled={busy} onClick={event => { if (busy) event.preventDefault(); }}><AuthProviderIcon provider={provider} />{t("使用 {0} 继续", [provider === "google" ? "Google" : "GitHub"])}</a>)}</div><p><T>{"或使用邮箱"}</T>{mode === "register" ? t("注册") : t("登录")}</p></div>}
-      <form onSubmit={submit} aria-busy={busy}>
-        {mode === "register" && <label className="field"><T>{"称呼"}</T><input name="displayName" value={name} onChange={event => setName(event.target.value)} required maxLength={60} autoComplete="name" placeholder={t("我们该怎么称呼你？")} disabled={busy} /></label>}
-        {mode !== "reset" && mode !== "verify" && <label className="field"><T>{"邮箱"}</T><input name="email" value={email} onChange={event => setEmail(event.target.value)} type="email" required maxLength={254} autoComplete="email" placeholder="you@example.com" disabled={busy} /></label>}
-        {passwordMode && <div className="field"><label htmlFor="login-password">{mode === "reset" ? t("新密码") : t("密码")}</label><div className="password-field"><input id="login-password" name="password" value={password} onChange={event => setPassword(event.target.value)} type={showPassword ? "text" : "password"} minLength={mode === "login" ? undefined : 10} maxLength={1024} required autoComplete={mode === "login" ? "current-password" : "new-password"} aria-describedby={mode !== "login" ? "password-help" : undefined} disabled={busy} /><button type="button" aria-label={showPassword ? t("隐藏密码") : t("显示密码")} aria-pressed={showPassword} disabled={busy} onClick={() => setShowPassword(value => !value)}>{showPassword ? <EyeOff /> : <Eye />}</button></div>{mode !== "login" && <small id="password-help" className="field-help"><T>{"至少 10 个字符，建议使用不重复的密码。"}</T></small>}</div>}
-        {(mode === "register" || mode === "reset") && <label className="field"><T>{"确认密码"}</T><input name="confirmation" type={showPassword ? "text" : "password"} value={confirmation} onChange={event => setConfirmation(event.target.value)} required autoComplete="new-password" disabled={busy} /></label>}
+      {(mode === "login" || mode === "register") && options && options.providers.length > 0 && <div className="auth-social"><div aria-label={t("第三方登录")}>{options.providers.map(provider => <a className="auth-provider-button" key={provider} href={`${API}/api/v1/auth/oauth/${provider}/start?returnTo=${encodeURIComponent(returnTo)}`} aria-disabled={disabled} onClick={event => { if (disabled) event.preventDefault(); }}><AuthProviderIcon provider={provider} />{t("使用 {0} 继续", [provider === "google" ? "Google" : "GitHub"])}</a>)}</div><p><T>{"或使用邮箱"}</T>{mode === "register" ? t("注册") : t("登录")}</p></div>}
+      <form onSubmit={submit} aria-busy={disabled}>
+        {mode === "register" && <label className="field"><T>{"称呼"}</T><input name="displayName" value={name} onChange={event => setName(event.target.value)} required maxLength={60} autoComplete="name" placeholder={t("我们该怎么称呼你？")} disabled={disabled} /></label>}
+        {mode !== "reset" && mode !== "verify" && <label className="field"><T>{"邮箱"}</T><input name="email" value={email} onChange={event => setEmail(event.target.value)} type="email" required maxLength={254} autoComplete="email" placeholder="you@example.com" disabled={disabled} /></label>}
+        {passwordMode && <div className="field"><label htmlFor="login-password">{mode === "reset" ? t("新密码") : t("密码")}</label><div className="password-field"><input id="login-password" name="password" value={password} onChange={event => setPassword(event.target.value)} type={showPassword ? "text" : "password"} minLength={mode === "login" ? undefined : 10} maxLength={1024} required autoComplete={mode === "login" ? "current-password" : "new-password"} aria-describedby={mode !== "login" ? "password-help" : undefined} disabled={disabled} /><button type="button" aria-label={showPassword ? t("隐藏密码") : t("显示密码")} aria-pressed={showPassword} disabled={disabled} onClick={() => setShowPassword(value => !value)}>{showPassword ? <EyeOff /> : <Eye />}</button></div>{mode !== "login" && <small id="password-help" className="field-help"><T>{"至少 10 个字符，建议使用不重复的密码。"}</T></small>}</div>}
+        {(mode === "register" || mode === "reset") && <label className="field"><T>{"确认密码"}</T><input name="confirmation" type={showPassword ? "text" : "password"} value={confirmation} onChange={event => setConfirmation(event.target.value)} required autoComplete="new-password" disabled={disabled} /></label>}
         {error && <p className="form-error" role="alert">{t(error)}</p>}
         {notice && <p className="auth-notice" role="status"><CheckCircle2 size={16} />{t(notice)}</p>}
-        <button className="primary-button" disabled={busy || ((mode === "reset" || mode === "verify") && !token) || (mode === "register" && !options?.registration_enabled)}>{busy ? t("处理中…") : { login: t("登录"), register: t("创建账号"), forgot: t("发送重设邮件"), reset: t("保存新密码"), verify: t("确认并验证邮箱") }[mode]}</button>
+        <button className="primary-button" disabled={disabled || ((mode === "reset" || mode === "verify") && !token) || (mode === "register" && !options?.registration_enabled)}>{busy ? t("处理中…") : { login: t("登录"), register: t("创建账号"), forgot: t("发送重设邮件"), reset: t("保存新密码"), verify: t("确认并验证邮箱") }[mode]}</button>
       </form>
       {mode === "register" && options?.email_verification_required && <p className="auth-registration-note"><Mail size={14} /><T>{"注册后需验证邮箱，才会进入工作区。"}</T></p>}
-      {mode === "login" && options?.password_reset_enabled && <button type="button" className="text-button auth-forgot" disabled={busy} onClick={() => changeMode("forgot")}><T>{"忘记密码？"}</T></button>}
-      {mode === "login" || mode === "register" ? <>{options?.registration_enabled && <button type="button" className="text-button" disabled={busy} onClick={() => changeMode(mode === "login" ? "register" : "login")}>{mode === "login" ? t("没有账号？创建一个") : t("已有账号？去登录")}</button>}{options && !options.registration_enabled && <p className="auth-registration-note"><T>{"此部署已关闭新账号注册，现有账号仍可登录。"}</T></p>}</> : <button type="button" className="text-button" disabled={busy} onClick={() => changeMode("login")}><ArrowLeft size={14} /><T>{"返回登录"}</T></button>}
-      {options?.email_verification_required && mode === "login" && <button type="button" className="text-button auth-resend" disabled={busy || !email.trim()} onClick={() => void act(async () => { const result = await api<{ message: string }>("/api/v1/auth/resend-verification", { method: "POST", body: JSON.stringify({ email }) }); setNotice(result.message); })}><T>{"重新发送验证邮件"}</T></button>}
+      {mode === "login" && options?.password_reset_enabled && <button type="button" className="text-button auth-forgot" disabled={disabled} onClick={() => changeMode("forgot")}><T>{"忘记密码？"}</T></button>}
+      {mode === "login" || mode === "register" ? <>{options?.registration_enabled && <button type="button" className="text-button" disabled={disabled} onClick={() => changeMode(mode === "login" ? "register" : "login")}>{mode === "login" ? t("没有账号？创建一个") : t("已有账号？去登录")}</button>}{options && !options.registration_enabled && <p className="auth-registration-note"><T>{"此部署已关闭新账号注册，现有账号仍可登录。"}</T></p>}</> : <button type="button" className="text-button" disabled={disabled} onClick={() => changeMode("login")}><ArrowLeft size={14} /><T>{"返回登录"}</T></button>}
+      {options?.email_verification_required && mode === "login" && <button type="button" className="text-button auth-resend" disabled={disabled || !email.trim()} onClick={() => void act(async () => { const result = await api<{ message: string }>("/api/v1/auth/resend-verification", { method: "POST", body: JSON.stringify({ email }) }); setNotice(result.message); })}><T>{"重新发送验证邮件"}</T></button>}
       {optionsError && <p className="auth-config-error" role="alert"><T>{"登录选项暂时无法读取，请刷新重试。邮箱登录仍可尝试。"}</T></p>}
       <nav className="login-public-links" aria-label={t("项目与帮助")}><Link href="/"><T>{"了解 Lester"}</T></Link><Link href="/docs"><T>{"帮助文档"}</T></Link></nav>
     </section>

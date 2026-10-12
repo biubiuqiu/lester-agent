@@ -49,7 +49,8 @@ test("composer expands and bounds long drafts; active-run follow-ups stay unsent
   expect(await input.evaluate(node => node.scrollHeight > node.clientHeight && node.clientHeight < 240)).toBe(true);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await input.fill("");
-  await expect.poll(async () => (await input.boundingBox())!.height).toBe(empty);
+  // Chromium may differ by a fraction of a CSS pixel after layout/animation.
+  await expect.poll(async () => (await input.boundingBox())!.height).toBeCloseTo(empty, 1);
   await start(page, api);
   await input.fill("请稍后继续处理这份材料");
   await expect(page.getByText("草稿已保留，当前任务结束后可发送。", { exact: true })).toBeVisible();
@@ -140,6 +141,8 @@ test("response copying confirms real clipboard writes; quoting appends without s
   await expect(reply.locator(".copy-error")).toContainText("复制失败");
   const input = page.getByRole("textbox", { name: "消息输入框", exact: true });
   await input.fill("已有草稿");
+  // Resizing the composer can scroll the thread and dismiss a text selection.
+  await expect.poll(() => input.evaluate(node => node.getAnimations().length)).toBe(0);
   await selectText(reply.locator(".markdown-content p").first());
   await page.getByRole("button", { name: "引用并追问", exact: true }).click();
   await expect(input).toHaveValue("已有草稿\n\n> 引用回答\n> 这段结论用于追问。\n\n");
@@ -164,6 +167,8 @@ test("file updates preserve selection; reopening restores source reading positio
   await page.getByRole("button", { name: "重新打开刚关闭的标签", exact: true }).click();
   await expect(page.getByRole("tab", { name: "notes.txt", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect.poll(() => source.evaluate(node => node.scrollTop)).toBe(420);
+  // Reload creates a new SSE connection; do not emit the update before it exists.
+  await expect.poll(() => api.streamCount).toBeGreaterThan(0);
   api.writeFile("index.html", "<html><body>更新后的网页</body></html>");
   const htmlTab = page.getByRole("tab", { name: "index.html", exact: true });
   await expect(htmlTab.locator(".file-unread-dot")).toBeVisible();

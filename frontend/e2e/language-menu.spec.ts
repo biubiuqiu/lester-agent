@@ -26,6 +26,8 @@ test("SVG language menu supports keyboard selection, Escape and remembered prefe
   await page.getByRole("heading", { level: 1 }).click({ position: { x: 8, y: 8 } });
   await expect(options).toHaveCount(0);
   await trigger.press("ArrowDown");
+  // Opening schedules initial focus; wait before sending the next navigation key.
+  await expect(options.first()).toBeFocused();
   await options.first().press("End");
   await expect(options.last()).toBeFocused();
   await options.last().press("Enter");
