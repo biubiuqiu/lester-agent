@@ -144,6 +144,7 @@ export const siteDocs: SiteDoc[] = [
       </> },
       { id: "runtime", title: "沙盒开发环境", content: <>
         <p><T>{"Compose 会先构建完整沙盒镜像，供新建的 Computer 使用。镜像预装 Node.js、npm、pnpm、Python、pip、venv、Go 和常用编译工具。Node.js 与 Python 的 Playwright 共用预下载的 Chromium，并包含中日韩字体。"}</T></p>
+        <p><T>{"Agent 可通过命令工具直接运行 Node.js 或 Python 的 Playwright 脚本，默认无头运行，无需安装浏览器 Skill。截图和下载文件保存在当前会话目录，操作结果以实际页面为准；旧 Computer 或自定义镜像需先检查环境。"}</T></p>
         <CodeBlock label="运行环境检查">{"make sandbox-check\n# deploy/.env\nSANDBOX_IMAGE=lester-sandbox-runtime:local"}</CodeBlock>
         <p><T>{"Docker Computer 默认禁用外网。预装浏览器可以测试本地页面；安装新依赖或访问外部网站仍需要部署侧的网络配置。"}</T></p>
         <Note><T>{"重建镜像不会升级已有 Computer，也不会删除工作区。旧配置需更新 SANDBOX_IMAGE；现有 Computer 请由管理员保留卷并安排迁移，检查非 root 用户的文件权限。ACS 需要推送新镜像并更新模板。"}</T></Note>

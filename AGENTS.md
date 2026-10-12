@@ -13,7 +13,7 @@ The current implementation intentionally does not include:
 - multi-Agent orchestration UI
 - Knowledge Base/RAG products
 - Memory
-- browser automation
+- dedicated browser-control tools, browser UI, or automatic browser-session management
 - Computer snapshots, or automatic cross-provider workspace migration
 
 First-task UI changes must preserve drafts when users leave to configure models and return to the original project. Task examples only fill the composer; sending remains explicit. Model setup distinguishes saved configuration from verified provider access: the current connection-test endpoint does not call the provider. Preserve advanced cloud-provider configuration and the separate administrator model controls. Link assistant file references only to files verified in the current conversation inventory.
@@ -27,7 +27,7 @@ Implementation phase labels are internal planning terms. Do not expose labels su
 - `/` is the anonymous, server-rendered project homepage; `/docs` and its authored chapters are public help. `/app` remains the authenticated conversation-first workspace. Keep public pages independent of API availability and session state; do not redirect public visitors to login or fetch workspace data there.
 - Public-site routes live under `frontend/src/app/(public)/`; scope their styles so workspace, login, and settings layouts remain independent. Small client components support labeled examples and clipboard controls; do not ship design images as interactive UI.
 - Keep the homepage minimal: a centered opening statement, one primary action, and a short name story, with detailed capabilities/setup in `/docs`. The name is inspired by GTA V's Lester Crest; describe resourcefulness without promising omnipotence. Text and controls stay native HTML; do not add decorative artwork or competing section headlines by default.
-- Homepage examples are explicitly illustrative, never real model runs, test results, or evidence of validation. Workspace entry must use the existing login flow and never auto-send. Link the actual `biubiuqiu/lester-agent` repository/Issues; do not fabricate a hosted demo, metrics, a licence, or unavailable Memory/connector/scheduling/browser capabilities.
+- Homepage examples are explicitly illustrative, never real model runs, test results, or evidence of validation. Workspace entry must use the existing login flow and never auto-send. Link the actual `biubiuqiu/lester-agent` repository/Issues; do not fabricate a hosted demo, metrics, a licence, or unavailable Memory/connector/scheduling/dedicated browser UI capabilities.
 - Homepage motion is brief and tied to reading or choices, with no perpetual loops or invented progress. The compact output sketch uses native radio controls and CSS to switch illustrative web/document/code previews without JavaScript; examples never run or fetch a model. Respect reduced motion and preserve server-rendered copy, anonymous navigation and all six languages.
 - Maintain `frontend/src/lib/site-docs.tsx` with README when supported behavior, environment variables, or migration requirements change. Distinguish fresh initialization from existing-volume upgrades, preserve the encryption key/data, and accurately explain model configuration versus actual provider verification.
 - Verify anonymous access, documentation navigation, copy success/error, desktop/mobile layout, and the existing workspace/login entry after public-site changes.
@@ -138,6 +138,7 @@ Preserve these behaviors when changing the implementation:
 - Sandbox lifecycle, command, file, and interactive terminal behavior must stay behind `sandbox.Provider`. Provider-specific SDK types, URL rules, Docker commands, and PTY behavior must not leak into conversation or HTTP services.
 - Conversations are rooted at `/workspace/conversations/{conversationId}` inside that Computer; file APIs and terminal sessions must stay scoped to that directory.
 - User Computers default to no network access and retain CPU, memory, and PID limits.
+- Browser tasks use ordinary `bash` execution of headless Node/Python Playwright scripts in the supplied Computer image; no browser Skill is required. Keep this guidance brief in the base prompt, check actual availability in older/custom images, reuse installed browsers, scope screenshots/downloads to the current conversation, verify actions from real page results and close browsers. Preserve deployment network restrictions; this does not add dedicated browser tools, UI, or managed browser sessions.
 - Computer state must be reconciled with the sandbox provider; use should recover a stopped or missing Computer while idle suspend/resume preserves the user workspace.
 - Conversation Skills must be installed under `.agent/skills/{slug}` and only installed Skills may be exposed to or loaded by the Agent runtime.
 - Conversation attachments must be stored under `.agent/upload`; do not parse or inject attachment contents into model context automatically.
