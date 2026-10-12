@@ -15,11 +15,14 @@
 .workspace-shell .conversation-header-leading { flex: 1; min-width: 0; }
 .workspace-shell .agent-heading { min-width: 0; }
 .workspace-shell .agent-heading > span:last-child { min-width: 0; }
-.workspace-shell .agent-heading strong { display: block; max-width: 36vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 550; }
+.workspace-shell .agent-heading strong { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 550; }
 .workspace-shell .agent-heading small { display: flex; min-width: 0; overflow: hidden; white-space: nowrap; color: var(--muted); font-size: 12px; line-height: 1.5; }
-.workspace-shell .conversation-agent-name { flex: 1 10 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.workspace-shell .conversation-agent-name { flex: 0 1 auto; min-width: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; }
 .workspace-shell .conversation-state-separator { flex: none; padding: 0 3px; }
-.workspace-shell .conversation-run-label { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.workspace-shell .conversation-run-label { flex: 0 0 auto; min-width: 0; max-width: calc(100% - 12px); overflow: hidden; text-overflow: ellipsis; }
+.workspace-shell .workspace-panel-button { display: inline-flex; align-items: center; justify-content: center; flex: none; gap: 6px; min-height: 40px; padding: 6px 9px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: 13px; }
+.workspace-shell .workspace-panel-button:hover { background: #f1f4f0; color: var(--ink); }
+.workspace-shell .mobile-results-entry { display: none; }
 .workspace-shell .agent-heading .run-state::before { display: none; }
 .workspace-shell .conversation-model-selector { display: none; }
 .workspace-shell .conversation-header .guide-launcher { margin-left: 0; }
@@ -53,8 +56,14 @@
 .workspace-shell .compose-box { transform-origin: top left; }
 .workspace-shell .new-chat-content > .new-project-context { animation: workspace-home-enter 420ms both; }
 .workspace-shell .new-chat-content > h1 { animation: workspace-home-enter 480ms 40ms both; }
-.workspace-shell .new-chat-content > .new-chat-composer { animation: workspace-home-enter 520ms 80ms both; }
-.workspace-shell .new-chat-content > .task-examples { animation: workspace-home-enter 520ms 120ms both; }
+.workspace-shell .new-chat-content > .new-chat-composer { animation: workspace-composer-enter 400ms both; }
+.workspace-shell .new-chat-content > .home-task-examples { animation: workspace-home-enter 520ms 120ms both; }
+.workspace-shell .home-task-examples { min-height: 44px; margin-top: 24px; }
+.workspace-shell .home-task-examples .task-examples { margin-top: 0; }
+.workspace-shell .task-suggestions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: min(360px, 100%); margin: 0 auto; }
+.workspace-shell .task-suggestions button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; min-height: 44px; padding: 8px; border: 1px solid #e7ebe7; border-radius: 8px; background: #fbfcfa; color: #52675a; font-size: 13px; cursor: pointer; }
+.workspace-shell .task-suggestions button:hover { background: #edf3ee; border-color: #d5e0d6; }
+.workspace-shell .task-suggestions button svg { flex: none; }
 .workspace-shell .new-chat-composer .compose-box { transition: border-color 180ms ease, box-shadow 220ms ease; }
 .workspace-shell .new-chat-composer .compose-box:focus-within { border-color: #9eb4a3; box-shadow: 0 0 0 4px #52755d0a; }
 .workspace-shell .new-chat-composer .compose-actions button { transition: background-color 160ms ease, color 160ms ease, transform 160ms ease; }
@@ -72,6 +81,7 @@
   .workspace-shell .task-examples[open]::details-content { block-size: auto; }
 }
 @keyframes workspace-home-enter { from { opacity: .3; translate: 0 12px; } to { opacity: 1; translate: 0 0; } }
+@keyframes workspace-composer-enter { from { translate: 0 8px; } to { translate: 0 0; } }
 @keyframes workspace-chip-enter { from { opacity: .4; translate: 0 4px; } to { opacity: 1; translate: 0 0; } }
 @keyframes workspace-popover-enter { from { opacity: .4; translate: 0 -4px; } to { opacity: 1; translate: 0 0; } }
 .workspace-shell .new-chat-home.composer-docked { padding: 12px clamp(20px, 3vw, 48px) 20px; }
@@ -80,6 +90,7 @@
 .workspace-shell .composer-docked .new-project-context,
 .workspace-shell .composer-docked h1,
 .workspace-shell .composer-docked .task-examples,
+.workspace-shell .composer-docked .home-task-examples,
 .workspace-shell .composer-docked .new-chat-options { display: none; }
 .workspace-shell .composer-docked .new-chat-composer .compose-box { max-width: none; }
 .workspace-shell.composer-motion-ghost { position: fixed; z-index: 50; display: block; pointer-events: none; overflow: hidden; transform-origin: top left; }
@@ -144,6 +155,8 @@
 .workspace-shell .deliverables-panel { padding: 24px; }
 .workspace-shell .deliverables-panel h2 { font-size: 16px; font-weight: 550; }
 @media (max-width: 1000px) {
+  .workspace-shell .workspace-panel-button { display: none; }
+  .workspace-shell .mobile-results-entry { display: inline-flex; flex: none; }
   .workspace-shell { --workspace-sidebar-width: 230px; }
   .workspace-shell.workspace-panel-open { grid-template-columns: var(--workspace-sidebar-width) minmax(0, 1fr); }
   .workspace-shell.sidebar-collapsed { --workspace-sidebar-width: 0px; }
@@ -156,7 +169,10 @@
   .workspace-shell { display: block; }
   .workspace-shell .conversation-header { padding: 0 10px; gap: 4px; }
   .workspace-shell .conversation-options-button { width: 44px; height: 44px; }
-  .workspace-shell .agent-heading strong { max-width: 30vw; font-size: 13px; }
+  .workspace-shell .agent-heading strong { max-width: 100%; font-size: 13px; }
+  .workspace-shell .conversation-agent-name,
+  .workspace-shell .conversation-state-separator { display: none; }
+  .workspace-shell .conversation-run-label { max-width: 100%; }
   .workspace-shell .agent-avatar,
   .workspace-shell .conversation-header .workspace-artifacts-link,
   .workspace-shell .conversation-header .open-files-button,

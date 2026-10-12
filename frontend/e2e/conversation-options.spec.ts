@@ -42,6 +42,13 @@ for (const locale of ["zh-CN", "fr"] as const) {
         const header = page.locator(".conversation-header");
         const before = (await header.boundingBox())!;
         expect((await header.locator(".agent-heading small").boundingBox())!.height).toBeLessThanOrEqual(20);
+        expect(await header.locator(".conversation-run-label").evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+        if (!compact) {
+          await expect(header.getByRole("button", { name: t("工作区"), exact: true })).toBeVisible();
+          await expect(header.getByRole("button", { name: t("成果"), exact: true })).toHaveCount(0);
+          await expect(header.getByRole("button", { name: t("文件"), exact: true })).toHaveCount(0);
+          await expect(header.locator(".conversation-agent-name")).toHaveText("Lester");
+        }
         const previewBefore = compact ? null : await panel.boundingBox();
         const trigger = page.getByRole("button", { name: t("更多会话选项"), exact: true });
         const popup = page.getByRole("dialog", { name: t("更多会话选项"), exact: true });

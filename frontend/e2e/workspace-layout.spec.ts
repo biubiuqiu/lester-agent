@@ -82,7 +82,7 @@ for (const locale of ["zh-CN", "en", "ja", "ko", "fr", "es"] as Locale[]) {
           await expect.poll(() => panel.evaluate(element => element.matches(":modal"))).toBe(true);
           await page.keyboard.press("Escape");
           await expect(panel).toBeHidden();
-          await page.locator(".conversation-header").getByRole("button", { name: t("文件"), exact: true }).click();
+          await page.locator(".conversation-header").getByRole("button", { name: t("工作区"), exact: true }).click();
           await expect(panel).toBeVisible();
           expect(await panel.evaluate(element => element.matches(":modal"))).toBe(false);
         }
@@ -115,6 +115,10 @@ for (const locale of ["zh-CN", "en", "ja", "ko", "fr", "es"] as Locale[]) {
         await expect(panel.getByLabel(t("{0} 源代码", ["notes.txt"]), { exact: true })).toContainText("请人工验收");
         await panel.locator(".computer-panel-header").getByRole("button", { name: t("成果"), exact: true }).click();
         await expect(panel.locator(".deliverable-card")).toHaveCount(1);
+        await expect(panel.locator(".deliverable-entry")).toHaveText("index.html");
+        await panel.getByRole("button", { name: t("预览成果 {0}", ["index.html"]), exact: true }).click();
+        await expect(panel.locator('iframe[title="index.html preview"]')).toBeVisible();
+        await panel.locator(".computer-panel-header").getByRole("button", { name: t("成果"), exact: true }).click();
         await page.screenshot({ path: testInfo.outputPath("results-panel.png") });
         const more = panel.locator(".deliverable-more > summary");
         await more.click();
@@ -129,7 +133,7 @@ for (const locale of ["zh-CN", "en", "ja", "ko", "fr", "es"] as Locale[]) {
         api.writeFile("later.txt", "后台写入不重新打开已关闭的面板");
         await expect(page.locator(".related-files > summary")).toContainText("3");
         await expect(panel).toBeHidden();
-        const opener = page.locator(".conversation-header").getByRole("button", { name: t("成果"), exact: true });
+        const opener = page.locator(".conversation-header").getByRole("button", { name: t(compact ? "成果" : "工作区"), exact: true });
         await opener.click();
         await expect(panel).toBeVisible();
         if (compact) {

@@ -36,7 +36,7 @@ test("login, explicit first task, live file tabs and independent HTML preview", 
   const composer = page.getByRole("textbox", { name: "消息输入框", exact: true });
   await expect(composer).toBeVisible();
   expect((await context.cookies()).find(cookie => cookie.name === "lester_access_token")?.httpOnly).toBe(true);
-  await page.locator(".task-examples summary").click();
+  await expect(page.getByRole("group", { name: "任务示例", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "制作一个网页", exact: true }).click();
   await expect(composer).not.toHaveValue("");
   expect(api.mutations.filter(item => item.path.startsWith("/api/v1/conversations"))).toEqual([]);

@@ -8,7 +8,7 @@ import { FloatingPopover } from "./floating-popover";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, ChevronDown, FileText, Paperclip, Send, X } from "lucide-react";
+import { ArrowRight, BarChart3, ChevronDown, FileText, Globe, Paperclip, Send, X } from "lucide-react";
 import { api, type Agent, type Conversation, type Deployment, type UserProfile } from "@/lib/api";
 import { pastedImageFiles } from "@/lib/clipboard";
 import { readView, updateView, viewKey } from "@/lib/conversation-view-state";
@@ -47,10 +47,12 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const input = useRef<HTMLInputElement>(null);
   const messageInput = useRef<HTMLTextAreaElement>(null);
+  const examplesDisclosure = useRef<HTMLDetailsElement>(null);
   useEffect(() => { if (!busy && error) messageInput.current?.focus({ preventScroll: true }); }, [busy, error]);
   const returnTo = projectId ? `/app/p/${encodeURIComponent(projectId)}` : "/app";
   const modelSettingsURL = `/app/settings/models?returnTo=${encodeURIComponent(returnTo)}`;
   function chooseExample(prompt: string) {
+    if (examplesDisclosure.current) examplesDisclosure.current.open = false;
     setText(prompt);
     updateView(storageKey, { text: prompt });
     messageInput.current?.focus();
@@ -58,6 +60,12 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
       try { composeBox.current?.animate([{ boxShadow: "0 0 0 5px #52755d18" }, { boxShadow: "0 0 0 0px #52755d00" }], { duration: 420, easing: "ease-out" }); } catch { /* Visual feedback never changes the draft or sends it. */ }
     }
   }
+  const hasDraft = Boolean(text.trim() || files.length || contexts.length || missing.length);
+  const examples = [
+    { title: t("整理需求文档"), label: t("文档"), prompt: t("帮我整理产品需求，生成一份包含目标、功能范围和验收标准的评审文档。"), icon: FileText },
+    { title: t("分析一份表格"), label: t("表格"), prompt: t("分析我上传的表格，找出主要趋势和异常，并整理成简明报告。"), icon: BarChart3 },
+    { title: t("制作一个网页"), label: t("网页"), prompt: t("帮我制作一个产品介绍网页，先和我确认目标用户、内容和视觉风格。"), icon: Globe },
+  ];
   const changeFiles = (next: File[]) => { setFiles(next); updateView(storageKey, { files: next }); };
 
   async function submit(event: FormEvent) {
@@ -126,17 +134,13 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
       {error ? <p role="alert" className="compose-error">{t(error)}</p> : null}
       {!deployments.length ? <div className="model-setup-prompt"><div><strong><T>{"再准备一个模型，就可以开始了"}</T></strong><p><T>{"连接你的模型服务，或使用管理员提供的共享模型。你的草稿会保留。"}</T></p></div><Link className="primary-button" href={modelSettingsURL}><T>{"配置第一个模型"}</T><ArrowRight size={16} /></Link></div> : null}
     </form>
-    <details className="task-examples" onKeyDown={event => {
+    <div className="home-task-examples">{hasDraft ? <details ref={examplesDisclosure} className="task-examples" onKeyDown={event => {
       if (event.key === "Escape") {
         event.preventDefault();
         event.currentTarget.open = false;
         event.currentTarget.querySelector("summary")?.focus();
       }
-    }}><summary><T>{"试试一个任务"}</T><ChevronDown size={15} aria-hidden="true" /></summary><div aria-label={t("任务示例")}>{[
-      [t("整理需求文档"), t("帮我整理产品需求，生成一份包含目标、功能范围和验收标准的评审文档。")],
-      [t("分析一份表格"), t("分析我上传的表格，找出主要趋势和异常，并整理成简明报告。")],
-      [t("制作一个网页"), t("帮我制作一个产品介绍网页，先和我确认目标用户、内容和视觉风格。")],
-    ].map(([title, prompt]) => <button type="button" key={title} disabled={busy} onClick={() => chooseExample(prompt)}>{title}</button>)}</div></details>
+    }}><summary><T>{"试试一个任务"}</T><ChevronDown size={15} aria-hidden="true" /></summary><div aria-label={t("任务示例")}>{examples.map(({ title, prompt }) => <button type="button" key={title} disabled={busy} onClick={() => chooseExample(prompt)}>{title}</button>)}</div></details> : <div className="task-suggestions" role="group" aria-label={t("任务示例")}>{examples.map(({ title, label, prompt, icon: Icon }) => <button type="button" key={title} disabled={busy} aria-label={title} title={title} onClick={() => chooseExample(prompt)}><Icon size={15} aria-hidden="true" />{label}</button>)}</div>}</div>
   </div></div>;
 }
 

@@ -11,8 +11,17 @@ export function OutcomeSketch() {
       <label><input type="radio" name="site-outcome" value="code" /><span><Code2 size={15} aria-hidden="true" /><T>{"代码"}</T></span></label>
       <i className="site-outcome-indicator" aria-hidden="true" />
     </div>
-    <div className="site-outcome-file" data-kind="web"><Code2 size={16} aria-hidden="true" /><code>index.html</code></div>
-    <div className="site-outcome-file" data-kind="document"><FileText size={16} aria-hidden="true" /><code>brief.md</code></div>
-    <div className="site-outcome-file" data-kind="code"><Code2 size={16} aria-hidden="true" /><code>main.py</code></div>
+    <div className="site-outcome-sample" data-kind="web">
+      <div className="site-outcome-file"><Code2 size={14} aria-hidden="true" /><code>index.html</code></div>
+      <div className="site-sample-web"><span>Lester</span><strong><T>{"让灵感"}</T>{" "}<T>{"落地。"}</T></strong><div className="site-sample-lines" aria-hidden="true"><i /><i /></div></div>
+    </div>
+    <div className="site-outcome-sample" data-kind="document">
+      <div className="site-outcome-file"><FileText size={14} aria-hidden="true" /><code>brief.md</code></div>
+      <div className="site-sample-document"><strong><T>{"产品需求报告"}</T></strong><span><T>{"一、项目背景"}</T></span><span><T>{"二、核心需求"}</T></span></div>
+    </div>
+    <div className="site-outcome-sample" data-kind="code">
+      <div className="site-outcome-file"><Code2 size={14} aria-hidden="true" /><code>main.py</code></div>
+      <pre className="site-sample-code"><code>{"def summarize(rows):\n    return {\"total\": len(rows)}"}</code></pre>
+    </div>
   </fieldset>;
 }

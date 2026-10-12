@@ -3,7 +3,7 @@ import { T, useT } from "@/components/i18n";
 
 
 import { useMemo, useState } from "react";
-import { ArrowUpRight, FileText, Globe, MessageSquare, MoreHorizontal, RefreshCw } from "lucide-react";
+import { ArrowUpRight, Eye, FileText, Globe, MessageSquare, MoreHorizontal, RefreshCw } from "lucide-react";
 import { deliverableKind } from "@/lib/deliverables";
 import { FileDownload, useFileWorkspace } from "./file-workspace";
 import { PublishFileButton } from "./artifact-manager";
@@ -37,13 +37,15 @@ export function Deliverables({ panel = false }: { panel?: boolean }) {
         const record = registered.get(file.path);
         const kind = record?.kind ?? deliverableKind(file);
         return <article className={`deliverable-card ${kind}`} key={record?.id ?? file.path}>
-          <button type="button" className="deliverable-preview" onClick={() => open(file, "preview")} aria-label={t("预览成果 {0}", [file.name])}>
+          <div className="deliverable-heading">
             <span className="deliverable-cover" aria-hidden="true">{kind === "html" ? <Globe /> : <FileText />}</span>
-            <span className="deliverable-info"><strong>{record?.title || file.name}</strong>{record?.summary ? <span className="deliverable-summary">{record.summary}</span> : null}<span className="deliverable-status"><span>{kind === "html" ? t("网页") : t("文档")}</span><span className="deliverable-review"><T>{"待验收"}</T></span>{updated.has(file.path) ? <span><T>{"本轮更新"}</T></span> : null}</span></span>
-            <ArrowUpRight className="deliverable-open-icon" aria-hidden="true" />
-          </button>
+            <span className="deliverable-info"><strong>{record?.title || file.name}</strong>{(record?.title || file.name) !== file.path ? <code className="deliverable-entry">{file.path}</code> : null}{record?.summary ? <span className="deliverable-summary">{record.summary}</span> : null}<span className="deliverable-status"><span>{kind === "html" ? t("网页") : t("文档")}</span><span className="deliverable-review"><T>{"待验收"}</T></span>{updated.has(file.path) ? <span><T>{"本轮更新"}</T></span> : null}</span></span>
+          </div>
           <div className="deliverable-actions">
+            <div className="deliverable-main-actions">
+            <button type="button" className="deliverable-open" onClick={() => open(file, "preview")} aria-label={t("预览成果 {0}", [file.name])}><Eye size={15} /><T>{"预览"}</T></button>
             <button type="button" className="deliverable-modify" onClick={() => { setReference(file.path); setExpanded(false); setPanelOpen(false); }} aria-label={t("继续修改 {0}", [file.name])}><MessageSquare size={15} /><T>{"继续修改"}</T></button>
+            </div>
             <details className="deliverable-more" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }}>
               <summary aria-label={t("{0} 的详情与更多操作", [file.name])} title={t("详情与更多操作")}><MoreHorizontal size={18} /></summary>
               <div className="deliverable-details">

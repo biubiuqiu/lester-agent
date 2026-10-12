@@ -901,7 +901,6 @@
   "模型、项目、文件、Agent、上下文库、Computer、Skill、个人资料与发布各有独立教学。功能页首次访问的提示可关闭；进度跟随账户保存，完成后也可重新看一遍。已有账户升级后不会被强制欢迎弹窗打断。": "Modèles, projets, fichiers, agents, contexte, Computer, Skills, profil et publication ont chacun un tutoriel. Les conseils initiaux se ferment ; la progression est liée au compte et les guides terminés se rejouent. Les comptes existants ne sont pas interrompus par un accueil forcé après mise à niveau.",
   "教学不会自动发送任务或发布内容；跳转模型配置时草稿保留。阅读模型教学不等于模型调用已验证。": "Les tutoriels n'envoient ni tâches ni publications automatiquement. Les brouillons sont conservés pendant la configuration. Lire un tutoriel ne vérifie pas les appels du modèle.",
   "描述目标，开始会话": "Décrire un objectif et démarrer une conversation",
-  "在工作区首页选择模型，按需展开输入框下方的 Agent 选项，写下目标、约束和想要的交付物。展开“试试一个任务”可以选择示例，只填入草稿；发送第一条消息时才会创建会话。顶部的书本图标可重放新手引导，产物图标可进入已发布产物管理。": "Choisissez un modèle sur l'accueil. Dépliez le choix d'agent si nécessaire, puis décrivez objectifs, contraintes et livrables. Essayer une tâche remplit seulement un brouillon ; le premier envoi crée la conversation. L'icône livre relance les guides et l'icône site ouvre les publications.",
   "你可以上传文件或粘贴图片。附件存入当前会话目录，模型默认接收文件路径提示，按需要使用工具读取内容。": "Importez des fichiers ou collez des images. Ils sont enregistrés dans le répertoire de la conversation. Le modèle reçoit les chemins et lit le contenu avec des outils au besoin.",
   "任务运行中可以准备下一条草稿，也可以点击停止。一个会话同时只执行一个任务。工具详情可展开查看，运行状态来自真实事件。": "Préparez le prochain brouillon pendant l'exécution ou arrêtez la tâche. Une seule tâche s'exécute à la fois par conversation. Dépliez les détails des outils ; l'état reflète des événements réels.",
   "使用你的 Computer": "Utiliser votre Computer",
@@ -914,7 +913,6 @@
   "手机端会自动打开文件面板，可关闭后继续对话。顶部“成果”直接打开成果集合；需要浏览其他文件时，切换面板的“文件”标签，或选择“更多 → 查看会话文件”。桌面端可以拖动调整右侧宽度、放大预览和收起会话栏。": "Sur mobile, le panneau Fichiers s'ouvre automatiquement ; fermez-le pour discuter. Résultats ouvre la collection. Pour les autres fichiers, choisissez Fichiers ou Plus → Voir les fichiers. Sur ordinateur, redimensionnez le panneau droit, agrandissez l'aperçu ou réduisez la barre des conversations.",
   "查看成果，继续修改": "Examiner les résultats et poursuivre les modifications",
   "任务结束、失败或停止后，成果区集中展示当前文件清单中确认存在的 HTML 网页与 Markdown 文档。Agent 可以登记标题、摘要和来源任务，旧文件仍支持按类型发现。": "Après fin, échec ou arrêt, Résultats affiche les HTML et Markdown confirmés dans l'inventaire actuel. Les agents peuvent enregistrer titre, résumé et exécution source ; les anciens fichiers restent détectés par type.",
-  "点击成果卡片打开预览，目录会收起以留出阅读空间；点击“目录”可重新展开。卡片上的“待验收”保持可见，文件路径、大小、完整摘要、下载与 HTML 部署放在卡片的“详情与更多操作”中。": "Une carte ouvre l'aperçu et réduit le répertoire pour la lecture ; Répertoire le rouvre. À vérifier reste visible. Chemin, taille, résumé complet, téléchargement et déploiement HTML figurent dans Détails et autres actions.",
   "点击预览可查看页面或文档，切换源码、下载文件。“继续修改”会引用文件并回到输入框，保留已有草稿；只有你发送后才开始下一项任务。": "Affichez pages et documents, consultez le code ou téléchargez. Continuer à modifier cite le fichier et revient au message sans perdre le brouillon. La tâche suivante démarre uniquement à l'envoi.",
   "成果登记与运行结束均不代表内容验收通过。预览显示当前文件，尚不提供历史内容版本恢复。失败或停止后的文件可能不完整，需要检查。": "Enregistrer un résultat ou finir une exécution ne valide pas le contenu. L'aperçu montre le fichier actuel ; la restauration d'anciennes versions n'est pas disponible. Les fichiers après échec ou arrêt peuvent être incomplets.",
   "明确发布 HTML": "Publier le HTML explicitement",
@@ -1258,11 +1256,15 @@
   "已就绪": "Prêt",
   "返回对话": "Retour à la conversation",
   "关闭工作区面板": "Fermer le panneau de travail",
-  "开始任务时先专注对话；第一份文件出现后展开预览并收起目录。顶部“文件”可随时打开工作区，“成果”集中查看交付内容。浏览中的标签不会因后台文件更新而切换。": "Commencez par la conversation. L’aperçu s’ouvre et le répertoire se replie dès qu’un premier fichier apparaît. Utilisez Fichiers en haut pour ouvrir l’espace de travail, ou Résultats pour consulter les livrables. Les mises à jour en arrière-plan ne changent pas l’onglet que vous lisez.",
   "聊天区保留简短的成果入口；右侧成果面板提供完整摘要、待验收状态和修改操作。手机面板支持“返回对话”与 Escape 关闭，并恢复原来的键盘焦点。": "La conversation conserve un lien succinct vers les résultats ; le panneau affiche les résumés complets, le statut à vérifier et les actions de modification. Sur mobile, Retour à la conversation ou Échap ferme le panneau et rétablit le focus du clavier.",
   "工具": "Outils",
   "终端和技能可从面板的“工具”菜单打开。": "Ouvrez le terminal et les compétences depuis le menu Outils du panneau.",
   "发送首条消息时，输入框会平滑移到底部；创建失败会回到居中位置并保留草稿，系统的减少动态效果设置会跳过动画。": "À l’envoi du premier message, la zone de saisie descend en douceur. Si la création de la conversation échoue, elle revient au centre et conserve votre brouillon. Le réglage système de réduction des animations permet de les ignorer.",
   "代码": "Code",
-  "成果示例": "Exemples de résultats"
+  "成果示例": "Exemples de résultats",
+  "表格": "Tableau",
+  "打开工作区面板": "Ouvrir le panneau de travail",
+  "在工作区首页选择模型和 Agent，写下目标、约束和想要的交付物。输入为空时显示文档、表格、网页三个示例入口；有草稿或附件时，示例收进“试试一个任务”。示例只填入草稿，发送第一条消息时才会创建会话。顶部书本图标可重放新手引导，产物图标可进入已发布产物管理。": "Choisissez un modèle et un Agent, puis décrivez votre objectif, les contraintes et les livrables. Une saisie vide affiche trois exemples : document, tableau et page web. Avec un brouillon ou une pièce jointe, ils sont regroupés sous « Essayer une tâche ». Les exemples remplissent uniquement un brouillon ; la conversation est créée à l’envoi du premier message. Le livre ouvre le tutoriel, et l’icône de livrable ouvre la gestion des publications.",
+  "开始任务时先专注对话；第一份文件出现后展开预览并收起目录。桌面顶部“工作区”打开或收起面板，成果与文件在面板内切换；手机顶部“成果”直接查看交付内容。浏览中的标签不会因后台文件更新而切换。": "Commencez par la conversation ; le premier fichier ouvre l’aperçu et replie le dossier. Sur ordinateur, « Espace de travail » ouvre ou ferme le panneau, où vous choisissez Résultats ou Fichiers. Sur mobile, « Résultats » ouvre directement les livrables. Les mises à jour en arrière-plan conservent l’onglet que vous consultez.",
+  "成果卡片显示标题、入口文件和“待验收”状态。点击主按钮“预览”查看内容，目录会收起以留出阅读空间；点击“目录”可重新展开。“继续修改”是单独的操作，大小、完整摘要、下载与 HTML 部署放在“详情与更多操作”中。": "Les cartes affichent le titre, le fichier d’entrée et l’état en attente de vérification. Le bouton principal « Aperçu » ouvre le contenu et replie le dossier, que « Dossier » permet de rouvrir. « Continuer à modifier » est une action distincte. Taille, résumé complet, téléchargement et publication HTML restent sous Détails et autres actions."
 }

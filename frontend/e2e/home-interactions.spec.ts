@@ -14,12 +14,15 @@ for (const javaScriptEnabled of [true, false]) {
       await expect(page.getByRole("heading", { level: 1 })).toContainText("想清楚。");
       const sketch = page.getByRole("group", { name: "成果示例", exact: true });
       await expect(sketch.getByText("index.html", { exact: true })).toBeVisible();
+      await expect(sketch.locator(".site-sample-web")).toBeVisible();
       await sketch.getByRole("radio", { name: "文档", exact: true }).check();
       await expect(sketch.getByText("brief.md", { exact: true })).toBeVisible();
+      await expect(sketch.getByText("产品需求报告", { exact: true })).toBeVisible();
       await expect(sketch.getByText("index.html", { exact: true })).toBeHidden();
       await sketch.getByRole("radio", { name: "文档", exact: true }).press("ArrowRight");
       await expect(sketch.getByRole("radio", { name: "代码", exact: true })).toBeChecked();
       await expect(sketch.getByText("main.py", { exact: true })).toBeVisible();
+      await expect(sketch.locator(".site-sample-code")).toContainText("def summarize");
       await page.emulateMedia({ reducedMotion: "reduce" });
       await sketch.getByRole("radio", { name: "网页", exact: true }).check();
       await expect(sketch.getByText("index.html", { exact: true })).toBeVisible();
@@ -49,6 +52,10 @@ test("new-task entry, example disclosure and focus feedback preserve explicit su
     const composer = page.getByRole("textbox", { name: "消息输入框", exact: true });
     await expect(composer).toBeVisible();
     expect(await page.locator(".new-chat-content h1").evaluate(element => getComputedStyle(element).animationName)).toBe("workspace-home-enter");
+    const suggestions = page.getByRole("group", { name: "任务示例", exact: true });
+    await expect(suggestions.getByRole("button")).toHaveCount(3);
+    await composer.fill("保留我的输入草稿");
+    await expect(suggestions).toHaveCount(0);
     const disclosure = page.locator(".task-examples");
     const before = (await disclosure.boundingBox())!.height;
     await disclosure.locator("summary").click();
@@ -69,6 +76,7 @@ test("new-task entry, example disclosure and focus feedback preserve explicit su
     await page.getByRole("button", { name: "整理需求文档", exact: true }).click();
     await expect(composer).toBeFocused();
     await expect(composer).toHaveValue(/验收标准/);
+    await expect(disclosure).not.toHaveAttribute("open", "");
     expect(api.mutations.filter(item => item.path.startsWith("/api/v1/conversations"))).toEqual([]);
     await disclosure.locator("summary").press("Escape");
     await expect(disclosure).not.toHaveAttribute("open", "");
@@ -79,6 +87,10 @@ test("new-task entry, example disclosure and focus feedback preserve explicit su
     await expect(composer).toHaveValue("帮我制作一个产品介绍网页，先和我确认目标用户、内容和视觉风格。");
     await page.locator('.new-chat-composer input[type="file"]').setInputFiles({ name: "材料.txt", mimeType: "text/plain", buffer: Buffer.from("示例材料") });
     await expect(page.locator(".pending-attachments")).toContainText("材料.txt");
+    await composer.fill("");
+    await expect(suggestions).toHaveCount(0);
+    await page.getByRole("button", { name: "移除 材料.txt", exact: true }).click();
+    await expect(suggestions.getByRole("button")).toHaveCount(3);
     if (info.project.name === "mobile") await page.setViewportSize({ width: 320, height: 839 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath("workspace-home.png") });
