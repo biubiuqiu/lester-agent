@@ -16,7 +16,6 @@ import (
 	agentpkg "github.com/biubiuqiu/lester-agent/backend/internal/agent"
 	"github.com/biubiuqiu/lester-agent/backend/internal/agenttool"
 	"github.com/biubiuqiu/lester-agent/backend/internal/blob"
-	"github.com/biubiuqiu/lester-agent/backend/internal/contextlibrary"
 	"github.com/biubiuqiu/lester-agent/backend/internal/eventlog"
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
 	"github.com/biubiuqiu/lester-agent/backend/internal/reference"
@@ -279,17 +278,6 @@ func (s *Service) SendSubmission(ctx context.Context, workspaceID, userID, id, s
 	if len(contextIDs)+len(selected) > reference.MaxReferences {
 		return uuid.Nil, errors.New("每条消息最多引用 8 个对象")
 	}
-	extra := []reference.Input{}
-	for _, input := range selected {
-		if input.ID == uuid.Nil {
-			return uuid.Nil, errors.New("无效的引用 ID")
-		}
-		if input.Type == "context" {
-			contextIDs = append(contextIDs, input.ID)
-		} else {
-			extra = append(extra, input)
-		}
-	}
 	content = string([]byte(content))
 	attachmentIDs = uniqueUUIDs(attachmentIDs)
 	if strings.TrimSpace(content) == "" && len(attachmentIDs) == 0 {
@@ -309,9 +297,13 @@ func (s *Service) SendSubmission(ctx context.Context, workspaceID, userID, id, s
 		return uuid.Nil, err
 	}
 	handedOff := false
+	queuePriority := false
 	defer func() {
 		if !handedOff {
 			guard.Close()
+			if queuePriority {
+				s.scheduleInputQueue(id)
+			}
 		}
 	}()
 	if accepted, found, err := s.acceptedSubmission(ctx, workspaceID, userID, id, submissionID, digest); err != nil || found {
@@ -330,41 +322,16 @@ func (s *Service) SendSubmission(ctx context.Context, workspaceID, userID, id, s
 	if err = tx.QueryRow(ctx, `SELECT model_deployment_id FROM conversations WHERE workspace_id=$1 AND id=$2 FOR UPDATE`, workspaceID, id).Scan(&acceptedModel); err != nil {
 		return uuid.Nil, errors.New("conversation not found")
 	}
-	attachments := []Attachment{}
-	if len(attachmentIDs) > 0 {
-		rows, queryErr := tx.Query(ctx, `SELECT id,conversation_id,original_name,stored_path,content_type,size_bytes,created_at FROM attachments WHERE conversation_id=$1 AND uploaded_by=$2 AND id=ANY($3) ORDER BY created_at,id`, id, userID, attachmentIDs)
-		if queryErr != nil {
-			return uuid.Nil, queryErr
-		}
-		for rows.Next() {
-			var attachment Attachment
-			if queryErr = rows.Scan(&attachment.ID, &attachment.ConversationID, &attachment.OriginalName, &attachment.StoredPath, &attachment.ContentType, &attachment.SizeBytes, &attachment.CreatedAt); queryErr != nil {
-				rows.Close()
-				return uuid.Nil, queryErr
-			}
-			attachments = append(attachments, attachment)
-		}
-		queryErr = rows.Err()
-		rows.Close()
-		if queryErr != nil {
-			return uuid.Nil, queryErr
-		}
-		if len(attachments) != len(attachmentIDs) {
-			return uuid.Nil, errors.New("one or more attachments were not found")
-		}
+	if ready, queueErr := queuedInputHasPriority(ctx, tx, id); queueErr != nil {
+		return uuid.Nil, queueErr
+	} else if ready {
+		queuePriority = true
+		return uuid.Nil, ErrQueuedInputPriority
 	}
-	if strings.TrimSpace(content) == "" {
-		content = "已上传附件：" + attachmentNames(attachments)
-	}
-	contexts, err := contextlibrary.Resolve(ctx, tx, workspaceID, contextIDs)
+	content, metadata, err := prepareRunInput(ctx, tx, workspaceID, userID, id, content, attachmentIDs, contextIDs, selected)
 	if err != nil {
 		return uuid.Nil, err
 	}
-	conversations, selectedSkills, err := reference.Resolve(ctx, tx, workspaceID, id, extra)
-	if err != nil {
-		return uuid.Nil, err
-	}
-	metadata, _ := json.Marshal(map[string]any{"attachments": attachments, "contexts": contexts, "conversations": conversations, "skills": selectedSkills})
 	var submission *uuid.UUID
 	if submissionID != uuid.Nil {
 		submission = &submissionID
@@ -380,7 +347,7 @@ func (s *Service) SendSubmission(ctx context.Context, workspaceID, userID, id, s
 		return uuid.Nil, err
 	}
 	_, _ = tx.Exec(ctx, `UPDATE conversations SET updated_at=now(),title=CASE WHEN title='新对话' THEN left($2,60) ELSE title END WHERE id=$1`, id, content)
-	if err = eventlog.Append(ctx, tx, runID, id, "RUN_STARTED", map[string]any{}); err != nil {
+	if err = eventlog.Append(ctx, tx, runID, id, "RUN_STARTED", map[string]any{"input_message_id": messageID}); err != nil {
 		return uuid.Nil, err
 	}
 	if err = tx.Commit(ctx); err != nil {
@@ -764,6 +731,7 @@ func (s *Service) SuspendIdle(ctx context.Context, idle time.Duration) {
 		case <-ticker.C:
 			rows, err := s.db.Query(ctx, `SELECT s.id,s.provider_ref FROM sandboxes s WHERE s.status='running' AND s.last_active_at<now()-$1::interval
 			AND NOT EXISTS(SELECT 1 FROM runs r JOIN conversations c ON c.id=r.conversation_id WHERE c.workspace_id=s.workspace_id AND c.created_by=s.user_id AND r.status IN ('running','cancelling'))
+			AND NOT EXISTS(SELECT 1 FROM run_inputs i JOIN conversations c ON c.id=i.conversation_id WHERE c.workspace_id=s.workspace_id AND c.created_by=s.user_id AND i.kind='next' AND i.status='queued')
 			AND NOT EXISTS(SELECT 1 FROM command_tasks t WHERE t.sandbox_ref=s.provider_ref AND t.status IN ('starting','running','stopping','unknown'))`, fmt.Sprintf("%f seconds", idle.Seconds()))
 			if err != nil {
 				continue

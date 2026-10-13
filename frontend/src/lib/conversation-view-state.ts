@@ -1,3 +1,4 @@
+import { clearRunInputs } from "./run-input";
 import type { ContextReference } from "./api";
 import { clearAttachmentUploads } from "./attachment-uploads";
 import { clearMessageSubmissions } from "./message-submission";
@@ -92,6 +93,7 @@ export function clearViewState() {
   cache.clear();
   clearAttachmentUploads();
   clearMessageSubmissions();
+  clearRunInputs();
   if (typeof window === "undefined") return;
   try { for (const key of Object.keys(window.sessionStorage)) if (key.startsWith(prefix)) window.sessionStorage.removeItem(key); } catch { /* best effort */ }
 }

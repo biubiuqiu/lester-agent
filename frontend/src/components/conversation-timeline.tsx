@@ -5,10 +5,12 @@ import Link from "next/link";
 import { MessageContent } from "./message-content";
 import { RunEvent, RunNarrative } from "./tool-timeline";
 import { FileText, MessageSquare, Puzzle } from "lucide-react";
+import { withoutPersistedModelText } from "@/lib/model-text-events";
+import { orderedMessages, runSegments, segmentOrder } from "@/lib/timeline-order";
 
 type TimelineItem =
-  | { kind: "message"; id: string; timestamp: number; message: Message }
-  | { kind: "run"; id: string; timestamp: number; events: RunEvent[]; hideFinalText: boolean };
+  | { kind: "message"; id: string; order: number; message: Message }
+  | { kind: "run"; id: string; order: number; events: RunEvent[]; hideFinalText: boolean };
 
 export function ConversationTimeline({ messages, events }: { messages: Message[]; events: RunEvent[] }) {
   const items = buildTimeline(messages, events);
@@ -45,10 +47,11 @@ function formatBytes(bytes: number) {
 }
 
 function buildTimeline(messages: Message[], events: RunEvent[]): TimelineItem[] {
-  const items: TimelineItem[] = messages.map((message) => ({
+  messages = orderedMessages(messages);
+  const items: TimelineItem[] = messages.map((message, index) => ({
     kind: "message",
     id: `message-${message.id}`,
-    timestamp: new Date(message.created_at).getTime(),
+    order: index * 10,
     message,
   }));
   const runs = new Map<string, RunEvent[]>();
@@ -58,18 +61,20 @@ function buildTimeline(messages: Message[], events: RunEvent[]): TimelineItem[] 
     runs.set(event.run_id, run);
   }
   for (const [runID, runEvents] of runs) {
-    const sortedEvents = runEvents.toSorted((a, b) => a.id - b.id);
-    const hideFinalText = hasPersistedFinalMessage(sortedEvents, messages);
-    if (!hasVisibleNarrative(sortedEvents, hideFinalText)) continue;
-    items.push({
-      kind: "run",
-      id: `run-${runID}`,
-      timestamp: new Date(sortedEvents[0]?.created_at ?? 0).getTime(),
-      events: sortedEvents,
-      hideFinalText,
-    });
+    for (const segment of runSegments(runEvents)) {
+      const sortedEvents = withoutPersistedModelText(segment, messages);
+      const hideFinalText = hasPersistedFinalMessage(sortedEvents, messages);
+      if (!hasVisibleNarrative(sortedEvents, hideFinalText)) continue;
+      items.push({
+        kind: "run",
+        id: `run-${runID}-${segment[0].id}`,
+        order: segmentOrder(segment, messages),
+        events: sortedEvents,
+        hideFinalText,
+      });
+    }
   }
-  return items.toSorted((a, b) => a.timestamp - b.timestamp || itemPriority(a) - itemPriority(b));
+  return items.toSorted((a, b) => a.order - b.order || itemPriority(a) - itemPriority(b));
 }
 
 function hasVisibleNarrative(events: RunEvent[], hideFinalText: boolean) {

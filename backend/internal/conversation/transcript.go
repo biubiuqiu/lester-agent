@@ -341,6 +341,9 @@ func (s *Service) finishFailedRun(ctx context.Context, runID, conversationID uui
 	if _, err = tx.Exec(ctx, `UPDATE runs SET status='failed',completed_at=now() WHERE id=$1`, runID); err != nil {
 		return err
 	}
+	if err = holdRunInputs(ctx, tx, runID, "run_failed"); err != nil {
+		return err
+	}
 	if _, err = tx.Exec(ctx, `UPDATE run_interactions SET status='cancelled',responded_at=now() WHERE run_id=$1 AND status='pending'`, runID); err != nil {
 		return err
 	}
@@ -374,6 +377,13 @@ func (s *Service) finishCompletedRun(ctx context.Context, runID, conversationID 
 	}
 	if status != "running" {
 		return ErrRunNotActive
+	}
+	var pendingInput bool
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM run_inputs WHERE after_run_id=$1 AND kind='adjust' AND status='pending')`, runID).Scan(&pendingInput); err != nil {
+		return err
+	}
+	if pendingInput {
+		return ErrPendingRunInputs
 	}
 	if _, err = tx.Exec(ctx, `UPDATE runs SET status='completed',completed_at=now() WHERE id=$1`, runID); err != nil {
 		return err

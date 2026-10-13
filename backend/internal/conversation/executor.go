@@ -23,11 +23,13 @@ import (
 // runExecutor owns in-process execution and shutdown, while Service owns the
 // conversation API and durable state. It is not a queue or remote worker.
 type runExecutor struct {
-	service  *Service
-	mu       sync.Mutex
-	stopping bool
-	tasks    sync.WaitGroup
-	active   sync.Map
+	service          *Service
+	mu               sync.Mutex
+	stopping         bool
+	tasks            sync.WaitGroup
+	active           sync.Map
+	queueDispatching sync.Map
+	queueContext     context.Context
 }
 
 func (e *runExecutor) start(guard *runGuard, workspaceID, conversationID, runID uuid.UUID) bool {
@@ -37,7 +39,7 @@ func (e *runExecutor) start(guard *runGuard, workspaceID, conversationID, runID 
 func (e *runExecutor) launch(guard *runGuard, conversationID, runID uuid.UUID, run func(context.Context)) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.stopping {
+	if e.stopping || e.queueContext != nil && e.queueContext.Err() != nil {
 		return false
 	}
 	ctx, cancel := context.WithCancelCause(context.Background())
@@ -46,7 +48,13 @@ func (e *runExecutor) launch(guard *runGuard, conversationID, runID uuid.UUID, r
 	e.tasks.Add(1)
 	go func() {
 		defer e.tasks.Done()
-		defer func() { cancel(context.Canceled); guard.Close(); e.active.Delete(runID); close(execution.done) }()
+		defer func() {
+			cancel(context.Canceled)
+			guard.Close()
+			e.active.Delete(runID)
+			close(execution.done)
+			e.service.scheduleInputQueue(conversationID)
+		}()
 		defer func() {
 			if recover() != nil {
 				slog.Error("run executor panic", "run_id", runID)
@@ -240,6 +248,12 @@ func (e *runExecutor) executeTurns(ctx context.Context, conversationID, runID uu
 			s.finishContext(ctx, runID, conversationID)
 			return
 		}
+		adjustments, adjustErr := s.applyRunAdjustments(ctx, conversationID, runID)
+		if adjustErr != nil {
+			s.finishExecutionError(ctx, runID, conversationID, adjustErr)
+			return
+		}
+		request.Messages = append(request.Messages, adjustments...)
 		// request retains the complete transcript; only this iteration's copy is
 		// projected. Never append new messages to a previously pruned history.
 		modelRequest, projection, budget, err := buildRequest()
@@ -441,14 +455,17 @@ func (e *runExecutor) executeTurns(ctx context.Context, conversationID, runID uu
 			s.finishExecutionError(ctx, runID, conversationID, err)
 			return
 		}
-		s.event(ctx, runID, conversationID, "MODEL_COMPLETED", map[string]any{"request_index": requestIndex, "usage": usage, "context_budget": budget})
+		s.event(ctx, runID, conversationID, "MODEL_COMPLETED", map[string]any{"request_index": requestIndex, "message_id": assistant.MessageID, "usage": usage, "context_budget": budget})
+		request.Messages = append(request.Messages, assistant)
 		if len(calls) == 0 {
 			if err = s.finishCompletedRun(ctx, runID, conversationID); err != nil {
+				if errors.Is(err, ErrPendingRunInputs) {
+					continue
+				}
 				s.finishExecutionError(ctx, runID, conversationID, err)
 			}
 			return
 		}
-		request.Messages = append(request.Messages, assistant)
 		for _, call := range calls {
 			if ctx.Err() != nil {
 				s.finishContext(ctx, runID, conversationID)

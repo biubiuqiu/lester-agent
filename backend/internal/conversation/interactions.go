@@ -197,7 +197,16 @@ func (s *Service) waitRunInteraction(ctx context.Context, conversationID, runID 
 		if err = s.db.QueryRow(ctx, `SELECT i.status,i.response,r.status FROM run_interactions i JOIN runs r ON r.id=i.run_id AND r.conversation_id=i.conversation_id WHERE i.id=$1 AND i.run_id=$2 AND i.conversation_id=$3`, item.ID, runID, conversationID).Scan(&status, &response, &runStatus); err != nil {
 			return nil, err
 		}
-		if runStatus != "running" || status == "cancelled" {
+		if runStatus != "running" {
+			return nil, ErrRunNotActive
+		}
+		if status == "cancelled" {
+			var superseded struct {
+				InputID string `json:"superseded_by_input_id"`
+			}
+			if json.Unmarshal(response, &superseded) == nil && superseded.InputID != "" {
+				return map[string]any{"interaction_id": item.ID, "kind": item.Kind, "status": "superseded_by_adjustment", "cancelled": true, "execution_approval": false}, nil
+			}
 			return nil, ErrRunNotActive
 		}
 		if status != "pending" {

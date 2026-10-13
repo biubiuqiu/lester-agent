@@ -130,6 +130,7 @@ func run() error {
 	shutdownDone := make(chan struct{})
 	go conversationService.SuspendIdle(ctx, cfg.SandboxIdleTTL)
 	go conversationService.MonitorSandboxes(ctx, cfg.SandboxMonitorInterval)
+	go conversationService.MonitorInputQueue(ctx)
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, stop := context.WithTimeout(context.Background(), 10*time.Second)

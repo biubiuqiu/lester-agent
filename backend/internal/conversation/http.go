@@ -126,7 +126,7 @@ func (h *Handler) Send(w http.ResponseWriter, r *http.Request) {
 	}
 	runID, err := h.service.SendSubmission(r.Context(), p.WorkspaceID, p.UserID, id, req.SubmissionID, req.Content, req.AttachmentIDs, req.ContextIDs, req.References, req.ExecutionMode)
 	if err != nil {
-		if errors.Is(err, ErrRunInProgress) || errors.Is(err, ErrSubmissionConflict) {
+		if errors.Is(err, ErrRunInProgress) || errors.Is(err, ErrSubmissionConflict) || errors.Is(err, ErrQueuedInputPriority) {
 			httpapi.Error(w, http.StatusConflict, err)
 			return
 		}
