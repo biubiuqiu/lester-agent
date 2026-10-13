@@ -78,8 +78,12 @@ export class WorkspaceApi {
     this.conversation.run_status = "completed";
     this.messages.push({ id: "fixture-assistant", role: "assistant", content: "已保存 index.html 和 notes.txt，请检查成果。", created_at: now });
     this.files = ["notes.txt", "index.html"].map(path => ({ path, name: path, is_dir: false, size: 200, modified_at: now }));
-    for (const [index, file] of this.files.entries()) this.emit(index + 2, "FILE_UPDATED", { path: file.path });
-    this.emit(4, "RUN_COMPLETED", {});
+    for (const file of this.files) this.emit(this.nextEventId++, "FILE_UPDATED", { path: file.path });
+    this.emit(this.nextEventId++, "RUN_COMPLETED", {});
+  }
+
+  contextEvent(type: "CONTEXT_COMPACTING" | "CONTEXT_COMPACTED" | "CONTEXT_COMPACTION_FAILED", payload: Record<string, unknown> = {}) {
+    this.emit(this.nextEventId++, type, payload);
   }
 
   private emit(id: number, type: string, payload: Record<string, unknown>) {

@@ -158,12 +158,20 @@ func lowValue(o observation) bool {
 
 func reference(exchange ToolExchange, o observation, resolved bool) string {
 	ref := map[string]any{"tool": o.name, "tool_execution_id": exchange.ID, "status": o.status}
+	if exchange.ToolResult.MessageID != "" {
+		ref["result_message_id"] = exchange.ToolResult.MessageID
+	}
 	if resolved {
 		ref["resolved_by_later_success"] = true
 	}
 	switch o.name {
 	case "read":
 		ref["file"] = shortened(filePath(o.args), 240)
+		if receipt, ok := o.result["read_receipt"].(map[string]any); ok {
+			if digest := field(receipt, "sha256"); len(digest) == 64 {
+				ref["historical_sha256"] = digest
+			}
+		}
 		if start, ok := number(o.result, "start_line"); ok {
 			if count, ok := number(o.result, "line_count"); ok {
 				ref["start_line"], ref["line_count"] = start, count

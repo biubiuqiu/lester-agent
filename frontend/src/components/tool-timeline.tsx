@@ -27,6 +27,7 @@ type NarrativeItem =
   | { kind: "text"; event: RunEvent }
   | { kind: "tool"; activity: ToolActivity }
   | { kind: "failure"; event: RunEvent }
+  | { kind: "context"; event: RunEvent; id: number }
   | { kind: "cancellation"; event: RunEvent };
 
 export function RunNarrative({ events, hideFinalText = false }: { events: RunEvent[]; hideFinalText?: boolean }) {
@@ -49,10 +50,25 @@ export function RunNarrative({ events, hideFinalText = false }: { events: RunEve
         }
         if (item.kind === "failure") return <RunFailure event={item.event} key={`failure-${item.event.id}`} />;
         if (item.kind === "cancellation") return <RunCancellation key={`cancellation-${item.event.id}`} />;
+        if (item.kind === "context") return <ContextActivity event={item.event} running={status === "running"} key={`context-${item.id}`} />;
         return <ToolActivityRow activity={item.activity} key={`tool-${item.activity.id}`} />;
       })}
     </section>
   );
+}
+
+function ContextActivity({ event, running }: { event: RunEvent; running: boolean }) {
+  const t = useT();
+  const compacting = event.type === "CONTEXT_COMPACTING";
+  const label = event.type === "CONTEXT_COMPACTED" ? t("历史已整理，继续任务") : compacting && running ? t("正在整理历史上下文") : compacting ? t("上下文整理已中断") : t("保留原上下文，继续检查");
+  return <details className="tool-activity">
+    <summary><span className="tool-activity-icon">{compacting && running ? <LoaderCircle className="tool-spinner" /> : <FileText />}</span><span>{label}</span><ChevronDown className="tool-disclosure" /></summary>
+    <div className="tool-activity-details">
+      <span>{t("完整聊天记录仍然保留；最新指令和未确认结果不会由摘要替代。")}</span>
+      {event.type === "CONTEXT_COMPACTED" && typeof event.payload.estimated_before === "number" && typeof event.payload.estimated_after === "number" ? <code>{t("请求输入估算：{0} → {1} token；不是 Provider 精确计数。", [String(event.payload.estimated_before), String(event.payload.estimated_after)])}</code> : null}
+      {event.type === "CONTEXT_COMPACTION_FAILED" ? <span>{t("本轮已停止自动整理。旧检查点保持不变，超出预算时任务会明确停止。")}</span> : null}
+    </div>
+  </details>;
 }
 
 function ToolActivityRow({ activity }: { activity: ToolActivity }) {
@@ -95,6 +111,13 @@ function narrativeItems(events: RunEvent[]): NarrativeItem[] {
   const items: NarrativeItem[] = [];
   let current: ToolActivity | null = null;
   for (const event of events) {
+    if (event.type.startsWith("CONTEXT_COMPACT")) {
+      if (current) { items.push({ kind: "tool", activity: current }); current = null; }
+      const previous = items.at(-1);
+      if (previous?.kind === "context") previous.event = event;
+      else items.push({ kind: "context", event, id: event.id });
+      continue;
+    }
     if (event.type === "MODEL_TEXT" || event.type === "MODEL_DELTA") {
       if (current) {
         items.push({ kind: "tool", activity: current });

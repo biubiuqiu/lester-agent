@@ -2,6 +2,8 @@ package agenttool
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"path"
@@ -48,12 +50,14 @@ func (tool LoadSkill) Execute(ctx context.Context, environment Environment, raw 
 	if !installed {
 		return nil, errors.New("skill is not installed for this conversation")
 	}
-	data, err := environment.Sandboxes.ReadFile(ctx, environment.SandboxID, environment.WorkDir, path.Join(".agent/skills", name, "SKILL.md"))
+	source := path.Join(".agent/skills", name, "SKILL.md")
+	data, err := environment.Sandboxes.ReadFile(ctx, environment.SandboxID, environment.WorkDir, source)
 	if err != nil {
 		return nil, err
 	}
 	content, truncated, omitted := truncateText(string(data), outputCharacterLimit)
-	result := map[string]any{"name": name, "content": content, "truncated": truncated}
+	digest := sha256.Sum256(data)
+	result := map[string]any{"name": name, "content": content, "truncated": truncated, "source_path": source, "sha256": hex.EncodeToString(digest[:])}
 	if truncated {
 		result["omitted_characters"] = omitted
 		result["notice"] = "Skill instructions were truncated at 30000 characters. Read the installed SKILL.md directly for the remainder."

@@ -4,6 +4,9 @@ export function activityLabel(state: "sending" | "running" | "stopping", latest?
   if (state === "sending") return t("正在准备任务");
   if (state === "stopping") return t("正在停止当前任务");
   if (!latest) return t("等待任务进展");
+  if (latest.type === "CONTEXT_COMPACTING") return t("正在整理历史上下文");
+  if (latest.type === "CONTEXT_COMPACTED") return t("历史已整理，继续任务");
+  if (latest.type === "CONTEXT_COMPACTION_FAILED") return t("保留原上下文，继续检查");
   if (latest.type === "TOOL_STARTED") {
     const tool = String(latest.payload.tool ?? "");
     let args: Record<string, unknown> = {};

@@ -68,6 +68,7 @@ func Build(history []modelruntime.Message) (Projection, error) {
 		return Projection{}, err
 	}
 	items := (DefaultPolicy{}).Resolve(exchanges)
+	deduplicateSkills(exchanges, items)
 	byAssistant := make(map[int][]int)
 	byResult := make(map[int]int)
 	stats := Stats{PolicyVersion: PolicyVersion, RecentFull: RecentFullToolExchanges, BeforeCharacters: messageCharacters(history)}

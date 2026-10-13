@@ -200,6 +200,35 @@ func (e *runExecutor) executeTurns(ctx context.Context, conversationID, runID uu
 	if len(budgets) > 0 {
 		config = budgets[0]
 	}
+	checkpoint, err := s.loadContextCheckpoint(ctx, conversationID, runID)
+	if err != nil {
+		s.finishExecutionError(ctx, runID, conversationID, err)
+		return
+	}
+	if checkpoint != nil {
+		_, err = s.db.Exec(ctx, `UPDATE runs SET context=context || jsonb_build_object('initial_checkpoint_id',$3::text,'checkpoint_policy',$4::text) WHERE id=$1 AND conversation_id=$2 AND status='running'`, runID, conversationID, checkpoint.ID, toolcontext.CompactionPolicyVersion)
+		if err != nil {
+			s.finishExecutionError(ctx, runID, conversationID, err)
+			return
+		}
+	}
+	requestIndex, contextRecoveries := 0, 0
+	compactionDisabled := false
+	buildRequest := func() (model.ModelRequest, toolcontext.Projection, toolcontext.Budget, error) {
+		projection, buildErr := toolcontext.Build(toolcontext.ApplyCheckpoint(request.Messages, checkpoint))
+		if buildErr != nil {
+			return model.ModelRequest{}, projection, toolcontext.Budget{}, buildErr
+		}
+		modelRequest := request
+		modelRequest.Messages = projection.Messages
+		taskState, stateErr := s.commandTaskContext(ctx, conversationID, runID)
+		if stateErr != nil {
+			return modelRequest, projection, toolcontext.Budget{}, stateErr
+		}
+		modelRequest.System += taskState
+		budget, budgetErr := estimator.Evaluate(modelRequest, config)
+		return modelRequest, projection, budget, budgetErr
+	}
 	for turn := 0; ; turn++ {
 		if ctx.Err() != nil {
 			s.finishContext(ctx, runID, conversationID)
@@ -207,23 +236,56 @@ func (e *runExecutor) executeTurns(ctx context.Context, conversationID, runID uu
 		}
 		// request retains the complete transcript; only this iteration's copy is
 		// projected. Never append new messages to a previously pruned history.
-		projection, err := toolcontext.Build(request.Messages)
+		modelRequest, projection, budget, err := buildRequest()
 		if err != nil {
 			s.finishExecutionError(ctx, runID, conversationID, fmt.Errorf("build tool context: %w", err))
 			return
 		}
-		modelRequest := request
-		modelRequest.Messages = projection.Messages
-		budget, err := estimator.Evaluate(modelRequest, config)
+		for attempt := 0; budget.ShouldCompact && !compactionDisabled && attempt < 2; attempt++ {
+			compactionBase := request
+			compactionBase.System = modelRequest.System
+			candidate, compactErr := e.compactContext(ctx, conversationID, runID, client, compactionBase, checkpoint, &estimator, config, budget, &requestIndex)
+			if compactErr != nil {
+				compactionDisabled = true // Open the circuit; keep the previous boundary.
+				s.event(ctx, runID, conversationID, "CONTEXT_COMPACTION_FAILED", map[string]any{"error_kind": string(modelruntime.ErrorKindOf(compactErr)), "prior_checkpoint_preserved": true})
+				break
+			}
+			checkpoint = candidate
+			modelRequest, projection, budget, err = buildRequest()
+			if err != nil {
+				break
+			}
+		}
+		if ctx.Err() != nil {
+			s.finishContext(ctx, runID, conversationID)
+			return
+		}
 		if err != nil {
 			s.finishExecutionError(ctx, runID, conversationID, err)
 			return
+		}
+		recoverContext := func(requestErr error, hasPartial bool) bool {
+			if hasPartial || ctx.Err() != nil || compactionDisabled || contextRecoveries >= 1 || modelruntime.ErrorKindOf(requestErr) != modelruntime.ErrorContextExceeded {
+				return false
+			}
+			contextRecoveries++
+			compactionBase := request
+			compactionBase.System = modelRequest.System
+			candidate, compactErr := e.compactContext(ctx, conversationID, runID, client, compactionBase, checkpoint, &estimator, config, budget, &requestIndex)
+			if compactErr != nil {
+				compactionDisabled = true
+				s.event(ctx, runID, conversationID, "CONTEXT_COMPACTION_FAILED", map[string]any{"error_kind": string(modelruntime.ErrorKindOf(compactErr)), "prior_checkpoint_preserved": true})
+				return false
+			}
+			checkpoint = candidate
+			return true
 		}
 		if budget.Exceeded {
 			s.finishExecutionError(ctx, runID, conversationID, errors.New("上下文超过已配置的预算；请缩短输入或调整模型预算。"))
 			return
 		}
-		requestIndex := turn + 1
+		requestIndex++
+		executionRequestIndex := requestIndex
 		if err = s.startModelRequest(ctx, runID, requestIndex, "execution", budget); err != nil {
 			s.finishExecutionError(ctx, runID, conversationID, err)
 			return
@@ -238,7 +300,7 @@ func (e *runExecutor) executeTurns(ctx context.Context, conversationID, runID uu
 			if usage == nil {
 				usage = &modelruntime.NormalizedUsage{Source: modelruntime.UsageMissing}
 			}
-			return s.finishModelRequest(ctx, runID, requestIndex, usage, requestErr)
+			return s.finishModelRequest(ctx, runID, executionRequestIndex, usage, requestErr)
 		}
 		// A historical read that is no longer visible to this model request does
 		// not grant permission to overwrite that file. Keep the state shared only
@@ -248,6 +310,9 @@ func (e *runExecutor) executeTurns(ctx context.Context, conversationID, runID uu
 		stream, err := client.Stream(ctx, modelRequest)
 		if err != nil {
 			_ = finishUsage(err)
+			if recoverContext(err, false) {
+				continue
+			}
 			s.finishExecutionError(ctx, runID, conversationID, err)
 			return
 		}
@@ -262,6 +327,7 @@ func (e *runExecutor) executeTurns(ctx context.Context, conversationID, runID uu
 		flushDelta := func() { flushDeltaWithContext(ctx) }
 		deltaTicker := time.NewTicker(75 * time.Millisecond)
 		callsByIndex := map[int]*model.ToolCall{}
+		var contextRetry bool
 		streamOpen := true
 		for streamOpen {
 			var event model.ModelEvent
@@ -285,6 +351,10 @@ func (e *runExecutor) executeTurns(ctx context.Context, conversationID, runID uu
 			if event.Err != nil {
 				_ = finishUsage(event.Err)
 				deltaTicker.Stop()
+				if recoverContext(event.Err, text.Len() > 0 || len(callsByIndex) > 0) {
+					contextRetry, streamOpen = true, false
+					continue
+				}
 				if ctx.Err() != nil {
 					cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 					flushDeltaWithContext(cleanupCtx)
@@ -326,6 +396,9 @@ func (e *runExecutor) executeTurns(ctx context.Context, conversationID, runID uu
 			}
 		}
 		deltaTicker.Stop()
+		if contextRetry {
+			continue
+		}
 		if ctx.Err() != nil {
 			_ = finishUsage(ctx.Err())
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -354,8 +427,9 @@ func (e *runExecutor) executeTurns(ctx context.Context, conversationID, runID uu
 			return
 		}
 		estimator.Observe(toolcontext.EstimateInput(modelRequest), usage)
+		contextRecoveries = 0
 		assistant := model.Message{Role: "assistant", Content: text.String(), ToolCalls: calls, RunID: runID.String()}
-		if err = s.appendMessage(ctx, conversationID, runID, assistant, "", nil); err != nil {
+		if assistant, err = s.appendMessageReceipt(ctx, conversationID, runID, assistant, "", nil); err != nil {
 			s.finishExecutionError(ctx, runID, conversationID, err)
 			return
 		}
@@ -415,7 +489,7 @@ func (e *runExecutor) executeTurns(ctx context.Context, conversationID, runID uu
 				return
 			}
 			toolMessage := model.Message{Role: "tool", Content: string(raw), ToolCallID: call.ID}
-			if err = s.appendMessage(ctx, conversationID, runID, toolMessage, call.Name, metadata); err != nil {
+			if toolMessage, err = s.appendMessageReceipt(ctx, conversationID, runID, toolMessage, call.Name, metadata); err != nil {
 				s.finishExecutionError(ctx, runID, conversationID, err)
 				return
 			}

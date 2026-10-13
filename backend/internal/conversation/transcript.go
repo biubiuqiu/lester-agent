@@ -100,7 +100,7 @@ func modelHistory(messages []Message) []model.Message {
 		if len(calls) == 0 {
 			calls = nil
 		}
-		item := model.Message{Role: message.Role, Content: messageContentForModel(message), ToolCalls: calls, ToolCallID: message.ToolCallID}
+		item := model.Message{Role: message.Role, Content: messageContentForModel(message), ToolCalls: calls, ToolCallID: message.ToolCallID, MessageID: message.ID.String(), Seq: message.Seq}
 		if message.RunID != nil {
 			item.RunID = message.RunID.String()
 		}
@@ -151,32 +151,43 @@ func assembledToolCalls(fragments map[int]*model.ToolCall) ([]model.ToolCall, er
 }
 
 func (s *Service) appendMessage(ctx context.Context, conversationID, runID uuid.UUID, message model.Message, toolName string, metadata map[string]any) error {
+	_, err := s.appendMessageReceipt(ctx, conversationID, runID, message, toolName, metadata)
+	return err
+}
+
+func (s *Service) appendMessageReceipt(ctx context.Context, conversationID, runID uuid.UUID, message model.Message, toolName string, metadata map[string]any) (model.Message, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
-		return err
+		return message, err
 	}
 	defer tx.Rollback(ctx)
 	// Use the same lock order as recovery. A superseded worker cannot write into
 	// a transcript after another owner has marked its run failed.
 	if _, err = tx.Exec(ctx, `SELECT id FROM conversations WHERE id=$1 FOR UPDATE`, conversationID); err != nil {
-		return err
+		return message, err
 	}
 	var status string
 	if err = tx.QueryRow(ctx, `SELECT status FROM runs WHERE id=$1 AND conversation_id=$2 FOR UPDATE`, runID, conversationID).Scan(&status); err != nil {
-		return err
+		return message, err
 	}
 	auditOnly := message.Role == "assistant" && len(message.ToolCalls) == 0 && metadata["incomplete"] == true
 	cancelObservation := message.Role == "tool" && message.ToolCallID != "" && metadata["cancelled"] == true
 	if status != "running" && !(status == "cancelling" && (auditOnly || cancelObservation)) {
-		return errors.New("run is no longer active")
+		return message, errors.New("run is no longer active")
 	}
-	if err = insertMessage(ctx, tx, conversationID, runID, message, toolName, metadata); err != nil {
-		return err
+	message, err = insertMessageReceipt(ctx, tx, conversationID, runID, message, toolName, metadata)
+	if err != nil {
+		return message, err
 	}
-	return tx.Commit(ctx)
+	return message, tx.Commit(ctx)
 }
 
 func insertMessage(ctx context.Context, tx pgx.Tx, conversationID, runID uuid.UUID, message model.Message, toolName string, metadata map[string]any) error {
+	_, err := insertMessageReceipt(ctx, tx, conversationID, runID, message, toolName, metadata)
+	return err
+}
+
+func insertMessageReceipt(ctx context.Context, tx pgx.Tx, conversationID, runID uuid.UUID, message model.Message, toolName string, metadata map[string]any) (model.Message, error) {
 	if metadata == nil {
 		metadata = map[string]any{}
 	}
@@ -186,15 +197,17 @@ func insertMessage(ctx context.Context, tx pgx.Tx, conversationID, runID uuid.UU
 	}
 	metadataJSON, err := json.Marshal(metadata)
 	if err != nil {
-		return err
+		return message, err
 	}
 	callsJSON, err := json.Marshal(calls)
 	if err != nil {
-		return err
+		return message, err
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO messages(conversation_id,run_id,role,content,metadata,tool_calls,tool_call_id,tool_name)
-		VALUES($1,$2,$3,$4,$5,$6,NULLIF($7,''),NULLIF($8,''))`, conversationID, runID, message.Role, message.Content, metadataJSON, callsJSON, message.ToolCallID, toolName)
-	return err
+	var id uuid.UUID
+	err = tx.QueryRow(ctx, `INSERT INTO messages(conversation_id,run_id,role,content,metadata,tool_calls,tool_call_id,tool_name)
+		VALUES($1,$2,$3,$4,$5,$6,NULLIF($7,''),NULLIF($8,'')) RETURNING id,seq`, conversationID, runID, message.Role, message.Content, metadataJSON, callsJSON, message.ToolCallID, toolName).Scan(&id, &message.Seq)
+	message.MessageID, message.RunID = id.String(), runID.String()
+	return message, err
 }
 
 func (s *Service) saveRunContext(ctx context.Context, runID uuid.UUID, messages []Message, request model.ModelRequest) error {
