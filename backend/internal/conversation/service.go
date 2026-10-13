@@ -227,11 +227,30 @@ func (s *Service) Get(ctx context.Context, workspaceID, id uuid.UUID) (Conversat
 	return c, messages, rows.Err()
 }
 func (s *Service) UpdateModel(ctx context.Context, workspaceID, id, modelID uuid.UUID) error {
-	tag, err := s.db.Exec(ctx, `UPDATE conversations SET model_deployment_id=$3,updated_at=now() WHERE workspace_id=$1 AND id=$2 AND EXISTS(SELECT 1 FROM model_deployments WHERE id=$3 AND (workspace_id=$1 OR workspace_id=$4) AND enabled)`, workspaceID, id, modelID, model.SystemWorkspaceID)
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	var locked uuid.UUID
+	if err = tx.QueryRow(ctx, `SELECT id FROM conversations WHERE workspace_id=$1 AND id=$2 FOR UPDATE`, workspaceID, id).Scan(&locked); err != nil {
+		return errors.New("conversation not found")
+	}
+	var active bool
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM runs WHERE conversation_id=$1 AND status IN ('running','cancelling'))`, id).Scan(&active); err != nil {
+		return err
+	}
+	if active {
+		return ErrRunInProgress
+	}
+	tag, err := tx.Exec(ctx, `UPDATE conversations SET model_deployment_id=$3,updated_at=now() WHERE workspace_id=$1 AND id=$2 AND EXISTS(SELECT 1 FROM model_deployments WHERE id=$3 AND (workspace_id=$1 OR workspace_id=$4) AND enabled)`, workspaceID, id, modelID, model.SystemWorkspaceID)
 	if err == nil && tag.RowsAffected() == 0 {
 		return errors.New("conversation or model not found")
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 func (s *Service) Send(ctx context.Context, workspaceID, userID, id uuid.UUID, content string, attachmentIDs []uuid.UUID, contextGroups ...[]uuid.UUID) (uuid.UUID, error) {
 	var contextIDs []uuid.UUID
@@ -242,6 +261,14 @@ func (s *Service) Send(ctx context.Context, workspaceID, userID, id uuid.UUID, c
 }
 
 func (s *Service) SendWithReferences(ctx context.Context, workspaceID, userID, id uuid.UUID, content string, attachmentIDs, contextIDs []uuid.UUID, selected []reference.Input) (uuid.UUID, error) {
+	return s.SendSubmission(ctx, workspaceID, userID, id, uuid.Nil, content, attachmentIDs, contextIDs, selected)
+}
+
+func (s *Service) SendSubmission(ctx context.Context, workspaceID, userID, id, submissionID uuid.UUID, content string, attachmentIDs, contextIDs []uuid.UUID, selected []reference.Input) (uuid.UUID, error) {
+	digest := submissionDigest(content, attachmentIDs, contextIDs, selected)
+	if accepted, found, err := s.acceptedSubmission(ctx, workspaceID, userID, id, submissionID, digest); err != nil || found {
+		return accepted, err
+	}
 	if len(contextIDs)+len(selected) > reference.MaxReferences {
 		return uuid.Nil, errors.New("每条消息最多引用 8 个对象")
 	}
@@ -265,6 +292,13 @@ func (s *Service) SendWithReferences(ctx context.Context, workspaceID, userID, i
 	// connection, not a pool slot or a long-lived transaction.
 	guard, err := s.acquireRun(ctx, workspaceID, id)
 	if err != nil {
+		// A concurrent identical request may have committed while acquiring the
+		// guard. Return its identity, without scheduling another executor.
+		if errors.Is(err, ErrRunInProgress) {
+			if accepted, found, lookupErr := s.acceptedSubmission(ctx, workspaceID, userID, id, submissionID, digest); lookupErr != nil || found {
+				return accepted, lookupErr
+			}
+		}
 		return uuid.Nil, err
 	}
 	handedOff := false
@@ -273,6 +307,9 @@ func (s *Service) SendWithReferences(ctx context.Context, workspaceID, userID, i
 			guard.Close()
 		}
 	}()
+	if accepted, found, err := s.acceptedSubmission(ctx, workspaceID, userID, id, submissionID, digest); err != nil || found {
+		return accepted, err
+	}
 	if err = s.recoverInterruptedRuns(ctx, id); err != nil {
 		return uuid.Nil, err
 	}
@@ -282,6 +319,10 @@ func (s *Service) SendWithReferences(ctx context.Context, workspaceID, userID, i
 		return uuid.Nil, err
 	}
 	defer tx.Rollback(ctx)
+	var acceptedModel *uuid.UUID
+	if err = tx.QueryRow(ctx, `SELECT model_deployment_id FROM conversations WHERE workspace_id=$1 AND id=$2 FOR UPDATE`, workspaceID, id).Scan(&acceptedModel); err != nil {
+		return uuid.Nil, errors.New("conversation not found")
+	}
 	attachments := []Attachment{}
 	if len(attachmentIDs) > 0 {
 		rows, queryErr := tx.Query(ctx, `SELECT id,conversation_id,original_name,stored_path,content_type,size_bytes,created_at FROM attachments WHERE conversation_id=$1 AND uploaded_by=$2 AND id=ANY($3) ORDER BY created_at,id`, id, userID, attachmentIDs)
@@ -317,7 +358,11 @@ func (s *Service) SendWithReferences(ctx context.Context, workspaceID, userID, i
 		return uuid.Nil, err
 	}
 	metadata, _ := json.Marshal(map[string]any{"attachments": attachments, "contexts": contexts, "conversations": conversations, "skills": selectedSkills})
-	if err = tx.QueryRow(ctx, `INSERT INTO runs(conversation_id,status) VALUES($1,'running') RETURNING id`, id).Scan(&runID); err != nil {
+	var submission *uuid.UUID
+	if submissionID != uuid.Nil {
+		submission = &submissionID
+	}
+	if err = tx.QueryRow(ctx, `INSERT INTO runs(conversation_id,status,model_deployment_id,submission_id,submitted_by,submission_sha256) VALUES($1,'running',$2,$3,$4,$5) RETURNING id`, id, acceptedModel, submission, userID, digest).Scan(&runID); err != nil {
 		return uuid.Nil, err
 	}
 	var messageID uuid.UUID
@@ -710,7 +755,9 @@ func (s *Service) SuspendIdle(ctx context.Context, idle time.Duration) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			rows, err := s.db.Query(ctx, `SELECT id,provider_ref FROM sandboxes WHERE status='running' AND last_active_at<now()-$1::interval`, fmt.Sprintf("%f seconds", idle.Seconds()))
+			rows, err := s.db.Query(ctx, `SELECT s.id,s.provider_ref FROM sandboxes s WHERE s.status='running' AND s.last_active_at<now()-$1::interval
+			AND NOT EXISTS(SELECT 1 FROM runs r JOIN conversations c ON c.id=r.conversation_id WHERE c.workspace_id=s.workspace_id AND c.created_by=s.user_id AND r.status IN ('running','cancelling'))
+			AND NOT EXISTS(SELECT 1 FROM command_tasks t WHERE t.sandbox_ref=s.provider_ref AND t.status IN ('starting','running','stopping','unknown'))`, fmt.Sprintf("%f seconds", idle.Seconds()))
 			if err != nil {
 				continue
 			}
@@ -757,6 +804,7 @@ func (s *Service) MonitorSandboxes(ctx context.Context, interval time.Duration) 
 				_, _ = s.db.Exec(ctx, `UPDATE sandboxes SET status=$2,last_error=NULL,last_checked_at=now() WHERE id=$1`, id, actual.Status)
 			}
 			rows.Close()
+			s.reconcileCommandTasks(ctx)
 		}
 	}
 }

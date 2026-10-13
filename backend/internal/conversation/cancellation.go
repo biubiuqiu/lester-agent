@@ -147,6 +147,9 @@ func (s *Service) finishCancelledRun(ctx context.Context, runID, conversationID 
 	if _, err = tx.Exec(ctx, `UPDATE runs SET status='cancelled',completed_at=now() WHERE id=$1`, runID); err != nil {
 		return false, err
 	}
+	if _, err = tx.Exec(ctx, `UPDATE model_request_usage SET status='cancelled',error_kind='cancelled',usage=COALESCE(usage,'{"source":"missing"}'::jsonb),finished_at=now() WHERE run_id=$1 AND status='started'`, runID); err != nil {
+		return false, err
+	}
 	if err = eventlog.Append(ctx, tx, runID, conversationID, "RUN_CANCELLED", map[string]any{"reason": "user_requested"}); err != nil {
 		return false, err
 	}

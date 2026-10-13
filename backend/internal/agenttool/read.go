@@ -2,7 +2,9 @@ package agenttool
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -68,21 +70,33 @@ func (Read) Execute(ctx context.Context, environment Environment, raw json.RawMe
 		if len(data) > maxImageBytes {
 			return nil, fmt.Errorf("image file exceeds the %d MiB read limit", maxImageBytes>>20)
 		}
-		return map[string]any{
-			"content": fmt.Sprintf("Read image file %q (%s, %d bytes). The image is attached in the images field.", filePath, mediaType, len(data)),
+		digest := sha256.Sum256(data)
+		result := map[string]any{
+			"sha256":       hex.EncodeToString(digest[:]),
+			"read_receipt": ReadReceipt{Path: filePath, SHA256: hex.EncodeToString(digest[:])},
+			"content":      fmt.Sprintf("Read image file %q (%s, %d bytes). The image is attached in the images field.", filePath, mediaType, len(data)),
 			"images": []map[string]any{{
 				"path":       filePath,
 				"media_type": mediaType,
 				"encoding":   "base64",
 				"data":       base64.StdEncoding.EncodeToString(data),
 			}},
-		}, nil
+		}
+		environment.Files.ObserveRead(result)
+		return result, nil
 	}
 	data, err := environment.Sandboxes.ReadFileLines(ctx, environment.SandboxID, environment.WorkDir, filePath, offset, limit)
 	if err != nil {
 		return nil, err
 	}
-	return numberedLinesResult(data), nil
+	if !validSHA(data.SHA256) {
+		return nil, errors.New("file reader did not confirm a content digest; update the Computer runtime")
+	}
+	result := numberedLinesResult(data)
+	result["sha256"] = data.SHA256
+	result["read_receipt"] = ReadReceipt{Path: filePath, SHA256: data.SHA256, StartLine: data.StartLine, LineCount: result["line_count"].(int), TotalLines: data.TotalLines, Complete: data.StartLine == 1 && result["line_count"] == data.TotalLines && result["truncated"] == false, EndsWithNewline: data.EndsWithNewline}
+	environment.Files.ObserveRead(result)
+	return result, nil
 }
 
 func imageMediaType(filePath string) string {

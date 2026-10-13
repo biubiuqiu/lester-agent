@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	pathpkg "path"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -74,7 +75,7 @@ func (p *DockerProvider) Create(ctx context.Context, opts CreateOptions) (*Sandb
 		return nil, fmt.Errorf("create docker workspace volume: %w: %s", createErr, output)
 	}
 	if _, inspectErr := p.Inspect(ctx, opts.ID); errors.Is(inspectErr, ErrSandboxNotFound) {
-		cmd := exec.CommandContext(ctx, "docker", "create", "--name", name, "--network", "none", "--cpus", cpus, "--memory", memory, "--pids-limit", "256", "--security-opt", "no-new-privileges", "-v", volume+":/workspace", "-w", "/workspace", image, "sleep", "infinity")
+		cmd := exec.CommandContext(ctx, "docker", "create", "--init", "--name", name, "--network", "none", "--cpus", cpus, "--memory", memory, "--pids-limit", "256", "--security-opt", "no-new-privileges", "-v", volume+":/workspace", "-w", "/workspace", image, "sleep", "infinity")
 		if output, createErr := cmd.CombinedOutput(); createErr != nil {
 			return nil, fmt.Errorf("create docker sandbox: %w: %s", createErr, output)
 		}
@@ -169,8 +170,16 @@ func (p *DockerProvider) Exec(ctx context.Context, id string, command Command) (
 	if err != nil {
 		return nil, err
 	}
-	if err = exec.CommandContext(ctx, "docker", "exec", name, "mkdir", "-p", workDir).Run(); err != nil {
-		return nil, fmt.Errorf("prepare sandbox work directory: %w", err)
+	probe := exec.CommandContext(ctx, "docker", "exec", name, "sh", "-c", `mkdir -p -- "$1" || exit 1
+command -v setsid >/dev/null 2>&1 || { printf 'setsid is required for cancellable sandbox commands\n' >&2; exit 1; }
+if command -v bash >/dev/null 2>&1; then printf bash; else printf sh; fi`, "lester-command", workDir)
+	probeOutput, err := probe.Output()
+	if err != nil {
+		return nil, fmt.Errorf("prepare sandbox command: %w", err)
+	}
+	shell := string(probeOutput)
+	if shell != "bash" && shell != "sh" {
+		return nil, errors.New("sandbox returned an invalid command shell")
 	}
 	timeoutSeconds := command.TimeoutSeconds
 	if timeoutSeconds <= 0 {
@@ -183,21 +192,50 @@ func (p *DockerProvider) Exec(ctx context.Context, id string, command Command) (
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	start := time.Now()
-	cmd := exec.CommandContext(runCtx, "docker", "exec", "-w", workDir, name, "sh", "-lc", command.Command)
+	pidFile := "/tmp/.lester-command-" + uuid.NewString() + ".pid"
+	cmd := exec.CommandContext(runCtx, "docker", "exec", "-w", workDir, name, "setsid", "sh", "-c", dockerCommandStart, "lester-command", pidFile, shell, command.Command)
+	cmd.WaitDelay = time.Second
 	stdout, stderr := newBoundedCapture(commandCaptureLimit), newBoundedCapture(commandCaptureLimit)
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	err = cmd.Run()
-	exitCode := 0
-	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			exitCode = exitErr.ExitCode()
-		} else {
-			return nil, err
+	status := "exited"
+	var cleanupConfirmed *bool
+	if runCtx.Err() != nil {
+		status = "cancelled"
+		if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
+			status = "timed_out"
+		}
+		// Cancelling docker exec only detaches its CLI. Stop the independently
+		// identified remote process group before forgetting the ownership marker.
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		cleanupErr := exec.CommandContext(cleanupCtx, "docker", "exec", name, "sh", "-c", dockerCommandStop, "lester-command", pidFile).Run()
+		cleanupCancel()
+		confirmed := cleanupErr == nil
+		cleanupConfirmed = &confirmed
+		if cleanupErr != nil {
+			_, _ = stderr.Write([]byte("\nCould not confirm remote command cleanup: " + cleanupErr.Error()))
 		}
 	}
-	return &CommandResult{ExitCode: exitCode, Stdout: stdout.String(), Stderr: stderr.String(), DurationMS: time.Since(start).Milliseconds(), StdoutTruncated: stdout.Truncated(), StderrTruncated: stderr.Truncated(), StdoutOmittedBytes: stdout.OmittedBytes(), StderrOmittedBytes: stderr.OmittedBytes()}, nil
+	readCtx, readCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	exitOutput, readErr := exec.CommandContext(readCtx, "docker", "exec", name, "sh", "-c", dockerCommandReadExit, "lester-command", pidFile).Output()
+	readCancel()
+	exitCode, parseErr := strconv.Atoi(string(exitOutput))
+	exitKnown := readErr == nil && parseErr == nil && exitCode >= 0 && exitCode <= 255
+	if !exitKnown {
+		exitCode = -1
+		if status == "exited" {
+			status = "unknown"
+		}
+	}
+	result := &CommandResult{ExitCode: exitCode, ExitCodeKnown: exitKnown, Shell: shell, Status: status, CleanupConfirmed: cleanupConfirmed, Stdout: stdout.String(), Stderr: stderr.String(), DurationMS: time.Since(start).Milliseconds(), StdoutTruncated: stdout.Truncated(), StderrTruncated: stderr.Truncated(), StdoutOmittedBytes: stdout.OmittedBytes(), StderrOmittedBytes: stderr.OmittedBytes()}
+	if status == "unknown" {
+		if err == nil {
+			err = errors.New("sandbox command completion could not be confirmed")
+		}
+		return result, err
+	}
+	return result, nil
 }
 
 func (p *DockerProvider) ListFiles(ctx context.Context, id, workDir, filePath string) ([]FileEntry, error) {
@@ -253,6 +291,29 @@ func (p *DockerProvider) WriteFile(ctx context.Context, id, workDir, filePath st
 	}
 	_, err = p.runToolbox(ctx, id, "write", base, target, data)
 	return err
+}
+
+func (p *DockerProvider) WriteFileVersioned(ctx context.Context, id, workDir, filePath string, request FileWriteRequest) (*FileWriteResult, error) {
+	if len(request.Content) > 25<<20 {
+		return nil, errors.New("file exceeds the 25 MiB write limit")
+	}
+	base, target, err := scopedPath(workDir, filePath)
+	if err != nil {
+		return nil, err
+	}
+	input, err := json.Marshal(request)
+	if err != nil {
+		return nil, err
+	}
+	output, err := p.runToolbox(ctx, id, "write-checked", base, target, input)
+	if err != nil {
+		return nil, err
+	}
+	var result FileWriteResult
+	if err = json.Unmarshal(output, &result); err != nil {
+		return nil, fmt.Errorf("decode checked write result: %w", err)
+	}
+	return &result, nil
 }
 
 func (p *DockerProvider) EditFile(ctx context.Context, id, workDir, filePath string, request FileEditRequest) (*FileEditResult, error) {
@@ -342,12 +403,24 @@ func (p *DockerProvider) ensureToolbox(ctx context.Context, id string) error {
 	if output, mkdirErr := exec.CommandContext(ctx, "docker", "exec", "-u", "0", name, "mkdir", "-p", pathpkg.Dir(toolboxContainerPath)).CombinedOutput(); mkdirErr != nil {
 		return fmt.Errorf("prepare lester-toolbox directory: %w: %s", mkdirErr, output)
 	}
-	destination := name + ":" + toolboxContainerPath
+	// A managed task may still be executing this binary after Sandbox Service
+	// restarts. Replacing its inode atomically avoids ETXTBSY and leaves the
+	// existing supervisor alive while new requests use the updated helper.
+	staged := toolboxContainerPath + ".install-" + uuid.NewString()
+	defer func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		_ = exec.CommandContext(cleanupCtx, "docker", "exec", "-u", "0", name, "rm", "-f", "--", staged).Run()
+	}()
+	destination := name + ":" + staged
 	if output, copyErr := exec.CommandContext(ctx, "docker", "cp", source, destination).CombinedOutput(); copyErr != nil {
 		return fmt.Errorf("install lester-toolbox: %w: %s", copyErr, output)
 	}
-	if output, chmodErr := exec.CommandContext(ctx, "docker", "exec", "-u", "0", name, "chmod", "0755", toolboxContainerPath).CombinedOutput(); chmodErr != nil {
+	if output, chmodErr := exec.CommandContext(ctx, "docker", "exec", "-u", "0", name, "chmod", "0755", staged).CombinedOutput(); chmodErr != nil {
 		return fmt.Errorf("prepare lester-toolbox: %w: %s", chmodErr, output)
+	}
+	if output, replaceErr := exec.CommandContext(ctx, "docker", "exec", "-u", "0", name, "mv", "-f", "--", staged, toolboxContainerPath).CombinedOutput(); replaceErr != nil {
+		return fmt.Errorf("replace lester-toolbox: %w: %s", replaceErr, output)
 	}
 	p.toolboxInstalled[id] = true
 	return nil

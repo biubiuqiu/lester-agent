@@ -1,6 +1,9 @@
 import { API } from "./api-origin";
 import { authenticatedFetch } from "./auth-client";
 export { API } from "./api-origin";
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) { super(message); }
+}
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await authenticatedFetch(API + path, {
@@ -46,7 +49,7 @@ export function conversationFilePreviewURL(conversationId: string, path: string)
 async function parseResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(body.error || response.statusText);
+    throw new ApiError(body.error || response.statusText, response.status);
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
@@ -60,7 +63,8 @@ export type UserProfile = { user_id: string; workspace_id: string; email: string
 export type AvatarKey = "forest" | "ocean" | "clay" | "lilac" | "amber" | "graphite";
 export type Attachment = { id: string; conversation_id: string; original_name: string; stored_path: string; content_type: string; size_bytes: number; created_at: string };
 export type Message = { id: string; role: string; content: string; metadata?: { attachments?: Attachment[]; contexts?: ContextEntry[]; conversations?: ConversationReference[]; skills?: SkillReference[] }; created_at: string };
-export type Deployment = { id: string; connection_id: string; name: string; model_id: string; is_default: boolean; enabled: boolean; shared: boolean };
+export type Deployment = { id: string; connection_id: string; name: string; model_id: string; is_default: boolean; enabled: boolean; shared: boolean; context_window?: number; output_reserve?: number; policy_window?: number };
+export type ModelVerification = { ok: boolean; verified: boolean; status: string; capability_scope: "text_call_only"; deployment_id: string; latency_ms: number; error_kind?: string; retryable?: boolean };
 export type Skill = { id: string; slug: string; name: string; description: string; version: string; source: string; size_bytes: number; installed_at?: string };
 export type FileEntry = { name: string; path: string; is_dir: boolean; size: number; modified_at: string };
 export type Deliverable = { id: string; conversation_id: string; run_id: string; title: string; summary: string; entry_path: string; kind: "html" | "markdown"; content_sha256: string; created_at: string; updated_at: string };

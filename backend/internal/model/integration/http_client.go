@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -21,7 +20,7 @@ type httpClient struct {
 }
 
 func (c *httpClient) Capabilities(context.Context, string) (modelruntime.Capabilities, error) {
-	return modelruntime.Capabilities{Streaming: true, Tools: true, Vision: true, StructuredOutput: c.protocol == "openai", TokenCounting: true}, nil
+	return modelruntime.Capabilities{Streaming: true, Tools: true, Vision: true}, nil
 }
 
 func (c *httpClient) Generate(ctx context.Context, request modelruntime.Request) (*modelruntime.Response, error) {
@@ -29,19 +28,23 @@ func (c *httpClient) Generate(ctx context.Context, request modelruntime.Request)
 	if err != nil {
 		return nil, err
 	}
-	result := &modelruntime.Response{Usage: map[string]int{}}
+	result := &modelruntime.Response{NormalizedUsage: (&usageAccumulator{provider: c.protocol}).snapshot()}
+	var calls modelruntime.ToolCallAssembler
 	for event := range events {
 		if event.Err != nil {
 			return nil, event.Err
 		}
 		result.Content += event.Delta
-		if event.ToolCall != nil {
-			result.ToolCalls = append(result.ToolCalls, *event.ToolCall)
-		}
-		for key, value := range event.Usage {
-			result.Usage[key] += value
+		calls.AddEvent(event)
+		if event.NormalizedUsage != nil {
+			result.NormalizedUsage = event.NormalizedUsage.Clone()
+			result.Usage = result.NormalizedUsage.Raw
 		}
 	}
+	if ctx.Err() != nil {
+		return nil, providerTransportError(ctx, ctx.Err())
+	}
+	result.ToolCalls = calls.Calls()
 	return result, nil
 }
 
@@ -53,7 +56,7 @@ func (c *httpClient) Stream(ctx context.Context, request modelruntime.Request) (
 	body, _ := json.Marshal(payload)
 	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return nil, providerProtocolError(err)
 	}
 	httpRequest.Header.Set("Content-Type", "application/json")
 	if c.protocol == "anthropic" {
@@ -70,12 +73,12 @@ func (c *httpClient) Stream(ctx context.Context, request modelruntime.Request) (
 	client := providerHTTPClient(c.client)
 	response, err := client.Do(httpRequest)
 	if err != nil {
-		return nil, err
+		return nil, providerTransportError(ctx, err)
 	}
 	if response.StatusCode >= 300 {
 		defer response.Body.Close()
 		data, _ := io.ReadAll(io.LimitReader(response.Body, 1<<20))
-		return nil, fmt.Errorf("model provider %s: %s", response.Status, string(data))
+		return nil, providerResponseError(response.StatusCode, data)
 	}
 	events := make(chan modelruntime.Event, 16)
 	go c.readSSE(ctx, response.Body, events)
@@ -97,7 +100,12 @@ func providerHTTPClient(client *http.Client) *http.Client {
 func (c *httpClient) readSSE(ctx context.Context, body io.ReadCloser, output chan<- modelruntime.Event) {
 	defer close(output)
 	defer body.Close()
+	stopClose := context.AfterFunc(ctx, func() { _ = body.Close() })
+	defer stopClose()
 	emit := func(event modelruntime.Event) bool {
+		if ctx.Err() != nil {
+			return false
+		}
 		select {
 		case output <- event:
 			return true
@@ -105,78 +113,111 @@ func (c *httpClient) readSSE(ctx context.Context, body io.ReadCloser, output cha
 			return false
 		}
 	}
+	usage := usageAccumulator{provider: c.protocol}
+	completed := func() bool {
+		snapshot := usage.snapshot()
+		return emit(modelruntime.Event{Type: "MODEL_COMPLETED", Usage: snapshot.Raw, NormalizedUsage: snapshot})
+	}
 	finished := false
-	scanner := bufio.NewScanner(body)
-	scanner.Buffer(make([]byte, 64*1024), 2<<20)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if !strings.HasPrefix(line, "data:") {
-			continue
-		}
-		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+	ended := false
+	dispatch := func(data string) bool {
+		data = strings.TrimSpace(data)
 		if data == "[DONE]" {
-			emit(modelruntime.Event{Type: "MODEL_COMPLETED"})
-			return
+			ended = true
+			completed()
+			return false
 		}
 		var raw map[string]any
-		if json.Unmarshal([]byte(data), &raw) != nil {
-			continue
+		if err := json.Unmarshal([]byte(data), &raw); err != nil || raw == nil {
+			emit(modelruntime.Event{Type: "RUN_FAILED", Err: providerProtocolError(err)})
+			return false
 		}
 		if c.protocol == "anthropic" {
 			if raw["type"] == "message_stop" {
-				emit(modelruntime.Event{Type: "MODEL_COMPLETED"})
-				return
+				ended = true
+				completed()
+				return false
 			}
 			if raw["type"] == "error" {
-				emit(modelruntime.Event{Err: fmt.Errorf("model provider stream error: %v", raw["error"])})
-				return
+				emit(modelruntime.Event{Type: "RUN_FAILED", Err: providerError(0, raw)})
+				return false
 			}
-			if !emit(parseAnthropic(raw)) {
-				return
-			}
-		} else {
-			if providerError, ok := raw["error"]; ok {
-				emit(modelruntime.Event{Err: fmt.Errorf("model provider stream error: %v", providerError)})
-				return
-			}
-			choices, _ := raw["choices"].([]any)
-			if len(choices) > 0 {
-				choice, _ := choices[0].(map[string]any)
-				if valueString(choice["finish_reason"]) != "" {
-					finished = true
+			event := parseAnthropic(raw)
+			if raw["type"] == "message_start" {
+				message, _ := raw["message"].(map[string]any)
+				if usage.observe(message["usage"]) {
+					event.NormalizedUsage = usage.snapshot()
+					event.Usage = event.NormalizedUsage.Raw
 				}
+			} else if usage.observe(raw["usage"]) {
+				event.NormalizedUsage = usage.snapshot()
+				event.Usage = event.NormalizedUsage.Raw
 			}
-			for _, event := range parseOpenAIEvents(raw) {
-				if !emit(event) {
-					return
-				}
+			return emit(event)
+		}
+		if _, ok := raw["error"]; ok {
+			emit(modelruntime.Event{Type: "RUN_FAILED", Err: providerError(0, raw)})
+			return false
+		}
+		choices, _ := raw["choices"].([]any)
+		if len(choices) > 0 {
+			choice, _ := choices[0].(map[string]any)
+			if valueString(choice["finish_reason"]) != "" {
+				finished = true
 			}
 		}
+		event := parseOpenAI(raw)
+		if usage.observe(raw["usage"]) {
+			event.NormalizedUsage = usage.snapshot()
+			event.Usage = event.NormalizedUsage.Raw
+		}
+		return emit(event)
+	}
+	scanner := bufio.NewScanner(body)
+	scanner.Buffer(make([]byte, 64*1024), 2<<20)
+	var dataLines []string
+	dataBytes := 0
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			if len(dataLines) > 0 && !dispatch(strings.Join(dataLines, "\n")) {
+				return
+			}
+			dataLines, dataBytes = nil, 0
+			continue
+		}
+		if strings.HasPrefix(line, "data:") {
+			data := strings.TrimPrefix(strings.TrimPrefix(line, "data:"), " ")
+			dataBytes += len(data) + 1
+			if dataBytes > 2<<20 {
+				emit(modelruntime.Event{Type: "RUN_FAILED", Err: providerProtocolError(nil)})
+				return
+			}
+			dataLines = append(dataLines, data)
+		}
+	}
+	if ctx.Err() != nil {
+		// A cancelled consumer may no longer drain; never block or report a
+		// successful completion merely because a finish_reason arrived earlier.
+		select {
+		case output <- modelruntime.Event{Type: "RUN_FAILED", Err: providerTransportError(ctx, ctx.Err())}:
+		default:
+		}
+		return
 	}
 	if err := scanner.Err(); err != nil {
-		emit(modelruntime.Event{Type: "RUN_FAILED", Err: err})
-	} else if !finished {
-		emit(modelruntime.Event{Type: "RUN_FAILED", Err: io.ErrUnexpectedEOF})
+		emit(modelruntime.Event{Type: "RUN_FAILED", Err: providerTransportError(ctx, err)})
+		return
 	}
-}
-
-// A single OpenAI SSE frame can contain deltas for multiple tool calls.
-func parseOpenAIEvents(raw map[string]any) []modelruntime.Event {
-	first := parseOpenAI(raw)
-	events := []modelruntime.Event{first}
-	choices, _ := raw["choices"].([]any)
-	if len(choices) == 0 {
-		return events
+	if len(dataLines) > 0 && !dispatch(strings.Join(dataLines, "\n")) {
+		return
 	}
-	choice, _ := choices[0].(map[string]any)
-	delta, _ := choice["delta"].(map[string]any)
-	calls, _ := delta["tool_calls"].([]any)
-	for index := 1; index < len(calls); index++ {
-		call, _ := calls[index].(map[string]any)
-		function, _ := call["function"].(map[string]any)
-		events = append(events, modelruntime.Event{Type: "MODEL_DELTA", ToolCall: &modelruntime.ToolCall{ID: valueString(call["id"]), Name: valueString(function["name"]), Arguments: json.RawMessage(valueString(function["arguments"])), Index: valueInt(call["index"])}})
+	if finished && !ended {
+		// Some compatible providers close after finish_reason without [DONE].
+		completed()
+	} else if !ended {
+		emit(modelruntime.Event{Type: "RUN_FAILED", Err: providerTransportError(ctx, io.ErrUnexpectedEOF)})
 	}
-	return events
 }
 
 func openAIPayload(request modelruntime.Request) map[string]any {
@@ -258,7 +299,7 @@ func anthropicPayload(request modelruntime.Request, mode string) map[string]any 
 		}
 		messages = append(messages, map[string]any{"role": message.Role, "content": message.Content})
 	}
-	payload := map[string]any{"model": request.Model, "system": request.System, "messages": messages, "max_tokens": max(request.MaxTokens, 4096), "stream": true}
+	payload := map[string]any{"model": request.Model, "system": request.System, "messages": messages, "max_tokens": anthropicMaxTokens(request.MaxTokens), "stream": true}
 	if mode == "vertex" {
 		delete(payload, "model")
 		payload["anthropic_version"] = "vertex-2023-10-16"
@@ -275,6 +316,11 @@ func anthropicPayload(request modelruntime.Request, mode string) map[string]any 
 
 func parseOpenAI(raw map[string]any) modelruntime.Event {
 	event := modelruntime.Event{Type: "MODEL_DELTA"}
+	usage := usageAccumulator{provider: "openai"}
+	if usage.observe(raw["usage"]) {
+		event.NormalizedUsage = usage.snapshot()
+		event.Usage = event.NormalizedUsage.Raw
+	}
 	choices, _ := raw["choices"].([]any)
 	if len(choices) == 0 {
 		return event
@@ -283,15 +329,28 @@ func parseOpenAI(raw map[string]any) modelruntime.Event {
 	delta, _ := choice["delta"].(map[string]any)
 	event.Delta, _ = delta["content"].(string)
 	if calls, _ := delta["tool_calls"].([]any); len(calls) > 0 {
-		call, _ := calls[0].(map[string]any)
-		function, _ := call["function"].(map[string]any)
-		event.ToolCall = &modelruntime.ToolCall{ID: valueString(call["id"]), Name: valueString(function["name"]), Arguments: json.RawMessage(valueString(function["arguments"])), Index: valueInt(call["index"])}
+		for _, rawCall := range calls {
+			call, _ := rawCall.(map[string]any)
+			function, _ := call["function"].(map[string]any)
+			event.ToolCalls = append(event.ToolCalls, &modelruntime.ToolCall{ID: valueString(call["id"]), Name: valueString(function["name"]), Arguments: json.RawMessage(valueString(function["arguments"])), Index: valueInt(call["index"])})
+		}
+		event.ToolCall = event.ToolCalls[0]
 	}
 	return event
 }
 
 func parseAnthropic(raw map[string]any) modelruntime.Event {
 	event := modelruntime.Event{Type: "MODEL_DELTA"}
+	usage := usageAccumulator{provider: "anthropic"}
+	value := raw["usage"]
+	if raw["type"] == "message_start" {
+		message, _ := raw["message"].(map[string]any)
+		value = message["usage"]
+	}
+	if usage.observe(value) {
+		event.NormalizedUsage = usage.snapshot()
+		event.Usage = event.NormalizedUsage.Raw
+	}
 	delta, _ := raw["delta"].(map[string]any)
 	event.Delta = valueString(delta["text"])
 	index := valueInt(raw["index"])
@@ -306,6 +365,14 @@ func parseAnthropic(raw map[string]any) modelruntime.Event {
 		event.ToolCall = &modelruntime.ToolCall{Arguments: json.RawMessage(valueString(delta["partial_json"])), Index: index}
 	}
 	return event
+}
+
+func anthropicMaxTokens(explicit int) int {
+	if explicit > 0 {
+		return explicit
+	}
+	// This protocol requires max_tokens. Other adapters omit an unset limit.
+	return 4096
 }
 
 func valueString(value any) string { result, _ := value.(string); return result }

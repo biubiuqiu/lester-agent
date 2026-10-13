@@ -1,4 +1,6 @@
 import type { ContextReference } from "./api";
+import { clearAttachmentUploads } from "./attachment-uploads";
+import { clearMessageSubmissions } from "./message-submission";
 
 // Tab-local UI state, never part of the model transcript or shared across accounts.
 export type ViewState = {
@@ -78,6 +80,8 @@ export function clearViewState() {
   // Unmount/pagehide callbacks after logout must not write the cleared draft back.
   writeScope = null;
   cache.clear();
+  clearAttachmentUploads();
+  clearMessageSubmissions();
   if (typeof window === "undefined") return;
   try { for (const key of Object.keys(window.sessionStorage)) if (key.startsWith(prefix)) window.sessionStorage.removeItem(key); } catch { /* best effort */ }
 }

@@ -165,7 +165,9 @@ func (s *Service) appendMessage(ctx context.Context, conversationID, runID uuid.
 	if err = tx.QueryRow(ctx, `SELECT status FROM runs WHERE id=$1 AND conversation_id=$2 FOR UPDATE`, runID, conversationID).Scan(&status); err != nil {
 		return err
 	}
-	if status != "running" {
+	auditOnly := message.Role == "assistant" && len(message.ToolCalls) == 0 && metadata["incomplete"] == true
+	cancelObservation := message.Role == "tool" && message.ToolCallID != "" && metadata["cancelled"] == true
+	if status != "running" && !(status == "cancelling" && (auditOnly || cancelObservation)) {
 		return errors.New("run is no longer active")
 	}
 	if err = insertMessage(ctx, tx, conversationID, runID, message, toolName, metadata); err != nil {
@@ -320,6 +322,9 @@ func (s *Service) finishFailedRun(ctx context.Context, runID, conversationID uui
 		}
 	}
 	if _, err = tx.Exec(ctx, `UPDATE runs SET status='failed',completed_at=now() WHERE id=$1`, runID); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE model_request_usage SET status='failed',error_kind='interrupted',usage=COALESCE(usage,'{"source":"missing"}'::jsonb),finished_at=now() WHERE run_id=$1 AND status='started'`, runID); err != nil {
 		return err
 	}
 	if err = eventlog.Append(ctx, tx, runID, conversationID, "RUN_FAILED", map[string]any{"error": reason}); err != nil {

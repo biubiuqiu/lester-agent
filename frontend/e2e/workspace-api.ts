@@ -32,6 +32,7 @@ export class WorkspaceApi {
   private fileContents = new Map<string, string>();
   private nextEventId = 5;
   private completed = false;
+  private submissions = new Map<string, { run_id: string; status: string; message_id: string }>();
   private streams = new Set<ServerResponse>();
   private server = createServer((_request, response) => {
     response.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store", "Access-Control-Allow-Origin": "http://127.0.0.1:13020", "Access-Control-Allow-Credentials": "true" });
@@ -62,6 +63,12 @@ export class WorkspaceApi {
   skillInstalled(slug: string) {
     this.installedSkillSlugs.add(slug);
     this.emit(this.nextEventId++, "SKILL_INSTALLED", { slug });
+  }
+
+  failRun(reason = "fixture tool failure") {
+    if (!this.conversation) throw new Error("A task must be created first");
+    this.conversation.run_status = "failed";
+    this.emit(this.nextEventId++, "RUN_FAILED", { error: reason });
   }
 
   finish() {
@@ -108,6 +115,7 @@ export class WorkspaceApi {
     }
     if (path === "/api/v1/projects") return reply({ projects: [{ ...project, conversation_count: this.conversation ? 1 : 0 }] });
     if (path === "/api/v1/model-deployments") return reply({ deployments: this.hasModel ? [{ ...deployment, name: this.modelName }] : [] });
+    if (path === `/api/v1/conversations/${conversationId}/tasks` && method === "GET") return reply({ tasks: [] });
     if (path === "/api/v1/model-connections") return reply({ connections: [] });
     if (path === "/api/v1/agents") return reply({ agents: [{ id: "fixture-agent", slug: "lester", name: "Lester", description: "模拟 Agent", instructions: "", skill_slugs: [], version: 1, builtin: true, updated_at: project.created_at }] });
     if (path === "/api/v1/conversations") {
@@ -153,7 +161,7 @@ export class WorkspaceApi {
         return reply(this.conversation);
       }
       await this.waitForConversation;
-      return reply({ conversation: this.conversation, messages: this.messages, active_run: this.conversation.run_status === "running" ? { id: "fixture-run", status: "running" } : null });
+      return reply({ conversation: this.conversation, messages: this.messages, active_run: this.conversation.run_status === "running" || this.conversation.run_status === "cancelling" ? { id: "fixture-run", status: this.conversation.run_status } : null });
     }
     if (path === `${prefix}/messages` && method === "POST") {
       const body = request.postDataJSON();
@@ -166,7 +174,12 @@ export class WorkspaceApi {
       const conversations = this.referenceConversations.filter(item => references.some(ref => ref.type === "conversation" && ref.id === item.id)).map(item => ({ id: item.id, title: item.title, project: "个人项目", max_seq: (this.referenceMessages[item.id] || []).length, updated_at: item.updated_at }));
       const skills = this.skillCatalog.filter(item => references.some(ref => ref.type === "skill" && ref.id === item.id));
       this.messages = [{ id: "fixture-user-message", role: "user", content: String(body.content), metadata: JSON.parse(JSON.stringify({ contexts, conversations, skills })), created_at: new Date().toISOString() }];
+      if (typeof body.submission_id === "string") this.submissions.set(body.submission_id, { run_id: "fixture-run", status: "running", message_id: "fixture-user-message" });
       return reply({ run_id: "fixture-run" });
+    }
+    if (path.startsWith(`${prefix}/submissions/`) && method === "GET") {
+      const result = this.submissions.get(path.split("/").at(-1)!);
+      return result ? reply({ ...result, status: this.conversation?.run_status || result.status }) : reply({ error: "not found" }, 404);
     }
     if (path === `${prefix}/events/history`) return reply({ events: [] });
     if (path === `${prefix}/computer`) return reply({ conversation_id: conversationId, user_id: user.user_id, provider: "docker", status: "running" });

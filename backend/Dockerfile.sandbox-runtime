@@ -10,6 +10,7 @@ RUN --mount=type=secret,id=proxy_ca \
     go mod download
 COPY cmd/lester-toolbox ./cmd/lester-toolbox
 COPY internal/toolboxfs ./internal/toolboxfs
+COPY internal/commandtask ./internal/commandtask
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/lester-toolbox ./cmd/lester-toolbox
 
 FROM python:3.12-slim-bookworm
@@ -33,7 +34,7 @@ RUN --mount=type=secret,id=proxy_ca \
     && apt-get install -y --no-install-recommends \
       bash bash-completion build-essential ca-certificates curl ffmpeg git jq less \
       libffi-dev libssl-dev nano ncurses-bin openssh-client pkg-config procps \
-      ripgrep sqlite3 unzip wget xz-utils zip fonts-noto-cjk fonts-noto-color-emoji \
+      ripgrep sqlite3 unzip util-linux wget xz-utils zip fonts-noto-cjk fonts-noto-color-emoji \
     && npm ci --prefix /opt/lester --omit=dev --no-audit --no-fund \
     && chmod -R a+rX /opt/lester \
     && python -m pip install --no-cache-dir -r /opt/lester/requirements.txt \

@@ -23,14 +23,17 @@ type Connection struct {
 	CredentialID uuid.UUID      `json:"-"`
 }
 type Deployment struct {
-	ID           uuid.UUID         `json:"id"`
-	ConnectionID uuid.UUID         `json:"connection_id"`
-	Name         string            `json:"name"`
-	ModelID      string            `json:"model_id"`
-	IsDefault    bool              `json:"is_default"`
-	Enabled      bool              `json:"enabled"`
-	Shared       bool              `json:"shared"`
-	Capabilities ModelCapabilities `json:"capabilities"`
+	ID            uuid.UUID         `json:"id"`
+	ConnectionID  uuid.UUID         `json:"connection_id"`
+	Name          string            `json:"name"`
+	ModelID       string            `json:"model_id"`
+	IsDefault     bool              `json:"is_default"`
+	Enabled       bool              `json:"enabled"`
+	Shared        bool              `json:"shared"`
+	Capabilities  ModelCapabilities `json:"capabilities"`
+	ContextWindow int               `json:"context_window"`
+	OutputReserve int               `json:"output_reserve"`
+	PolicyWindow  int               `json:"policy_window"`
 }
 type Store struct {
 	db        *pgxpool.Pool
@@ -85,8 +88,16 @@ func (s *Store) ListConnections(ctx context.Context, workspaceID uuid.UUID) ([]C
 	return items, rows.Err()
 }
 func (s *Store) CreateDeployment(ctx context.Context, workspaceID, connectionID uuid.UUID, name, modelID string, isDefault bool) (Deployment, error) {
+	return s.CreateDeploymentWithBudget(ctx, workspaceID, connectionID, name, modelID, isDefault, DeploymentBudgetChange{})
+}
+
+func (s *Store) CreateDeploymentWithBudget(ctx context.Context, workspaceID, connectionID uuid.UUID, name, modelID string, isDefault bool, budget DeploymentBudgetChange) (Deployment, error) {
 	if strings.TrimSpace(name) == "" || strings.TrimSpace(modelID) == "" || len(name) > 240 || len(modelID) > 240 {
 		return Deployment{}, errors.New("valid name and model ID are required")
+	}
+	limits, err := budget.apply(Deployment{})
+	if err != nil {
+		return Deployment{}, err
 	}
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
@@ -101,11 +112,11 @@ func (s *Store) CreateDeployment(ctx context.Context, workspaceID, connectionID 
 			return Deployment{}, err
 		}
 	}
-	caps := ModelCapabilities{Streaming: true, Tools: true, Vision: true, StructuredOutput: true, TokenCounting: true}
+	caps := ModelCapabilities{Streaming: true, Tools: true, Vision: true}
 	raw, _ := json.Marshal(caps)
 	var d Deployment
 	d.Capabilities = caps
-	err = tx.QueryRow(ctx, `INSERT INTO model_deployments(workspace_id,connection_id,name,model_id,capabilities,is_default) SELECT $1,$2,$3,$4,$5,$6 WHERE EXISTS(SELECT 1 FROM model_connections WHERE id=$2 AND workspace_id=$1) RETURNING id,connection_id,name,model_id,is_default`, workspaceID, connectionID, name, modelID, raw, isDefault).Scan(&d.ID, &d.ConnectionID, &d.Name, &d.ModelID, &d.IsDefault)
+	err = tx.QueryRow(ctx, `INSERT INTO model_deployments(workspace_id,connection_id,name,model_id,capabilities,is_default,context_window,output_reserve,policy_window) SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9 WHERE EXISTS(SELECT 1 FROM model_connections WHERE id=$2 AND workspace_id=$1) RETURNING id,connection_id,name,model_id,is_default,context_window,output_reserve,policy_window`, workspaceID, connectionID, name, modelID, raw, isDefault, limits.ContextWindow, limits.OutputReserve, limits.PolicyWindow).Scan(&d.ID, &d.ConnectionID, &d.Name, &d.ModelID, &d.IsDefault, &d.ContextWindow, &d.OutputReserve, &d.PolicyWindow)
 	if err != nil {
 		return d, err
 	}
@@ -114,7 +125,7 @@ func (s *Store) CreateDeployment(ctx context.Context, workspaceID, connectionID 
 	return d, tx.Commit(ctx)
 }
 func (s *Store) ListDeployments(ctx context.Context, workspaceID uuid.UUID) ([]Deployment, error) {
-	rows, err := s.db.Query(ctx, `SELECT id,connection_id,name,model_id,is_default,capabilities,enabled,workspace_id=$2 FROM model_deployments WHERE (workspace_id=$1 OR workspace_id=$2) AND (enabled OR $1=$2) ORDER BY is_default DESC,(workspace_id=$1) DESC,created_at`, workspaceID, SystemWorkspaceID)
+	rows, err := s.db.Query(ctx, `SELECT id,connection_id,name,model_id,is_default,capabilities,enabled,workspace_id=$2,context_window,output_reserve,policy_window FROM model_deployments WHERE (workspace_id=$1 OR workspace_id=$2) AND (enabled OR $1=$2) ORDER BY is_default DESC,(workspace_id=$1) DESC,created_at`, workspaceID, SystemWorkspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -123,10 +134,14 @@ func (s *Store) ListDeployments(ctx context.Context, workspaceID uuid.UUID) ([]D
 	for rows.Next() {
 		var d Deployment
 		var raw []byte
-		if err = rows.Scan(&d.ID, &d.ConnectionID, &d.Name, &d.ModelID, &d.IsDefault, &raw, &d.Enabled, &d.Shared); err != nil {
+		if err = rows.Scan(&d.ID, &d.ConnectionID, &d.Name, &d.ModelID, &d.IsDefault, &raw, &d.Enabled, &d.Shared, &d.ContextWindow, &d.OutputReserve, &d.PolicyWindow); err != nil {
 			return nil, err
 		}
 		_ = json.Unmarshal(raw, &d.Capabilities)
+		// No token-counting endpoint or structured-response request is implemented.
+		// Old persisted declarations must not imply verified model support.
+		d.Capabilities.TokenCounting = false
+		d.Capabilities.StructuredOutput = false
 		items = append(items, d)
 	}
 	return items, rows.Err()
@@ -135,11 +150,15 @@ func (s *Store) Client(ctx context.Context, workspaceID, deploymentID uuid.UUID)
 	var c Connection
 	var d Deployment
 	var raw []byte
-	err := s.db.QueryRow(ctx, `SELECT d.id,d.connection_id,d.name,d.model_id,d.is_default,c.id,c.workspace_id,c.name,c.provider,c.protocol,COALESCE(c.endpoint,''),c.config,c.credential_id FROM model_deployments d JOIN model_connections c ON c.id=d.connection_id AND c.workspace_id=d.workspace_id WHERE d.id=$2 AND (d.workspace_id=$1 OR d.workspace_id=$3) AND d.enabled`, workspaceID, deploymentID, SystemWorkspaceID).Scan(&d.ID, &d.ConnectionID, &d.Name, &d.ModelID, &d.IsDefault, &c.ID, &c.WorkspaceID, &c.Name, &c.Provider, &c.Protocol, &c.Endpoint, &raw, &c.CredentialID)
+	var capabilities []byte
+	err := s.db.QueryRow(ctx, `SELECT d.id,d.connection_id,d.name,d.model_id,d.is_default,d.enabled,d.workspace_id=$3,d.context_window,d.output_reserve,d.policy_window,d.capabilities,c.id,c.workspace_id,c.name,c.provider,c.protocol,COALESCE(c.endpoint,''),c.config,c.credential_id FROM model_deployments d JOIN model_connections c ON c.id=d.connection_id AND c.workspace_id=d.workspace_id WHERE d.id=$2 AND (d.workspace_id=$1 OR d.workspace_id=$3) AND d.enabled`, workspaceID, deploymentID, SystemWorkspaceID).Scan(&d.ID, &d.ConnectionID, &d.Name, &d.ModelID, &d.IsDefault, &d.Enabled, &d.Shared, &d.ContextWindow, &d.OutputReserve, &d.PolicyWindow, &capabilities, &c.ID, &c.WorkspaceID, &c.Name, &c.Provider, &c.Protocol, &c.Endpoint, &raw, &c.CredentialID)
 	if err != nil {
 		return nil, d, err
 	}
 	_ = json.Unmarshal(raw, &c.Config)
+	_ = json.Unmarshal(capabilities, &d.Capabilities)
+	d.Capabilities.TokenCounting = false
+	d.Capabilities.StructuredOutput = false
 	credential, err := s.secrets.Get(ctx, c.WorkspaceID, c.CredentialID)
 	if err != nil {
 		return nil, d, err

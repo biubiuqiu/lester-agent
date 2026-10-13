@@ -98,6 +98,10 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.service.UpdateModel(r.Context(), p.WorkspaceID, id, req.ModelDeploymentID); err != nil {
+		if errors.Is(err, ErrRunInProgress) {
+			httpapi.Error(w, http.StatusConflict, err)
+			return
+		}
 		httpapi.Error(w, 404, err)
 		return
 	}
@@ -111,6 +115,7 @@ func (h *Handler) Send(w http.ResponseWriter, r *http.Request) {
 	}
 	var req struct {
 		Content       string            `json:"content"`
+		SubmissionID  uuid.UUID         `json:"submission_id"`
 		AttachmentIDs []uuid.UUID       `json:"attachment_ids"`
 		ContextIDs    []uuid.UUID       `json:"context_ids"`
 		References    []reference.Input `json:"references"`
@@ -118,9 +123,9 @@ func (h *Handler) Send(w http.ResponseWriter, r *http.Request) {
 	if !httpapi.Decode(w, r, &req) {
 		return
 	}
-	runID, err := h.service.SendWithReferences(r.Context(), p.WorkspaceID, p.UserID, id, req.Content, req.AttachmentIDs, req.ContextIDs, req.References)
+	runID, err := h.service.SendSubmission(r.Context(), p.WorkspaceID, p.UserID, id, req.SubmissionID, req.Content, req.AttachmentIDs, req.ContextIDs, req.References)
 	if err != nil {
-		if errors.Is(err, ErrRunInProgress) {
+		if errors.Is(err, ErrRunInProgress) || errors.Is(err, ErrSubmissionConflict) {
 			httpapi.Error(w, http.StatusConflict, err)
 			return
 		}
@@ -128,6 +133,29 @@ func (h *Handler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpapi.JSON(w, 202, map[string]any{"run_id": runID})
+}
+
+func (h *Handler) Submission(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	submissionID, err := uuid.Parse(chi.URLParam(r, "submissionID"))
+	if err != nil || submissionID == uuid.Nil {
+		httpapi.Error(w, http.StatusBadRequest, errors.New("invalid submission ID"))
+		return
+	}
+	found, err := h.service.Submission(r.Context(), p.WorkspaceID, p.UserID, id, submissionID)
+	if err != nil {
+		httpapi.Error(w, http.StatusServiceUnavailable, errors.New("submission status unavailable"))
+		return
+	}
+	if found == nil {
+		httpapi.Error(w, http.StatusNotFound, errors.New("submission not found"))
+		return
+	}
+	httpapi.JSON(w, http.StatusOK, found)
 }
 
 func (h *Handler) CancelRun(w http.ResponseWriter, r *http.Request) {

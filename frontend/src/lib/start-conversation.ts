@@ -1,4 +1,6 @@
-import { api, upload, type Attachment, type Conversation, type MentionInput } from "./api";
+import { api, type Conversation, type MentionInput } from "./api";
+import { uploadConversationAttachments } from "./attachment-uploads";
+import { sendConversationMessage } from "./message-submission";
 
 // Called only from an explicit submit, never from a mount/navigation effect.
 export async function startConversation(content: string, files: File[], model: string, onCreated: (conversation: Conversation) => void, projectId?: string, contextIds: string[] = [], agentSlug = "lester", references: MentionInput[] = []) {
@@ -8,13 +10,7 @@ export async function startConversation(content: string, files: File[], model: s
     body: JSON.stringify({ project_id: projectId, agent_slug: agentSlug, model_deployment_id: model, title: Array.from(content.trim() || files[0].name).slice(0, 60).join("") }),
   });
   onCreated(conversation);
-  const attachments = await Promise.all(files.map((file) => {
-    const form = new FormData();
-    form.append("file", file);
-    return upload<Attachment>(`/api/v1/conversations/${conversation.id}/attachments`, form);
-  }));
-  await api<{ run_id: string }>(`/api/v1/conversations/${conversation.id}/messages`, {
-    method: "POST", body: JSON.stringify({ content: content.trim(), context_ids: contextIds, ...(references.length ? { references } : {}), attachment_ids: attachments.map((file) => file.id) }),
-  });
+  const attachments = await uploadConversationAttachments(conversation.id, files);
+  await sendConversationMessage(conversation.id, { content: content.trim(), context_ids: contextIds, ...(references.length ? { references } : {}), attachment_ids: attachments.map((file) => file.id) });
   return conversation;
 }

@@ -6,6 +6,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Check, Plus, Server, ShieldCheck, Cpu } from "lucide-react";
 import { ModelEditor } from "@/components/model-editor";
+import { ModelDeploymentControls } from "@/components/model-deployment-controls";
 import { api, Deployment } from "@/lib/api";
 
 export type Connection = {
@@ -188,6 +189,7 @@ export function ModelSettings({ admin = false, requestedReturn = "/app" }: { adm
                 <small>{item.model_id}</small>
               </div>
               <div className="admin-model-actions">{item.shared && !admin && <span><T>{"共享"}</T></span>}{item.is_default && <span><T>{"默认"}</T></span>}{item.enabled === false && <span><T>{"已停用"}</T></span>}{admin && <button type="button" className="admin-edit" onClick={() => setEditing(item)}><T>{"编辑模型"}</T></button>}</div>
+              <ModelDeploymentControls key={[item.id,item.model_id,item.connection_id,item.enabled].join(":")} item={item} admin={admin} onSaved={load} />
             </article>
           ))}
         </div>

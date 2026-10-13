@@ -69,6 +69,23 @@
 .admin-edit { display:inline-flex; align-items:center; gap:6px; border:1px solid #dfe4d8; border-radius:7px; background:white; color:#546449; padding:6px 10px; font-size:12px; cursor:pointer; }
 .admin-edit:hover { background:#f1f5ed; }
 .admin-model-actions { display:flex; align-items:center; gap:10px; }
+.deployment-list>article { flex-wrap:wrap; }
+.model-deployment-controls { flex-basis:100%; min-width:0; display:grid; gap:6px; }
+.model-deployment-controls>.text-button { justify-self:start; }
+.model-budget-settings { border-top:1px solid var(--line); padding-top:10px; }
+.model-budget-settings>summary { cursor:pointer; color:var(--muted); font-size:12px; }
+.model-budget-settings>form { display:grid; gap:12px; padding-top:14px; }
+.model-budget-settings .field-help { margin:0; }
+.command-tasks { margin:16px 0; border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+.command-tasks>summary { cursor:pointer; color:var(--muted); font-size:12px; }
+.command-task-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; padding:12px 0; border-top:1px solid var(--line); }
+.command-task-row strong,.command-task-row small { display:block; overflow-wrap:anywhere; }
+.command-task-row small { margin-top:4px; color:var(--muted); font-size:11px; }
+.command-task-actions { display:flex; flex-wrap:wrap; gap:10px; }
+.command-task-actions button,.command-task-actions a { border:0; background:transparent; color:var(--muted); font:inherit; font-size:12px; cursor:pointer; padding:4px; }
+.command-task-actions button:disabled { opacity:.5; cursor:wait; }
+.command-task-log { min-width:0; width:100%; }
+.command-task-log pre { max-height:280px; overflow:auto; border:1px solid var(--line); border-radius:8px; background:var(--panel); padding:12px; font-size:11px; white-space:pre-wrap; overflow-wrap:anywhere; }
 .admin-dialog { width:min(480px,calc(100vw - 32px)); max-height:calc(100dvh - 48px); border:1px solid #e0e4da; border-radius:16px; padding:28px; color:#303b2d; background:#fff; box-shadow:0 24px 100px #15230f30; overflow-y:auto; }
 .admin-dialog::backdrop { background:#17251066; backdrop-filter:blur(3px); }
 .admin-dialog form { display:flex; flex-direction:column; gap:18px; }

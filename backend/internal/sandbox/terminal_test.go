@@ -233,9 +233,14 @@ func exerciseTerminal(t *testing.T, open func() TerminalSession) {
 	output.wait(t, "SPACE_IGNORED", 5*time.Second)
 	send("history | grep -F \"$HIST_IGNORED\" >/dev/null || printf '%s%s\\n' HISTORY _PRIVATE\r")
 	output.wait(t, "HISTORY_PRIVATE", 5*time.Second)
-	send("sleep 30\r")
-	output.wait(t, "sleep 30", 5*time.Second)
-	send("\x03printf '%s%s\\n' INTERRUPT _OK\r")
+	// An echoed input is not proof that a foreground process has started.
+	// Ctrl+C also flushes queued terminal input; do not combine it with the
+	// next command in one write and then mistake that flush for a lost command.
+	send("bash -c \"printf '%s%s\\\\n' INTERRUPT _STARTED; exec sleep 30\"\r")
+	output.wait(t, "INTERRUPT_STARTED", 5*time.Second)
+	send("\x03")
+	output.wait(t, "$ ", 5*time.Second)
+	send("printf '%s%s\\n' INTERRUPT _OK\r")
 	output.wait(t, "INTERRUPT_OK", 5*time.Second)
 	// Bracketed multiline paste must wait for explicit Enter.
 	send("\x1b[200~printf '%s%s\\n' PASTE _SAFE\n\x1b[201~")
@@ -247,6 +252,7 @@ func exerciseTerminal(t *testing.T, open func() TerminalSession) {
 	output.wait(t, "PASTE_SAFE", 5*time.Second)
 	send("printf '%s%s\\n' PERSISTED _HISTORY\r")
 	output.wait(t, "PERSISTED_HISTORY", 5*time.Second)
+	output.wait(t, "$ ", 5*time.Second)
 	send("\x04")
 	select {
 	case <-output.done:
@@ -299,10 +305,13 @@ func (c *terminalCapture) wait(t *testing.T, text string, timeout time.Duration)
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		c.mu.Lock()
-		found := strings.Contains(c.data, text)
+		index := strings.Index(c.data, text)
+		found := index >= 0
 		data := c.data
 		if found {
-			c.data = ""
+			// Keep bytes following the observation, including a prompt delivered
+			// in the same PTY read. A later wait must not race a discarded prompt.
+			c.data = c.data[index+len(text):]
 		}
 		c.mu.Unlock()
 		if found {

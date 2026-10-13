@@ -36,6 +36,10 @@ type Command struct {
 }
 type CommandResult struct {
 	ExitCode           int    `json:"exit_code"`
+	ExitCodeKnown      bool   `json:"exit_code_known"`
+	Shell              string `json:"shell,omitempty"`
+	Status             string `json:"status,omitempty"`
+	CleanupConfirmed   *bool  `json:"cleanup_confirmed,omitempty"`
 	Stdout             string `json:"stdout"`
 	Stderr             string `json:"stderr"`
 	DurationMS         int64  `json:"duration_ms"`
@@ -56,9 +60,31 @@ type FileLine struct {
 	OmittedCharacters int    `json:"omitted_characters,omitempty"`
 }
 type FileLines struct {
-	Lines      []FileLine `json:"lines"`
-	StartLine  int        `json:"start_line"`
-	TotalLines int        `json:"total_lines"`
+	Lines           []FileLine `json:"lines"`
+	StartLine       int        `json:"start_line"`
+	TotalLines      int        `json:"total_lines"`
+	SHA256          string     `json:"sha256"`
+	ByteSize        int64      `json:"byte_size"`
+	EndsWithNewline bool       `json:"ends_with_newline"`
+}
+
+type FileWriteRequest struct {
+	Content        []byte `json:"content"`
+	ExpectedSHA256 string `json:"expected_sha256,omitempty"`
+	CreateOnly     bool   `json:"create_only,omitempty"`
+}
+
+type FileWriteResult struct {
+	OK           bool   `json:"ok"`
+	SHA256       string `json:"sha256"`
+	BytesWritten int64  `json:"bytes_written"`
+}
+
+// VersionedFileWriter is deliberately optional so existing providers and
+// non-file tools keep their contracts. Agent writes require this capability;
+// there is no fallback to an unprotected overwrite.
+type VersionedFileWriter interface {
+	WriteFileVersioned(context.Context, string, string, string, FileWriteRequest) (*FileWriteResult, error)
 }
 type FileEditRequest struct {
 	OldString      string `json:"old_string"`

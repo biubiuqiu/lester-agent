@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -59,7 +58,7 @@ type bedrockClient struct {
 }
 
 func (c *bedrockClient) Capabilities(context.Context, string) (modelruntime.Capabilities, error) {
-	return modelruntime.Capabilities{Streaming: false, Tools: true, Vision: true, TokenCounting: true}, nil
+	return modelruntime.Capabilities{Streaming: false, Tools: true, Vision: true}, nil
 }
 
 func (c *bedrockClient) Stream(ctx context.Context, request modelruntime.Request) (<-chan modelruntime.Event, error) {
@@ -74,7 +73,7 @@ func (c *bedrockClient) Stream(ctx context.Context, request modelruntime.Request
 		call.Index = index
 		events <- modelruntime.Event{Type: "MODEL_DELTA", ToolCall: &call}
 	}
-	events <- modelruntime.Event{Type: "MODEL_COMPLETED", Usage: response.Usage}
+	events <- modelruntime.Event{Type: "MODEL_COMPLETED", Usage: response.Usage, NormalizedUsage: response.NormalizedUsage}
 	close(events)
 	return events, nil
 }
@@ -94,7 +93,7 @@ func (c *bedrockClient) Generate(ctx context.Context, request modelruntime.Reque
 		}
 		messages = append(messages, map[string]any{"role": message.Role, "content": content})
 	}
-	payload := map[string]any{"anthropic_version": "bedrock-2023-05-31", "max_tokens": max(request.MaxTokens, 4096), "system": request.System, "messages": messages}
+	payload := map[string]any{"anthropic_version": "bedrock-2023-05-31", "max_tokens": anthropicMaxTokens(request.MaxTokens), "system": request.System, "messages": messages}
 	if len(request.Tools) > 0 {
 		tools := make([]any, 0, len(request.Tools))
 		for _, tool := range request.Tools {
@@ -107,32 +106,38 @@ func (c *bedrockClient) Generate(ctx context.Context, request modelruntime.Reque
 	endpoint := "https://bedrock-runtime." + c.region + ".amazonaws.com" + requestPath
 	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return nil, providerProtocolError(err)
 	}
 	c.sign(httpRequest, body, time.Now().UTC(), requestPath)
 	response, err := providerHTTPClient(c.http).Do(httpRequest)
 	if err != nil {
-		return nil, err
+		return nil, providerTransportError(ctx, err)
 	}
 	defer response.Body.Close()
-	data, _ := io.ReadAll(io.LimitReader(response.Body, 8<<20))
+	data, err := io.ReadAll(io.LimitReader(response.Body, (8<<20)+1))
+	if err != nil {
+		return nil, providerTransportError(ctx, err)
+	}
 	if response.StatusCode >= 300 {
-		return nil, fmt.Errorf("bedrock %s: %s", response.Status, string(data))
+		return nil, providerResponseError(response.StatusCode, data)
+	}
+	if len(data) > 8<<20 {
+		return nil, providerProtocolError(nil)
 	}
 	var decoded struct {
 		Content []struct {
 			Type, Text, ID, Name string
 			Input                json.RawMessage
 		}
-		Usage struct {
-			InputTokens  int `json:"input_tokens"`
-			OutputTokens int `json:"output_tokens"`
-		}
+		Usage map[string]any
 	}
 	if err = json.Unmarshal(data, &decoded); err != nil {
-		return nil, err
+		return nil, providerProtocolError(err)
 	}
-	result := &modelruntime.Response{Usage: map[string]int{"input_tokens": decoded.Usage.InputTokens, "output_tokens": decoded.Usage.OutputTokens}}
+	usage := usageAccumulator{provider: "bedrock"}
+	usage.observe(decoded.Usage)
+	normalized := usage.snapshot()
+	result := &modelruntime.Response{Usage: normalized.Raw, NormalizedUsage: normalized}
 	for index, block := range decoded.Content {
 		if block.Type == "text" {
 			result.Content += block.Text

@@ -27,7 +27,12 @@ type Environment struct {
 	RunID, ConversationID uuid.UUID
 	SandboxID, WorkDir    string
 	Sandboxes             Sandbox
-	Emit                  EventEmitter
+	Files                 *FileState
+	// RecordTask persists trusted launch identity before starting a command and
+	// its actual ownership handle afterward. Never expose that handle to models.
+	RecordTask func(context.Context, *sandbox.CommandTaskSnapshot) error
+	TaskAccess func(context.Context, uuid.UUID, sandbox.CommandTaskReadOptions, bool) (map[string]any, error)
+	Emit       EventEmitter
 }
 
 type Handler interface {
@@ -51,7 +56,10 @@ func NewDefaultRegistry(db *pgxpool.Pool) *Registry {
 	registry.Register(Write{}, "computer_write_file")
 	registry.Register(Edit{})
 	registry.Register(LoadSkill{DB: db})
+	registry.Register(TaskOutput{})
+	registry.Register(StopTask{})
 	registry.Register(ReadConversation{DB: db})
+	registry.Register(ToolResult{DB: db})
 	registry.RegisterHidden(ListFiles{}, "computer_list_files")
 	return registry
 }

@@ -13,6 +13,8 @@ import (
 
 	"github.com/biubiuqiu/lester-agent/backend/internal/agenttool"
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
+	modelruntime "github.com/biubiuqiu/lester-agent/backend/internal/model/runtime"
+	"github.com/biubiuqiu/lester-agent/backend/internal/sandbox"
 	"github.com/biubiuqiu/lester-agent/backend/internal/toolcontext"
 	"github.com/biubiuqiu/lester-agent/backend/prompts"
 	"github.com/google/uuid"
@@ -87,6 +89,14 @@ func (e *runExecutor) execute(ctx context.Context, workspaceID, conversationID, 
 	if err != nil {
 		s.finishExecutionError(ctx, runID, conversationID, err)
 		return
+	}
+	var acceptedModel *uuid.UUID
+	if err = s.db.QueryRow(ctx, `SELECT model_deployment_id FROM runs WHERE id=$1 AND conversation_id=$2`, runID, conversationID).Scan(&acceptedModel); err != nil {
+		s.finishExecutionError(ctx, runID, conversationID, err)
+		return
+	}
+	if acceptedModel != nil {
+		conversation.ModelDeploymentID = *acceptedModel
 	}
 	if conversation.ModelDeploymentID == uuid.Nil {
 		s.finishExecutionError(ctx, runID, conversationID, errors.New("configure a default model deployment first"))
@@ -180,11 +190,16 @@ func (e *runExecutor) execute(ctx context.Context, workspaceID, conversationID, 
 		s.finishExecutionError(ctx, runID, conversationID, err)
 		return
 	}
-	e.executeTurns(ctx, conversationID, runID, computer, client, request)
+	e.executeTurns(ctx, conversationID, runID, computer, client, request, toolcontext.BudgetConfig{ContextWindow: deployment.ContextWindow, OutputReserve: deployment.OutputReserve, PolicyWindow: deployment.PolicyWindow})
 }
 
-func (e *runExecutor) executeTurns(ctx context.Context, conversationID, runID uuid.UUID, computer *Computer, client model.ModelClient, request model.ModelRequest) {
+func (e *runExecutor) executeTurns(ctx context.Context, conversationID, runID uuid.UUID, computer *Computer, client model.ModelClient, request model.ModelRequest, budgets ...toolcontext.BudgetConfig) {
 	s := e.service
+	var estimator toolcontext.Estimator
+	var config toolcontext.BudgetConfig
+	if len(budgets) > 0 {
+		config = budgets[0]
+	}
 	for turn := 0; ; turn++ {
 		if ctx.Err() != nil {
 			s.finishContext(ctx, runID, conversationID)
@@ -199,9 +214,40 @@ func (e *runExecutor) executeTurns(ctx context.Context, conversationID, runID uu
 		}
 		modelRequest := request
 		modelRequest.Messages = projection.Messages
-		s.event(ctx, runID, conversationID, "MODEL_STARTED", map[string]any{"turn": turn + 1, "tool_context": projection.Stats})
+		budget, err := estimator.Evaluate(modelRequest, config)
+		if err != nil {
+			s.finishExecutionError(ctx, runID, conversationID, err)
+			return
+		}
+		if budget.Exceeded {
+			s.finishExecutionError(ctx, runID, conversationID, errors.New("上下文超过已配置的预算；请缩短输入或调整模型预算。"))
+			return
+		}
+		requestIndex := turn + 1
+		if err = s.startModelRequest(ctx, runID, requestIndex, "execution", budget); err != nil {
+			s.finishExecutionError(ctx, runID, conversationID, err)
+			return
+		}
+		var usage *modelruntime.NormalizedUsage
+		finishedUsage := false
+		finishUsage := func(requestErr error) error {
+			if finishedUsage {
+				return nil
+			}
+			finishedUsage = true
+			if usage == nil {
+				usage = &modelruntime.NormalizedUsage{Source: modelruntime.UsageMissing}
+			}
+			return s.finishModelRequest(ctx, runID, requestIndex, usage, requestErr)
+		}
+		// A historical read that is no longer visible to this model request does
+		// not grant permission to overwrite that file. Keep the state shared only
+		// within this visible turn's tool batch.
+		files := agenttool.NewFileState(modelRequest.Messages)
+		s.event(ctx, runID, conversationID, "MODEL_STARTED", map[string]any{"turn": turn + 1, "request_index": requestIndex, "tool_context": projection.Stats, "context_budget": budget})
 		stream, err := client.Stream(ctx, modelRequest)
 		if err != nil {
+			_ = finishUsage(err)
 			s.finishExecutionError(ctx, runID, conversationID, err)
 			return
 		}
@@ -233,12 +279,17 @@ func (e *runExecutor) executeTurns(ctx context.Context, conversationID, runID uu
 				streamOpen = false
 				continue
 			}
+			if event.NormalizedUsage != nil {
+				usage = event.NormalizedUsage.Clone()
+			}
 			if event.Err != nil {
+				_ = finishUsage(event.Err)
 				deltaTicker.Stop()
 				if ctx.Err() != nil {
 					cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 					flushDeltaWithContext(cleanupCtx)
 					cancel()
+					s.savePartialResponse(runID, conversationID, text.String(), callsByIndex)
 					s.finishContext(ctx, runID, conversationID)
 					return
 				}
@@ -254,44 +305,61 @@ func (e *runExecutor) executeTurns(ctx context.Context, conversationID, runID uu
 					flushDelta()
 				}
 			}
-			if event.ToolCall != nil {
-				call := callsByIndex[event.ToolCall.Index]
+			for _, fragment := range event.ToolCallDeltas() {
+				if fragment == nil {
+					continue
+				}
+				call := callsByIndex[fragment.Index]
 				if call == nil {
-					call = &model.ToolCall{Index: event.ToolCall.Index}
-					callsByIndex[event.ToolCall.Index] = call
+					call = &model.ToolCall{Index: fragment.Index}
+					callsByIndex[fragment.Index] = call
 				}
-				if event.ToolCall.ID != "" {
-					call.ID = event.ToolCall.ID
+				if fragment.ID != "" {
+					call.ID = fragment.ID
 				}
-				if event.ToolCall.Name != "" {
-					call.Name = event.ToolCall.Name
+				if fragment.Name != "" {
+					call.Name = fragment.Name
 				}
-				if fragment := event.ToolCall.Arguments; len(fragment) > 0 && string(fragment) != "{}" {
-					call.Arguments = append(call.Arguments, fragment...)
+				if arguments := fragment.Arguments; len(arguments) > 0 && string(arguments) != "{}" {
+					call.Arguments = append(call.Arguments, arguments...)
 				}
 			}
 		}
 		deltaTicker.Stop()
 		if ctx.Err() != nil {
+			_ = finishUsage(ctx.Err())
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			flushDeltaWithContext(cleanupCtx)
 			cancel()
+			s.savePartialResponse(runID, conversationID, text.String(), callsByIndex)
 			s.finishContext(ctx, runID, conversationID)
 			return
 		}
 		flushDelta()
 		calls, err := assembledToolCalls(callsByIndex)
 		if err != nil {
+			_ = finishUsage(err)
 			s.savePartialResponse(runID, conversationID, text.String(), callsByIndex)
 			s.finishExecutionError(ctx, runID, conversationID, err)
 			return
 		}
+		if len(calls) == 0 && strings.TrimSpace(text.String()) == "" {
+			empty := &modelruntime.ProviderError{Kind: modelruntime.ErrorProtocol}
+			_ = finishUsage(empty)
+			s.finishExecutionError(ctx, runID, conversationID, empty)
+			return
+		}
+		if err = finishUsage(nil); err != nil {
+			s.finishExecutionError(ctx, runID, conversationID, err)
+			return
+		}
+		estimator.Observe(toolcontext.EstimateInput(modelRequest), usage)
 		assistant := model.Message{Role: "assistant", Content: text.String(), ToolCalls: calls, RunID: runID.String()}
 		if err = s.appendMessage(ctx, conversationID, runID, assistant, "", nil); err != nil {
 			s.finishExecutionError(ctx, runID, conversationID, err)
 			return
 		}
-		s.event(ctx, runID, conversationID, "MODEL_COMPLETED", map[string]any{})
+		s.event(ctx, runID, conversationID, "MODEL_COMPLETED", map[string]any{"request_index": requestIndex, "usage": usage, "context_budget": budget})
 		if len(calls) == 0 {
 			if err = s.finishCompletedRun(ctx, runID, conversationID); err != nil {
 				s.finishExecutionError(ctx, runID, conversationID, err)
@@ -305,15 +373,39 @@ func (e *runExecutor) executeTurns(ctx context.Context, conversationID, runID uu
 				return
 			}
 			s.event(ctx, runID, conversationID, "TOOL_STARTED", map[string]any{"tool": call.Name, "tool_call_id": call.ID, "arguments": string(call.Arguments)})
-			result, toolErr := e.runTool(ctx, runID, conversationID, computer, call)
+			result, toolErr := e.runTool(ctx, runID, conversationID, computer, call, files)
 			if ctx.Err() != nil {
+				if errors.Is(context.Cause(ctx), ErrRunCancelled) && result != nil {
+					observed, encodeErr := json.Marshal(result)
+					if encodeErr == nil {
+						var envelope map[string]any
+						if json.Unmarshal(observed, &envelope) != nil || envelope == nil {
+							envelope = map[string]any{"observed_result": json.RawMessage(observed)}
+						}
+						envelope["cancelled"] = true
+						envelope["error"] = "The turn was cancelled. This result was observed; inspect its status and current state before continuing."
+						if raw, marshalErr := json.Marshal(envelope); marshalErr == nil {
+							cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+							_ = s.appendMessage(cleanupCtx, conversationID, runID, model.Message{Role: "tool", Content: string(raw), ToolCallID: call.ID}, call.Name, map[string]any{"is_error": true, "cancelled": true})
+							cancel()
+						}
+					}
+				}
 				s.finishContext(ctx, runID, conversationID)
 				return
 			}
 			eventType := "TOOL_COMPLETED"
 			metadata := map[string]any{}
+			if commandResultFailed(call.Name, result) {
+				metadata["is_error"] = true
+				eventType = "TOOL_FAILED"
+			}
 			if toolErr != nil {
-				result = map[string]any{"error": toolErr.Error()}
+				if retained, ok := result.(map[string]any); ok && retained != nil {
+					retained["error"] = toolErr.Error()
+				} else {
+					result = map[string]any{"error": toolErr.Error(), "observed_result": result}
+				}
 				metadata["is_error"] = true
 				eventType = "TOOL_FAILED"
 			}
@@ -337,18 +429,57 @@ func (e *runExecutor) executeTurns(ctx context.Context, conversationID, runID uu
 	}
 }
 
-func (e *runExecutor) runTool(ctx context.Context, runID, conversationID uuid.UUID, computer *Computer, call model.ToolCall) (any, error) {
+func (e *runExecutor) runTool(ctx context.Context, runID, conversationID uuid.UUID, computer *Computer, call model.ToolCall, fileStates ...*agenttool.FileState) (any, error) {
 	s := e.service
 	_, _ = s.db.Exec(ctx, `UPDATE sandboxes SET last_active_at=now() WHERE provider_ref=$1`, computer.SandboxID)
 	environment := agenttool.Environment{
 		RunID: runID, ConversationID: conversationID,
 		SandboxID: computer.SandboxID, WorkDir: computer.WorkDir,
 		Sandboxes: s.sandboxes,
+		RecordTask: func(taskCtx context.Context, snapshot *sandbox.CommandTaskSnapshot) error {
+			return s.recordCommandTask(taskCtx, runID, conversationID, computer, snapshot)
+		},
+		TaskAccess: func(taskCtx context.Context, taskID uuid.UUID, read sandbox.CommandTaskReadOptions, stop bool) (map[string]any, error) {
+			var workspaceID uuid.UUID
+			if err := s.db.QueryRow(taskCtx, `SELECT c.workspace_id FROM conversations c JOIN runs r ON r.conversation_id=c.id WHERE c.id=$1 AND r.id=$2 AND r.status='running'`, conversationID, runID).Scan(&workspaceID); err != nil {
+				return nil, err
+			}
+			return s.commandTask(taskCtx, workspaceID, conversationID, taskID, read, stop)
+		},
 		Emit: func(eventType string, payload map[string]any) {
 			payload["tool_call_id"] = call.ID
 			payload["tool"] = call.Name
 			s.event(ctx, runID, conversationID, eventType, payload)
 		},
 	}
+	if len(fileStates) > 0 {
+		environment.Files = fileStates[0]
+	}
 	return s.tools.Execute(ctx, call.Name, call.Arguments, environment)
+}
+
+// An executed command can fail without a transport/tool error. Keep its full
+// result so the Agent can repair it; only its event and audit status change.
+func commandResultFailed(tool string, result any) bool {
+	if tool != "bash" && tool != "computer_exec" {
+		return false
+	}
+	value, ok := result.(map[string]any)
+	if !ok {
+		return false
+	}
+	if status, _ := value["status"].(string); status == "timed_out" || status == "cancelled" || status == "unknown" {
+		return true
+	}
+	if known, present := value["exit_code_known"].(bool); present && !known {
+		return false
+	}
+	switch code := value["exit_code"].(type) {
+	case int:
+		return code != 0
+	case float64:
+		return code != 0
+	default:
+		return false
+	}
 }

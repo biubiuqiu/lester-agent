@@ -5,7 +5,9 @@ import { startConversation } from "./start-conversation";
 test("first submit creates Lester then sends exactly once with the chosen model", async (t) => {
   const calls: { path: string; body: Record<string, unknown> }[] = [];
   t.mock.method(globalThis, "fetch", async (path: string, init: RequestInit) => {
-    calls.push({ path, body: JSON.parse(String(init.body)) });
+    const body = JSON.parse(String(init.body));
+    if (path.endsWith("/messages")) { assert.match(body.submission_id, /^[0-9a-f-]{36}$/); delete body.submission_id; }
+    calls.push({ path, body });
     return Response.json(path.endsWith("/messages") ? { run_id: "r" } : { id: "c" });
   });
   let created = false;
@@ -24,17 +26,18 @@ test("blank drafts or missing models never create a conversation", async (t) => 
   await assert.rejects(startConversation("hello", [], "", () => {}), /请输入/);
 });
 
-test("send failure exposes the created conversation for recovery and never retries", async (t) => {
+test("send failure exposes the created conversation and only reads to reconcile", async (t) => {
   let requests = 0;
-  t.mock.method(globalThis, "fetch", async () => {
+  t.mock.method(globalThis, "fetch", async (path: string) => {
     requests++;
+    if (path.includes("/submissions/")) return Response.json({ error: "not found" }, { status: 404 });
     if (requests === 1) return Response.json({ id: "saved" });
     throw new Error("connection lost");
   });
   let saved = "";
   await assert.rejects(startConversation("keep my draft", [], "model", (item) => { saved = item.id; }), /connection lost/);
   assert.equal(saved, "saved");
-  assert.equal(requests, 2);
+  assert.equal(requests, 3);
 });
 
 test("attachments upload into the new conversation before sending only their IDs", async (t) => {
@@ -42,7 +45,7 @@ test("attachments upload into the new conversation before sending only their IDs
   t.mock.method(globalThis, "fetch", async (path: string, init: RequestInit) => {
     paths.push(path);
     if (path.endsWith("/attachments")) { assert.ok(init.body instanceof FormData); return Response.json({ id: "attachment" }); }
-    if (path.endsWith("/messages")) { assert.deepEqual(JSON.parse(String(init.body)), { content: "", context_ids: [], attachment_ids: ["attachment"] }); return Response.json({ run_id: "r" }); }
+    if (path.endsWith("/messages")) { const body = JSON.parse(String(init.body)); assert.match(body.submission_id, /^[0-9a-f-]{36}$/); delete body.submission_id; assert.deepEqual(body, { content: "", context_ids: [], attachment_ids: ["attachment"] }); return Response.json({ run_id: "r" }); }
     return Response.json({ id: "c" });
   });
   await startConversation("", [new File(["not injected"], "notes.txt")], "model", () => {});

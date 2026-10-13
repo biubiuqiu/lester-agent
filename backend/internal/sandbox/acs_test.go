@@ -2,7 +2,10 @@ package sandbox
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -53,8 +56,8 @@ func TestACSProviderScopesFilesAndLimitsLines(t *testing.T) {
 	if len(lines.Lines) != 1 || lines.Lines[0].OmittedCharacters != 3 || lines.TotalLines != 3 {
 		t.Fatalf("lines = %#v", lines)
 	}
-	if runtimeClient.readPath != "/workspace/conversations/c1/notes.txt" {
-		t.Fatalf("read path = %q", runtimeClient.readPath)
+	if !strings.Contains(runtimeClient.lastCommand, "'/workspace/conversations/c1/notes.txt'") || runtimeClient.readPath != "" {
+		t.Fatalf("page did not use native helper without a full runtime.Read: command=%q, read=%q", runtimeClient.lastCommand, runtimeClient.readPath)
 	}
 	if _, err = provider.ReadFile(context.Background(), "acs-1", "/workspace/conversations/c1", "/workspace/conversations/other/secret"); err == nil {
 		t.Fatal("expected cross-conversation path rejection")
@@ -129,12 +132,41 @@ func (b *fakeACSBackend) Pause(context.Context, string) error { return nil }
 func (b *fakeACSBackend) Kill(context.Context, string) error  { return nil }
 
 type fakeACSRuntime struct {
-	data     []byte
-	readPath string
-	symlink  string
+	data          []byte
+	readPath      string
+	symlink       string
+	lastCommand   string
+	helperVersion string
 }
 
-func (r *fakeACSRuntime) Run(context.Context, string, string, func(string), func(string)) (*acsCommandResult, error) {
+func (r *fakeACSRuntime) Run(_ context.Context, command, _ string, _ func(string), _ func(string)) (*acsCommandResult, error) {
+	r.lastCommand = command
+	if strings.HasSuffix(command, " version") {
+		version := r.helperVersion
+		if version == "" {
+			version = "2"
+		}
+		return &acsCommandResult{Stdout: version + "\n"}, nil
+	}
+	if strings.Contains(command, "'read-lines'") {
+		values := regexp.MustCompile("'([^']*)'").FindAllStringSubmatch(command, -1)
+		offset, limit := 1, 2000
+		for index, value := range values {
+			if index+1 >= len(values) {
+				break
+			}
+			if value[1] == "--offset" {
+				offset, _ = strconv.Atoi(values[index+1][1])
+			}
+			if value[1] == "--limit" {
+				limit, _ = strconv.Atoi(values[index+1][1])
+			}
+		}
+		lines := readLinesFromBytes(r.data, offset, limit)
+		lines.SHA256, lines.ByteSize, lines.EndsWithNewline = sha256String(r.data), int64(len(r.data)), len(r.data) > 0 && r.data[len(r.data)-1] == '\n'
+		encoded, _ := json.Marshal(lines)
+		return &acsCommandResult{Stdout: string(encoded)}, nil
+	}
 	return &acsCommandResult{}, nil
 }
 func (r *fakeACSRuntime) StartTerminal(context.Context, string) (acsProcess, error) {

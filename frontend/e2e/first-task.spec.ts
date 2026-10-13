@@ -74,7 +74,7 @@ test("login, explicit first task, live file tabs and independent HTML preview", 
   const taskMutations = api.mutations.filter(item => item.path.startsWith("/api/v1/conversations"));
   expect(taskMutations.map(item => item.path)).toEqual(["/api/v1/conversations", `/api/v1/conversations/${conversationId}/messages`]);
   expect(taskMutations[0].body).toMatchObject({ project_id: "fixture-project", agent_slug: "lester", model_deployment_id: "fixture-model" });
-  expect(taskMutations[1].body).toEqual({ content: prompt, context_ids: [], attachment_ids: [] });
+  expect(taskMutations[1].body).toEqual({ content: prompt, context_ids: [], attachment_ids: [], submission_id: expect.stringMatching(/^[0-9a-f-]{36}$/) });
   await expect.poll(() => api.streamCount).toBeGreaterThan(0);
   api.finish();
   const tabs = page.getByRole("tablist", { name: "已打开文件" });

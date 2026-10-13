@@ -2,6 +2,8 @@ package conversation
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -101,6 +103,10 @@ func newTranscriptFixture(t *testing.T, legacy bool) transcriptFixture {
 	applyTestMigration(t, db, "000010_agent_files.up.sql")
 	applyTestMigration(t, db, "000011_agent_designer.up.sql")
 	applyTestMigration(t, db, "000012_deliverables_events.up.sql")
+	applyTestMigration(t, db, "000016_run_submissions.up.sql")
+	applyTestMigration(t, db, "000017_model_budget.up.sql")
+	applyTestMigration(t, db, "000018_command_tasks.up.sql")
+	applyTestMigration(t, db, "000019_model_request_usage.up.sql")
 	return f
 }
 
@@ -211,6 +217,7 @@ func (f *transcriptSandboxFixture) serveHTTP(w http.ResponseWriter, r *http.Requ
 
 	switch {
 	case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/files/lines"):
+		original := f.files[path]
 		lines := strings.Split(f.files[path], "\n")
 		if len(lines) > 0 && lines[len(lines)-1] == "" {
 			lines = lines[:len(lines)-1]
@@ -225,7 +232,8 @@ func (f *transcriptSandboxFixture) serveHTTP(w http.ResponseWriter, r *http.Requ
 		}
 		start := min(offset-1, len(lines))
 		end := min(start+limit, len(lines))
-		result := sandbox.FileLines{StartLine: offset, TotalLines: len(lines)}
+		digest := sha256.Sum256([]byte(original))
+		result := sandbox.FileLines{StartLine: offset, TotalLines: len(lines), SHA256: hex.EncodeToString(digest[:]), ByteSize: int64(len(original)), EndsWithNewline: strings.HasSuffix(original, "\n")}
 		for _, line := range lines[start:end] {
 			result.Lines = append(result.Lines, sandbox.FileLine{Text: line})
 		}
@@ -237,10 +245,31 @@ func (f *transcriptSandboxFixture) serveHTTP(w http.ResponseWriter, r *http.Requ
 		body, _ := io.ReadAll(r.Body)
 		f.files[path] = string(body)
 		w.WriteHeader(http.StatusNoContent)
+	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/files/write-checked"):
+		var input sandbox.FileWriteRequest
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			http.Error(w, "invalid write", http.StatusBadRequest)
+			return
+		}
+		current, exists := f.files[path]
+		digest := sha256.Sum256([]byte(current))
+		if (input.CreateOnly && exists) || (input.ExpectedSHA256 != "" && (!exists || input.ExpectedSHA256 != hex.EncodeToString(digest[:]))) {
+			http.Error(w, "file version conflict", http.StatusConflict)
+			return
+		}
+		f.files[path] = string(input.Content)
+		written := sha256.Sum256(input.Content)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(sandbox.FileWriteResult{OK: true, SHA256: hex.EncodeToString(written[:]), BytesWritten: int64(len(input.Content))})
 	case r.Method == http.MethodPatch && strings.HasSuffix(r.URL.Path, "/files/content"):
 		var input sandbox.FileEditRequest
 		if err := json.NewDecoder(r.Body).Decode(&input); err != nil || input.OldString == "" {
 			http.Error(w, "invalid edit request", http.StatusBadRequest)
+			return
+		}
+		baseline := sha256.Sum256([]byte(f.files[path]))
+		if input.ExpectedSHA256 != "" && input.ExpectedSHA256 != hex.EncodeToString(baseline[:]) {
+			http.Error(w, "file version conflict", http.StatusConflict)
 			return
 		}
 		matches := strings.Count(f.files[path], input.OldString)
@@ -254,7 +283,8 @@ func (f *transcriptSandboxFixture) serveHTTP(w http.ResponseWriter, r *http.Requ
 		}
 		f.files[path] = strings.Replace(f.files[path], input.OldString, input.NewString, count)
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(sandbox.FileEditResult{OK: true, Replacements: matches, SHA256: "test-digest"})
+		updated := sha256.Sum256([]byte(f.files[path]))
+		_ = json.NewEncoder(w).Encode(sandbox.FileEditResult{OK: true, Replacements: matches, SHA256: hex.EncodeToString(updated[:])})
 	default:
 		http.NotFound(w, r)
 	}

@@ -30,6 +30,9 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T post
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000015_rotating_tokens.up.sql
+for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage; do
+  docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "backend/migrations/${migration}.up.sql" || exit 1
+done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
 ```
 
@@ -386,7 +389,7 @@ For an existing `deploy/.env` using the previous default `SANDBOX_IMAGE=python:3
 
 Restricted build environments may supply a prepopulated Playwright cache with BuildKit `--build-context browser-cache=/path/to/cache`; normal builds download the pinned browser automatically. The cache must contain binaries for the target architecture and the pinned Playwright revision. Optional `--secret id=proxy_ca,src=/path/to/combined-ca-bundle` supplies build-only TLS trust without persisting session certificates.
 
-`bash` accepts `run_in_background: true`, immediately returning a task ID, PID, and `.lester/tasks/{taskId}.log`. Read the log to inspect progress. Starting a background process does not prove it succeeded.
+`bash` accepts `run_in_background: true`, returning a managed task ID, actual Shell/status and `.lester/tasks/{taskId}/output.log`. Use `task_output` for stable byte-offset output pages and `stop_task` for explicit task cancellation. Starting a background process does not prove it succeeded. The conversation's **命令任务** disclosure exposes logs, download and a separate Stop command action; stopping Agent generation does not stop background tasks.
 
 Command truncation retains the beginning and end with omitted-byte counts. Text `read` streams a contiguous line range, returning one-based right-aligned line numbers, a tab, and original text, such as `"     1\tport: 8080"`. Use `offset`, `limit`, and `next_offset` to page; lines over 2,000 characters are explicitly truncated. Do not include added line-number prefixes in edits. Image reads return bounded `images[]` envelopes that integrations translate to native vision parts, not text containing base64.
 
@@ -416,7 +419,7 @@ Before every model iteration, the runtime derives a read-only projection of comp
 
 Calls and results are paired atomically, even in mixed batches. Failures are pinned as FULL until a verified matching success occurs in a later batch. Bash requires the same command and foreground/background mode; reads require the same path; other tools require equivalent JSON arguments. Conversational claims, same-batch successes, and background launches do not release failure pins.
 
-Compound commands and redirected commands are not treated as allowlisted bare commands. `load_skill`, unknown tools, and unrecognized results stay FULL conservatively. References are marked historical data, not executable tool arguments. `tool_execution_id` is `run_id:tool_call_id`; background references keep `task_id` and `log_path`. Re-reading sees current files, not a historical snapshot; do not replay side effects to reconstruct output.
+Compound commands and redirected commands are not treated as allowlisted bare commands. `load_skill`, unknown tools, and unrecognized results stay FULL conservatively. References are marked historical data, not executable tool arguments. Pass `tool_execution_id` (`run_id:tool_call_id`) to `read_tool_result` to page the original stored result within the current conversation. This does not restore output shortened before storage or grant fresh file-write observations; use `task_output` for managed raw logs. Background references keep `task_id` and `log_path`. Re-reading files sees their current state; do not replay side effects to reconstruct output.
 
 `MODEL_STARTED.payload.tool_context` reports policy version, FULL/REFERENCE/EVICTED/PIN counts, and before/after character counts, not exact token usage. `runs.context` stores the policy version and window size. This policy requires existing migration 004 but no extra migration. It does not add summaries, automatic compaction, Memory, RAG, or a total context budget; prose, references, and unresolved failures may still grow.
 
@@ -439,7 +442,7 @@ Fresh installs apply 004–005 automatically. Migration 004 preserves old chat o
 
 ### Deliverable registration and reliable events upgrade
 
-The current version requires migrations 001–015. Migration 013 is described in [Accounts and sign-in](#accounts-and-sign-in). The historical 004–005 commands above are insufficient for a full upgrade; apply every missing migration in numeric order. For a database already on 001–011, back it up, stop API writes, apply 012 once, then complete 013, 014 and 015 below before rebuilding API/Web:
+The current version requires migrations 001–019. Migration 013 is described in [Accounts and sign-in](#accounts-and-sign-in). The historical 004–005 commands above are insufficient for a full upgrade; apply every missing migration in numeric order. For a database already on 001–011, back it up, stop API writes, apply 012 once, then complete 013, 014 and 015 below before rebuilding API/Web:
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
@@ -448,7 +451,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T post
   < backend/migrations/000012_deliverables_events.up.sql
 ```
 
-New Compose volumes initialize migrations 001–015; existing volumes never upgrade automatically. Do not delete volumes. Rolling back 012 drops registered metadata and pending delivery intents while preserving Computer files, messages, run events, and published artifacts. Stop the updated API before rollback and restore a compatible application version. Monitor pending outbox count and disk space during prolonged Redis outages.
+New Compose volumes initialize migrations 001–019; existing volumes never upgrade automatically. Do not delete volumes. Rolling back 012 drops registered metadata and pending delivery intents while preserving Computer files, messages, run events, and published artifacts. Stop the updated API before rollback and restore a compatible application version. Monitor pending outbox count and disk space during prolonged Redis outages.
 
 ## Skills and attachments
 
@@ -718,17 +721,20 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000013_account_identity.up.sql
-# Also apply 014 and 015 before restarting the latest API/Web.
+# Apply 014–019 before restarting the latest services.
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000014_user_guides.up.sql
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000015_rotating_tokens.up.sql
+for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage; do
+  docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "backend/migrations/${migration}.up.sql" || exit 1
+done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
 ```
 
-Fresh Compose volumes initialize 001–015 automatically; existing volumes never re-run init scripts. PowerShell can pipe `Get-Content -Raw` into the same `exec -T postgres` command. Rolling back 013 removes identity/token/avatar references and therefore **refuses while accounts without passwords exist**; arrange password recovery before a downgrade and restore a compatible application version. Existing workspace files and projects are not moved. PostgreSQL-backed auth tests use mock identity providers and a local SMTP fixture; live third-party consent/delivery require deployment validation.
+Fresh Compose volumes initialize 001–019 automatically; existing volumes never re-run init scripts. PowerShell can pipe `Get-Content -Raw` into the same `exec -T postgres` command. Rolling back 013 removes identity/token/avatar references and therefore **refuses while accounts without passwords exist**; arrange password recovery before a downgrade and restore a compatible application version. Existing workspace files and projects are not moved. PostgreSQL-backed auth tests use mock identity providers and a local SMTP fixture; live third-party consent/delivery require deployment validation.
 
 ## Administration
 
@@ -772,7 +778,29 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000015_rotating_tokens.up.sql
+for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage; do
+  docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "backend/migrations/${migration}.up.sql" || exit 1
+done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
 ```
 
-Migration 015 invalidates old sessions: users sign in once after upgrade. Accounts, profiles, projects and files remain intact. Retain `.env`, encryption keys and volumes. Fresh Compose volumes initialize 001–015; Helm requires SQL before deployment. Rolling back 015 also invalidates current credentials and must be paired with compatible API/Web. The lifetimes are fixed application defaults; no extra environment variables are required.
+Migration 015 invalidates old sessions: users sign in once after upgrade. Accounts, profiles, projects and files remain intact. Retain `.env`, encryption keys and volumes. Fresh Compose volumes initialize 001–019; Helm requires SQL before deployment. Rolling back 015 also invalidates current credentials and must be paired with compatible API/Web. The lifetimes are fixed application defaults; no extra environment variables are required.
+
+
+## Runtime reliability upgrade
+
+Sends use stable submission IDs to avoid duplicate runs when a response is lost. Accepted sends and stops remain accepted when a later read fails; attachment retries reuse successful uploads. A running task keeps its selected model. Native file writes validate the digest of visible reads: full replacement requires a full read, precise editing requires its untruncated observed range, and stale reads require reinspection. Helper writers share conditional-write locks; arbitrary Bash writes do not.
+
+Managed command logs retain up to 64 MiB of raw combined output. Larger logs disclose omitted bytes. Nonzero exits, timeouts, cancelled partial output and unknown cleanup are explicit. Task state is reconciled separately from Agent completion, and active or unconfirmed work prevents idle suspension. Lost launch receipts are inspected without relaunch; unknown process identity cannot be stopped blindly. New Docker Computers use `--init`; existing containers are not replaced to add it. Rebuild ACS templates for file protocol 2/task protocol 1 and deploy the matching Sandbox Service helper. Local ACS fixtures do not verify live cloud access.
+
+Model settings offer an explicit text-only verification call; saved configuration does not verify provider access. Shared models can be verified without exposing credentials or budget edits. Expand Context budget to set a known window, output reserve and local policy. Zero means unknown/automatic/default 64k policy; it does not invent a model limit or cap ordinary replies. Whole-request estimates and actual/missing provider usage are persisted per request, with cached input counted once. Automatic context checkpoints are still tracked as remaining work in [the alignment implementation](docs/claude-code-alignment.md).
+
+Existing databases on 001–015 must apply 016–019 once in order, before starting the updated services. Back up PostgreSQL, stop API writes and preserve keys, files and volumes. Earlier databases must first complete their missing migrations. Fresh volumes initialize all migrations. Stop managed tasks before rolling back 018; schema rollback does not undo file or external effects.
+
+```bash
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
+for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage; do
+  docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "backend/migrations/${migration}.up.sql" || exit 1
+done
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web sandbox-service
+```

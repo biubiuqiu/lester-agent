@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -18,6 +19,7 @@ import (
 	"unicode/utf8"
 
 	"connectrpc.com/connect"
+	"github.com/google/uuid"
 	acsapi "github.com/openkruise/agents-api/sdk/proto/api"
 	acsprocess "github.com/openkruise/agents-api/sdk/proto/envd/process"
 	acsruntime "github.com/openkruise/agents-api/sdk/runtime"
@@ -90,6 +92,7 @@ type acsCommandResult struct {
 	Stdout   string
 	Stderr   string
 	ExitCode int
+	Shell    string
 }
 
 type acsFileEntry struct {
@@ -242,7 +245,7 @@ func (p *ACSProvider) Exec(ctx context.Context, providerRef string, command Comm
 	if err != nil {
 		return nil, err
 	}
-	if _, err = runtimeClient.Run(ctx, "mkdir -p -- "+shellQuote(workDir), "/workspace", nil, nil); err != nil {
+	if _, err = runtimeClient.Run(ctx, "mkdir -p -- "+shellQuote(workDir)+" && command -v setsid >/dev/null", "/workspace", nil, nil); err != nil {
 		return nil, fmt.Errorf("prepare sandbox work directory: %w", err)
 	}
 	timeoutSeconds := command.TimeoutSeconds
@@ -256,27 +259,63 @@ func (p *ACSProvider) Exec(ctx context.Context, providerRef string, command Comm
 	defer cancel()
 	stdout, stderr := newBoundedCapture(commandCaptureLimit), newBoundedCapture(commandCaptureLimit)
 	startedAt := time.Now()
-	result, runErr := runtimeClient.Run(runCtx, command.Command, workDir,
+	pidFile := "/tmp/.lester-command-" + uuid.NewString() + ".pid"
+	ownedCommand := "exec setsid sh -c " + shellQuote(dockerCommandStart) + " lester-command " + shellQuote(pidFile) + " bash " + shellQuote(command.Command)
+	result, runErr := runtimeClient.Run(runCtx, ownedCommand, workDir,
 		func(value string) { _, _ = stdout.Write([]byte(value)) },
 		func(value string) { _, _ = stderr.Write([]byte(value)) },
 	)
-	if result == nil {
-		return nil, runErr
+	status := "exited"
+	var cleanupConfirmed *bool
+	if runCtx.Err() != nil || result == nil {
+		status = "unknown"
+		if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
+			status = "timed_out"
+		} else if errors.Is(runCtx.Err(), context.Canceled) {
+			status = "cancelled"
+		}
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_, cleanupErr := runtimeClient.Run(cleanupCtx, "sh -c "+shellQuote(dockerCommandStop)+" lester-command "+shellQuote(pidFile), workDir, nil, nil)
+		cleanupCancel()
+		confirmed := cleanupErr == nil
+		cleanupConfirmed = &confirmed
+		if cleanupErr != nil {
+			_, _ = stderr.Write([]byte("\nCould not confirm remote command cleanup: " + cleanupErr.Error()))
+		}
 	}
-	if stdout.String() == "" && result.Stdout != "" {
+	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	_, _ = runtimeClient.Run(cleanupCtx, "rm -f -- "+shellQuote(pidFile)+" "+shellQuote(pidFile+".exit"), workDir, nil, nil)
+	cleanupCancel()
+	if result != nil && stdout.String() == "" && result.Stdout != "" {
 		_, _ = stdout.Write([]byte(result.Stdout))
 	}
-	if stderr.String() == "" && result.Stderr != "" {
+	if result != nil && stderr.String() == "" && result.Stderr != "" {
 		_, _ = stderr.Write([]byte(result.Stderr))
 	}
 	// A non-zero program exit is a command result, matching DockerProvider.
-	if runErr != nil && result.ExitCode == 0 {
-		return nil, runErr
+	exitCode, exitKnown, shell := -1, false, "unknown"
+	if result != nil {
+		shell = result.Shell
+		if shell == "" {
+			shell = "unknown"
+		}
+		if status == "exited" && (runErr == nil || result.ExitCode != 0) {
+			exitCode, exitKnown = result.ExitCode, true
+		} else if status == "exited" {
+			status = "unknown"
+		}
 	}
-	return &CommandResult{
-		ExitCode: result.ExitCode, Stdout: stdout.String(), Stderr: stderr.String(), DurationMS: time.Since(startedAt).Milliseconds(),
+	response := &CommandResult{
+		ExitCode: exitCode, ExitCodeKnown: exitKnown, Shell: shell, Status: status, CleanupConfirmed: cleanupConfirmed, Stdout: stdout.String(), Stderr: stderr.String(), DurationMS: time.Since(startedAt).Milliseconds(),
 		StdoutTruncated: stdout.Truncated(), StderrTruncated: stderr.Truncated(), StdoutOmittedBytes: stdout.OmittedBytes(), StderrOmittedBytes: stderr.OmittedBytes(),
-	}, nil
+	}
+	if status == "unknown" {
+		if runErr == nil {
+			runErr = errors.New("sandbox command completion could not be confirmed")
+		}
+		return response, runErr
+	}
+	return response, nil
 }
 
 func (p *ACSProvider) ReadFile(ctx context.Context, providerRef, workDir, filePath string) ([]byte, error) {
@@ -302,58 +341,43 @@ func (p *ACSProvider) ReadFileLines(ctx context.Context, providerRef, workDir, f
 	if offset < 1 || limit < 1 || limit > 2000 {
 		return nil, errors.New("invalid file line range")
 	}
-	data, err := p.ReadFile(ctx, providerRef, workDir, filePath)
+	output, err := p.runFileToolbox(ctx, providerRef, workDir, filePath, "read-lines", nil, "--offset", fmt.Sprint(offset), "--limit", fmt.Sprint(limit))
 	if err != nil {
 		return nil, err
 	}
-	return readLinesFromBytes(data, offset, limit), nil
+	var result FileLines
+	if err = json.Unmarshal(output, &result); err != nil {
+		return nil, fmt.Errorf("decode native file page: %w", err)
+	}
+	return &result, nil
 }
 
 func (p *ACSProvider) WriteFile(ctx context.Context, providerRef, workDir, filePath string, data []byte) error {
 	if len(data) > acsMaxFileBytes {
 		return errors.New("file exceeds the 25 MiB write limit")
 	}
-	_, target, err := scopedPath(workDir, filePath)
+	input, err := json.Marshal(FileWriteRequest{Content: append([]byte{}, data...)})
 	if err != nil {
 		return err
 	}
-	runtimeClient, err := p.runtime(ctx, providerRef)
-	if err != nil {
-		return err
-	}
-	if err = validateACSPath(ctx, runtimeClient, path.Clean(workDir), target, true); err != nil {
-		return err
-	}
-	return runtimeClient.Write(ctx, target, data)
+	_, err = p.runFileToolbox(ctx, providerRef, workDir, filePath, "write-request", input)
+	return err
 }
 
 func (p *ACSProvider) EditFile(ctx context.Context, providerRef, workDir, filePath string, request FileEditRequest) (*FileEditResult, error) {
-	if request.OldString == "" {
-		return nil, errors.New("old_string cannot be empty")
-	}
-	data, err := p.ReadFile(ctx, providerRef, workDir, filePath)
+	input, err := json.Marshal(request)
 	if err != nil {
 		return nil, err
 	}
-	currentSHA := sha256String(data)
-	if request.ExpectedSHA256 != "" && !strings.EqualFold(request.ExpectedSHA256, currentSHA) {
-		return nil, errors.New("file changed since it was read")
-	}
-	matches := strings.Count(string(data), request.OldString)
-	if matches == 0 {
-		return nil, errors.New("old_string was not found in the file")
-	}
-	if matches > 1 && !request.ReplaceAll {
-		return nil, fmt.Errorf("old_string matched %d locations; include more context or set replace_all", matches)
-	}
-	updated := strings.Replace(string(data), request.OldString, request.NewString, 1)
-	if request.ReplaceAll {
-		updated = strings.ReplaceAll(string(data), request.OldString, request.NewString)
-	}
-	if err = p.WriteFile(ctx, providerRef, workDir, filePath, []byte(updated)); err != nil {
+	output, err := p.runFileToolbox(ctx, providerRef, workDir, filePath, "edit", input)
+	if err != nil {
 		return nil, err
 	}
-	return &FileEditResult{OK: true, Replacements: matches, SHA256: sha256String([]byte(updated))}, nil
+	var result FileEditResult
+	if err = json.Unmarshal(output, &result); err != nil {
+		return nil, fmt.Errorf("decode native edit result: %w", err)
+	}
+	return &result, nil
 }
 
 func (p *ACSProvider) ListFiles(ctx context.Context, providerRef, workDir, filePath string) ([]FileEntry, error) {
@@ -544,7 +568,7 @@ func (r *openKruiseRuntime) Run(ctx context.Context, command, workDir string, st
 	if result == nil {
 		return nil, err
 	}
-	return &acsCommandResult{Stdout: result.Stdout, Stderr: result.Stderr, ExitCode: int(result.ExitCode)}, err
+	return &acsCommandResult{Stdout: result.Stdout, Stderr: result.Stderr, ExitCode: int(result.ExitCode), Shell: "bash"}, err
 }
 
 func (r *openKruiseRuntime) StartTerminal(ctx context.Context, workDir string) (acsProcess, error) {

@@ -74,8 +74,8 @@ func TestStreamRetainsAllToolCallsAndDetectsInterruptedEOF(t *testing.T) {
 	var calls []string
 	var streamErr error
 	for event := range events {
-		if event.ToolCall != nil {
-			calls = append(calls, event.ToolCall.ID)
+		for _, call := range event.ToolCallDeltas() {
+			calls = append(calls, call.ID)
 		}
 		if event.Err != nil {
 			streamErr = event.Err

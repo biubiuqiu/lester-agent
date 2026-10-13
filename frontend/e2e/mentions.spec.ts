@@ -76,7 +76,7 @@ test("mixed references preview, persist and send only typed IDs on explicit subm
   await expect(page.locator(".message-context")).toContainText("项目背景");
   const sent = api.mutations.filter(item => item.path.endsWith("/messages"));
   expect(sent).toHaveLength(1);
-  expect(sent[0].body).toEqual({ content: "请整理", attachment_ids: [], context_ids: [contextId], references: [{ type: "conversation", id: sourceId }, { type: "skill", id: skillId }] });
+  expect(sent[0].body).toEqual({ content: "请整理", attachment_ids: [], context_ids: [contextId], references: [{ type: "conversation", id: sourceId }, { type: "skill", id: skillId }], submission_id: expect.stringMatching(/^[0-9a-f-]{36}$/) });
 });
 
 test("failed first send keeps all reference drafts; new-task grants exclude the current chat", async ({ page, api }, info) => {

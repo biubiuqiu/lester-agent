@@ -3,6 +3,7 @@ package sandbox
 import (
 	"context"
 	"crypto/subtle"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -40,14 +41,42 @@ func (h *ServiceHandler) Router() http.Handler {
 		private.Post("/v1/sandboxes/{id}/resume", h.action(h.provider.Resume))
 		private.Delete("/v1/sandboxes/{id}", h.action(h.provider.Destroy))
 		private.Post("/v1/sandboxes/{id}/exec", h.exec)
+		private.Post("/v1/sandboxes/{id}/command-tasks", h.taskEndpoint("start"))
+		private.Post("/v1/sandboxes/{id}/command-tasks/inspect", h.taskEndpoint("inspect"))
+		private.Post("/v1/sandboxes/{id}/command-tasks/stop", h.taskEndpoint("stop"))
 		private.Get("/v1/sandboxes/{id}/files", h.list)
 		private.Get("/v1/sandboxes/{id}/files/content", h.read)
 		private.Get("/v1/sandboxes/{id}/files/lines", h.readLines)
 		private.Put("/v1/sandboxes/{id}/files/content", h.write)
+		private.Post("/v1/sandboxes/{id}/files/write-checked", h.writeChecked)
 		private.Patch("/v1/sandboxes/{id}/files/content", h.edit)
 		private.Get("/v1/sandboxes/{id}/terminal", h.terminal)
 	})
 	return r
+}
+func (h *ServiceHandler) writeChecked(w http.ResponseWriter, r *http.Request) {
+	writer, supported := h.provider.(VersionedFileWriter)
+	if !supported {
+		httpapi.Error(w, http.StatusNotImplemented, errors.New("sandbox provider does not support protected writes"))
+		return
+	}
+	var request FileWriteRequest
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, (25<<20)*4/3+(1<<20)))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&request); err != nil || request.Content == nil {
+		httpapi.Error(w, http.StatusBadRequest, errors.New("content must be supplied as a bounded byte payload"))
+		return
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		httpapi.Error(w, http.StatusBadRequest, errors.New("expected one JSON request"))
+		return
+	}
+	result, err := writer.WriteFileVersioned(r.Context(), chi.URLParam(r, "id"), r.URL.Query().Get("work_dir"), r.URL.Query().Get("path"), request)
+	if err != nil {
+		httpapi.Error(w, http.StatusConflict, err)
+		return
+	}
+	httpapi.JSON(w, http.StatusOK, result)
 }
 func (h *ServiceHandler) readLines(w http.ResponseWriter, r *http.Request) {
 	offset, err1 := strconv.Atoi(r.URL.Query().Get("offset"))

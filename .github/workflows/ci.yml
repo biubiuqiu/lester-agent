@@ -270,7 +270,7 @@ jobs:
         env:
           LESTER_TEST_RUNTIME_IMAGE: lester-sandbox-runtime:local
           LESTER_TEST_DOCKER_IMAGE: lester-sandbox-runtime:local
-        run: go test -count=1 -timeout=5m ./internal/sandbox
+        run: go test -count=1 -timeout=5m ./internal/sandbox ./internal/agenttool ./internal/commandtask
       - name: Clean up fixture volume
         if: always()
         run: docker volume rm lester-runtime-check-workspace || test "$(docker volume ls -q --filter name=^lester-runtime-check-workspace$)" = ""

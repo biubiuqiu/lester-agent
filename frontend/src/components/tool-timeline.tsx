@@ -5,6 +5,7 @@ import { T, useT } from "@/components/i18n";
 
 import { Check, ChevronDown, CircleX, FileText, LoaderCircle, Square, TerminalSquare, Wrench } from "lucide-react";
 import { MessageContent } from "./message-content";
+import { commandOutcome, commandResult } from "@/lib/command-outcome";
 
 export type RunEvent = {
   id: number;
@@ -18,7 +19,7 @@ export type RunEvent = {
 type ToolActivity = {
   id: number;
   tool: string;
-  status: "running" | "completed" | "failed" | "cancelled";
+  status: "running" | "completed" | "failed" | "cancelled" | "unknown";
   events: RunEvent[];
 };
 
@@ -116,7 +117,14 @@ function narrativeItems(events: RunEvent[]): NarrativeItem[] {
     }
     if (current && isToolDetail(event.type)) {
       current.events.push(event);
-      if (event.type === "TOOL_COMPLETED") current.status = "completed";
+      if (event.type === "COMMAND_COMPLETED") {
+        const outcome = commandOutcome(event.payload);
+        if (outcome && outcome !== "background") current.status = outcome;
+      }
+      if (event.type === "TOOL_COMPLETED") {
+        const outcome = commandOutcome(event.payload.result);
+        current.status = outcome && outcome !== "background" ? outcome : current.status === "running" ? "completed" : current.status;
+      }
       if (event.type === "TOOL_FAILED") current.status = "failed";
       if (event.type === "TOOL_COMPLETED" || event.type === "TOOL_FAILED") {
         items.push({ kind: "tool", activity: current });
@@ -160,6 +168,13 @@ function runStatus(events: RunEvent[]) {
 }
 
 function activityLabel(activity: ToolActivity, t: ReturnType<typeof useT>) {
+  if (activity.tool === "bash" || activity.tool === "computer_exec") {
+    if (activity.events.some(event => event.type === "BACKGROUND_STARTED")) return t("已启动后台命令");
+    const ended = activity.events.findLast(event => event.type === "COMMAND_COMPLETED");
+    if (activity.status === "unknown") return t("命令状态尚未确认");
+    if (ended?.payload.status === "timed_out") return t("命令执行超时");
+    if (ended && ended.payload.exit_code_known !== false && typeof ended.payload.exit_code === "number") return t("命令结束 · 退出码 {0}", [String(ended.payload.exit_code)]);
+  }
   const verb = activity.status === "running" ? "正在：{0}" : activity.status === "failed" ? "未能：{0}" : activity.status === "cancelled" ? "已停止：{0}" : "已完成：{0}";
   const action = ({
     bash: "运行命令",
@@ -190,7 +205,10 @@ function activityDetails(activity: ToolActivity, t: ReturnType<typeof useT>) {
   const details: Array<{ kind: "code" | "output"; value: string }> = [];
   const started = activity.events.find((event) => event.type === "TOOL_STARTED");
   const command = activity.events.find((event) => event.type === "COMMAND_STARTED");
-  const output = activity.events.find((event) => event.type === "COMMAND_OUTPUT");
+  const outputs = activity.events.filter((event) => event.type === "COMMAND_OUTPUT");
+  const ended = activity.events.findLast((event) => event.type === "COMMAND_COMPLETED");
+  const finished = activity.events.findLast(event => event.type === "TOOL_COMPLETED" || event.type === "TOOL_FAILED");
+  const result = commandResult(finished?.payload.result);
   const background = activity.events.find((event) => event.type === "BACKGROUND_STARTED");
   const file = activity.events.find((event) => event.type === "FILE_UPDATED");
   const failed = activity.events.find((event) => event.type === "TOOL_FAILED" || event.type === "RUN_FAILED");
@@ -201,10 +219,13 @@ function activityDetails(activity: ToolActivity, t: ReturnType<typeof useT>) {
   if (updatedPath && !argumentsDetail.startsWith(updatedPath)) details.push({ kind: "code", value: updatedPath });
   if (file?.payload.replacements) details.push({ kind: "code", value: t("已替换 {0} 处", [String(file.payload.replacements)]) });
   if (background?.payload.log_path) details.push({ kind: "code", value: t("后台日志：{0}", [String(background.payload.log_path)]) });
-  if (output) {
+  if (ended?.payload.shell && ended.payload.shell !== "unknown") details.push({ kind: "code", value: t("执行 Shell：{0}", [String(ended.payload.shell)]) });
+  if (ended && ended.payload.exit_code_known !== false && typeof ended.payload.exit_code === "number") details.push({ kind: "code", value: t("命令结束 · 退出码 {0}", [String(ended.payload.exit_code)]) });
+  for (const output of outputs) {
     const value = [output.payload.stdout, output.payload.stderr].filter(Boolean).join("\n").trim();
     if (value) details.push({ kind: "output", value });
   }
+  if (result?.stdout_truncated || result?.stderr_truncated || result?.preview_truncated || result?.truncated) details.push({ kind: "output", value: t("命令输出已截断。") });
   if (failed?.payload.error) details.push({ kind: "output", value: String(failed.payload.error) });
   return details;
 }

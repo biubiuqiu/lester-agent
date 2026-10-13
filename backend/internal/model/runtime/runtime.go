@@ -34,17 +34,20 @@ type Request struct {
 }
 
 type Event struct {
-	Type     string
-	Delta    string
-	ToolCall *ToolCall
-	Usage    map[string]int
-	Err      error
+	Type            string
+	Delta           string
+	ToolCall        *ToolCall
+	ToolCalls       []*ToolCall
+	Usage           map[string]int
+	NormalizedUsage *NormalizedUsage
+	Err             error
 }
 
 type Response struct {
-	Content   string
-	ToolCalls []ToolCall
-	Usage     map[string]int
+	Content         string
+	ToolCalls       []ToolCall
+	Usage           map[string]int
+	NormalizedUsage *NormalizedUsage
 }
 
 type Capabilities struct {

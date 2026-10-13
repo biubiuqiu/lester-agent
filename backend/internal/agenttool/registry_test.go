@@ -2,7 +2,10 @@ package agenttool
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -11,7 +14,7 @@ import (
 
 func TestDefaultRegistryDefinitions(t *testing.T) {
 	definitions := NewDefaultRegistry(nil).Definitions()
-	want := []string{"bash", "read", "write", "edit", "load_skill", "read_conversation"}
+	want := []string{"bash", "read", "write", "edit", "load_skill", "task_output", "stop_task", "read_conversation", "read_tool_result"}
 	if len(definitions) != len(want) {
 		t.Fatalf("definitions = %d, want %d", len(definitions), len(want))
 	}
@@ -54,7 +57,7 @@ func TestShellQuote(t *testing.T) {
 
 func TestFileHandlersComposeThroughRegistry(t *testing.T) {
 	computer := &fakeSandbox{files: map[string][]byte{}}
-	environment := Environment{SandboxID: "test", WorkDir: "/workspace/conversations/test", Sandboxes: computer, Emit: func(string, map[string]any) {}}
+	environment := Environment{SandboxID: "test", WorkDir: "/workspace/conversations/test", Sandboxes: computer, Files: NewFileState(nil), Emit: func(string, map[string]any) {}}
 	registry := NewRegistry()
 	registry.Register(Write{})
 	registry.Register(Edit{})
@@ -88,11 +91,20 @@ func (f *fakeSandbox) ReadFileLines(_ context.Context, _, _, path string, offset
 	lines := fileLines(content)
 	start := min(offset-1, len(lines))
 	end := min(start+limit, len(lines))
-	result := &sandbox.FileLines{StartLine: offset, TotalLines: len(lines)}
+	result := &sandbox.FileLines{StartLine: offset, TotalLines: len(lines), SHA256: fakeDigest(f.files[path]), ByteSize: int64(len(f.files[path])), EndsWithNewline: strings.HasSuffix(content, "\n")}
 	for _, line := range lines[start:end] {
 		result.Lines = append(result.Lines, sandbox.FileLine{Text: line})
 	}
 	return result, nil
+}
+func fakeDigest(data []byte) string { sum := sha256.Sum256(data); return hex.EncodeToString(sum[:]) }
+func (f *fakeSandbox) WriteFileVersioned(_ context.Context, _, _, path string, request sandbox.FileWriteRequest) (*sandbox.FileWriteResult, error) {
+	old, exists := f.files[path]
+	if request.CreateOnly && exists || !request.CreateOnly && (!exists || request.ExpectedSHA256 != fakeDigest(old)) {
+		return nil, errors.New("file changed or already exists")
+	}
+	f.files[path] = append([]byte{}, request.Content...)
+	return &sandbox.FileWriteResult{OK: true, SHA256: fakeDigest(request.Content), BytesWritten: int64(len(request.Content))}, nil
 }
 func (f *fakeSandbox) WriteFile(_ context.Context, _, _, path string, data []byte) error {
 	f.files[path] = append([]byte(nil), data...)
@@ -100,6 +112,9 @@ func (f *fakeSandbox) WriteFile(_ context.Context, _, _, path string, data []byt
 }
 func (f *fakeSandbox) EditFile(_ context.Context, _, _, path string, input sandbox.FileEditRequest) (*sandbox.FileEditResult, error) {
 	content := string(f.files[path])
+	if input.ExpectedSHA256 != "" && input.ExpectedSHA256 != fakeDigest(f.files[path]) {
+		return nil, errors.New("file changed since it was read")
+	}
 	replacements := strings.Count(content, input.OldString)
 	if input.ReplaceAll {
 		content = strings.ReplaceAll(content, input.OldString, input.NewString)
@@ -107,7 +122,7 @@ func (f *fakeSandbox) EditFile(_ context.Context, _, _, path string, input sandb
 		content = strings.Replace(content, input.OldString, input.NewString, 1)
 	}
 	f.files[path] = []byte(content)
-	return &sandbox.FileEditResult{OK: true, Replacements: replacements, SHA256: "test"}, nil
+	return &sandbox.FileEditResult{OK: true, Replacements: replacements, SHA256: fakeDigest([]byte(content))}, nil
 }
 func (f *fakeSandbox) ListFiles(context.Context, string, string, string) ([]sandbox.FileEntry, error) {
 	return nil, nil

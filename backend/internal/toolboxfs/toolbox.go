@@ -2,6 +2,7 @@ package toolboxfs
 
 import (
 	"bufio"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -14,6 +15,7 @@ import (
 	"runtime"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -21,6 +23,7 @@ const (
 	MaxDirectoryItems   = 500
 	MaxReadLines        = 2000
 	MaxCharactersInLine = 2000
+	ProtocolVersion     = "2"
 )
 
 type Entry struct {
@@ -37,9 +40,18 @@ type FileLine struct {
 }
 
 type FileLines struct {
-	Lines      []FileLine `json:"lines"`
-	StartLine  int        `json:"start_line"`
-	TotalLines int        `json:"total_lines"`
+	Lines           []FileLine `json:"lines"`
+	StartLine       int        `json:"start_line"`
+	TotalLines      int        `json:"total_lines"`
+	SHA256          string     `json:"sha256"`
+	ByteSize        int64      `json:"byte_size"`
+	EndsWithNewline bool       `json:"ends_with_newline"`
+}
+
+type CheckedWriteRequest struct {
+	Content        []byte `json:"content"`
+	ExpectedSHA256 string `json:"expected_sha256,omitempty"`
+	CreateOnly     bool   `json:"create_only,omitempty"`
 }
 
 type EditRequest struct {
@@ -66,8 +78,19 @@ func Run(args []string, stdin io.Reader, stdout io.Writer) error {
 		return errors.New("missing operation")
 	}
 	if args[0] == "version" {
-		_, err := io.WriteString(stdout, "1\n")
+		_, err := io.WriteString(stdout, ProtocolVersion+"\n")
 		return err
+	}
+	if args[0] == "prepare-input" {
+		return prepareInput(args[1:], stdout)
+	}
+	args, staged, err := stagedInput(args)
+	if err != nil {
+		return err
+	}
+	if staged != nil {
+		defer staged.Close()
+		stdin = staged
 	}
 	root, target, offset, limit, remaining, err := parsePathFlags(args[0], args[1:])
 	if err != nil {
@@ -106,6 +129,31 @@ func Run(args []string, stdin io.Reader, stdout io.Writer) error {
 			return writeErr
 		}
 		return json.NewEncoder(stdout).Encode(result)
+	case "write-checked", "write-request":
+		if len(remaining) != 0 {
+			return errors.New("write-checked does not accept positional arguments")
+		}
+		var request CheckedWriteRequest
+		if err = decodeOneJSON(io.LimitReader(stdin, (MaxFileBytes*4/3)+(1<<20)), &request); err != nil {
+			return fmt.Errorf("decode checked write: %w", err)
+		}
+		if request.Content == nil {
+			return errors.New("content must be supplied, including an explicit empty value")
+		}
+		var result *WriteResult
+		var writeErr error
+		if args[0] == "write-request" {
+			if request.CreateOnly || request.ExpectedSHA256 != "" {
+				return errors.New("write-request does not accept conditional fields")
+			}
+			result, writeErr = Write(root, target, strings.NewReader(string(request.Content)), "")
+		} else {
+			result, writeErr = WriteChecked(root, target, request)
+		}
+		if writeErr != nil {
+			return writeErr
+		}
+		return json.NewEncoder(stdout).Encode(result)
 	case "edit":
 		if len(remaining) != 0 {
 			return errors.New("edit does not accept positional arguments")
@@ -122,6 +170,84 @@ func Run(args []string, stdin io.Reader, stdout io.Writer) error {
 	default:
 		return fmt.Errorf("unknown operation %q", args[0])
 	}
+}
+
+func prepareInput(args []string, output io.Writer) error {
+	flags := flag.NewFlagSet("prepare-input", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	name := flags.String("name", "", "temporary request basename")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 0 || filepath.Base(*name) != *name || !strings.HasPrefix(*name, ".lester-input-") {
+		return errors.New("invalid temporary request name")
+	}
+	root, err := os.OpenRoot(os.TempDir())
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	file, err := root.OpenFile(*name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	if err = file.Close(); err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(output, filepath.Join(os.TempDir(), *name))
+	return err
+}
+
+// Remote runtimes with no stdin API stage a single native protocol request.
+// Open and unlink it before execution so contents do not linger on failure.
+func stagedInput(args []string) ([]string, *os.File, error) {
+	filtered := []string{args[0]}
+	var filename string
+	for index := 1; index < len(args); index++ {
+		if args[index] != "--input-file" {
+			filtered = append(filtered, args[index])
+			continue
+		}
+		if filename != "" || index+1 >= len(args) {
+			return nil, nil, errors.New("invalid input-file option")
+		}
+		index++
+		filename = args[index]
+	}
+	if filename == "" {
+		return filtered, nil, nil
+	}
+	if args[0] != "edit" && args[0] != "write-checked" && args[0] != "write-request" {
+		return nil, nil, errors.New("input-file is only supported for checked write and edit")
+	}
+	if filepath.Dir(filename) != os.TempDir() || !strings.HasPrefix(filepath.Base(filename), ".lester-input-") {
+		return nil, nil, errors.New("input-file must be a Lester temporary request")
+	}
+	info, err := os.Lstat(filename)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !info.Mode().IsRegular() || info.Size() > (MaxFileBytes*4/3)+(1<<20) {
+		return nil, nil, errors.New("invalid staged request file")
+	}
+	root, err := os.OpenRoot(os.TempDir())
+	if err != nil {
+		return nil, nil, err
+	}
+	defer root.Close()
+	file, err := root.OpenFile(filepath.Base(filename), os.O_RDONLY|nonBlockingOpenFlag|noFollowOpenFlag, 0)
+	if err != nil {
+		return nil, nil, err
+	}
+	if info, statErr := file.Stat(); statErr != nil || !info.Mode().IsRegular() || info.Size() > (MaxFileBytes*4/3)+(1<<20) || info.Mode().Perm()&0o077 != 0 {
+		file.Close()
+		return nil, nil, errors.New("invalid opened staged request")
+	}
+	if err = root.Remove(filepath.Base(filename)); err != nil {
+		file.Close()
+		return nil, nil, fmt.Errorf("remove staged request: %w", err)
+	}
+	return filtered, file, nil
 }
 
 func parsePathFlags(operation string, args []string) (string, string, int, int, []string, error) {
@@ -175,11 +301,11 @@ func List(root, target string) ([]Entry, error) {
 }
 
 func Read(root, target string, output io.Writer) error {
-	_, resolved, err := resolveExisting(root, target)
+	rootReal, resolved, err := resolveExisting(root, target)
 	if err != nil {
 		return err
 	}
-	file, err := openRegularFile(resolved)
+	file, err := openRegularFile(rootReal, resolved)
 	if err != nil {
 		return err
 	}
@@ -205,11 +331,11 @@ func ReadLines(root, target string, offset, limit int) (*FileLines, error) {
 	if offset < 1 || limit < 1 || limit > MaxReadLines {
 		return nil, errors.New("invalid file line range")
 	}
-	_, resolved, err := resolveExisting(root, target)
+	rootReal, resolved, err := resolveExisting(root, target)
 	if err != nil {
 		return nil, err
 	}
-	file, err := openRegularFile(resolved)
+	file, err := openRegularFile(rootReal, resolved)
 	if err != nil {
 		return nil, err
 	}
@@ -223,20 +349,38 @@ func ReadLines(root, target string, offset, limit int) (*FileLines, error) {
 	}
 
 	result := &FileLines{StartLine: offset}
-	reader := bufio.NewReader(file)
+	if info, statErr := file.Stat(); statErr != nil || info.Size() > MaxFileBytes {
+		return nil, errors.New("file exceeds the 25 MiB read limit or could not be inspected")
+	}
+	hash := sha256.New()
+	counter := &countingReader{reader: io.TeeReader(io.LimitReader(file, MaxFileBytes+1), hash)}
+	reader := bufio.NewReader(counter)
 	lineNumber, characters, kept, omitted := 1, 0, 0, 0
+	pageCharacters := 0
+	pageFull := false
 	var line strings.Builder
 	finishLine := func() {
 		result.TotalLines++
-		if lineNumber >= offset && lineNumber < offset+limit {
-			result.Lines = append(result.Lines, FileLine{Text: line.String(), OmittedCharacters: omitted})
+		if !pageFull && lineNumber >= offset && lineNumber < offset+limit {
+			// Reserve line-prefix and explicit truncation-notice room. This is a
+			// protocol page cap, not a file-size or token-window claim.
+			needed := kept + 9
+			if omitted > 0 {
+				needed += len(fmt.Sprintf(" [line truncated: %d characters omitted]", omitted))
+			}
+			if pageCharacters+needed <= 30000 {
+				result.Lines = append(result.Lines, FileLine{Text: line.String(), OmittedCharacters: omitted})
+				pageCharacters += needed
+			} else {
+				pageFull = true
+			}
 		}
 		lineNumber++
 		characters, kept, omitted = 0, 0, 0
 		line.Reset()
 	}
 	for {
-		value, _, readErr := reader.ReadRune()
+		value, runeBytes, readErr := reader.ReadRune()
 		if readErr != nil {
 			if errors.Is(readErr, io.EOF) {
 				if characters > 0 {
@@ -245,6 +389,9 @@ func ReadLines(root, target string, offset, limit int) (*FileLines, error) {
 				break
 			}
 			return nil, fmt.Errorf("read file lines: %w", readErr)
+		}
+		if value == 0 || value == utf8.RuneError && runeBytes == 1 {
+			return nil, errors.New("file contains binary or invalid UTF-8 data; inspect it with a format-aware command instead of text read")
 		}
 		if value == '\n' {
 			finishLine()
@@ -261,26 +408,66 @@ func ReadLines(root, target string, offset, limit int) (*FileLines, error) {
 			omitted++
 		}
 	}
+	if counter.count > MaxFileBytes {
+		return nil, errors.New("file exceeds the 25 MiB read limit")
+	}
+	result.SHA256 = hex.EncodeToString(hash.Sum(nil))
+	result.ByteSize = counter.count
+	result.EndsWithNewline = counter.last == '\n' && counter.count > 0
 	return result, nil
 }
 
+type countingReader struct {
+	reader io.Reader
+	count  int64
+	last   byte
+}
+
+func (r *countingReader) Read(buffer []byte) (int, error) {
+	n, err := r.reader.Read(buffer)
+	r.count += int64(n)
+	if n > 0 {
+		r.last = buffer[n-1]
+	}
+	return n, err
+}
+
 func Write(root, target string, input io.Reader, expectedSHA256 string) (*WriteResult, error) {
-	bytesWritten, sum, err := atomicWrite(root, target, input, expectedSHA256)
+	bytesWritten, sum, err := atomicWrite(root, target, input, expectedSHA256, false)
 	if err != nil {
 		return nil, err
 	}
 	return &WriteResult{OK: true, BytesWritten: bytesWritten, SHA256: sum}, nil
 }
 
+func WriteChecked(root, target string, request CheckedWriteRequest) (*WriteResult, error) {
+	if request.CreateOnly == (request.ExpectedSHA256 != "") {
+		return nil, errors.New("choose create_only or an expected_sha256")
+	}
+	if request.ExpectedSHA256 != "" && !validDigest(request.ExpectedSHA256) {
+		return nil, errors.New("expected_sha256 must be a SHA256 digest")
+	}
+	count, sum, err := atomicWrite(root, target, strings.NewReader(string(request.Content)), request.ExpectedSHA256, request.CreateOnly)
+	if err != nil {
+		return nil, err
+	}
+	return &WriteResult{OK: true, SHA256: sum, BytesWritten: count}, nil
+}
+
+func validDigest(value string) bool {
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == sha256.Size
+}
+
 func Edit(root, target string, request EditRequest) (*EditResult, error) {
 	if request.OldString == "" {
 		return nil, errors.New("old_string cannot be empty")
 	}
-	_, resolved, err := resolveExisting(root, target)
+	rootReal, resolved, err := resolveExisting(root, target)
 	if err != nil {
 		return nil, err
 	}
-	data, err := readRegularFile(resolved)
+	data, err := readRegularFile(rootReal, resolved)
 	if err != nil {
 		return nil, err
 	}
@@ -306,8 +493,8 @@ func Edit(root, target string, request EditRequest) (*EditResult, error) {
 	return &EditResult{OK: true, Replacements: matches, SHA256: writeResult.SHA256}, nil
 }
 
-func atomicWrite(root, target string, input io.Reader, expectedSHA256 string) (int64, string, error) {
-	_, parent, destination, err := resolveWriteTarget(root, target)
+func atomicWrite(root, target string, input io.Reader, expectedSHA256 string, createOnly bool) (int64, string, error) {
+	rootReal, parent, destination, err := resolveWriteTarget(root, target)
 	if err != nil {
 		return 0, "", err
 	}
@@ -323,24 +510,29 @@ func atomicWrite(root, target string, input io.Reader, expectedSHA256 string) (i
 	} else if !errors.Is(statErr, os.ErrNotExist) {
 		return 0, "", fmt.Errorf("stat write target: %w", statErr)
 	}
-	if expectedSHA256 != "" {
-		current, readErr := readRegularFile(destination)
-		if readErr != nil {
-			return 0, "", readErr
-		}
-		if !strings.EqualFold(expectedSHA256, sha256Hex(current)) {
-			return 0, "", errors.New("file changed during edit")
-		}
+	scoped, err := os.OpenRoot(rootReal)
+	if err != nil {
+		return 0, "", err
 	}
-
-	temporary, err := os.CreateTemp(parent, ".lester-write-*")
+	defer scoped.Close()
+	parentRelative, err := filepath.Rel(rootReal, parent)
+	if err != nil {
+		return 0, "", err
+	}
+	parentRoot, err := scoped.OpenRoot(parentRelative)
+	if err != nil {
+		return 0, "", err
+	}
+	defer parentRoot.Close()
+	temporaryName := ".lester-write-" + rand.Text()
+	temporary, err := parentRoot.OpenFile(temporaryName, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o600)
 	if err != nil {
 		return 0, "", fmt.Errorf("create temporary file: %w", err)
 	}
-	temporaryPath := temporary.Name()
+	temporaryPath := filepath.Join(parent, temporaryName)
 	cleanup := func() {
 		_ = temporary.Close()
-		_ = os.Remove(temporaryPath)
+		_ = parentRoot.Remove(temporaryName)
 	}
 	if err = temporary.Chmod(mode); err != nil {
 		cleanup()
@@ -361,12 +553,62 @@ func atomicWrite(root, target string, input io.Reader, expectedSHA256 string) (i
 		return 0, "", fmt.Errorf("sync temporary file: %w", err)
 	}
 	if err = temporary.Close(); err != nil {
-		_ = os.Remove(temporaryPath)
+		_ = parentRoot.Remove(temporaryName)
 		return 0, "", fmt.Errorf("close temporary file: %w", err)
 	}
-	if err = replaceFile(temporaryPath, destination); err != nil {
-		_ = os.Remove(temporaryPath)
-		return 0, "", fmt.Errorf("replace file atomically: %w", err)
+	// All native-helper writers acquire the same stable per-path lock, including
+	// legacy writes. Prepare bytes before taking it, then check and commit under
+	// the lock so two conditional writers cannot both accept the same version.
+	unlock, err := lockFile(root, destination)
+	if err != nil {
+		_ = parentRoot.Remove(temporaryName)
+		return 0, "", err
+	}
+	defer unlock()
+	defer parentRoot.Remove(temporaryName)
+	_, currentParent, currentDestination, err := resolveWriteTarget(root, target)
+	if err != nil || currentParent != parent || currentDestination != destination {
+		return 0, "", errors.New("file path changed while preparing the write")
+	}
+	if info, statErr := os.Lstat(destination); statErr == nil && !info.Mode().IsRegular() {
+		return 0, "", errors.New("refusing to replace a non-regular file or symbolic link")
+	}
+	if info, statErr := os.Lstat(destination); statErr == nil {
+		// Preserve the mode at commit time, including permission-only changes
+		// while bytes were being prepared; content hashes do not encode mode.
+		if err = parentRoot.Chmod(temporaryName, info.Mode().Perm()); err != nil {
+			return 0, "", fmt.Errorf("preserve file permissions: %w", err)
+		}
+	}
+	if expectedSHA256 != "" {
+		current, readErr := readRegularFile(rootReal, destination)
+		if readErr != nil {
+			return 0, "", fmt.Errorf("file changed before replacement: %w", readErr)
+		}
+		if !strings.EqualFold(expectedSHA256, sha256Hex(current)) {
+			return 0, "", errors.New("file changed since it was read; read it again before modifying it")
+		}
+	}
+	if createOnly {
+		// A link publishes the prepared inode only if the destination is absent.
+		// Unlike stat+rename this cannot overwrite a concurrent external creator.
+		temporaryRelative, _ := filepath.Rel(rootReal, temporaryPath)
+		destinationRelative, _ := filepath.Rel(rootReal, destination)
+		if err = scoped.Link(temporaryRelative, destinationRelative); err != nil {
+			return 0, "", fmt.Errorf("create-only write refused; the file may already exist, read it before overwriting: %w", err)
+		}
+		_ = parentRoot.Remove(temporaryName)
+	} else {
+		temporaryRelative, _ := filepath.Rel(rootReal, temporaryPath)
+		destinationRelative, _ := filepath.Rel(rootReal, destination)
+		err = scoped.Rename(temporaryRelative, destinationRelative)
+		if err != nil && runtime.GOOS == "windows" {
+			err = replaceFile(temporaryPath, destination)
+		}
+		if err != nil {
+			_ = parentRoot.Remove(temporaryName)
+			return 0, "", fmt.Errorf("replace file atomically: %w", err)
+		}
 	}
 	if directory, openErr := os.Open(parent); openErr == nil {
 		_ = directory.Sync()
@@ -503,10 +745,21 @@ func within(root, target string) bool {
 	return relative == "." || (relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)))
 }
 
-func openRegularFile(path string) (*os.File, error) {
-	file, err := os.Open(path)
+func openRegularFile(root, target string) (*os.File, error) {
+	scoped, err := os.OpenRoot(root)
 	if err != nil {
-		return nil, fmt.Errorf("open file: %w", err)
+		return nil, err
+	}
+	defer scoped.Close()
+	relative, err := filepath.Rel(root, target)
+	if err != nil {
+		return nil, err
+	}
+	// Root prevents links swapped after resolveExisting from escaping the root;
+	// NONBLOCK lets us reject a swapped named pipe without hanging while opening.
+	file, err := scoped.OpenFile(relative, os.O_RDONLY|nonBlockingOpenFlag, 0)
+	if err != nil {
+		return nil, fmt.Errorf("open scoped file: %w", err)
 	}
 	info, err := file.Stat()
 	if err != nil {
@@ -520,8 +773,8 @@ func openRegularFile(path string) (*os.File, error) {
 	return file, nil
 }
 
-func readRegularFile(path string) ([]byte, error) {
-	file, err := openRegularFile(path)
+func readRegularFile(root, target string) ([]byte, error) {
+	file, err := openRegularFile(root, target)
 	if err != nil {
 		return nil, err
 	}

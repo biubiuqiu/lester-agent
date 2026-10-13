@@ -19,7 +19,7 @@ type editInput struct {
 }
 
 func (Edit) Definition() model.Tool {
-	return model.Tool{Name: "edit", Description: "Edit a text file by exact string replacement. This is not a regular expression or AST edit.", InputSchema: map[string]any{"type": "object", "properties": map[string]any{
+	return model.Tool{Name: "edit", Description: "Edit a text file by exact string replacement after reading its current matching portion. The observed file version is checked before replacement. replace_all requires a complete, untruncated read. This is not a regular expression or AST edit.", InputSchema: map[string]any{"type": "object", "properties": map[string]any{
 		"file_path":   pathProperty(),
 		"old_string":  map[string]any{"type": "string", "description": "The exact text to replace. Include enough context to make a single match."},
 		"new_string":  map[string]any{"type": "string", "description": "The replacement text. It may be empty."},
@@ -32,6 +32,9 @@ func (Edit) Execute(ctx context.Context, environment Environment, raw json.RawMe
 	if err := decodeArguments(raw, &input); err != nil {
 		return nil, err
 	}
+	if err := requiredStringField(raw, "new_string"); err != nil {
+		return nil, err
+	}
 	filePath, err := required(input.FilePath, "file_path")
 	if err != nil {
 		return nil, err
@@ -39,12 +42,22 @@ func (Edit) Execute(ctx context.Context, environment Environment, raw json.RawMe
 	if input.OldString == "" {
 		return nil, errors.New("old_string cannot be empty")
 	}
+	expected, err := environment.Files.ExpectedEdit(filePath, input.OldString, input.ReplaceAll)
+	if err != nil {
+		return nil, err
+	}
 	result, err := environment.Sandboxes.EditFile(ctx, environment.SandboxID, environment.WorkDir, filePath, sandbox.FileEditRequest{
-		OldString: input.OldString, NewString: input.NewString, ReplaceAll: input.ReplaceAll,
+		OldString: input.OldString, NewString: input.NewString, ReplaceAll: input.ReplaceAll, ExpectedSHA256: expected,
 	})
 	if err != nil {
 		return nil, err
 	}
-	environment.Emit("FILE_UPDATED", map[string]any{"path": filePath, "operation": "edit", "replacements": result.Replacements})
+	if result == nil || !result.OK || !validSHA(result.SHA256) {
+		return nil, errors.New("edit did not confirm the resulting file version")
+	}
+	environment.Files.RecordEdit(filePath, input.OldString, input.NewString, input.ReplaceAll, result.SHA256)
+	if environment.Emit != nil {
+		environment.Emit("FILE_UPDATED", map[string]any{"path": filePath, "operation": "edit", "replacements": result.Replacements, "sha256": result.SHA256})
+	}
 	return map[string]any{"ok": true, "replacements": result.Replacements, "sha256": result.SHA256}, nil
 }

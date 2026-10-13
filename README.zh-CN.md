@@ -116,7 +116,7 @@ User
 
 ACS Provider 支持 `native` 与 `private` 两种 E2B 路由。生产默认使用 Native（需要泛域名 DNS/TLS）；Private 使用单域名 `/kruise` 路径，适合内网接入和测试。创建默认启用 `secure` 与 `autoPause`，运行时访问令牌由每次 connect 获取且不会写入 Lester 数据库。
 
-`bash` 支持 `run_in_background: true`。后台命令会立即返回任务 ID、PID 和 `.lester/tasks/{taskId}.log`，Agent 可以随后使用 `read` 查看日志。前台 Bash 默认超时 120 秒，最大可配置为 600 秒。
+`bash` 支持 `run_in_background: true`，返回受管理的任务 ID、实际 Shell/状态和 `.lester/tasks/{taskId}/output.log`。Agent 使用 `task_output` 按字节分页读取日志，使用 `stop_task` 独立停止命令。对话中的“命令任务”提供日志、下载和停止命令入口；停止 Agent 生成不会停止后台任务。前台 Bash 默认超时 120 秒，最大可配置为 600 秒。
 
 `bash` 的 stdout/stderr 会在 Sandbox Provider 边界分别限制为 256 KiB，并保留开头与结尾及明确的省略字节数；返回模型前仍会应用约 30,000 字符的工具结果限制。`read` 使用流式按行读取，只返回所需范围，不会为了读取几行而把整个大文件载入内存。`load_skill` 同样受单次结果限制。
 
@@ -159,7 +159,7 @@ Computer 的“成果”标签和手机端“⋯ → 查看会话成果”可打
 - 按单次调用计数，不按消息或批次计数。同一 assistant 消息里的多个工具可以分别降级，但保留的调用和结果必须配对。REFERENCE 在原 assistant 位置呈现为带标记的历史数据，不伪造可执行工具参数。
 - `error`、`is_error`、`ok:false`、非零 `exit_code` 或失败/中断状态会额外 PIN 为 FULL。只有后续批次中可验证的同操作成功才解除：bash 要求相同命令且前后台模式相同（忽略超时/描述），read 要求相同文件路径；其他工具要求等价 JSON 参数。不同命令、后台任务刚启动、同批次成功或对话中的“已经修好”不会自动解除。
 - 低价值判断使用精确命令白名单，不会把 `pwd && go test`、带重定向的 `ls` 或搜索结果误删。当前搜索通过 bash 执行，窗口外保留命令与退出码引用，不猜测命中文件。`load_skill`、未知工具和无法识别的结果保守保持 FULL。
-- 引用里的 `tool_execution_id` 由 `run_id:tool_call_id` 组成，用于定位完整记录，不是新增工具。重新 read 得到的是当前文件状态，不保证等于历史快照；不要为了恢复输出盲目重跑可能有副作用的 bash 命令。后台任务引用保留 `task_id` / `log_path`。
+- 引用里的 `tool_execution_id` 由 `run_id:tool_call_id` 组成，可传给 `read_tool_result`，按 Unicode 字符分页读取当前会话已保存的原始结果。它不会恢复入库前已截掉的内容，也不授予新的文件修改观察；受管理命令的原文日志使用 `task_output`。重新 read 得到的是当前文件状态，不保证等于历史快照；不要为了恢复输出盲目重跑可能有副作用的 bash 命令。后台任务引用保留 `task_id` / `log_path`。
 - `MODEL_STARTED.payload.tool_context` 记录策略版本、FULL/REFERENCE/EVICTED/PIN 数量和裁剪前后正文/参数字符数；这是字符统计，不是精确 token 用量。`runs.context` 保存策略版本和默认窗口大小。
 
 这层管理与单次工具输出限制同时生效，无需新增数据库迁移（仍需已有的 004）。暂不包含对话摘要、自动压缩、Memory、RAG 或总 token 预算；普通对话、历史引用及未解决错误仍可能增长。首次接入已有会话时也会应用这套策略。
@@ -183,7 +183,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --buil
 
 ### 成果登记与可靠事件升级
 
-当前版本需要迁移 001–015；账号机制的 013 迁移见下方“账号、第三方登录与头像”。上面的 004–005 命令仅说明历史聊天升级，不足以升级到当前版本；请按编号补齐所有尚未执行的迁移。若数据库已完成 001–011，先备份、停止 API 写入，再执行一次 012，并继续补齐 013、014、015 后重建 API/Web：
+当前版本需要迁移 001–019；账号机制的 013 迁移见下方“账号、第三方登录与头像”。上面的 004–005 命令仅说明历史聊天升级，不足以升级到当前版本；请按编号补齐所有尚未执行的迁移。若数据库已完成 001–011，先备份、停止 API 写入，再执行一次 012，并继续补齐 013、014、015 后重建 API/Web：
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
@@ -192,7 +192,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T post
   < backend/migrations/000012_deliverables_events.up.sql
 ```
 
-全新 Compose 数据卷会按序执行 001–015；已有数据卷不会自动升级，勿删除数据卷。012 回滚会删除成果登记和待投递记录，保留原文件、消息、运行事件及已发布站点；回滚前停止新版 API，并配套恢复兼容的应用版本。Redis 长期不可用时待投递表会增长，需要监控数量和磁盘空间。
+全新 Compose 数据卷会按序执行 001–019；已有数据卷不会自动升级，勿删除数据卷。012 回滚会删除成果登记和待投递记录，保留原文件、消息、运行事件及已发布站点；回滚前停止新版 API，并配套恢复兼容的应用版本。Redis 长期不可用时待投递表会增长，需要监控数量和磁盘空间。
 
 ## 账号、第三方登录与头像
 
@@ -231,17 +231,20 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000013_account_identity.up.sql
-# 最新 API/Web 需先应用 014、015，再启动。
+# 最新服务需先补齐 014–019，再启动。
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000014_user_guides.up.sql
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000015_rotating_tokens.up.sql
+for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage; do
+  docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "backend/migrations/${migration}.up.sql" || exit 1
+done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
 ```
 
-保留 `.env`、原密钥和数据卷。全新卷自动初始化 001–015，已有卷不会自动升级。PowerShell 用 `Get-Content -Raw` 管道传入 `exec -T postgres`。013 回滚会删除身份、令牌和头像引用，存在无密码账号时会拒绝回滚；降级前先安排密码恢复并配套兼容版本。工作区、项目和文件不迁移。实际 OAuth 授权与邮件投递需使用部署方真实配置验收。
+保留 `.env`、原密钥和数据卷。全新卷自动初始化 001–019，已有卷不会自动升级。PowerShell 用 `Get-Content -Raw` 管道传入 `exec -T postgres`。013 回滚会删除身份、令牌和头像引用，存在无密码账号时会拒绝回滚；降级前先安排密码恢复并配套兼容版本。工作区、项目和文件不迁移。实际 OAuth 授权与邮件投递需使用部署方真实配置验收。
 
 ## 逐步新手引导
 
@@ -259,6 +262,9 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T post
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000015_rotating_tokens.up.sql
+for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage; do
+  docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "backend/migrations/${migration}.up.sql" || exit 1
+done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
 ```
 
@@ -539,7 +545,29 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000015_rotating_tokens.up.sql
+for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage; do
+  docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "backend/migrations/${migration}.up.sql" || exit 1
+done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
 ```
 
-015 会使旧登录失效，升级后需重新登录一次，账号、个人资料、项目与文件不受影响。保留原 `.env`、加密密钥与数据卷。全新 Compose 卷初始化 001–015；Helm 部署前手动执行 SQL。015 回滚也会撤销登录，需配套兼容的 API/Web。有效期为应用固定默认值，无需新增环境变量。
+015 会使旧登录失效，升级后需重新登录一次，账号、个人资料、项目与文件不受影响。保留原 `.env`、加密密钥与数据卷。全新 Compose 卷初始化 001–019；Helm 部署前手动执行 SQL。015 回滚也会撤销登录，需配套兼容的 API/Web。有效期为应用固定默认值，无需新增环境变量。
+
+
+## 运行可靠性升级
+
+发送使用稳定的提交 ID，避免响应丢失后重复创建任务。消息或停止请求已受理时，后续刷新失败只提示同步异常；附件重试会复用已成功的上传。运行中的任务固定使用已选模型。覆盖文件需完整读取，局部编辑需读取未截断的目标范围，原生写入检查读取时的 SHA-256；历史正文移出上下文后需重读。原生 helper 写操作共用锁，任意 Bash 写入不参与该锁。
+
+命令最多保留 64 MiB 原始合流日志，并明确标注超出的字节。非零退出、超时、取消后的局部输出和未确认清理都有实际状态。后台命令独立于 Agent 结束持续核对；活跃或未知任务阻止空闲暂停。启动响应丢失后只检查原任务，进程身份未知时不盲目重启或发送停止信号。新 Docker Computer 使用 `--init`，已有容器不会自动替换。ACS 需重建包含文件协议 2、任务协议 1 的模板，并部署匹配的 Sandbox Service helper；本地 ACS 契约测试不代表真实云端验收。
+
+模型列表支持明确发起一次短文本验证；保存配置不等于 Provider 调用可用，文本成功也不代表工具与附件验证通过。共享模型允许成员验证，预算与凭证仍由管理员管理。展开“上下文预算”配置已知窗口、输出预留及本地策略；0 表示未知/自动/默认 64k 策略，不虚构模型上限，也不限制普通回复长度。每次请求记录完整请求估算和供应商实际/缺失用量，缓存只计算一次。自动上下文 checkpoint 等剩余目标见[对标实施记录](docs/claude-code-alignment.md)。
+
+已有数据库完成 001–015 后，先备份、停止 API 写入，按顺序执行一次 016–019，再启动最新版服务；更早的数据库先补齐缺失迁移。保留密钥、文件与数据卷。回滚 018 前先停止命令任务；数据库回滚不会撤销文件修改或外部操作。
+
+```bash
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
+for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage; do
+  docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "backend/migrations/${migration}.up.sql" || exit 1
+done
+docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web sandbox-service
+```
