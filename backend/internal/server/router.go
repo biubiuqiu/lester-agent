@@ -87,6 +87,8 @@ func Router(deps Dependencies) http.Handler {
 				private.Get("/projects", deps.Projects.List)
 				private.Post("/projects", deps.Projects.Create)
 				private.Patch("/projects/{id}", deps.Projects.Update)
+				private.Get("/projects/{id}/rules", deps.Projects.Rules)
+				private.Put("/projects/{id}/rules", deps.Projects.SaveRules)
 			}
 			if deps.Artifacts != nil {
 				private.Get("/artifacts", deps.Artifacts.List)
@@ -138,6 +140,10 @@ func Router(deps Dependencies) http.Handler {
 			private.Get("/conversations/{id}/interactions", deps.Conversations.RunInteractions)
 			private.Get("/conversations/{id}/interactions/{interactionID}", deps.Conversations.RunInteraction)
 			private.Post("/conversations/{id}/interactions/{interactionID}/respond", deps.Conversations.RespondRunInteraction)
+			private.Get("/conversations/{id}/file-changes", deps.Conversations.FileChanges)
+			private.Get("/conversations/{id}/file-changes/{changeID}", deps.Conversations.FileChange)
+			private.Post("/conversations/{id}/file-changes/{changeID}/rollback", deps.Conversations.RollbackFileChange)
+			private.Get("/conversations/{id}/file-changes/{changeID}/rollback/{rollbackID}", deps.Conversations.FileRollback)
 			private.Get("/conversations/{id}/inputs", deps.Conversations.RunInputs)
 			private.Post("/conversations/{id}/inputs", deps.Conversations.AcceptRunInput)
 			private.Get("/conversations/{id}/inputs/{inputID}", deps.Conversations.RunInput)

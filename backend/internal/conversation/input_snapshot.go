@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/biubiuqiu/lester-agent/backend/internal/contextlibrary"
+	"github.com/biubiuqiu/lester-agent/backend/internal/project"
 	"github.com/biubiuqiu/lester-agent/backend/internal/reference"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -67,7 +68,12 @@ func prepareRunInput(ctx context.Context, tx pgx.Tx, workspaceID, userID, id uui
 	if err != nil {
 		return "", nil, err
 	}
-	metadata, marshalErr := json.Marshal(map[string]any{"attachments": attachments, "contexts": contexts, "conversations": conversations, "skills": selectedSkills})
+	var rules project.Rules
+	if err = tx.QueryRow(ctx, `SELECT p.id,p.name,p.rules_content,p.rules_version FROM projects p JOIN conversations c ON c.project_id=p.id AND c.workspace_id=p.workspace_id WHERE c.id=$1 AND c.workspace_id=$2`, id, workspaceID).Scan(&rules.ProjectID, &rules.ProjectName, &rules.Content, &rules.Version); err != nil {
+		return "", nil, err
+	}
+	rules.Digest()
+	metadata, marshalErr := json.Marshal(map[string]any{"attachments": attachments, "contexts": contexts, "conversations": conversations, "skills": selectedSkills, "project_rules": rules})
 	if marshalErr != nil {
 		return "", nil, marshalErr
 	}

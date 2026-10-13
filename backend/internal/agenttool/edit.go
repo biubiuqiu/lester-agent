@@ -46,18 +46,30 @@ func (Edit) Execute(ctx context.Context, environment Environment, raw json.RawMe
 	if err != nil {
 		return nil, err
 	}
+	var change *FileChange
+	if environment.RecordFileChange != nil {
+		change = captureFileChange(ctx, environment, filePath, "edit", expected, false, input.NewString, input.OldString, input.ReplaceAll)
+		if err = environment.RecordFileChange(ctx, change); err != nil {
+			return nil, errors.New("file review intent could not be saved; edit was not started")
+		}
+	}
 	result, err := environment.Sandboxes.EditFile(ctx, environment.SandboxID, environment.WorkDir, filePath, sandbox.FileEditRequest{
 		OldString: input.OldString, NewString: input.NewString, ReplaceAll: input.ReplaceAll, ExpectedSHA256: expected,
 	})
 	if err != nil {
+		finishFileChange(ctx, environment, change, "", false)
 		return nil, err
 	}
-	if result == nil || !result.OK || !validSHA(result.SHA256) {
+	if result == nil || !result.OK || !validSHA(result.SHA256) || change != nil && change.AfterSHA256 != "" && change.AfterSHA256 != result.SHA256 {
+		finishFileChange(ctx, environment, change, "", false)
 		return nil, errors.New("edit did not confirm the resulting file version")
 	}
 	environment.Files.RecordEdit(filePath, input.OldString, input.NewString, input.ReplaceAll, result.SHA256)
 	if environment.Emit != nil {
 		environment.Emit("FILE_UPDATED", map[string]any{"path": filePath, "operation": "edit", "replacements": result.Replacements, "sha256": result.SHA256})
+	}
+	if !finishFileChange(ctx, environment, change, result.SHA256, true) {
+		return map[string]any{"ok": true, "sha256": result.SHA256, "review_saved": false, "notice": "File edit succeeded, but its review receipt could not be saved. Do not repeat the edit to recover the receipt."}, nil
 	}
 	return map[string]any{"ok": true, "replacements": result.Replacements, "sha256": result.SHA256}, nil
 }

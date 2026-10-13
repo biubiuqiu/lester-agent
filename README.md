@@ -30,7 +30,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T post
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000015_rotating_tokens.up.sql
-for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions 000022_run_inputs; do
+for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions 000022_run_inputs 000023_file_changes 000024_project_rules; do
   docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "backend/migrations/${migration}.up.sql" || exit 1
 done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
@@ -442,7 +442,7 @@ Fresh installs apply 004–005 automatically. Migration 004 preserves old chat o
 
 ### Deliverable registration and reliable events upgrade
 
-The current version requires migrations 001–022. Migration 013 is described in [Accounts and sign-in](#accounts-and-sign-in). The historical 004–005 commands above are insufficient for a full upgrade; apply every missing migration in numeric order. For a database already on 001–011, back it up, stop API writes, apply 012 once, then complete 013, 014 and 015 below before rebuilding API/Web:
+The current version requires migrations 001–024. Migration 013 is described in [Accounts and sign-in](#accounts-and-sign-in). The historical 004–005 commands above are insufficient for a full upgrade; apply every missing migration in numeric order. For a database already on 001–011, back it up, stop API writes, apply 012 once, then complete 013, 014 and 015 below before rebuilding API/Web:
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
@@ -451,7 +451,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T post
   < backend/migrations/000012_deliverables_events.up.sql
 ```
 
-New Compose volumes initialize migrations 001–022; existing volumes never upgrade automatically. Do not delete volumes. Rolling back 012 drops registered metadata and pending delivery intents while preserving Computer files, messages, run events, and published artifacts. Stop the updated API before rollback and restore a compatible application version. Monitor pending outbox count and disk space during prolonged Redis outages.
+New Compose volumes initialize migrations 001–024; existing volumes never upgrade automatically. Do not delete volumes. Rolling back 012 drops registered metadata and pending delivery intents while preserving Computer files, messages, run events, and published artifacts. Stop the updated API before rollback and restore a compatible application version. Monitor pending outbox count and disk space during prolonged Redis outages.
 
 ## Skills and attachments
 
@@ -721,20 +721,20 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000013_account_identity.up.sql
-# Apply 014–022 before restarting the latest services.
+# Apply 014–024 before restarting the latest services.
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000014_user_guides.up.sql
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000015_rotating_tokens.up.sql
-for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions 000022_run_inputs; do
+for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions 000022_run_inputs 000023_file_changes 000024_project_rules; do
   docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "backend/migrations/${migration}.up.sql" || exit 1
 done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
 ```
 
-Fresh Compose volumes initialize 001–022 automatically; existing volumes never re-run init scripts. PowerShell can pipe `Get-Content -Raw` into the same `exec -T postgres` command. Rolling back 013 removes identity/token/avatar references and therefore **refuses while accounts without passwords exist**; arrange password recovery before a downgrade and restore a compatible application version. Existing workspace files and projects are not moved. PostgreSQL-backed auth tests use mock identity providers and a local SMTP fixture; live third-party consent/delivery require deployment validation.
+Fresh Compose volumes initialize 001–024 automatically; existing volumes never re-run init scripts. PowerShell can pipe `Get-Content -Raw` into the same `exec -T postgres` command. Rolling back 013 removes identity/token/avatar references and therefore **refuses while accounts without passwords exist**; arrange password recovery before a downgrade and restore a compatible application version. Existing workspace files and projects are not moved. PostgreSQL-backed auth tests use mock identity providers and a local SMTP fixture; live third-party consent/delivery require deployment validation.
 
 ## Administration
 
@@ -778,13 +778,13 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000015_rotating_tokens.up.sql
-for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions 000022_run_inputs; do
+for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions 000022_run_inputs 000023_file_changes 000024_project_rules; do
   docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "backend/migrations/${migration}.up.sql" || exit 1
 done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
 ```
 
-Migration 015 invalidates old sessions: users sign in once after upgrade. Accounts, profiles, projects and files remain intact. Retain `.env`, encryption keys and volumes. Fresh Compose volumes initialize 001–022; Helm requires SQL before deployment. Rolling back 015 also invalidates current credentials and must be paired with compatible API/Web. The lifetimes are fixed application defaults; no extra environment variables are required.
+Migration 015 invalidates old sessions: users sign in once after upgrade. Accounts, profiles, projects and files remain intact. Retain `.env`, encryption keys and volumes. Fresh Compose volumes initialize 001–024; Helm requires SQL before deployment. Rolling back 015 also invalidates current credentials and must be paired with compatible API/Web. The lifetimes are fixed application defaults; no extra environment variables are required.
 
 
 ## Runtime reliability upgrade
@@ -799,17 +799,17 @@ Long conversations now save scoped history checkpoints while retaining the compl
 
 Summarization is a separate tool-free model request with its own usage record and bounded output. Only validated summaries that reduce the complete request commit a checkpoint and event atomically. Malformed output, cancellation or ineffective summaries preserve the previous checkpoint and open the compaction circuit for that run. Compaction attempts are limited to two per turn; a provider context rejection gets one retry only before any partial output. Ordinary model/tool loops remain unlimited. Protected inputs that cannot fit fail explicitly; no tools are automatically replayed and current input is never truncated. Restarted tasks load the saved checkpoint; a model change triggers a new complete-request estimate. Remaining collaboration/review goals are recorded in [the alignment implementation](docs/claude-code-alignment.md).
 
-Existing databases on 001–015 must apply 016–022 once in order, before starting the updated services. Back up PostgreSQL, stop API writes and preserve keys, files and volumes. Earlier databases must first complete their missing migrations. Fresh volumes initialize all migrations. Stop managed tasks before rolling back 018; schema rollback does not undo file or external effects.
+Existing databases on 001–015 must apply 016–024 once in order, before starting the updated services. Back up PostgreSQL, stop API writes and preserve keys, files and volumes. Earlier databases must first complete their missing migrations. Fresh volumes initialize all migrations. Stop managed tasks before rolling back 018; schema rollback does not undo file or external effects.
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
-for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions 000022_run_inputs; do
+for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions 000022_run_inputs 000023_file_changes 000024_project_rules; do
   docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "backend/migrations/${migration}.up.sql" || exit 1
 done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web sandbox-service
 ```
 
-Deployments on 001–019 apply missing 020, 021 and 022; never re-run previously applied migrations. Rolling back 020 removes summary checkpoints only and preserves original messages and files.
+Deployments on 001–019 apply missing 020–024; never re-run previously applied migrations. Rolling back 020 removes summary checkpoints only and preserves original messages and files.
 
 ## Questions and Plan review
 
@@ -817,7 +817,7 @@ Choose Plan before sending for Agent read-only inspection, directory listing and
 
 Structured questions collect information separately from approval. Answer drafts survive conversation navigation/refresh. Accepted responses are idempotent, and uncertain responses are confirmed through their scoped receipt without automatic resubmission. Cancellation/failure revokes pending requests. Refresh checks cross-replica session ownership; an abandoned executor is marked interrupted, never restarted by an old answer. Explicit in-run adjustments and next-task queuing remain pending in the alignment record.
 
-Databases already on 001–020 apply `000021_run_interactions.up.sql` once after a backup and stopping API writes. A database on 001–019 applies missing 020, 021 and 022. Never rerun existing migrations. Stop affected active tasks before rolling back 021 and restore a compatible API/Web; original messages and files remain.
+Databases already on 001–020 apply `000021_run_interactions.up.sql` once after a backup and stopping API writes. A database on 001–019 applies missing 020–024. Never rerun existing migrations. Stop affected active tasks before rolling back 021 and restore a compatible API/Web; original messages and files remain.
 
 ## Running-task adjustments and next-task queue
 
@@ -826,3 +826,13 @@ While a task is running, the composer offers **Adjust current task** and **Queue
 Queueing is explicit. Accepted tasks retain the actor, selected model, next-task execution mode, attachments and @ snapshots. The next task starts after successful completion, under the same conversation guard. Failure, stopping or an interrupted predecessor pauses future work; resume is explicit and requires an idle conversation. Actor membership is checked again before dispatch. Held text adjustments can be copied back to the draft without sending. Receipt loss preserves the draft and checks the original ID rather than replaying a mutation. “Added to current task” means the input was recorded, not that its requested effect has succeeded.
 
 For databases already on 001–021, back up, stop API writes and apply `000022_run_inputs.up.sql` once. Earlier versions apply all missing migrations in numeric order. Stop active tasks and restore a compatible API/Web before rolling back 022; accepted queue records are removed, while messages and files remain. Queue rollback does not undo any file or external effect.
+
+## Actual file review and project rules
+
+**Review file changes** is a collapsed conversation section. Expanding a file loads the actual retained before/after bytes from successful Agent `write`/`edit` calls, displays an exact line comparison, and exports a JSON review record. Comparisons above 1,000 lines use original before/after text panes. Private capture reads do not authorize Agent edits of unseen content. Each side retains at most 512 KiB of UTF-8 text without NUL bytes; the conversation retention cap is 64 MiB. Large, binary, quota-limited or unconfirmed operations display their limitation instead of a fabricated diff. Existing history is not reconstructed retroactively.
+
+Restoring a confirmed modification of an existing retained text file requires explicit confirmation and an idle conversation. The native writer checks that the current file still matches the recorded AFTER SHA-256 before restoring the original bytes. Later edits are refused. New-file deletion, shell/network/background effects and other files are not undone. A lost native write receipt remains unknown and prevents blind replay; matching content is not proof of ownership. Stable scoped rollback receipts recover lost HTTP responses without a second write. Up to 20 recent unconfirmed mutation/restore facts are restored from platform records into the Agent request after compaction, with no file bodies or new write permissions. A confirmed historic digest does not assert current live file contents.
+
+The project menu provides **Project rules** with content, version and SHA-256. Saving a stale version preserves the editor draft and refuses overwrite. Initial sends and accepted queued tasks snapshot rules from the project settings at acceptance; later edits or conversation moves affect future accepted tasks only. The input message exposes the accepted source/version/content. Rules are explicit user guidance and grant no tools, @ access or Plan approval. Platform constraints and the latest direct user requirements take precedence. File arrivals during an open settings/review dialog still add tabs without opening a covering preview.
+
+For databases already on 001–022, back up and stop API writes, then apply `000023_file_changes.up.sql` and `000024_project_rules.up.sql` once in order. Earlier versions apply every missing migration; fresh Compose volumes initialize 001–024. Stop active tasks and restore compatible API/Web before rollback. Roll back 024 before 023 when downgrading this batch. 024 removes editable project rules while accepted message snapshots remain; 023 removes review/rollback records. Neither rollback restores file or external effects. Preserve database backups, keys and Computer volumes.

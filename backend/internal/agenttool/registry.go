@@ -30,11 +30,12 @@ type Environment struct {
 	Files                 *FileState
 	// RecordTask persists trusted launch identity before starting a command and
 	// its actual ownership handle afterward. Never expose that handle to models.
-	RecordTask    func(context.Context, *sandbox.CommandTaskSnapshot) error
-	TaskAccess    func(context.Context, uuid.UUID, sandbox.CommandTaskReadOptions, bool) (map[string]any, error)
-	Interact      func(context.Context, InteractionRequest) (map[string]any, error)
-	AuthorizeTool func(context.Context, string, json.RawMessage) error
-	Emit          EventEmitter
+	RecordFileChange func(context.Context, *FileChange) error
+	RecordTask       func(context.Context, *sandbox.CommandTaskSnapshot) error
+	TaskAccess       func(context.Context, uuid.UUID, sandbox.CommandTaskReadOptions, bool) (map[string]any, error)
+	Interact         func(context.Context, InteractionRequest) (map[string]any, error)
+	AuthorizeTool    func(context.Context, string, json.RawMessage) error
+	Emit             EventEmitter
 }
 
 type Handler interface {

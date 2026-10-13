@@ -29,8 +29,13 @@ async function finish(page: Page, api: WorkspaceApi) {
   api.finish();
   await expect(page.getByRole("button", { name: "停止生成", exact: true })).toHaveCount(0);
   await expect(page.locator(".chat-message.assistant")).toBeVisible();
+  // File inventory is a separate asynchronous receipt from run completion.
+  // Wait for the actual auto-open before closing it, so a late mobile modal
+  // cannot cover the next model-menu interaction.
+  await expect(page.locator(".open-file-tabs [role=tab]")).toHaveCount(2);
   const close = page.locator(".computer-panel .close-files-panel");
-  if (await close.isVisible()) await close.click();
+  await expect(close).toBeVisible();
+  await close.click();
 }
 
 test("accepted send survives a failed refresh without restoring its draft or losing Stop", async ({ page, context, api }, info) => {

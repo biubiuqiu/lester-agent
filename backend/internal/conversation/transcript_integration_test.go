@@ -110,6 +110,8 @@ func newTranscriptFixture(t *testing.T, legacy bool) transcriptFixture {
 	applyTestMigration(t, db, "000020_context_checkpoints.up.sql")
 	applyTestMigration(t, db, "000021_run_interactions.up.sql")
 	applyTestMigration(t, db, "000022_run_inputs.up.sql")
+	applyTestMigration(t, db, "000023_file_changes.up.sql")
+	applyTestMigration(t, db, "000024_project_rules.up.sql")
 	return f
 }
 
@@ -695,6 +697,8 @@ func TestTranscriptGuardAndConcurrentSequence(t *testing.T) {
 		}
 	}
 	applyTestMigration(t, f.service.db, "000012_deliverables_events.down.sql")
+	applyTestMigration(t, f.service.db, "000024_project_rules.down.sql")
+	applyTestMigration(t, f.service.db, "000023_file_changes.down.sql")
 	applyTestMigration(t, f.service.db, "000022_run_inputs.down.sql")
 	applyTestMigration(t, f.service.db, "000020_context_checkpoints.down.sql")
 	applyTestMigration(t, f.service.db, "000021_run_interactions.down.sql")

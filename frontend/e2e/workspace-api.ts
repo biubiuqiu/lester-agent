@@ -186,6 +186,7 @@ export class WorkspaceApi {
       return result ? reply({ ...result, status: this.conversation?.run_status || result.status }) : reply({ error: "not found" }, 404);
     }
     if (path === `${prefix}/events/history`) return reply({ events: [] });
+    if (path === `${prefix}/file-changes`) return reply({ changes: [] });
     if (path === `${prefix}/inputs`) return reply({ inputs: [] });
     if (path === `${prefix}/interactions`) return reply({ interactions: [], execution_mode: "execute" });
     if (path === `${prefix}/computer`) return reply({ conversation_id: conversationId, user_id: user.user_id, provider: "docker", status: "running" });

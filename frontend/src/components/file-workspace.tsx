@@ -152,7 +152,10 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, live
       const recent = readView(storageKey).closedTabs.filter(path => !files.some(file => file.path === path));
       updateView(storageKey, { closedTabs: recent }); setClosedTabs(recent);
     }
-    if (!automatic || (!current && !panelIntent.current)) {
+    // Background file arrivals must not cover an active settings/review dialog.
+    // Tabs are still recorded; opening the panel remains an explicit choice.
+    const occupied = automatic && document.querySelector("dialog:modal");
+    if (!automatic || (!current && !panelIntent.current && !occupied)) {
       if (!automatic) panelIntent.current = true;
       setPanelTabState("files"); setPanelOpenState(true);
       if (automatic) setTreeOpen(false);

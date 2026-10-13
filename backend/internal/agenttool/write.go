@@ -48,16 +48,28 @@ func (Write) Execute(ctx context.Context, environment Environment, raw json.RawM
 	if !supported {
 		return nil, errors.New("this Computer does not support protected file writes; update its runtime before writing")
 	}
+	var change *FileChange
+	if environment.RecordFileChange != nil {
+		change = captureFileChange(ctx, environment, filePath, "write", expected, createOnly, input.Content, "", false)
+		if err = environment.RecordFileChange(ctx, change); err != nil {
+			return nil, errors.New("file review intent could not be saved; write was not started")
+		}
+	}
 	result, err := writer.WriteFileVersioned(ctx, environment.SandboxID, environment.WorkDir, filePath, sandbox.FileWriteRequest{Content: []byte(input.Content), ExpectedSHA256: expected, CreateOnly: createOnly})
 	if err != nil {
+		finishFileChange(ctx, environment, change, "", false)
 		return nil, err
 	}
-	if result == nil || !result.OK || !validSHA(result.SHA256) {
+	if result == nil || !result.OK || !validSHA(result.SHA256) || result.SHA256 != contentSHA([]byte(input.Content)) {
+		finishFileChange(ctx, environment, change, "", false)
 		return nil, errors.New("protected write did not confirm the resulting file version")
 	}
 	environment.Files.RecordWrite(filePath, input.Content, result.SHA256)
 	if environment.Emit != nil {
 		environment.Emit("FILE_UPDATED", map[string]any{"path": filePath, "operation": "write", "sha256": result.SHA256})
+	}
+	if !finishFileChange(ctx, environment, change, result.SHA256, true) {
+		return map[string]any{"ok": true, "sha256": result.SHA256, "review_saved": false, "notice": "File write succeeded, but its review receipt could not be saved. Do not repeat the write to recover the receipt."}, nil
 	}
 	return result, nil
 }

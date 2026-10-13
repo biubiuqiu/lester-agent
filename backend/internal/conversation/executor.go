@@ -188,6 +188,12 @@ func (e *runExecutor) execute(ctx context.Context, workspaceID, conversationID, 
 		files.WriteString("</agent_resources>")
 		system += files.String()
 	}
+	rulesContext, rulesErr := s.runProjectRulesContext(ctx, conversationID, runID)
+	if rulesErr != nil {
+		s.finishExecutionError(ctx, runID, conversationID, rulesErr)
+		return
+	}
+	system += rulesContext
 	history := modelHistory(messages)
 	toolDefinitions := s.tools.Definitions()
 	if conversation.AgentSlug != "agent-designer" {
@@ -240,6 +246,11 @@ func (e *runExecutor) executeTurns(ctx context.Context, conversationID, runID uu
 			return modelRequest, projection, toolcontext.Budget{}, stateErr
 		}
 		modelRequest.System += taskState
+		fileFacts, fileFactsErr := s.fileReviewContext(ctx, conversationID, runID)
+		if fileFactsErr != nil {
+			return modelRequest, projection, toolcontext.Budget{}, fileFactsErr
+		}
+		modelRequest.System += fileFacts
 		budget, budgetErr := estimator.Evaluate(modelRequest, config)
 		return modelRequest, projection, budget, budgetErr
 	}
@@ -540,6 +551,9 @@ func (e *runExecutor) runTool(ctx context.Context, runID, conversationID uuid.UU
 		},
 		Interact: func(toolCtx context.Context, request agenttool.InteractionRequest) (map[string]any, error) {
 			return s.waitRunInteraction(toolCtx, conversationID, runID, call.ID, request)
+		},
+		RecordFileChange: func(changeCtx context.Context, change *agenttool.FileChange) error {
+			return s.recordFileChange(changeCtx, runID, conversationID, call.ID, change)
 		},
 		RecordTask: func(taskCtx context.Context, snapshot *sandbox.CommandTaskSnapshot) error {
 			return s.recordCommandTask(taskCtx, runID, conversationID, computer, snapshot)

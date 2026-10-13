@@ -44,3 +44,29 @@
 .run-input-receipts button{border:1px solid var(--line);border-radius:7px;padding:7px 10px;background:#fff;color:var(--ink);margin-right:8px;font:inherit;cursor:pointer}
 .run-input-receipts button:disabled{opacity:.5;cursor:default}
 .run-input-receipts button:focus-visible{outline:2px solid #69866c;outline-offset:2px}
+.project-rules-dialog{width:min(640px,calc(100vw - 32px));max-height:85dvh;box-sizing:border-box;border:1px solid #dce4d8;border-radius:16px;padding:24px;background:#fff;color:#28362a;overflow:auto}
+.project-rules-dialog::backdrop{background:#1b281f55}
+.project-rules-dialog h2{font-size:18px;margin:0 0 14px}
+.project-rules-dialog p,.project-rules-dialog small{font-size:12px;line-height:1.7;color:#697568}
+.project-rules-dialog label{display:grid;gap:8px;margin:18px 0;font-size:12px}
+.project-rules-dialog textarea{width:100%;box-sizing:border-box;min-height:180px;max-height:45dvh;resize:vertical;border:1px solid #dfe5dc;border-radius:10px;padding:12px;font:inherit;line-height:1.6}
+.project-rules-dialog button,.file-changes button{background:#fff;border:1px solid #dfe5dc;color:inherit;border-radius:8px;min-height:34px;padding:7px 11px;font:inherit;font-size:12px;cursor:pointer}
+.project-rules-dialog button:disabled,.file-changes button:disabled{opacity:.5;cursor:default}
+.project-rules-dialog button:focus-visible,.project-rules-dialog textarea:focus-visible,.file-changes button:focus-visible{outline:2px solid #69866c;outline-offset:2px}
+.file-changes{max-width:780px;margin:18px auto;color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.file-changes summary{padding:9px 0;cursor:pointer}
+.file-changes p{line-height:1.7}
+.file-change-card{border-top:1px solid var(--line);padding:4px 0}
+.file-change-card>summary{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;list-style:none}
+.file-change-card code{color:var(--ink);overflow-wrap:anywhere}
+.file-change-card small{display:block;overflow-wrap:anywhere;font-size:10px;line-height:1.7}
+.file-change-card button{margin:10px 8px 8px 0}
+.file-diff{max-height:320px;overflow:auto;background:#f8faf6;border:1px solid var(--line);border-radius:8px;padding:10px;font:11px/1.7 monospace;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink)}
+.file-diff span{display:block;min-height:1.7em}
+.file-diff .diff-added{background:#eaf3e5;color:#2f6537}
+.file-diff .diff-removed{background:#faeee8;color:#8c4433}
+.file-change-panes{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.file-change-panes section{min-width:0}.file-change-panes h4{font-size:12px;font-weight:550}
+.file-change-panes pre{max-height:320px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px}
+.file-restore-confirm{margin-top:10px;border:1px solid var(--line);padding:12px;border-radius:10px;background:#fbfcf9}
+@media(max-width:600px){.project-rules-dialog{padding:18px}.project-rules-dialog textarea{font-size:16px}.file-change-panes{grid-template-columns:1fr}.file-changes button{min-height:40px}}

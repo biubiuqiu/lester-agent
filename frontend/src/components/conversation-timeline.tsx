@@ -2,6 +2,7 @@
 import { useI18n, useT } from "@/components/i18n";
 import type { Message } from "@/lib/api";
 import Link from "next/link";
+import { ProjectRulesReceipt } from "./project-rules";
 import { MessageContent } from "./message-content";
 import { RunEvent, RunNarrative } from "./tool-timeline";
 import { FileText, MessageSquare, Puzzle } from "lucide-react";
@@ -34,6 +35,7 @@ function ChatMessage({ message }: { message: Message }) {
           {message.metadata.conversations?.map(entry => <Link key={`conversation:${entry.id}`} href={`/app/c/${encodeURIComponent(entry.id)}`} target="_blank" rel="noopener noreferrer" title={t("会话引用 · 截至消息序号 {0}", [entry.max_seq])}><MessageSquare size={13} aria-hidden="true" /><span>@{entry.title}</span><small>{t("会话")}</small></Link>)}
           {message.metadata.skills?.map(entry => <span key={`skill:${entry.id}`} title={`${entry.slug} · v${entry.version}`}><Puzzle size={13} aria-hidden="true" /><span>@{entry.name}</span><small>Skill</small></span>)}
         </div> : null}
+        <ProjectRulesReceipt rules={message.metadata?.project_rules} />
         <time>{new Date(message.created_at).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}</time>
       </div>
     </article>

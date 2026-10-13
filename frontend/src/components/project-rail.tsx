@@ -4,6 +4,7 @@ import { T, useT } from "@/components/i18n";
 
 import { useId, useRef, useState, type ReactNode } from "react";
 import { Bot, ChevronRight, MoreHorizontal, Pin, Plus, Search, X } from "lucide-react";
+import { ProjectRulesEditor } from "./project-rules";
 import { ProjectIcon, ConversationIcon } from "./workspace-icons";
 import { api, type Conversation, type Project } from "@/lib/api";
 import { ConversationRunMark, type UnreadRunResult } from "./run-awareness";
@@ -39,6 +40,7 @@ export function ProjectRail({
   const [showAll, setShowAll] = useState<Record<string, boolean>>({});
   const [editing, setEditing] = useState<string | null>(null);
   const [name, setName] = useState("");
+  const [rulesProject, setRulesProject] = useState<Project | null>(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   async function saveProject(id: string) {
@@ -114,6 +116,7 @@ export function ProjectRail({
   const searching = Boolean(search.trim());
   return (
     <div className="project-rail project-tree-rail">
+      {rulesProject ? <ProjectRulesEditor project={rulesProject} onClose={() => setRulesProject(null)} /> : null}
       <label className="conversation-search"><Search /><input value={search} onChange={e => onSearch(e.target.value)} placeholder={t("搜索会话")} aria-label={t("搜索会话")} />{search ? <button type="button" onClick={() => onSearch("")} aria-label={t("清空会话搜索")}><X /></button> : null}</label>
       <div className="tree-section-heading"><span>{searching ? t("搜索结果") : t("项目与会话")}</span><button className="rail-icon" aria-label={t("新建项目")} disabled={!!busy} onClick={() => { setEditing(""); setName(""); setError(""); }}><Plus size={15} /></button></div>
       {error ? (
@@ -170,6 +173,7 @@ export function ProjectRail({
                 </button>
                 <button className="rail-icon tree-new" aria-label={t("在 {0} 中新建会话", [project.name])} title={t("新建会话")} onClick={() => { setCollapsed(prev => ({ ...prev, [project.id]: false })); onNew(project.id); }}><Plus size={14} /></button>
                 <RailActions label={t("项目 {0} 的操作", [project.name])}>
+                  <button disabled={!!busy} onClick={() => setRulesProject(project)}>{t("项目规则")}</button>
                   <button disabled={!!busy} onClick={() => void pinProject(project)}>{project.pinned ? t("取消项目置顶") : t("置顶项目")}</button>
                   <button disabled={!!busy} onClick={() => { setEditing(project.id); setName(project.name); }}><T>{"重命名项目"}</T></button>
                 </RailActions>
