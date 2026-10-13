@@ -241,7 +241,7 @@ File and tool/run events invalidate the shared inventory. While the page is visi
 
 The changes list combines persisted file events from the current run with changes observed while the view is open. It is not a complete history, content diff, or checkpoint system. Metadata checks cannot detect changed contents with identical size and modification time.
 
-View state is scoped by user, workspace, and conversation in tab-local `sessionStorage`, bounded to 50 conversations and 100,000 draft characters, and cleared at logout. Local attachments survive client navigation in memory only; after reload, the UI asks you to select them again. File contents are never saved in browser storage. HTML refreshes may reset the generated page's own interaction state; iframe permissions are not relaxed to preserve it.
+View layout is scoped by user/workspace/conversation in tab-local `sessionStorage` (50 conversations). Text drafts (up to 100,000 characters), references, selected mode and pending receipt identities persist in browser `localStorage` across tab/window closure, under the same account scope. Logging out clears both. Scroll/layout updates do not overwrite another window’s persisted draft. Local attachments survive client navigation in memory only; after reload, the UI asks you to select them again. File contents are never saved in browser storage. HTML refreshes may reset the generated page's own interaction state; iframe permissions are not relaxed to preserve it.
 
 ### Product scope
 
@@ -821,7 +821,7 @@ Databases already on 001–020 apply `000021_run_interactions.up.sql` once after
 
 ## Running-task adjustments and next-task queue
 
-While a task is running, the composer offers **Adjust current task** and **Queue next task**. Enter still preserves the draft during execution. Adjustments accept text only and become real user messages after a complete tool batch; they do not interrupt or replay commands, change Plan mode, or approve execution. Pending adjustments are checked again before completion. An adjustment supersedes a pending question or proposed plan so the Agent can consider the new requirement.
+While a task is running, the composer offers **Adjust current task** and **Queue next task**. During execution, explicit Enter or **Send to queue** accepts the next message; typing alone never queues. The current Stop control remains separate. Adjustments accept text only and become real user messages after a complete tool batch; they do not interrupt or replay commands, change Plan mode, or approve execution. Pending adjustments are checked again before completion. An adjustment supersedes a pending question or proposed plan so the Agent can consider the new requirement.
 
 Queueing is explicit. Accepted tasks retain the actor, selected model, next-task execution mode, attachments and @ snapshots. The next task starts after successful completion, under the same conversation guard. Failure, stopping or an interrupted predecessor pauses future work; resume is explicit and requires an idle conversation. Actor membership is checked again before dispatch. Held text adjustments can be copied back to the draft without sending. Receipt loss preserves the draft and checks the original ID rather than replaying a mutation. “Added to current task” means the input was recorded, not that its requested effect has succeeded.
 

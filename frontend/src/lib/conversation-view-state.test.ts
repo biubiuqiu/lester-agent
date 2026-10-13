@@ -8,7 +8,7 @@ const storage = Object.defineProperties(values, {
   setItem: { value: (key: string, value: string) => { values[key] = value; }, writable: true },
   removeItem: { value: (key: string) => { delete values[key]; } },
 }) as unknown as Storage;
-Object.defineProperty(globalThis, "window", { value: { sessionStorage: storage }, configurable: true });
+Object.defineProperty(globalThis, "window", { value: { sessionStorage: storage, localStorage: storage }, configurable: true });
 
 test("drafts and view state are isolated by user, workspace and conversation", () => {
   clearViewState();
@@ -29,6 +29,7 @@ test("switching retains File objects, persistence contains only attachment names
   values["lester.view.v1.reloaded"] = values["lester.view.v1.attachments"];
   assert.deepEqual(readView("reloaded").missingFiles, ["report.txt"]);
   assert.deepEqual(readView("reloaded").files, []);
+  assert.deepEqual(JSON.parse(values["lester.draft.v1.reloaded"]).attachmentNames, ["report.txt"]);
 });
 test("corrupt storage and disabled storage do not break drafts", () => {
   values["lester.view.v1.corrupt"] = "{";
@@ -50,4 +51,20 @@ test("logout clears persisted state and rejects late cleanup writes", () => {
   assert.equal(readView("u1.w1.c1").text, "");
   updateView("u2.w2.c1", { text: "new account" });
   assert.equal(readView("u2.w2.c1").text, "new account");
+});
+
+test("durable draft restores after session storage disappears, without restoring File bytes", () => {
+  resumeViewState("u2.w2.");
+  const key = "u2.w2.reopened";
+  values["lester.draft.v1." + key] = JSON.stringify({ version: 1, text: "关窗前打了一半", contexts: [{ id: "context", title: "背景" }], reference: "note.txt", executionMode: "plan", attachmentNames: ["photo.png"] });
+  assert.equal(readView(key).text, "关窗前打了一半");
+  assert.equal(readView(key).executionMode, "plan");
+  assert.equal(readView(key).reference, "note.txt");
+  assert.deepEqual(readView(key).missingFiles, ["photo.png"]);
+  assert.deepEqual(readView(key).files, []);
+  values["lester.draft.v1." + key] = JSON.stringify({ version: 1, text: "another window's new draft" });
+  updateView(key, { thread: { top: 20, following: false } });
+  assert.equal(JSON.parse(values["lester.draft.v1." + key]).text, "another window's new draft");
+  clearViewState();
+  assert.equal(values["lester.draft.v1." + key], undefined);
 });

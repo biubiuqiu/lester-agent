@@ -39,7 +39,7 @@ async function selectText(locator: Locator) {
   });
 }
 
-test("composer expands and bounds long drafts; active-run follow-ups stay unsent", async ({ page, api }, info) => {
+test("composer expands and bounds long drafts; typing active-run follow-ups never submits", async ({ page, api }, info) => {
   await login(page);
   const input = page.getByRole("textbox", { name: "消息输入框", exact: true });
   const empty = (await input.boundingBox())!.height;
@@ -53,8 +53,7 @@ test("composer expands and bounds long drafts; active-run follow-ups stay unsent
   await expect.poll(async () => (await input.boundingBox())!.height).toBeCloseTo(empty, 1);
   await start(page, api);
   await input.fill("请稍后继续处理这份材料");
-  await expect(page.getByText("草稿已保留，当前任务结束后可发送。", { exact: true })).toBeVisible();
-  await input.press("Enter");
+  await expect(page.getByText("发送将排队，当前任务完成后开始；也可选择调整当前任务。", { exact: true })).toBeVisible();
   await expect(input).toHaveValue("请稍后继续处理这份材料");
   await page.locator('.composer input[type="file"]').setInputFiles({ name: "下一轮.txt", mimeType: "text/plain", buffer: Buffer.from("draft material") });
   await expect(page.locator(".pending-attachments")).toContainText("下一轮.txt");

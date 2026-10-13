@@ -1,3 +1,4 @@
+import { readAttemptStorage, writeAttemptStorage, removeAttemptStorage, clearAttemptStorage } from "./attempt-storage";
 import { api, ApiError, type MentionInput } from "./api";
 import { randomId } from "./random-id";
 export type RunInputRequest = { id: string; run_id: string; kind: "adjust" | "next"; content: string; attachment_ids?: string[]; context_ids?: string[]; references?: MentionInput[]; execution_mode?: "plan" };
@@ -16,18 +17,18 @@ function readAttempt(key: string): RunInputRequest | undefined {
   const cached = attempts.get(key);
   if (cached) return cached;
   try {
-    const value = JSON.parse(sessionStorage.getItem(prefix + key) || "null");
+    const value = JSON.parse(readAttemptStorage(prefix + key) || "null");
     if (value && typeof value.id === "string" && /^[0-9a-f-]{36}$/i.test(value.id) && typeof value.content === "string" && (value.kind === "adjust" || value.kind === "next")) return value;
   } catch { /* In-memory receipt tracking remains available. */ }
 }
 function forget(key: string) {
   attempts.delete(key);
-  try { sessionStorage.removeItem(prefix + key); } catch { /* best effort */ }
+  removeAttemptStorage(prefix + key);
 }
 export function clearRunInputs() {
   epoch++;
   attempts.clear();
-  if (typeof window !== "undefined") try { for (const key of Object.keys(sessionStorage)) if (key.startsWith(prefix)) sessionStorage.removeItem(key); } catch { /* best effort */ }
+  clearAttemptStorage(prefix);
 }
 export async function acceptRunInput(conversationId: string, storageKey: string, payload: Omit<RunInputRequest, "id">): Promise<RunInput> {
   const startedEpoch = epoch;
@@ -36,11 +37,11 @@ export async function acceptRunInput(conversationId: string, storageKey: string,
   const path = `/api/v1/conversations/${conversationId}/inputs`;
   // A changed draft cannot replace a request whose mutation result is unknown.
   if (previous && !sameRunInput(previous, request)) {
-    try { const receipt = await api<RunInput>(`${path}/${previous.id}`); if (!receipt.request || !sameRunInput(receipt.request, previous)) throw new RunInputUnconfirmed(); if (epoch === startedEpoch) forget(storageKey); } catch { throw new RunInputUnconfirmed(); }
+    try { const receipt = await api<RunInput>(`${path}/${previous.id}`); if (!receipt.request || !sameRunInput(receipt.request, previous)) throw new RunInputUnconfirmed(); if (epoch === startedEpoch) forget(storageKey); if (sameRunInput(previous, { ...request, run_id: previous.run_id })) return receipt; } catch { throw new RunInputUnconfirmed(); }
     throw new RunInputUnconfirmed();
   }
   attempts.set(storageKey, request);
-  try { sessionStorage.setItem(prefix + storageKey, JSON.stringify(request)); } catch { /* keep in memory */ }
+  writeAttemptStorage(prefix + storageKey, JSON.stringify(request));
   let receipt: RunInput;
   try {
     receipt = await api<RunInput>(path, { method: "POST", body: JSON.stringify(request) });
@@ -53,5 +54,21 @@ export async function acceptRunInput(conversationId: string, storageKey: string,
   }
   if (receipt.id !== request.id || !receipt.request || !sameRunInput(receipt.request, request)) throw new RunInputUnconfirmed();
   if (epoch === startedEpoch) forget(storageKey);
+  return receipt;
+}
+
+// Resolve a preserved unknown input before an idle composer starts a fresh run.
+// An accepted/held input is never silently converted into a second task.
+export async function confirmPendingRunInput(conversationId: string, storageKey: string, payload: Omit<RunInputRequest, "id" | "run_id" | "kind">): Promise<RunInput | null> {
+  const previous = readAttempt(storageKey);
+  if (!previous) return null;
+  const startedEpoch = epoch;
+  let receipt: RunInput;
+  try { receipt = await api<RunInput>(`/api/v1/conversations/${conversationId}/inputs/${previous.id}`); } catch { throw new RunInputUnconfirmed(); }
+  if (!receipt.request || !sameRunInput(receipt.request, previous)) throw new RunInputUnconfirmed();
+  if (epoch === startedEpoch) forget(storageKey);
+  const current = { ...payload, id: previous.id, run_id: previous.run_id, kind: previous.kind };
+  if (previous.kind === "adjust") delete current.execution_mode;
+  if (!sameRunInput(previous, current)) throw new RunInputUnconfirmed();
   return receipt;
 }

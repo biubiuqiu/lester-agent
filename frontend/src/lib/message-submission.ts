@@ -1,3 +1,4 @@
+import { readAttemptStorage, writeAttemptStorage, removeAttemptStorage, clearAttemptStorage } from "./attempt-storage";
 import { api, ApiError, type ConversationRunStatus, type MentionInput } from "./api";
 import { clearConversationAttachmentUploads } from "./attachment-uploads";
 import { randomId } from "./random-id";
@@ -17,7 +18,7 @@ function readAttempt(conversationId: string) {
   const cached = attempts.get(conversationId);
   if (cached) return cached;
   try {
-    const stored = typeof window !== "undefined" ? JSON.parse(window.sessionStorage.getItem(prefix + conversationId) || "null") : null;
+    const stored = JSON.parse(readAttemptStorage(prefix + conversationId) || "null");
     if (stored && /^[0-9a-f-]{36}$/i.test(stored.id) && typeof stored.fingerprint === "string"
       && (/^sha256:[0-9a-f]{64}$/.test(stored.fingerprint) || (stored.fingerprint.startsWith("json:") && stored.fingerprint.length <= maximumStoredAttemptCharacters))) return stored as Submission;
   } catch { /* Keep in-memory retry protection when browser storage is unavailable. */ }
@@ -27,7 +28,7 @@ export function clearMessageSubmissions() {
   sessionEpoch++;
   attempts.clear();
   if (typeof window === "undefined") return;
-  try { for (const key of Object.keys(window.sessionStorage)) if (key.startsWith(prefix)) window.sessionStorage.removeItem(key); } catch { /* best effort */ }
+  clearAttemptStorage(prefix);
 }
 
 export async function sendConversationMessage(conversationId: string, payload: MessageSubmission): Promise<AcceptedSubmission> {
@@ -48,15 +49,9 @@ export async function sendConversationMessage(conversationId: string, payload: M
   const attempt = previous?.fingerprint === fingerprint ? previous : { id: randomId(), fingerprint };
   attempts.set(conversationId, attempt);
   while (attempts.size > 50) attempts.delete(attempts.keys().next().value!);
-  try {
-    if (typeof window !== "undefined") {
-      const serialized = JSON.stringify(attempt);
-      if (serialized.length <= maximumStoredAttemptCharacters) window.sessionStorage.setItem(prefix + conversationId, serialized);
-      else window.sessionStorage.removeItem(prefix + conversationId);
-      const keys = Object.keys(window.sessionStorage).filter(key => key.startsWith(prefix));
-      for (const key of keys.slice(0, Math.max(0, keys.length - 50))) if (key !== prefix + conversationId) window.sessionStorage.removeItem(key);
-    }
-  } catch { /* Receipt remains in memory for client navigation and explicit retry. */ }
+  const serialized = JSON.stringify(attempt);
+  if (serialized.length <= maximumStoredAttemptCharacters) writeAttemptStorage(prefix + conversationId, serialized);
+  else removeAttemptStorage(prefix + conversationId);
   let started: AcceptedSubmission;
   try {
     started = await api<AcceptedSubmission>(`/api/v1/conversations/${conversationId}/messages`, { method: "POST", body: JSON.stringify({ ...payload, submission_id: attempt.id }) });
@@ -74,7 +69,7 @@ export async function sendConversationMessage(conversationId: string, payload: M
   }
   if (attempts.get(conversationId)?.id === attempt.id) {
     attempts.delete(conversationId);
-    try { if (typeof window !== "undefined") window.sessionStorage.removeItem(prefix + conversationId); } catch { /* best effort */ }
+    removeAttemptStorage(prefix + conversationId);
   }
   clearConversationAttachmentUploads(conversationId);
   return started;

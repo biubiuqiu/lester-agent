@@ -3,7 +3,7 @@ import type { ContextReference } from "./api";
 import { clearAttachmentUploads } from "./attachment-uploads";
 import { clearMessageSubmissions } from "./message-submission";
 
-// Tab-local UI state, never part of the model transcript or shared across accounts.
+// View layout remains tab-local; account-scoped drafts survive closing tabs/windows.
 export type ViewState = {
   contexts: ContextReference[];
   agentSlug: string;
@@ -25,11 +25,25 @@ export type ViewState = {
   thread: { top: number; following: boolean };
 };
 const prefix = "lester.view.v1.";
+const draftPrefix = "lester.draft.v1.";
+const draftFields = ["text", "contexts", "reference", "executionMode", "agentSlug", "interactionDrafts", "sendNotice", "files", "missingFiles"] as const;
+function stored(read: () => string | null) { try { return JSON.parse(read() || "null"); } catch { return null; } }
 const cache = new Map<string, ViewState>();
 let writeScope: string | null = "";
 export function resumeViewState(scope: string) { writeScope = scope; }
 const defaults = (): ViewState => ({ contexts: [], agentSlug: "lester", executionMode: "execute", interactionDrafts: {}, sendNotice: "", text: "", files: [], missingFiles: [], reference: null, tabs: [], closedTabs: [], unreadFiles: [], selected: null, treeOpen: true, directories: [""], modes: {}, positions: {}, thread: { top: 0, following: true } });
 export const viewKey = (userId: string, workspaceId: string, conversationId: string) => `${userId}.${workspaceId}.${conversationId}`;
+
+function persistDraft(key: string, value: ViewState) {
+  try {
+    window.localStorage.setItem(draftPrefix + key, JSON.stringify({ version: 1,
+      text: value.text.slice(0, 100_000), contexts: value.contexts, reference: value.reference,
+      executionMode: value.executionMode, agentSlug: value.agentSlug,
+      interactionDrafts: value.interactionDrafts, sendNotice: value.sendNotice,
+      attachmentNames: [...value.files.map(file => file.name), ...value.missingFiles],
+    }));
+  } catch { /* Browser storage restrictions must not break editing or sending. */ }
+}
 
 export function readView(key: string): ViewState {
   if (!key || typeof window === "undefined" || writeScope === null || !key.startsWith(writeScope)) return defaults();
@@ -37,7 +51,9 @@ export function readView(key: string): ViewState {
   if (cached) return cached;
   const value = defaults();
   try {
-    const saved = JSON.parse(window.sessionStorage.getItem(prefix + key) ?? "null");
+    const session = stored(() => window.sessionStorage.getItem(prefix + key));
+    const draft = stored(() => window.localStorage.getItem(draftPrefix + key));
+    const saved = draft?.version === 1 ? { ...(session?.version === 1 ? session : {}), ...draft } : session;
     if (saved && saved.version === 1) {
       value.contexts = Array.isArray(saved.contexts) ? saved.contexts.filter((v: unknown) => v && typeof v === "object" && "id" in v && typeof v.id === "string" && "title" in v && typeof v.title === "string" && (!("type" in v) || v.type === "context" || v.type === "conversation" || v.type === "skill")).map((item: ContextReference) => ({ id: item.id, title: item.title, ...(item.type ? { type: item.type } : {}) })).slice(0, 8) : [];
       value.agentSlug = typeof saved.agentSlug === "string" && saved.agentSlug.length <= 50 ? saved.agentSlug : "lester";
@@ -67,6 +83,7 @@ export function readView(key: string): ViewState {
         if (p && Number.isFinite(p.top) && Number.isFinite(p.left)) value.positions[path] = { top: Math.max(0, p.top!), left: Math.max(0, p.left!) };
       }
       if (saved.thread && Number.isFinite(saved.thread.top)) value.thread = { top: Math.max(0, saved.thread.top), following: saved.thread.following !== false };
+      if (draft?.version !== 1 && session?.version === 1) persistDraft(key, value);
     }
   } catch { /* Storage may be unavailable; in-memory navigation still works. */ }
   cache.set(key, value);
@@ -79,6 +96,8 @@ export function updateView(key: string, patch: Partial<ViewState>) {
   cache.delete(key);
   cache.set(key, next);
   while (cache.size > 50) cache.delete(cache.keys().next().value!);
+  // Layout/scroll updates must not overwrite another tab's more recent draft.
+  if (draftFields.some(field => Object.hasOwn(patch, field))) persistDraft(key, next);
   try {
     const { files, missingFiles, ...serializable } = next;
     window.sessionStorage.setItem(prefix + key, JSON.stringify({ ...serializable, text: next.text.slice(0, 100_000), version: 1, attachmentNames: [...files.map((file) => file.name), ...missingFiles] }));
@@ -96,4 +115,5 @@ export function clearViewState() {
   clearRunInputs();
   if (typeof window === "undefined") return;
   try { for (const key of Object.keys(window.sessionStorage)) if (key.startsWith(prefix)) window.sessionStorage.removeItem(key); } catch { /* best effort */ }
+  try { for (const key of Object.keys(window.localStorage)) if (key.startsWith(draftPrefix)) window.localStorage.removeItem(key); } catch { /* best effort */ }
 }
