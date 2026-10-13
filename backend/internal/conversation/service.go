@@ -264,8 +264,15 @@ func (s *Service) SendWithReferences(ctx context.Context, workspaceID, userID, i
 	return s.SendSubmission(ctx, workspaceID, userID, id, uuid.Nil, content, attachmentIDs, contextIDs, selected)
 }
 
-func (s *Service) SendSubmission(ctx context.Context, workspaceID, userID, id, submissionID uuid.UUID, content string, attachmentIDs, contextIDs []uuid.UUID, selected []reference.Input) (uuid.UUID, error) {
-	digest := submissionDigest(content, attachmentIDs, contextIDs, selected)
+func (s *Service) SendSubmission(ctx context.Context, workspaceID, userID, id, submissionID uuid.UUID, content string, attachmentIDs, contextIDs []uuid.UUID, selected []reference.Input, modes ...string) (uuid.UUID, error) {
+	mode := "execute"
+	if len(modes) > 0 && modes[0] != "" {
+		mode = modes[0]
+	}
+	if mode != "execute" && mode != "plan" {
+		return uuid.Nil, errors.New("invalid execution mode")
+	}
+	digest := submissionDigest(content, attachmentIDs, contextIDs, selected, mode)
 	if accepted, found, err := s.acceptedSubmission(ctx, workspaceID, userID, id, submissionID, digest); err != nil || found {
 		return accepted, err
 	}
@@ -362,7 +369,7 @@ func (s *Service) SendSubmission(ctx context.Context, workspaceID, userID, id, s
 	if submissionID != uuid.Nil {
 		submission = &submissionID
 	}
-	if err = tx.QueryRow(ctx, `INSERT INTO runs(conversation_id,status,model_deployment_id,submission_id,submitted_by,submission_sha256) VALUES($1,'running',$2,$3,$4,$5) RETURNING id`, id, acceptedModel, submission, userID, digest).Scan(&runID); err != nil {
+	if err = tx.QueryRow(ctx, `INSERT INTO runs(conversation_id,status,model_deployment_id,submission_id,submitted_by,submission_sha256,execution_mode) VALUES($1,'running',$2,$3,$4,$5,$6) RETURNING id`, id, acceptedModel, submission, userID, digest, mode).Scan(&runID); err != nil {
 		return uuid.Nil, err
 	}
 	var messageID uuid.UUID

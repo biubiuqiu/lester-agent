@@ -25,6 +25,22 @@ func addReads(history *[]modelruntime.Message, count int) {
 	}
 }
 
+func TestRevokedQuestionsDoNotPinHistoricalChoicesOrGrantApproval(t *testing.T) {
+	history := []modelruntime.Message{{Role: "user", Content: "clarify"}}
+	addExchange(&history, "ask_user_question", `{"questions":[{"id":"one","prompt":"Choose"}]}`, `{"cancelled":true,"error":"Question revoked"}`)
+	history = append(history, modelruntime.Message{Role: "assistant", Content: "revoked"})
+	addReads(&history, 12)
+	history = append(history, modelruntime.Message{Role: "assistant", Content: "observed"})
+	projection := build(t, history)
+	if projection.Stats.Pinned != 0 {
+		t.Fatal("revoked information request stayed pinned as an unresolved command effect")
+	}
+	raw, _ := json.Marshal(projection.Messages)
+	if !strings.Contains(string(raw), "execution_approval") || strings.Contains(string(raw), "Question revoked") {
+		t.Fatal("historical question was not replaced by a non-authorizing reference")
+	}
+}
+
 func build(t *testing.T, history []modelruntime.Message) Projection {
 	t.Helper()
 	projection, err := Build(history)

@@ -16,6 +16,12 @@ func TestSubmissionDigestBindsEffectiveInput(t *testing.T) {
 	if base != submissionDigest("keep the file", []uuid.UUID{id, id}, []uuid.UUID{}, []reference.Input{}) {
 		t.Fatal("empty/duplicate normalization changed identity")
 	}
+	if base != submissionDigest("keep the file", []uuid.UUID{id}, nil, nil, "execute") {
+		t.Fatal("mode upgrade changed existing execution receipt hashes")
+	}
+	if base == submissionDigest("keep the file", []uuid.UUID{id}, nil, nil, "plan") {
+		t.Fatal("Plan mode reused an execution receipt")
+	}
 	for _, changed := range []string{
 		submissionDigest("delete the file", []uuid.UUID{id}, nil, nil),
 		submissionDigest("keep the file", []uuid.UUID{uuid.New()}, nil, nil),

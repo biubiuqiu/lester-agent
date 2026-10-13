@@ -38,7 +38,7 @@ func (s *Service) Submission(ctx context.Context, workspaceID, userID, conversat
 	return &found, nil
 }
 
-func submissionDigest(content string, attachments, contexts []uuid.UUID, refs []reference.Input) string {
+func submissionDigest(content string, attachments, contexts []uuid.UUID, refs []reference.Input, modes ...string) string {
 	// Normalize nil/empty and duplicate legacy IDs to the effective input. Keep
 	// selected reference order: it is part of the user's selected context.
 	attachments = append([]uuid.UUID{}, uniqueUUIDs(attachments)...)
@@ -50,6 +50,10 @@ func submissionDigest(content string, attachments, contexts []uuid.UUID, refs []
 		References            []reference.Input
 	}{content, attachments, contexts, refs})
 	digest := sha256.Sum256(raw)
+	// Preserve existing execution receipt hashes across the mode upgrade.
+	if len(modes) > 0 && modes[0] == "plan" {
+		digest = sha256.Sum256(append(digest[:], []byte("\x00plan")...))
+	}
 	return hex.EncodeToString(digest[:])
 }
 

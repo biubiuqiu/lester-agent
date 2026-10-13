@@ -30,7 +30,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T post
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000015_rotating_tokens.up.sql
-for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints; do
+for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions; do
   docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "backend/migrations/${migration}.up.sql" || exit 1
 done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
@@ -442,7 +442,7 @@ Fresh installs apply 004–005 automatically. Migration 004 preserves old chat o
 
 ### Deliverable registration and reliable events upgrade
 
-The current version requires migrations 001–020. Migration 013 is described in [Accounts and sign-in](#accounts-and-sign-in). The historical 004–005 commands above are insufficient for a full upgrade; apply every missing migration in numeric order. For a database already on 001–011, back it up, stop API writes, apply 012 once, then complete 013, 014 and 015 below before rebuilding API/Web:
+The current version requires migrations 001–021. Migration 013 is described in [Accounts and sign-in](#accounts-and-sign-in). The historical 004–005 commands above are insufficient for a full upgrade; apply every missing migration in numeric order. For a database already on 001–011, back it up, stop API writes, apply 012 once, then complete 013, 014 and 015 below before rebuilding API/Web:
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
@@ -451,7 +451,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T post
   < backend/migrations/000012_deliverables_events.up.sql
 ```
 
-New Compose volumes initialize migrations 001–020; existing volumes never upgrade automatically. Do not delete volumes. Rolling back 012 drops registered metadata and pending delivery intents while preserving Computer files, messages, run events, and published artifacts. Stop the updated API before rollback and restore a compatible application version. Monitor pending outbox count and disk space during prolonged Redis outages.
+New Compose volumes initialize migrations 001–021; existing volumes never upgrade automatically. Do not delete volumes. Rolling back 012 drops registered metadata and pending delivery intents while preserving Computer files, messages, run events, and published artifacts. Stop the updated API before rollback and restore a compatible application version. Monitor pending outbox count and disk space during prolonged Redis outages.
 
 ## Skills and attachments
 
@@ -721,20 +721,20 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000013_account_identity.up.sql
-# Apply 014–020 before restarting the latest services.
+# Apply 014–021 before restarting the latest services.
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000014_user_guides.up.sql
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000015_rotating_tokens.up.sql
-for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints; do
+for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions; do
   docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "backend/migrations/${migration}.up.sql" || exit 1
 done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
 ```
 
-Fresh Compose volumes initialize 001–020 automatically; existing volumes never re-run init scripts. PowerShell can pipe `Get-Content -Raw` into the same `exec -T postgres` command. Rolling back 013 removes identity/token/avatar references and therefore **refuses while accounts without passwords exist**; arrange password recovery before a downgrade and restore a compatible application version. Existing workspace files and projects are not moved. PostgreSQL-backed auth tests use mock identity providers and a local SMTP fixture; live third-party consent/delivery require deployment validation.
+Fresh Compose volumes initialize 001–021 automatically; existing volumes never re-run init scripts. PowerShell can pipe `Get-Content -Raw` into the same `exec -T postgres` command. Rolling back 013 removes identity/token/avatar references and therefore **refuses while accounts without passwords exist**; arrange password recovery before a downgrade and restore a compatible application version. Existing workspace files and projects are not moved. PostgreSQL-backed auth tests use mock identity providers and a local SMTP fixture; live third-party consent/delivery require deployment validation.
 
 ## Administration
 
@@ -778,13 +778,13 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000015_rotating_tokens.up.sql
-for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints; do
+for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions; do
   docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "backend/migrations/${migration}.up.sql" || exit 1
 done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
 ```
 
-Migration 015 invalidates old sessions: users sign in once after upgrade. Accounts, profiles, projects and files remain intact. Retain `.env`, encryption keys and volumes. Fresh Compose volumes initialize 001–020; Helm requires SQL before deployment. Rolling back 015 also invalidates current credentials and must be paired with compatible API/Web. The lifetimes are fixed application defaults; no extra environment variables are required.
+Migration 015 invalidates old sessions: users sign in once after upgrade. Accounts, profiles, projects and files remain intact. Retain `.env`, encryption keys and volumes. Fresh Compose volumes initialize 001–021; Helm requires SQL before deployment. Rolling back 015 also invalidates current credentials and must be paired with compatible API/Web. The lifetimes are fixed application defaults; no extra environment variables are required.
 
 
 ## Runtime reliability upgrade
@@ -799,14 +799,22 @@ Long conversations now save scoped history checkpoints while retaining the compl
 
 Summarization is a separate tool-free model request with its own usage record and bounded output. Only validated summaries that reduce the complete request commit a checkpoint and event atomically. Malformed output, cancellation or ineffective summaries preserve the previous checkpoint and open the compaction circuit for that run. Compaction attempts are limited to two per turn; a provider context rejection gets one retry only before any partial output. Ordinary model/tool loops remain unlimited. Protected inputs that cannot fit fail explicitly; no tools are automatically replayed and current input is never truncated. Restarted tasks load the saved checkpoint; a model change triggers a new complete-request estimate. Remaining collaboration/review goals are recorded in [the alignment implementation](docs/claude-code-alignment.md).
 
-Existing databases on 001–015 must apply 016–020 once in order, before starting the updated services. Back up PostgreSQL, stop API writes and preserve keys, files and volumes. Earlier databases must first complete their missing migrations. Fresh volumes initialize all migrations. Stop managed tasks before rolling back 018; schema rollback does not undo file or external effects.
+Existing databases on 001–015 must apply 016–021 once in order, before starting the updated services. Back up PostgreSQL, stop API writes and preserve keys, files and volumes. Earlier databases must first complete their missing migrations. Fresh volumes initialize all migrations. Stop managed tasks before rolling back 018; schema rollback does not undo file or external effects.
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
-for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints; do
+for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions; do
   docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "backend/migrations/${migration}.up.sql" || exit 1
 done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web sandbox-service
 ```
 
-Deployments already on 001–019 need only apply `000020_context_checkpoints.up.sql` once; never re-run previously applied migrations. Rolling back 020 removes summary checkpoints only and preserves original messages and files.
+Deployments on 001–019 apply missing 020 then 021; never re-run previously applied migrations. Rolling back 020 removes summary checkpoints only and preserves original messages and files.
+
+## Questions and Plan review
+
+Choose Plan before sending for Agent read-only inspection, directory listing and requirement clarification. Server-side checks block shell commands, file changes, publication and other mutations, including aliases and custom tools. Explicit user uploads and Skill installation remain separate actions. A proposed plan can be approved, revised or declined; approval binds its exact stored parameters/version to this active run. The approved scope is restored from platform records after compaction. Normal execution does not ask for redundant Plan approval.
+
+Structured questions collect information separately from approval. Answer drafts survive conversation navigation/refresh. Accepted responses are idempotent, and uncertain responses are confirmed through their scoped receipt without automatic resubmission. Cancellation/failure revokes pending requests. Refresh checks cross-replica session ownership; an abandoned executor is marked interrupted, never restarted by an old answer. Explicit in-run adjustments and next-task queuing remain pending in the alignment record.
+
+Databases already on 001–020 apply `000021_run_interactions.up.sql` once after a backup and stopping API writes. A database on 001–019 applies missing 020 then 021. Never rerun existing migrations. Stop affected active tasks before rolling back 021 and restore a compatible API/Web; original messages and files remain.

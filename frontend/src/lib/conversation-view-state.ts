@@ -6,6 +6,8 @@ import { clearMessageSubmissions } from "./message-submission";
 export type ViewState = {
   contexts: ContextReference[];
   agentSlug: string;
+  executionMode: "execute" | "plan";
+  interactionDrafts: Record<string, { answers: Record<string, { option_id?: string; text?: string }>; feedback: string }>;
   sendNotice: string;
   text: string;
   files: File[];
@@ -25,7 +27,7 @@ const prefix = "lester.view.v1.";
 const cache = new Map<string, ViewState>();
 let writeScope: string | null = "";
 export function resumeViewState(scope: string) { writeScope = scope; }
-const defaults = (): ViewState => ({ contexts: [], agentSlug: "lester", sendNotice: "", text: "", files: [], missingFiles: [], reference: null, tabs: [], closedTabs: [], unreadFiles: [], selected: null, treeOpen: true, directories: [""], modes: {}, positions: {}, thread: { top: 0, following: true } });
+const defaults = (): ViewState => ({ contexts: [], agentSlug: "lester", executionMode: "execute", interactionDrafts: {}, sendNotice: "", text: "", files: [], missingFiles: [], reference: null, tabs: [], closedTabs: [], unreadFiles: [], selected: null, treeOpen: true, directories: [""], modes: {}, positions: {}, thread: { top: 0, following: true } });
 export const viewKey = (userId: string, workspaceId: string, conversationId: string) => `${userId}.${workspaceId}.${conversationId}`;
 
 export function readView(key: string): ViewState {
@@ -38,6 +40,14 @@ export function readView(key: string): ViewState {
     if (saved && saved.version === 1) {
       value.contexts = Array.isArray(saved.contexts) ? saved.contexts.filter((v: unknown) => v && typeof v === "object" && "id" in v && typeof v.id === "string" && "title" in v && typeof v.title === "string" && (!("type" in v) || v.type === "context" || v.type === "conversation" || v.type === "skill")).map((item: ContextReference) => ({ id: item.id, title: item.title, ...(item.type ? { type: item.type } : {}) })).slice(0, 8) : [];
       value.agentSlug = typeof saved.agentSlug === "string" && saved.agentSlug.length <= 50 ? saved.agentSlug : "lester";
+      value.executionMode = saved.executionMode === "plan" ? "plan" : "execute";
+      if (saved.interactionDrafts && typeof saved.interactionDrafts === "object") for (const [id, raw] of Object.entries(saved.interactionDrafts).slice(-8)) {
+        if (!/^[0-9a-f-]{36}$/i.test(id) || !raw || typeof raw !== "object") continue;
+        const draft = raw as { answers?: Record<string, { option_id?: string; text?: string }>; feedback?: string };
+        const answers: Record<string, { option_id?: string; text?: string }> = {};
+        if (draft.answers && typeof draft.answers === "object") for (const [key, answer] of Object.entries(draft.answers).slice(0, 3)) if (/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,39}$/.test(key) && answer && typeof answer === "object") answers[key] = { option_id: typeof answer.option_id === "string" ? answer.option_id.slice(0, 40) : "", text: typeof answer.text === "string" ? answer.text.slice(0, 6000) : "" };
+        value.interactionDrafts[id] = { answers, feedback: typeof draft.feedback === "string" ? draft.feedback.slice(0, 6000) : "" };
+      }
       value.sendNotice = typeof saved.sendNotice === "string" ? saved.sendNotice.slice(0, 2000) : "";
       value.text = typeof saved.text === "string" ? saved.text.slice(0, 100_000) : "";
       value.reference = typeof saved.reference === "string" ? saved.reference : null;

@@ -68,6 +68,8 @@ export const siteDocs: SiteDoc[] = [
         <p><T>{"你可以上传文件或粘贴图片。附件存入当前会话目录，模型默认接收文件路径提示，按需要使用工具读取内容。"}</T></p>
         <p><T>{"任务运行中可以准备下一条草稿，也可以点击停止。一个会话同时只执行一个任务。工具详情可展开查看，运行状态来自真实事件。"}</T></p>
         <p><T>{"消息受理后，即使刷新会话失败，也会保留任务和停止入口，点击“重新同步状态”即可，不必重复发送。同一次重试使用提交 ID 去重；已上传的附件会复用。模型在任务开始时固定，运行中不能切换。停止请求受理后会保留“正在停止”状态。"}</T></p>
+        <p><T>{"发送前可点击“执行”切换到 Plan。Plan 约束 Agent 工具：只能读取、查看目录和澄清需求，不能运行命令、修改文件或发布。你主动上传附件和安装 Skill 仍可进行。当前计划可批准、提出调整或暂不执行；批准只绑定本次任务和当前版本，旧批准不会用于新任务。"}</T></p>
+        <p><T>{"Agent 需要关键选择时，会在对话中显示问题和选项，也可补充自由回答。回答草稿随会话保存，刷新后可继续。问题回答不是执行批准；提交结果不确定时只检查原请求，不会自动重复提交。停止或中断任务会撤销待答请求，旧回答和批准不能重新启动任务。"}</T></p>
         <p><T>{"输入框随内容增长，最多约六行后内部滚动。任务运行中可准备文字、引用和附件草稿，结束后需明确发送，不会自动排队发送。"}</T></p>
         <p><T>{"回答支持普通复制与保留格式复制，代码块可单独复制。成功后显示勾选反馈；剪贴板不可用时可手动选择复制。选中回答、Markdown 文件或源码后，可点击“引用并追问”追加到草稿，保留已有文字并回到输入框；源码引用包含文件路径和行号，超过 6000 个字符时按钮明确提示只引用前 6000 个字符。"}</T></p>
         <p><T>{"待发送附件显示大小，图片支持缩略图和放大预览；单个文件超过 25 MiB 时会立即提示，重复选择的相同附件会忽略。点击已选上下文标签可检查当前版本和内容，聚焦标签后按 Delete 或 Backspace 可移除；空输入框按 Backspace 先聚焦最后一个标签。"}</T></p>
@@ -182,8 +184,8 @@ export const siteDocs: SiteDoc[] = [
         <p><T>{"已有部署不要重新覆盖"}</T><code>deploy/.env</code><T>{"，也不要删除 Volume 来升级。切换 Docker 与 ACS Provider 不会自动迁移用户文件，应另行规划。"}</T></p>
       </> },
       { id: "upgrade", title: "已有数据库升级", content: <>
-        <p><T>{"当前版本需要迁移 001–020。全新 PostgreSQL 数据目录会按序执行初始化 SQL，已有 Volume 不会自动重新执行这些文件。"}</T></p>
-        <p><T>{"已完成 001–019 的部署只需执行一次 020（context_checkpoints），不要重复执行旧迁移。先备份并停止 API 写入，升级后完整消息仍保留；回滚 020 只删除历史摘要检查点，不会回退文件或重放工具。"}</T></p>
+        <p><T>{"当前版本需要迁移 001–021。全新 PostgreSQL 数据目录会按序执行初始化 SQL，已有 Volume 不会自动重新执行这些文件。"}</T></p>
+        <p><T>{"已完成 001–019 的部署补齐 020（context_checkpoints）和 021（run_interactions）；已完成 001–020 时只执行 021。先备份并停止 API 写入，不重复旧迁移。回滚 021 前先停止相关活跃任务并配套兼容服务，原始消息和文件保留；回滚 020 只删除摘要检查点。"}</T></p>
         <p><T>{"先备份并停止 API 写入，确认数据库已应用哪些迁移，再按编号执行尚未应用的"}</T><code>backend/migrations/*.up.sql</code><T>{"。不要重复执行已经完成的迁移。"}</T></p>
         <p><T>{"例如，数据库已完成 001–012 时，先执行一次账号机制的 013，再按编号补齐下面的迁移，最后重建服务："}</T></p>
         <CodeBlock label="迁移 013（仅适用于已完成 001–012）">{"docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api\ndocker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"' < backend/migrations/000013_account_identity.up.sql"}</CodeBlock>
@@ -191,11 +193,11 @@ export const siteDocs: SiteDoc[] = [
         <p><T>{"数据库已完成 001–013 时，执行一次新手引导的 014。新数据库会自动初始化；已有卷不会自动升级："}</T></p>
         <CodeBlock label="迁移 014（仅适用于已完成 001–013）">{"docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api\ndocker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"' < backend/migrations/000014_user_guides.up.sql"}</CodeBlock>
         <p><T>{"014 回滚只删除新手引导进度；使用兼容的 API/Web 版本。迁移时已有账户默认跳过自动欢迎，新账户首次进入会看到引导。"}</T></p>
-        <p><T>{"数据库已完成 001–014 时，先备份、停止 API 写入并执行一次 015，然后继续执行下方的 016–020，最后启动新版服务："}</T></p>
+        <p><T>{"数据库已完成 001–014 时，先备份、停止 API 写入并执行一次 015，然后继续执行下方的 016–021，最后启动新版服务："}</T></p>
         <CodeBlock label="迁移 015（仅适用于已完成 001–014）">{"docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api\ndocker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"' < backend/migrations/000015_rotating_tokens.up.sql"}</CodeBlock>
         <p><T>{"015 使旧登录失效，升级后需重新登录一次，账号、项目与文件保留。015 回滚也撤销登录，需配套兼容的 API/Web。双令牌有效期为固定默认值，无需新增环境变量。"}</T></p>
-        <p><T>{"已完成 001–015 的部署继续按顺序执行 016–020：提交去重、模型预算、命令任务和请求用量。停止 API 写入后，每项只执行一次。保留密钥、对象存储和 Computer 文件；回滚 018 前先停止命令任务，回滚不会撤销文件修改或外部操作。"}</T></p>
-        <CodeBlock label="迁移 016–020">{"docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api\nfor migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints; do\n  docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"' < \"backend/migrations/${migration}.up.sql\" || exit 1\ndone\ndocker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web sandbox-service"}</CodeBlock>
+        <p><T>{"已完成 001–015 的部署继续按顺序执行 016–021：提交去重、模型预算、命令任务和请求用量。停止 API 写入后，每项只执行一次。保留密钥、对象存储和 Computer 文件；回滚 018 前先停止命令任务，回滚不会撤销文件修改或外部操作。"}</T></p>
+        <CodeBlock label="迁移 016–021">{"docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api\nfor migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions; do\n  docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"' < \"backend/migrations/${migration}.up.sql\" || exit 1\ndone\ndocker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web sandbox-service"}</CodeBlock>
         <p><T>{"Sandbox Service 需带新版 lester-toolbox：文件协议为 2，命令任务协议为 1。ACS 需重建模板；旧 Computer 不会被删除或重建。新 Docker Computer 使用进程回收器；既有容器不会自动获得它。任务启动响应丢失时，已保存的日志仍可读取，但进程身份未确认，平台不会盲目重启或停止进程。"}</T></p>
         <Note><T>{"回滚应配套恢复兼容的应用版本。迁移 013 会删除身份、令牌和头像引用，存在无密码账号时会拒绝回滚，应先安排密码恢复。工作区与文件不会迁移。迁移 012 回滚会删除成果登记和待投递记录。"}</T></Note>
       </> },

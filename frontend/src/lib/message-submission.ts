@@ -3,7 +3,7 @@ import { clearConversationAttachmentUploads } from "./attachment-uploads";
 import { randomId } from "./random-id";
 
 type Submission = { id: string; fingerprint: string };
-export type MessageSubmission = { content: string; context_ids?: string[]; references?: MentionInput[]; attachment_ids: string[] };
+export type MessageSubmission = { content: string; context_ids?: string[]; references?: MentionInput[]; attachment_ids: string[]; execution_mode?: "plan" };
 export type AcceptedSubmission = { run_id: string; status?: ConversationRunStatus };
 export class SubmissionUnconfirmed extends Error {
   constructor() { super("消息发送结果尚未确认，请先重新同步状态；草稿已保留。"); }

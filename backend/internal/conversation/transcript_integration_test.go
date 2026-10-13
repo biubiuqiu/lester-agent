@@ -108,6 +108,7 @@ func newTranscriptFixture(t *testing.T, legacy bool) transcriptFixture {
 	applyTestMigration(t, db, "000018_command_tasks.up.sql")
 	applyTestMigration(t, db, "000019_model_request_usage.up.sql")
 	applyTestMigration(t, db, "000020_context_checkpoints.up.sql")
+	applyTestMigration(t, db, "000021_run_interactions.up.sql")
 	return f
 }
 
@@ -694,6 +695,7 @@ func TestTranscriptGuardAndConcurrentSequence(t *testing.T) {
 	}
 	applyTestMigration(t, f.service.db, "000012_deliverables_events.down.sql")
 	applyTestMigration(t, f.service.db, "000020_context_checkpoints.down.sql")
+	applyTestMigration(t, f.service.db, "000021_run_interactions.down.sql")
 	applyTestMigration(t, f.service.db, "000004_durable_transcript.down.sql")
 	var count int
 	if err := f.service.db.QueryRow(ctx, `SELECT count(*) FROM messages`).Scan(&count); err != nil || count != 14 {

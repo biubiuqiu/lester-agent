@@ -1,0 +1,31 @@
+.workspace-shell .execution-mode{flex:0 0 auto;min-height:32px;border:0;border-radius:7px;padding:5px 9px;background:transparent;color:var(--muted);font-size:11px;cursor:pointer}
+.workspace-shell .execution-mode:hover{background:#f1f4f0}
+.workspace-shell .execution-mode.plan{background:#eef3eb;color:var(--dark);font-weight:650}
+.workspace-shell .execution-mode:disabled{cursor:default;opacity:.6}
+.run-interactions{max-width:780px;margin:20px auto;min-width:0;color:var(--ink);font-size:12px}
+.interaction-mode{color:var(--muted);font-size:11px}
+.interaction-card{border:1px solid var(--line-strong);border-radius:13px;padding:18px;background:#fbfcf9}
+.interaction-card h3{margin:0 0 14px;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
+.interaction-card fieldset{min-width:0;margin:0 0 16px;border:0;padding:0}
+.interaction-card legend{margin-bottom:10px;font-weight:650;line-height:1.55;overflow-wrap:anywhere}
+.interaction-card label{display:grid;gap:7px;color:var(--muted);font-size:11px}
+.interaction-card textarea{box-sizing:border-box;width:100%;min-height:64px;max-height:180px;resize:vertical;border:1px solid var(--line);border-radius:8px;background:#fff;padding:9px;color:var(--ink);font:inherit;line-height:1.6}
+.interaction-card textarea:focus-visible{outline:2px solid #69866c;outline-offset:2px;border-color:#b5c5b0}
+.interaction-card .interaction-option{display:flex;align-items:flex-start;gap:9px;margin-bottom:7px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:10px;cursor:pointer}
+.interaction-card .interaction-option:has(input:checked){border-color:#bdcdb6;background:#f2f6ee}
+.interaction-option input{margin:3px 0 0;accent-color:var(--dark)}
+.interaction-option span{display:grid;gap:4px;min-width:0;overflow-wrap:anywhere}
+.interaction-option strong{color:var(--ink);font-size:12px;font-weight:550}
+.interaction-option small{font-size:11px;line-height:1.5}
+.interaction-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:13px}
+.run-interactions button{min-height:34px;border:1px solid var(--line-strong);border-radius:8px;background:#fff;padding:7px 12px;color:var(--ink);font:inherit;cursor:pointer}
+.run-interactions button.primary{border-color:var(--dark);background:var(--dark);color:#fff}
+.run-interactions button:disabled{opacity:.5;cursor:default}
+.run-interactions button:focus-visible,.execution-mode:focus-visible{outline:2px solid #69866c;outline-offset:3px}
+.interaction-hint{margin:13px 0;color:var(--muted);font-size:11px;line-height:1.65}
+.interaction-card ol,.interaction-content ol{padding-left:22px;line-height:1.7;overflow-wrap:anywhere}
+.interaction-receipt{margin:10px 0;border-bottom:1px solid var(--line);padding:10px 0;color:var(--muted)}
+.interaction-receipt summary{cursor:pointer;font-size:12px;overflow-wrap:anywhere}
+.interaction-content{margin-top:12px;line-height:1.7;overflow-wrap:anywhere}
+.interaction-content p{white-space:pre-wrap}
+@media(max-width:600px){.interaction-card{padding:14px}.interaction-card textarea{font-size:16px}.interaction-actions button{min-height:40px}.workspace-shell .execution-mode{padding-right:6px;padding-left:6px;font-size:10px}}

@@ -61,7 +61,12 @@ func observe(exchange ToolExchange) observation {
 	decoder.UseNumber() // Retry identity must not collapse large integer arguments.
 	argsErr := decoder.Decode(&o.args)
 	_ = json.Unmarshal([]byte(exchange.ToolResult.Content), &o.result)
-	if hasError(o.result) {
+	interaction := o.name == "ask_user_question" || o.name == "propose_plan"
+	if interaction && o.result["cancelled"] == true {
+		// Revoked questions/plans have no file/command side effect to repair.
+		// Keep their factual outcome, but do not pin a large old question forever.
+		o.status = "cancelled"
+	} else if hasError(o.result) {
 		o.status = "error"
 	} else if argsErr == nil && o.args != nil {
 		switch o.name {
@@ -82,6 +87,11 @@ func observe(exchange ToolExchange) observation {
 		case "list_files":
 			var files []json.RawMessage
 			if json.Unmarshal([]byte(exchange.ToolResult.Content), &files) == nil && files != nil {
+				o.status = "success"
+			}
+		case "ask_user_question", "propose_plan":
+			switch field(o.result, "status") {
+			case "answered", "approved", "rejected", "changes_requested":
 				o.status = "success"
 			}
 		}
@@ -134,7 +144,7 @@ func canonicalName(name string) string {
 
 func knownTool(name string) bool {
 	switch name {
-	case "bash", "read", "write", "edit", "list_files":
+	case "bash", "read", "write", "edit", "list_files", "ask_user_question", "propose_plan":
 		return true
 	}
 	return false
@@ -165,6 +175,15 @@ func reference(exchange ToolExchange, o observation, resolved bool) string {
 		ref["resolved_by_later_success"] = true
 	}
 	switch o.name {
+	case "ask_user_question", "propose_plan":
+		ref["interaction_status"] = field(o.result, "status")
+		ref["historical_only"] = true
+		ref["execution_approval"] = false
+		for _, key := range []string{"interaction_id", "request_digest"} {
+			if value := field(o.result, key); value != "" {
+				ref[key] = shortened(value, 80)
+			}
+		}
 	case "read":
 		ref["file"] = shortened(filePath(o.args), 240)
 		if receipt, ok := o.result["read_receipt"].(map[string]any); ok {

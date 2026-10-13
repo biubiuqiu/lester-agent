@@ -221,6 +221,12 @@ func (e *runExecutor) executeTurns(ctx context.Context, conversationID, runID uu
 		}
 		modelRequest := request
 		modelRequest.Messages = projection.Messages
+		mode, modeContext, modeErr := s.runModeContext(ctx, conversationID, runID)
+		if modeErr != nil {
+			return modelRequest, projection, toolcontext.Budget{}, modeErr
+		}
+		modelRequest.System += modeContext
+		modelRequest.Tools = modelToolsForMode(request.Tools, mode)
 		taskState, stateErr := s.commandTaskContext(ctx, conversationID, runID)
 		if stateErr != nil {
 			return modelRequest, projection, toolcontext.Budget{}, stateErr
@@ -244,6 +250,7 @@ func (e *runExecutor) executeTurns(ctx context.Context, conversationID, runID uu
 		for attempt := 0; budget.ShouldCompact && !compactionDisabled && attempt < 2; attempt++ {
 			compactionBase := request
 			compactionBase.System = modelRequest.System
+			compactionBase.Tools = modelRequest.Tools
 			candidate, compactErr := e.compactContext(ctx, conversationID, runID, client, compactionBase, checkpoint, &estimator, config, budget, &requestIndex)
 			if compactErr != nil {
 				compactionDisabled = true // Open the circuit; keep the previous boundary.
@@ -271,6 +278,7 @@ func (e *runExecutor) executeTurns(ctx context.Context, conversationID, runID uu
 			contextRecoveries++
 			compactionBase := request
 			compactionBase.System = modelRequest.System
+			compactionBase.Tools = modelRequest.Tools
 			candidate, compactErr := e.compactContext(ctx, conversationID, runID, client, compactionBase, checkpoint, &estimator, config, budget, &requestIndex)
 			if compactErr != nil {
 				compactionDisabled = true
@@ -510,6 +518,12 @@ func (e *runExecutor) runTool(ctx context.Context, runID, conversationID uuid.UU
 		RunID: runID, ConversationID: conversationID,
 		SandboxID: computer.SandboxID, WorkDir: computer.WorkDir,
 		Sandboxes: s.sandboxes,
+		AuthorizeTool: func(toolCtx context.Context, name string, args json.RawMessage) error {
+			return s.authorizeRunTool(toolCtx, conversationID, runID, name, args)
+		},
+		Interact: func(toolCtx context.Context, request agenttool.InteractionRequest) (map[string]any, error) {
+			return s.waitRunInteraction(toolCtx, conversationID, runID, call.ID, request)
+		},
 		RecordTask: func(taskCtx context.Context, snapshot *sandbox.CommandTaskSnapshot) error {
 			return s.recordCommandTask(taskCtx, runID, conversationID, computer, snapshot)
 		},

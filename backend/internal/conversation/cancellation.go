@@ -71,6 +71,9 @@ func (s *Service) CancelRun(ctx context.Context, workspaceID, conversationID, ru
 		if _, err = tx.Exec(ctx, `UPDATE runs SET status='cancelling' WHERE id=$1`, runID); err != nil {
 			return err
 		}
+		if _, err = tx.Exec(ctx, `UPDATE run_interactions SET status='cancelled',responded_at=now() WHERE run_id=$1 AND status='pending'`, runID); err != nil {
+			return err
+		}
 		if err = eventlog.Append(ctx, tx, runID, conversationID, "RUN_CANCELLING", map[string]any{}); err != nil {
 			return err
 		}
@@ -145,6 +148,9 @@ func (s *Service) finishCancelledRun(ctx context.Context, runID, conversationID 
 		}
 	}
 	if _, err = tx.Exec(ctx, `UPDATE runs SET status='cancelled',completed_at=now() WHERE id=$1`, runID); err != nil {
+		return false, err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE run_interactions SET status='cancelled',responded_at=now() WHERE run_id=$1 AND status='pending'`, runID); err != nil {
 		return false, err
 	}
 	if _, err = tx.Exec(ctx, `UPDATE model_request_usage SET status='cancelled',error_kind='cancelled',usage=COALESCE(usage,'{"source":"missing"}'::jsonb),finished_at=now() WHERE run_id=$1 AND status='started'`, runID); err != nil {

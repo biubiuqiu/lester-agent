@@ -30,9 +30,11 @@ type Environment struct {
 	Files                 *FileState
 	// RecordTask persists trusted launch identity before starting a command and
 	// its actual ownership handle afterward. Never expose that handle to models.
-	RecordTask func(context.Context, *sandbox.CommandTaskSnapshot) error
-	TaskAccess func(context.Context, uuid.UUID, sandbox.CommandTaskReadOptions, bool) (map[string]any, error)
-	Emit       EventEmitter
+	RecordTask    func(context.Context, *sandbox.CommandTaskSnapshot) error
+	TaskAccess    func(context.Context, uuid.UUID, sandbox.CommandTaskReadOptions, bool) (map[string]any, error)
+	Interact      func(context.Context, InteractionRequest) (map[string]any, error)
+	AuthorizeTool func(context.Context, string, json.RawMessage) error
+	Emit          EventEmitter
 }
 
 type Handler interface {
@@ -60,6 +62,8 @@ func NewDefaultRegistry(db *pgxpool.Pool) *Registry {
 	registry.Register(StopTask{})
 	registry.Register(ReadConversation{DB: db})
 	registry.Register(ToolResult{DB: db})
+	registry.Register(AskUserQuestion{})
+	registry.Register(ProposePlan{})
 	registry.RegisterHidden(ListFiles{}, "computer_list_files")
 	return registry
 }
@@ -103,6 +107,11 @@ func (r *Registry) Execute(ctx context.Context, name string, arguments json.RawM
 	}
 	if environment.Sandboxes == nil {
 		return nil, errors.New("agent tool environment is incomplete")
+	}
+	if environment.AuthorizeTool != nil {
+		if err := environment.AuthorizeTool(ctx, handler.Definition().Name, arguments); err != nil {
+			return nil, err
+		}
 	}
 	return handler.Execute(ctx, environment, arguments)
 }

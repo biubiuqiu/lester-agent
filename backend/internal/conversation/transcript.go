@@ -211,6 +211,10 @@ func insertMessageReceipt(ctx context.Context, tx pgx.Tx, conversationID, runID 
 }
 
 func (s *Service) saveRunContext(ctx context.Context, runID uuid.UUID, messages []Message, request model.ModelRequest) error {
+	var mode string
+	if err := s.db.QueryRow(ctx, `SELECT execution_mode FROM runs WHERE id=$1 AND status='running'`, runID).Scan(&mode); err != nil {
+		return err
+	}
 	var through int64
 	for _, message := range messages {
 		if message.Seq > through {
@@ -219,7 +223,7 @@ func (s *Service) saveRunContext(ctx context.Context, runID uuid.UUID, messages 
 	}
 	// Record the dynamic prompt/tool snapshot once. Durable messages through the
 	// cursor reconstruct the initial history; this contains no provider credentials.
-	contextSnapshot := map[string]any{"model": request.Model, "system": request.System, "tools": request.Tools, "temperature": request.Temperature, "history_through_seq": through, "tool_context_policy": toolcontext.PolicyVersion, "recent_full_tool_exchanges": toolcontext.RecentFullToolExchanges}
+	contextSnapshot := map[string]any{"model": request.Model, "system": request.System, "tools": modelToolsForMode(request.Tools, mode), "base_tools": request.Tools, "initial_execution_mode": mode, "temperature": request.Temperature, "history_through_seq": through, "tool_context_policy": toolcontext.PolicyVersion, "recent_full_tool_exchanges": toolcontext.RecentFullToolExchanges}
 	if request.MaxTokens > 0 {
 		contextSnapshot["max_tokens"] = request.MaxTokens
 	}
@@ -337,6 +341,9 @@ func (s *Service) finishFailedRun(ctx context.Context, runID, conversationID uui
 	if _, err = tx.Exec(ctx, `UPDATE runs SET status='failed',completed_at=now() WHERE id=$1`, runID); err != nil {
 		return err
 	}
+	if _, err = tx.Exec(ctx, `UPDATE run_interactions SET status='cancelled',responded_at=now() WHERE run_id=$1 AND status='pending'`, runID); err != nil {
+		return err
+	}
 	if _, err = tx.Exec(ctx, `UPDATE model_request_usage SET status='failed',error_kind='interrupted',usage=COALESCE(usage,'{"source":"missing"}'::jsonb),finished_at=now() WHERE run_id=$1 AND status='started'`, runID); err != nil {
 		return err
 	}
@@ -369,6 +376,9 @@ func (s *Service) finishCompletedRun(ctx context.Context, runID, conversationID 
 		return ErrRunNotActive
 	}
 	if _, err = tx.Exec(ctx, `UPDATE runs SET status='completed',completed_at=now() WHERE id=$1`, runID); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE run_interactions SET status='cancelled',responded_at=now() WHERE run_id=$1 AND status='pending'`, runID); err != nil {
 		return err
 	}
 	if err = eventlog.Append(ctx, tx, runID, conversationID, "RUN_COMPLETED", map[string]any{}); err != nil {

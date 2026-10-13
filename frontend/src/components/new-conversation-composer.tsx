@@ -17,6 +17,7 @@ import { readView, updateView, viewKey } from "@/lib/conversation-view-state";
 import { mentionPayload } from "@/lib/mentions";
 import { startConversation } from "@/lib/start-conversation";
 import { useComposerDock, useComposerMotion } from "./composer-motion";
+import { ExecutionMode } from "./execution-mode";
 
 export function NewConversationComposer({ deployments, user, projectId, projectName, initialAgentSlug }: { deployments: Deployment[]; user: UserProfile; projectId?:string; projectName?:string; initialAgentSlug?: string }) {
   const t = useT();
@@ -30,6 +31,7 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
   const [model, setModel] = useState(deployments.find((item) => item.is_default)?.id || deployments[0]?.id || "");
   const [agents, setAgents] = useState<Agent[]>([]);
   const [agentSlug, setAgentSlug] = useState(initialAgentSlug || readView(storageKey).agentSlug);
+  const [executionMode, setExecutionMode] = useState(() => readView(storageKey).executionMode);
   const [agentError, setAgentError] = useState("");
   useEffect(() => { let active=true; api<{agents:Agent[]}>("/api/v1/agents").then(result=>{if(active){setAgents(result.agents);setAgentSlug(current=>result.agents.some(a=>a.slug===current)?current:"lester");}}).catch(reason=>{if(active)setAgentError(reason instanceof Error?reason.message:"Agent 加载失败");});return()=>{active=false}; }, []);
   useEffect(() => { updateView(storageKey,{agentSlug}); }, [storageKey,agentSlug]);
@@ -96,8 +98,8 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
       const conversation = await startConversation(text, files, model, (item) => {
         created = item;
         // Preserve the submitted draft before uploads/send; never auto-resend on reload.
-        updateView(viewKey(user.user_id, user.workspace_id, item.id), { contexts, text, files, missingFiles: missing });
-      },projectId,mentionPayload(contexts).context_ids,agentSlug,mentionPayload(contexts).references || []);
+        updateView(viewKey(user.user_id, user.workspace_id, item.id), { contexts, text, files, missingFiles: missing, executionMode });
+      },projectId,mentionPayload(contexts).context_ids,agentSlug,mentionPayload(contexts).references || [],executionMode);
       updateView(viewKey(user.user_id, user.workspace_id, conversation.id), { contexts: [], text: "", files: [], missingFiles: [], sendNotice: "" });
       clear();
       if (mounted.current) {
@@ -136,6 +138,7 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
           <button type="button" className="icon-button upload-button" aria-label={t("添加附件")} title={t("添加附件或直接粘贴图片")} disabled={busy} onClick={() => input.current?.click()}><Paperclip /></button>
           <label className="model-selector"><select aria-label={t("当前模型")} value={model} disabled={busy || !deployments.length} onChange={(event) => setModel(event.target.value)}>{!deployments.length ? <option value=""><T>{"请先配置模型"}</T></option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown /></label>
           <AgentPicker agents={agents} selected={agentSlug} disabled={busy} onSelect={value => { setAgentSlug(value); updateView(storageKey, { agentSlug: value }); }} />
+          <ExecutionMode mode={executionMode} disabled={busy} onChange={mode => { setExecutionMode(mode); updateView(storageKey, { executionMode: mode }); }} />
           <button className="send-button" aria-label={t("发送消息")} disabled={busy || !model || (!text.trim() && !files.length)}><Send /></button>
         </>} />
       </div>
