@@ -193,7 +193,9 @@ if command -v bash >/dev/null 2>&1; then printf bash; else printf sh; fi`, "lest
 	defer cancel()
 	start := time.Now()
 	pidFile := "/tmp/.lester-command-" + uuid.NewString() + ".pid"
-	cmd := exec.CommandContext(runCtx, "docker", "exec", "-w", workDir, name, "setsid", "sh", "-c", dockerCommandStart, "lester-command", pidFile, shell, command.Command)
+	cmd := exec.CommandContext(runCtx, "docker", "exec", "-w", workDir, name, "setsid", "-w", "sh", "-c", dockerCommandStart, "lester-command", pidFile, shell, command.Command)
+	// setsid may fork when the runtime makes exec a process-group leader.
+	// Wait for its session child instead of mistaking the launcher exit for completion.
 	cmd.WaitDelay = time.Second
 	stdout, stderr := newBoundedCapture(commandCaptureLimit), newBoundedCapture(commandCaptureLimit)
 	cmd.Stdout = stdout

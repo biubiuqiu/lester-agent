@@ -260,7 +260,7 @@ func (p *ACSProvider) Exec(ctx context.Context, providerRef string, command Comm
 	stdout, stderr := newBoundedCapture(commandCaptureLimit), newBoundedCapture(commandCaptureLimit)
 	startedAt := time.Now()
 	pidFile := "/tmp/.lester-command-" + uuid.NewString() + ".pid"
-	ownedCommand := "exec setsid sh -c " + shellQuote(dockerCommandStart) + " lester-command " + shellQuote(pidFile) + " bash " + shellQuote(command.Command)
+	ownedCommand := "exec setsid -w sh -c " + shellQuote(dockerCommandStart) + " lester-command " + shellQuote(pidFile) + " bash " + shellQuote(command.Command)
 	result, runErr := runtimeClient.Run(runCtx, ownedCommand, workDir,
 		func(value string) { _, _ = stdout.Write([]byte(value)) },
 		func(value string) { _, _ = stderr.Write([]byte(value)) },

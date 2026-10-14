@@ -22,6 +22,11 @@ func TestDockerCommandShellAndCancellation(t *testing.T) {
 		t.Fatalf("start fixture: %v: %s", err, out)
 	}
 	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", name).Run() })
+	// runc may make an exec process a group leader, which makes setsid fork.
+	// Force that case deterministically; actual commands still run as non-root.
+	if out, err := exec.Command("docker", "exec", "--user", "0", name, "sh", "-c", `printf '%s\n' '#!/bin/sh' 'case "$1" in sh|-w) exec /usr/bin/setsid -f "$@" ;; *) exec /usr/bin/setsid "$@" ;; esac' > /usr/local/bin/setsid && chmod 755 /usr/local/bin/setsid`).CombinedOutput(); err != nil {
+		t.Fatalf("prepare forking setsid fixture: %v: %s", err, out)
+	}
 	provider := NewDockerProvider(image)
 	workDir := "/workspace/conversations/" + id
 	result, err := provider.Exec(context.Background(), id, Command{Command: `items=(one two); printf '%s\n' "${items[1]}"; set -o pipefail; false | true`, WorkDir: workDir})
@@ -31,6 +36,7 @@ func TestDockerCommandShellAndCancellation(t *testing.T) {
 
 	for _, mode := range []string{"cancelled", "timed_out"} {
 		t.Run(mode, func(t *testing.T) {
+			workDir := "/workspace/conversations/" + uuid.NewString() // Do not observe the previous subtest's PID files.
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			command := Command{WorkDir: workDir, Command: `printf '%s\n' "$$" > parent.pid; setsid bash -c 'trap "" TERM; sleep 30' & printf '%s\n' "$!" > child.pid; printf 'PARTIAL_OUTPUT\n'; wait`}

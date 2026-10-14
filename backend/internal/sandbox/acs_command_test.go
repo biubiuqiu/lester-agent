@@ -44,6 +44,9 @@ func (o *observedCommandOutput) detach() string {
 }
 
 func (r *localACSCommandRuntime) Run(ctx context.Context, command, _ string, stdout, stderr func(string)) (*acsCommandResult, error) {
+	// Map the sandbox root into the isolated fixture; GitHub runners do not
+	// have a writable /workspace, and tests must never create one on the host.
+	command = strings.ReplaceAll(command, shellQuote("/workspace"), shellQuote(r.dir))
 	cmd := exec.Command("bash", "-lc", command)
 	cmd.Dir = r.dir
 	out, errOut := &observedCommandOutput{callback: stdout}, &observedCommandOutput{callback: stderr}
