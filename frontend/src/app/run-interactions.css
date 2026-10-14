@@ -70,3 +70,33 @@
 .file-change-panes pre{max-height:320px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px}
 .file-restore-confirm{margin-top:10px;border:1px solid var(--line);padding:12px;border-radius:10px;background:#fbfcf9}
 @media(max-width:600px){.project-rules-dialog{padding:18px}.project-rules-dialog textarea{font-size:16px}.file-change-panes{grid-template-columns:1fr}.file-changes button{min-height:40px}}
+/* Pending messages belong to the composer, not the scrolling transcript. */
+.composer-dock{max-width:780px;margin:0 auto;min-width:0}
+.composer-queue{margin:0 12px -12px;border:1px solid var(--line);border-bottom:0;border-radius:15px 15px 0 0;background:#fafbf8;padding:4px 0 14px;color:var(--muted);font-size:11px;min-width:0}
+.composer-dock>.compose-box{position:relative;z-index:1;width:100%;box-sizing:border-box}
+.composer-queue-list{max-height:min(156px,22dvh);overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
+.composer-queue-item{display:flex;align-items:flex-start;gap:9px;min-width:0;padding:9px 12px}
+.composer-queue-item+article{border-top:1px solid var(--line)}
+.composer-queue-item>svg{flex:none;margin-top:4px;color:var(--faint)}
+.queue-message{flex:1;min-width:0;color:var(--ink)}
+.queue-message summary{list-style:none;cursor:pointer;line-height:22px}
+.queue-message summary::-webkit-details-marker{display:none}
+.queue-message summary span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.queue-message[open] summary span{white-space:normal;overflow-wrap:anywhere}
+.queue-message p{display:none}
+.queue-status{flex:none;line-height:22px;font-size:10px;color:var(--faint)}
+.queue-status.held{color:#986f37}
+.queue-actions{display:flex;flex:none;gap:3px}
+.composer-queue button{display:inline-flex;align-items:center;justify-content:center;min-width:24px;min-height:24px;border:0;border-radius:6px;padding:4px;background:transparent;color:var(--muted);font:inherit;cursor:pointer}
+.composer-queue button:hover:not(:disabled){background:#eaf0e6;color:var(--ink)}
+.composer-queue button:disabled{opacity:.45;cursor:default}
+.composer-queue button:focus-visible,.queue-message summary:focus-visible{outline:2px solid #69866c;outline-offset:2px}
+.composer-queue .run-input-receipts{margin:0;padding:0 12px;font-size:10px}
+.composer-queue .run-input-receipts>summary{padding:5px 0}
+.queue-history{max-height:120px;overflow:auto;overscroll-behavior:contain}
+.queue-history article{padding:7px 0}.queue-history p{margin:6px 0}
+.queue-error{padding:5px 12px;margin:0;line-height:1.6;overflow-wrap:anywhere}
+@media(max-width:600px){.composer-queue{margin-right:6px;margin-left:6px}.composer-queue-item{gap:6px;padding:8px}.queue-status{max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.composer-queue-list{max-height:min(128px,20dvh)}.queue-actions button{min-width:32px;min-height:32px}.queue-message summary,.queue-status{line-height:32px}}
+.composer-queue-item{animation:composer-queue-enter 160ms ease-out both}
+@keyframes composer-queue-enter{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){.composer-queue-item{animation:none}}

@@ -62,12 +62,12 @@ test("record the current workspace story", async ({ context, page }, info) => {
     await caption(page, "03 / While it works, press Enter to queue the next task.");
     await input.pressSequentially("下一步：补充部署说明和帮助文档入口。", { delay: 65 });
     await input.press("Enter"); await expect.poll(() => inputs.length).toBe(1);
-    await page.locator(".run-input-receipts>summary").click(); await hold(page);
+    await hold(page);
     await caption(page, "04 / Or explicitly add a clarification to the current task.");
     await input.pressSequentially("当前页面用鼠尾草绿色，保持留白。", { delay: 65 });
     await page.getByRole("button", { name: "运行中输入", exact: true }).click(); await hold(page, 2000);
     await page.getByRole("button", { name: "调整当前任务", exact: true }).click();
-    await expect.poll(() => inputs.length).toBe(2); await expect(page.locator(".run-input-receipts")).toContainText("等待加入当前任务"); await hold(page);
+    await expect.poll(() => inputs.length).toBe(2); await expect(page.locator(".composer-queue")).toContainText("等待加入当前任务"); await hold(page);
     await caption(page, "05 / The result opens beside the conversation, in its own tab.");
     api.finish();
     api.messages.at(-1)!.content = "示例成果：index.html 和 notes.txt 已更新，可以在右侧预览并查看修改。";

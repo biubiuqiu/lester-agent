@@ -40,8 +40,7 @@ test("typing preserves running drafts; adjustment is explicit and receipt loss n
   await page.getByRole("button", { name: "调整当前任务", exact: true }).click();
   await expect(input).toHaveValue("");
   expect(posts).toBe(1); expect(reads).toBe(1);
-  await page.locator(".run-input-receipts>summary").click();
-  await expect(page.locator(".run-input-receipts")).toContainText("等待加入当前任务");
+  await expect(page.locator(".composer-queue")).toContainText("等待加入当前任务");
   await expect(page.getByRole("button", { name: "停止生成", exact: true })).toBeEnabled();
 });
 test("unknown acceptance preserves draft and shows an honest error", async ({ context, page, api }) => {
@@ -70,8 +69,7 @@ test("queued task captures selected Plan mode without changing the running task"
   await page.getByRole("button", { name: "运行中输入", exact: true }).click();
   await page.getByRole("button", { name: "排队下一任务", exact: true }).click();
   await expect(input).toHaveValue("");
-  await page.locator(".run-input-receipts>summary").click();
-  await expect(page.locator(".run-input-receipts")).toContainText("等待下一任务");
+  await expect(page.locator(".composer-queue")).toContainText("等待下一任务");
   expect(api.mutations.filter(item => item.path.endsWith("/messages"))).toHaveLength(1);
 });
 
@@ -113,7 +111,7 @@ test("a closed window's unfinished draft restores and an accepted queue survives
   await reopened.close();
   const again = await context.newPage(); await again.goto(`/app/c/${conversationId}`);
   await expect(again.getByRole("textbox", { name: "消息输入框", exact: true })).toHaveValue("");
-  await again.locator(".run-input-receipts>summary").click(); await expect(again.locator(".run-input-receipts")).toContainText("写了一半，还没有发"); expect(accepted).toHaveLength(1);
+  await expect(again.locator(".composer-queue")).toContainText("写了一半，还没有发"); expect(accepted).toHaveLength(1);
 });
 
 test("a lost queue receipt survives window closure and cannot become a duplicate idle task", async ({ context, page, api }) => {
@@ -131,5 +129,66 @@ test("a lost queue receipt survives window closure and cannot become a duplicate
   const restored = reopened.getByRole("textbox", { name: "消息输入框", exact: true }); await expect(restored).toHaveValue("受理不确定时保存的消息");
   await restored.press("Enter"); await expect(restored).toHaveValue("");
   expect(posted).toBe(1); expect(api.mutations.filter(item => item.path.endsWith("/messages"))).toHaveLength(1);
-  await reopened.locator(".run-input-receipts>summary").click(); await expect(reopened.locator(".run-input-receipts")).toContainText("已暂停，等待处理");
+  await expect(reopened.locator(".composer-queue")).toContainText("已暂停，等待处理");
+});
+
+test("queued messages attach to the composer immediately, survive scrolling, and cancel without losing the draft", async ({ context, page, api }, info) => {
+  const accepted: RunInput[] = [];
+  let cancelled = 0;
+  // Deliberately stale list: the accepted POST receipt must still be visible.
+  await context.route(`**${prefix}`, route => {
+    if (route.request().method() === "GET") return route.fulfill({ json: { inputs: [] } });
+    const item = { ...receipt(route.request().postDataJSON()), accepted_order: accepted.length + 1 };
+    accepted.push(item); return route.fulfill({ status: 202, json: item });
+  });
+  await context.route(`**${prefix}/*/action`, route => {
+    expect(route.request().postDataJSON()).toEqual({ action: "cancel" }); cancelled++;
+    const item = accepted.find(value => route.request().url().includes(value.id))!;
+    return route.fulfill({ json: { ...item, status: "cancelled", revision: 2 } });
+  });
+  const input = await start(page, api);
+  const consoleErrors: string[] = [];
+  page.on("console", message => { if (message.type() === "error") consoleErrors.push(message.text()); });
+  await input.fill("第一个排队任务：整理帮助文档"); await input.press("Enter");
+  const queue = page.locator(".composer-queue-list");
+  await expect(queue).toBeVisible(); await expect(queue).toContainText("第一个排队任务");
+  await input.fill("第二个排队任务：" + "很长的任务内容".repeat(70)); await input.press("Enter");
+  await expect(queue.locator("article")).toHaveCount(2);
+  await expect(queue.locator("article").first()).toContainText("第一个排队任务");
+  await expect(page.locator(".thread .composer-queue")).toHaveCount(0);
+  await input.fill("还没发出的草稿");
+  const attached = async () => {
+    const { q, b } = await page.locator(".composer-dock").evaluate(el => ({
+      q: el.querySelector(".composer-queue-list")!.getBoundingClientRect().toJSON(),
+      b: el.querySelector(".compose-box")!.getBoundingClientRect().toJSON(),
+    }));
+    expect(q).not.toBeNull(); expect(b).not.toBeNull();
+    expect(q!.y + q!.height).toBeLessThanOrEqual(b!.y + 4);
+    expect(b!.y - q!.y - q!.height).toBeLessThan(18);
+    expect(b!.y + b!.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+    expect(q!.x).toBeGreaterThanOrEqual(b!.x); expect(q!.x + q!.width).toBeLessThanOrEqual(b!.x + b!.width + 1);
+  };
+  await attached();
+  await page.screenshot({ path: info.outputPath("composer-queue-compact.png") });
+  await queue.locator("article").last().locator("summary").click();
+  await attached(); // Long text scrolls in the queue rather than pushing input offscreen.
+  await page.locator(".thread").evaluate(el => { el.scrollTop = 0; });
+  await attached();
+  await expect(page).toHaveTitle("Lester");
+  await page.screenshot({ path: info.outputPath("composer-queue-attached.png") });
+  await queue.locator("article").first().getByRole("button", { name: "取消", exact: true }).click();
+  await expect(queue.locator("article")).toHaveCount(1); await expect(input).toHaveValue("还没发出的草稿");
+  expect(cancelled).toBe(1);
+  await page.locator(".run-input-receipts>summary").click();
+  await expect(page.locator(".queue-history")).toContainText("已取消");
+  await attached();
+  expect(consoleErrors).toEqual([]);
+});
+
+test("an attachment-only queued message has a readable label", async ({ context, page, api }) => {
+  const item = { id: "77777777-7777-4777-8777-777777777777", after_run_id: "fixture-run", kind: "next", status: "queued", revision: 1, content: "", accepted_order: 1, request: { attachment_ids: ["fixture-attachment"] } };
+  await context.route(`**${prefix}`, route => route.fulfill({ json: { inputs: [item] } }));
+  await start(page, api);
+  await expect(page.locator(".composer-queue .queue-message summary")).toHaveText("1 个附件");
+  await expect(page.locator(".composer-queue-item")).toContainText("等待下一任务");
 });
