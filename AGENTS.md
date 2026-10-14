@@ -256,11 +256,15 @@ docker compose --env-file deploy/.env \
 
 Run backend checks:
 
+Run `go mod tidy` even when no new module was added: direct imports and platform-specific files can change direct/indirect classification. Include its `go.mod`/`go.sum` changes in the commit, then verify a second tidy produces no further changes before pushing; CI intentionally rejects untidied committed module files.
+
 ```bash
 cd backend
 go mod tidy
 test -z "$(gofmt -l cmd internal prompts)"
+go vet ./...
 go test ./...
+go build ./cmd/...
 ```
 
 Run frontend checks:

@@ -607,8 +607,13 @@ Backend (Go 1.26.9):
 ```bash
 cd backend
 go mod tidy
+go vet ./...
 go test ./...
+go build ./cmd/...
 ```
+
+Commit the changes made by `go mod tidy`, including direct/indirect dependency classifications. Backend CI reruns tidy and requires the committed module files to stay unchanged; passing local tests alone does not satisfy this check.
+
 
 Frontend (pnpm 10.17.1):
 
