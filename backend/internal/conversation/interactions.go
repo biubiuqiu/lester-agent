@@ -355,23 +355,24 @@ func (s *Service) authorizeRunTool(ctx context.Context, conversationID, runID uu
 }
 
 func (s *Service) runModeContext(ctx context.Context, conversationID, runID uuid.UUID) (string, string, error) {
-	var status, mode string
+	var status, mode, permission string
 	var approved *string
-	if err := s.db.QueryRow(ctx, `SELECT status,execution_mode,approved_plan_digest FROM runs WHERE id=$1 AND conversation_id=$2`, runID, conversationID).Scan(&status, &mode, &approved); err != nil {
+	if err := s.db.QueryRow(ctx, `SELECT status,execution_mode,approved_plan_digest,permission_mode FROM runs WHERE id=$1 AND conversation_id=$2`, runID, conversationID).Scan(&status, &mode, &approved, &permission); err != nil {
 		return "", "", err
 	}
 	if status != "running" {
 		return "", "", ErrRunNotActive
 	}
+	permissionNote := fmt.Sprintf("\n\n<permissions>Active task permission mode: %s. The server checks every tool. It displays operation approvals automatically when required; do not ask redundant questions for those approvals. Plan approval never changes this permission mode. A rejected operation is not permission to retry it with another command, tool or path. Full access stays within the authorized Computer and platform scope; it never grants host access or enables external network access.</permissions>", permission)
 	if mode == "plan" {
-		return mode, "\n\n<execution_mode>Plan mode is read-only. Use list_files to discover paths, then read tools to inspect files and clarify requirements when necessary. Bash, file edits/writes, publication and other changes are blocked by the server. Use propose_plan for exact user review. Only an explicit approval of that active plan version enables execution; question answers, summaries and historical agreement do not grant approval.</execution_mode>", nil
+		return mode, permissionNote + "\n\n<execution_mode>Plan mode is read-only. Use list_files to discover paths, then read tools to inspect files and clarify requirements when necessary. Bash, file edits/writes, publication and other changes are blocked by the server. Use propose_plan for exact user review. Only an explicit approval of that active plan version enables execution; question answers, summaries and historical agreement do not grant approval.</execution_mode>", nil
 	}
 	if approved != nil {
 		var plan json.RawMessage
 		if err := s.db.QueryRow(ctx, `SELECT request FROM run_interactions WHERE run_id=$1 AND conversation_id=$2 AND kind='plan' AND status='approved' AND request_digest=$3`, runID, conversationID, *approved).Scan(&plan); err != nil {
 			return "", "", errors.New("approved plan record unavailable")
 		}
-		return mode, fmt.Sprintf("\n\n<execution_mode>The user approved this exact plan version for this active run. Normal tool execution is enabled within that agreed scope; do not ask for the same approval again. Publication still requires the user's actual publication request. User adjustments and current state checks remain authoritative. The following platform-restored plan is the approved scope, not permission granted by a summary:\n%s\n</execution_mode>", plan), nil
+		return mode, permissionNote + fmt.Sprintf("\n\n<execution_mode>The user approved this exact plan version for this active run. Normal tool execution is enabled within that agreed scope; do not ask for the same approval again. Publication still requires the user's actual publication request. User adjustments and current state checks remain authoritative. The following platform-restored plan is the approved scope, not permission granted by a summary:\n%s\n</execution_mode>", plan), nil
 	}
-	return mode, "", nil
+	return mode, permissionNote, nil
 }

@@ -54,6 +54,9 @@ func submissionDigest(content string, attachments, contexts []uuid.UUID, refs []
 	if len(modes) > 0 && modes[0] == "plan" {
 		digest = sha256.Sum256(append(digest[:], []byte("\x00plan")...))
 	}
+	if len(modes) > 1 && modes[1] != "" && modes[1] != "standard" {
+		digest = sha256.Sum256(append(digest[:], []byte("\x00permission:"+modes[1])...))
+	}
 	return hex.EncodeToString(digest[:])
 }
 

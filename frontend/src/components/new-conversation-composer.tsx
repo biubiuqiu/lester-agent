@@ -1,5 +1,4 @@
 "use client";
-import { formatMessage } from "@/lib/i18n";
 import { T, useT } from "@/components/i18n";
 
 
@@ -17,6 +16,7 @@ import { readView, updateView, viewKey } from "@/lib/conversation-view-state";
 import { mentionPayload } from "@/lib/mentions";
 import { startConversation } from "@/lib/start-conversation";
 import { useComposerDock, useComposerMotion } from "./composer-motion";
+import { PermissionMode } from "./permission-mode";
 import { ExecutionMode } from "./execution-mode";
 
 export function NewConversationComposer({ deployments, user, projectId, projectName, initialAgentSlug }: { deployments: Deployment[]; user: UserProfile; projectId?:string; projectName?:string; initialAgentSlug?: string }) {
@@ -32,6 +32,7 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
   const [agents, setAgents] = useState<Agent[]>([]);
   const [agentSlug, setAgentSlug] = useState(initialAgentSlug || readView(storageKey).agentSlug);
   const [executionMode, setExecutionMode] = useState(() => readView(storageKey).executionMode);
+  const [permissionMode, setPermissionMode] = useState(() => readView(storageKey).permissionMode);
   const [agentError, setAgentError] = useState("");
   useEffect(() => { let active=true; api<{agents:Agent[]}>("/api/v1/agents").then(result=>{if(active){setAgents(result.agents);setAgentSlug(current=>result.agents.some(a=>a.slug===current)?current:"lester");}}).catch(reason=>{if(active)setAgentError(reason instanceof Error?reason.message:"Agent 加载失败");});return()=>{active=false}; }, []);
   useEffect(() => { updateView(storageKey,{agentSlug}); }, [storageKey,agentSlug]);
@@ -98,8 +99,8 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
       const conversation = await startConversation(text, files, model, (item) => {
         created = item;
         // Preserve the submitted draft before uploads/send; never auto-resend on reload.
-        updateView(viewKey(user.user_id, user.workspace_id, item.id), { contexts, text, files, missingFiles: missing, executionMode });
-      },projectId,mentionPayload(contexts).context_ids,agentSlug,mentionPayload(contexts).references || [],executionMode);
+        updateView(viewKey(user.user_id, user.workspace_id, item.id), { contexts, text, files, missingFiles: missing, executionMode, permissionMode });
+      },projectId,mentionPayload(contexts).context_ids,agentSlug,mentionPayload(contexts).references || [],executionMode,permissionMode);
       updateView(viewKey(user.user_id, user.workspace_id, conversation.id), { contexts: [], text: "", files: [], missingFiles: [], sendNotice: "" });
       clear();
       if (mounted.current) {
@@ -109,7 +110,7 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : t("发送失败");
       if (created) {
-        updateView(viewKey(user.user_id, user.workspace_id, created.id), { sendNotice: formatMessage("会话已创建，但首条消息未确认发送成功：{0}。草稿已保留，请先检查消息和运行状态，再决定是否重新发送。", [message]) });
+        updateView(viewKey(user.user_id, user.workspace_id, created.id), { sendNotice: t("会话已创建，但首条消息未确认发送成功：{0}。草稿已保留，请先检查消息和运行状态，再决定是否重新发送。", [t(message)]) });
         clear();
         if (mounted.current) {
           if (composeBox.current) handoff(created.id, composeBox.current);
@@ -138,6 +139,7 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
           <button type="button" className="icon-button upload-button" aria-label={t("添加附件")} title={t("添加附件或直接粘贴图片")} disabled={busy} onClick={() => input.current?.click()}><Paperclip /></button>
           <label className="model-selector"><select aria-label={t("当前模型")} value={model} disabled={busy || !deployments.length} onChange={(event) => setModel(event.target.value)}>{!deployments.length ? <option value=""><T>{"请先配置模型"}</T></option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown /></label>
           <AgentPicker agents={agents} selected={agentSlug} disabled={busy} onSelect={value => { setAgentSlug(value); updateView(storageKey, { agentSlug: value }); }} />
+          <PermissionMode mode={permissionMode} disabled={busy} onChange={mode => { setPermissionMode(mode); updateView(storageKey, { permissionMode: mode }); }} />
           <ExecutionMode mode={executionMode} disabled={busy} onChange={mode => { setExecutionMode(mode); updateView(storageKey, { executionMode: mode }); }} />
           <button className="send-button" aria-label={t("发送消息")} disabled={busy || !model || (!text.trim() && !files.length)}><Send /></button>
         </>} />

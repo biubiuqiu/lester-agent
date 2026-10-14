@@ -4,7 +4,7 @@ import { clearConversationAttachmentUploads } from "./attachment-uploads";
 import { randomId } from "./random-id";
 
 type Submission = { id: string; fingerprint: string };
-export type MessageSubmission = { content: string; context_ids?: string[]; references?: MentionInput[]; attachment_ids: string[]; execution_mode?: "plan" };
+export type MessageSubmission = { content: string; context_ids?: string[]; references?: MentionInput[]; attachment_ids: string[]; execution_mode?: "plan"; permission_mode?: "standard" | "auto" | "full" };
 export type AcceptedSubmission = { run_id: string; status?: ConversationRunStatus };
 export class SubmissionUnconfirmed extends Error {
   constructor() { super("消息发送结果尚未确认，请先重新同步状态；草稿已保留。"); }
@@ -33,7 +33,9 @@ export function clearMessageSubmissions() {
 
 export async function sendConversationMessage(conversationId: string, payload: MessageSubmission): Promise<AcceptedSubmission> {
   const epoch = sessionEpoch;
-  const canonical = JSON.stringify(payload, (_key, value) => value && typeof value === "object" && !Array.isArray(value)
+  const identityPayload = { ...payload };
+  if (identityPayload.permission_mode === "standard") delete identityPayload.permission_mode;
+  const canonical = JSON.stringify(identityPayload, (_key, value) => value && typeof value === "object" && !Array.isArray(value)
     ? Object.fromEntries(Object.keys(value).sort().map(key => [key, value[key]])) : value);
   let fingerprint: string;
   if (crypto.subtle) {
@@ -54,10 +56,11 @@ export async function sendConversationMessage(conversationId: string, payload: M
   else removeAttemptStorage(prefix + conversationId);
   let started: AcceptedSubmission;
   try {
-    started = await api<AcceptedSubmission>(`/api/v1/conversations/${conversationId}/messages`, { method: "POST", body: JSON.stringify({ ...payload, submission_id: attempt.id }) });
+    started = await api<AcceptedSubmission>(`/api/v1/conversations/${conversationId}/${payload.permission_mode ? "permissions/messages" : "messages"}`, { method: "POST", body: JSON.stringify({ ...payload, submission_id: attempt.id }) });
   } catch (error) {
     // Definite validation/access failures cannot have started a run. For a lost
     // response, perform one scoped read, never an automatic mutation retry.
+    if (error instanceof ApiError && error.status === 404 && payload.permission_mode) throw new Error("权限服务不可用，请完成升级后重试。");
     if (error instanceof ApiError && error.status < 500 && error.status !== 408) throw error;
     try {
       started = await api<AcceptedSubmission>(`/api/v1/conversations/${conversationId}/submissions/${attempt.id}`);

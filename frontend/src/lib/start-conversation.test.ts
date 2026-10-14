@@ -16,7 +16,7 @@ test("first submit creates Lester then sends exactly once with the chosen model"
   assert.equal(result.id, "c");
   assert.deepEqual(calls, [
     { path: "/api/v1/conversations", body: { agent_slug: "lester", model_deployment_id: "model", title: "hello" } },
-    { path: "/api/v1/conversations/c/messages", body: { content: "hello", context_ids: [], attachment_ids: [] } },
+    { path: "/api/v1/conversations/c/permissions/messages", body: { content: "hello", context_ids: [], attachment_ids: [], permission_mode: "standard" } },
   ]);
 });
 
@@ -45,11 +45,11 @@ test("attachments upload into the new conversation before sending only their IDs
   t.mock.method(globalThis, "fetch", async (path: string, init: RequestInit) => {
     paths.push(path);
     if (path.endsWith("/attachments")) { assert.ok(init.body instanceof FormData); return Response.json({ id: "attachment" }); }
-    if (path.endsWith("/messages")) { const body = JSON.parse(String(init.body)); assert.match(body.submission_id, /^[0-9a-f-]{36}$/); delete body.submission_id; assert.deepEqual(body, { content: "", context_ids: [], attachment_ids: ["attachment"] }); return Response.json({ run_id: "r" }); }
+    if (path.endsWith("/messages")) { const body = JSON.parse(String(init.body)); assert.match(body.submission_id, /^[0-9a-f-]{36}$/); delete body.submission_id; assert.deepEqual(body, { content: "", context_ids: [], attachment_ids: ["attachment"], permission_mode: "standard" }); return Response.json({ run_id: "r" }); }
     return Response.json({ id: "c" });
   });
   await startConversation("", [new File(["not injected"], "notes.txt")], "model", () => {});
-  assert.deepEqual(paths, ["/api/v1/conversations", "/api/v1/conversations/c/attachments", "/api/v1/conversations/c/messages"]);
+  assert.deepEqual(paths, ["/api/v1/conversations", "/api/v1/conversations/c/attachments", "/api/v1/conversations/c/permissions/messages"]);
 });
 
 

@@ -35,7 +35,7 @@ test("record the current workspace story", async ({ context, page }, info) => {
   const inputs: RunInput[] = [];
   await context.route(`**${prefix}/interactions`, r => r.fulfill({ json: { interactions: [approved ? { ...plan, status: "approved", response: { decision: "approve", request_digest: plan.request_digest } } : plan], execution_mode: approved ? "execute" : "plan" } }));
   await context.route(`**${prefix}/interactions/${plan.id}/respond`, r => { approved = true; return r.fulfill({ json: { ...plan, status: "approved", response: r.request().postDataJSON() } }); });
-  await context.route(`**${prefix}/inputs`, r => {
+  await context.route(`**${prefix}/permissions/inputs`, r => {
     if (r.request().method() === "GET") return r.fulfill({ json: { inputs } });
     const request = r.request().postDataJSON() as RunInputRequest;
     const item: RunInput = { id: request.id, after_run_id: request.run_id, kind: request.kind, status: request.kind === "next" ? "queued" : "pending", revision: 1, content: request.content, request, accepted_order: inputs.length + 1 };
@@ -48,7 +48,10 @@ test("record the current workspace story", async ({ context, page }, info) => {
     await page.goto("/app");
     const input = page.getByRole("textbox", { name: "消息输入框", exact: true });
     await expect(input).toBeVisible();
-    await caption(page, "01 / Start with a goal. Choose Plan before execution.");
+    await caption(page, "01 / Choose permissions and Plan, then describe your goal.");
+    await page.getByRole("button", { name: "权限设置", exact: true }).click();
+    await hold(page, 2000);
+    await page.getByRole("group", { name: "权限设置", exact: true }).getByRole("button").filter({ hasText: "自动审批" }).click();
     await page.getByRole("button", { name: "先规划，再执行", exact: true }).click();
     await input.pressSequentially("制作一个 Lester 的极简介绍页：大标题、项目定位、GitHub 入口。", { delay: 55 });
     await hold(page, 2500); await input.press("Enter");

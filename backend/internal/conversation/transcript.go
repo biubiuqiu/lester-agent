@@ -211,8 +211,8 @@ func insertMessageReceipt(ctx context.Context, tx pgx.Tx, conversationID, runID 
 }
 
 func (s *Service) saveRunContext(ctx context.Context, runID uuid.UUID, messages []Message, request model.ModelRequest) error {
-	var mode string
-	if err := s.db.QueryRow(ctx, `SELECT execution_mode FROM runs WHERE id=$1 AND status='running'`, runID).Scan(&mode); err != nil {
+	var mode, permission string
+	if err := s.db.QueryRow(ctx, `SELECT execution_mode,permission_mode FROM runs WHERE id=$1 AND status='running'`, runID).Scan(&mode, &permission); err != nil {
 		return err
 	}
 	var through int64
@@ -223,7 +223,7 @@ func (s *Service) saveRunContext(ctx context.Context, runID uuid.UUID, messages 
 	}
 	// Record the dynamic prompt/tool snapshot once. Durable messages through the
 	// cursor reconstruct the initial history; this contains no provider credentials.
-	contextSnapshot := map[string]any{"model": request.Model, "system": request.System, "tools": modelToolsForMode(request.Tools, mode), "base_tools": request.Tools, "initial_execution_mode": mode, "temperature": request.Temperature, "history_through_seq": through, "tool_context_policy": toolcontext.PolicyVersion, "recent_full_tool_exchanges": toolcontext.RecentFullToolExchanges}
+	contextSnapshot := map[string]any{"model": request.Model, "system": request.System, "tools": modelToolsForMode(request.Tools, mode), "base_tools": request.Tools, "initial_execution_mode": mode, "permission_mode": permission, "temperature": request.Temperature, "history_through_seq": through, "tool_context_policy": toolcontext.PolicyVersion, "recent_full_tool_exchanges": toolcontext.RecentFullToolExchanges}
 	if request.MaxTokens > 0 {
 		contextSnapshot["max_tokens"] = request.MaxTokens
 	}

@@ -95,7 +95,7 @@ export function RunFailureRecovery({ reason, lastPrompt, onPrepare }: { reason: 
 }
 
 const activityEventTypes = new Set([
-  "INTERACTION_REQUESTED",
+  "INTERACTION_REQUESTED", "PERMISSION_REQUESTED", "PERMISSION_RESPONDED",
   "CONTEXT_COMPACTING", "CONTEXT_COMPACTED", "CONTEXT_COMPACTION_FAILED",
   "RUN_STARTED",
   "MODEL_STARTED",

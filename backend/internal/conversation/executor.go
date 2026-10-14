@@ -547,7 +547,10 @@ func (e *runExecutor) runTool(ctx context.Context, runID, conversationID uuid.UU
 		SandboxID: computer.SandboxID, WorkDir: computer.WorkDir,
 		Sandboxes: s.sandboxes,
 		AuthorizeTool: func(toolCtx context.Context, name string, args json.RawMessage) error {
-			return s.authorizeRunTool(toolCtx, conversationID, runID, name, args)
+			if err := s.authorizeRunTool(toolCtx, conversationID, runID, name, args); err != nil {
+				return err
+			}
+			return s.authorizePermission(toolCtx, conversationID, runID, call.ID, name, args)
 		},
 		Interact: func(toolCtx context.Context, request agenttool.InteractionRequest) (map[string]any, error) {
 			return s.waitRunInteraction(toolCtx, conversationID, runID, call.ID, request)

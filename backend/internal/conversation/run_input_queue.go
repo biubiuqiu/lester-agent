@@ -32,10 +32,10 @@ func (s *Service) claimQueuedInput(ctx context.Context, workspaceID, conversatio
 	}
 	var id, after uuid.UUID
 	var actor, modelID *uuid.UUID
-	var content, mode, digest string
+	var content, mode, digest, permission string
 	var metadata json.RawMessage
 	var override bool
-	err = tx.QueryRow(ctx, `SELECT id,after_run_id,submitted_by,content,metadata,model_deployment_id,execution_mode,request_digest,resume_authorized FROM run_inputs WHERE workspace_id=$1 AND conversation_id=$2 AND kind='next' AND status='queued' ORDER BY accepted_order LIMIT 1 FOR UPDATE`, workspaceID, conversationID).Scan(&id, &after, &actor, &content, &metadata, &modelID, &mode, &digest, &override)
+	err = tx.QueryRow(ctx, `SELECT id,after_run_id,submitted_by,content,metadata,model_deployment_id,execution_mode,request_digest,resume_authorized,permission_mode FROM run_inputs WHERE workspace_id=$1 AND conversation_id=$2 AND kind='next' AND status='queued' ORDER BY accepted_order LIMIT 1 FOR UPDATE`, workspaceID, conversationID).Scan(&id, &after, &actor, &content, &metadata, &modelID, &mode, &digest, &override, &permission)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return uuid.Nil, nil
 	}
@@ -74,7 +74,7 @@ func (s *Service) claimQueuedInput(ctx context.Context, workspaceID, conversatio
 		return uuid.Nil, tx.Commit(ctx)
 	}
 	var runID, messageID uuid.UUID
-	if err = tx.QueryRow(ctx, `INSERT INTO runs(conversation_id,status,model_deployment_id,submission_id,submitted_by,submission_sha256,execution_mode) VALUES($1,'running',$2,$3,$4,$5,$6) RETURNING id`, conversationID, modelID, id, actor, digest, mode).Scan(&runID); err != nil {
+	if err = tx.QueryRow(ctx, `INSERT INTO runs(conversation_id,status,model_deployment_id,submission_id,submitted_by,submission_sha256,execution_mode,permission_mode) VALUES($1,'running',$2,$3,$4,$5,$6,$7) RETURNING id`, conversationID, modelID, id, actor, digest, mode, permission).Scan(&runID); err != nil {
 		return uuid.Nil, err
 	}
 	if err = tx.QueryRow(ctx, `INSERT INTO messages(conversation_id,run_id,role,content,metadata) VALUES($1,$2,'user',$3,$4::jsonb || jsonb_build_object('run_input_id',$5::text,'input_kind','next')) RETURNING id`, conversationID, runID, content, metadata, id).Scan(&messageID); err != nil {

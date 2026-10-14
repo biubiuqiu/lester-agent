@@ -271,7 +271,15 @@ func (s *Service) SendSubmission(ctx context.Context, workspaceID, userID, id, s
 	if mode != "execute" && mode != "plan" {
 		return uuid.Nil, errors.New("invalid execution mode")
 	}
-	digest := submissionDigest(content, attachmentIDs, contextIDs, selected, mode)
+	permission := "standard"
+	if len(modes) > 1 {
+		permission = modes[1]
+	}
+	permission, permissionErr := permissionMode(permission)
+	if permissionErr != nil {
+		return uuid.Nil, permissionErr
+	}
+	digest := submissionDigest(content, attachmentIDs, contextIDs, selected, mode, permission)
 	if accepted, found, err := s.acceptedSubmission(ctx, workspaceID, userID, id, submissionID, digest); err != nil || found {
 		return accepted, err
 	}
@@ -336,7 +344,7 @@ func (s *Service) SendSubmission(ctx context.Context, workspaceID, userID, id, s
 	if submissionID != uuid.Nil {
 		submission = &submissionID
 	}
-	if err = tx.QueryRow(ctx, `INSERT INTO runs(conversation_id,status,model_deployment_id,submission_id,submitted_by,submission_sha256,execution_mode) VALUES($1,'running',$2,$3,$4,$5,$6) RETURNING id`, id, acceptedModel, submission, userID, digest, mode).Scan(&runID); err != nil {
+	if err = tx.QueryRow(ctx, `INSERT INTO runs(conversation_id,status,model_deployment_id,submission_id,submitted_by,submission_sha256,execution_mode,permission_mode) VALUES($1,'running',$2,$3,$4,$5,$6,$7) RETURNING id`, id, acceptedModel, submission, userID, digest, mode, permission).Scan(&runID); err != nil {
 		return uuid.Nil, err
 	}
 	var messageID uuid.UUID

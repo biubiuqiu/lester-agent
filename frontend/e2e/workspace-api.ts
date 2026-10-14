@@ -82,6 +82,10 @@ export class WorkspaceApi {
     this.emit(this.nextEventId++, "RUN_COMPLETED", {});
   }
 
+  permissionEvent(type: "PERMISSION_REQUESTED" | "PERMISSION_RESPONDED", payload: Record<string, unknown> = {}) {
+    this.emit(this.nextEventId++, type, payload);
+  }
+
   contextEvent(type: "CONTEXT_COMPACTING" | "CONTEXT_COMPACTED" | "CONTEXT_COMPACTION_FAILED", payload: Record<string, unknown> = {}) {
     this.emit(this.nextEventId++, type, payload);
   }
@@ -100,13 +104,13 @@ export class WorkspaceApi {
   }
 
   private async respond(route: Route) {
-    const request = route.request(), url = new URL(request.url()), path = url.pathname;
+    const request = route.request(), url = new URL(request.url()), rawPath = url.pathname, path = rawPath.replace(/(\/conversations\/[^/]+)\/permissions\/(messages|inputs)(?=\/|$)/, "$1/$2");
     const method = request.method();
     const reply = (data: unknown, status = 200, headers: Record<string, string> = {}) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(data), headers });
     if (path === "/api/v1/auth/options") return reply({ providers: [], registration_enabled: true, email_verification_required: false, password_reset_enabled: false });
     if (path === "/api/v1/auth/login" && method === "POST") {
       const body = request.postDataJSON();
-      this.mutations.push({ path, body });
+      this.mutations.push({ path: rawPath, body });
       if (body.email !== user.email || body.password !== "fixture-password-123") return reply({ error: "邮箱或密码不正确" }, 401);
       return reply({}, 200, { "set-cookie": "lester_access_token=browser-test-access; HttpOnly; SameSite=Lax; Path=/" });
     }
@@ -115,7 +119,7 @@ export class WorkspaceApi {
     if (path === "/api/v1/me") return reply(user);
     if (path === "/api/v1/me/guides") return reply({ guides: ["welcome", "models", "projects", "files", "agents", "contexts", "computer", "skills", "profile", "publishing"].map(topic => ({ topic, step: 0, status: "completed" })) });
     if (/^\/api\/v1\/me\/guides\/(welcome|models|projects|files|agents|contexts|computer|skills|profile|publishing)$/.test(path) && method === "PATCH") {
-      const body = request.postDataJSON(); this.mutations.push({ path, body }); return reply({ topic: path.split("/").at(-1), ...body });
+      const body = request.postDataJSON(); this.mutations.push({ path: rawPath, body }); return reply({ topic: path.split("/").at(-1), ...body });
     }
     if (path === "/api/v1/projects") return reply({ projects: [{ ...project, conversation_count: this.conversation ? 1 : 0 }] });
     if (path === "/api/v1/model-deployments") return reply({ deployments: this.hasModel ? [{ ...deployment, name: this.modelName }] : [] });
@@ -126,7 +130,7 @@ export class WorkspaceApi {
       if (method === "GET") return reply({ conversations: this.conversation ? [this.conversation] : [] });
       if (method === "POST") {
         const body = request.postDataJSON();
-        this.mutations.push({ path, body });
+        this.mutations.push({ path: rawPath, body });
         await this.waitForCreate;
         if (this.failCreate) return reply({ error: "模拟会话创建失败" }, 503);
         this.conversation = { id: conversationId, workspace_id: user.workspace_id, created_by: user.user_id, project_id: project.id, agent_slug: "lester", agent_name: "Lester", model_deployment_id: deployment.id, title: String(body.title), pinned: false, run_status: "idle", created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
@@ -160,7 +164,7 @@ export class WorkspaceApi {
     if (path === prefix && this.conversation) {
       if (method === "PATCH") {
         const body = request.postDataJSON();
-        this.mutations.push({ path, body });
+        this.mutations.push({ path: rawPath, body });
         this.conversation.model_deployment_id = String(body.model_deployment_id);
         return reply(this.conversation);
       }
@@ -169,7 +173,7 @@ export class WorkspaceApi {
     }
     if (path === `${prefix}/messages` && method === "POST") {
       const body = request.postDataJSON();
-      this.mutations.push({ path, body });
+      this.mutations.push({ path: rawPath, body });
       if (this.failSend) return reply({ error: "模拟首条消息发送失败" }, 503);
       if (!this.conversation) throw new Error("Message sent before creating a conversation");
       this.conversation.run_status = "running"; this.conversation.run_id = "fixture-run";
@@ -188,6 +192,7 @@ export class WorkspaceApi {
     if (path === `${prefix}/events/history`) return reply({ events: [] });
     if (path === `${prefix}/file-changes`) return reply({ changes: [] });
     if (path === `${prefix}/inputs`) return reply({ inputs: [] });
+    if (path === `${prefix}/permissions` && method === "GET") return reply({ permissions: [] });
     if (path === `${prefix}/interactions`) return reply({ interactions: [], execution_mode: "execute" });
     if (path === `${prefix}/computer`) return reply({ conversation_id: conversationId, user_id: user.user_id, provider: "docker", status: "running" });
     if (path === `${prefix}/files`) return reply({ files: this.files });

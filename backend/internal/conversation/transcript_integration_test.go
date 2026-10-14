@@ -112,6 +112,7 @@ func newTranscriptFixture(t *testing.T, legacy bool) transcriptFixture {
 	applyTestMigration(t, db, "000022_run_inputs.up.sql")
 	applyTestMigration(t, db, "000023_file_changes.up.sql")
 	applyTestMigration(t, db, "000024_project_rules.up.sql")
+	applyTestMigration(t, db, "000025_run_permissions.up.sql")
 	return f
 }
 
@@ -130,7 +131,7 @@ func (f transcriptFixture) startRun(t *testing.T, content string) uuid.UUID {
 	t.Helper()
 	ctx := context.Background()
 	var runID, messageID uuid.UUID
-	if err := f.service.db.QueryRow(ctx, `INSERT INTO runs(conversation_id,status) VALUES($1,'running') RETURNING id`, f.conversationID).Scan(&runID); err != nil {
+	if err := f.service.db.QueryRow(ctx, `INSERT INTO runs(conversation_id,status,permission_mode) VALUES($1,'running','full') RETURNING id`, f.conversationID).Scan(&runID); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.service.db.QueryRow(ctx, `INSERT INTO messages(conversation_id,run_id,role,content) VALUES($1,$2,'user',$3) RETURNING id`, f.conversationID, runID, content).Scan(&messageID); err != nil {
@@ -697,6 +698,7 @@ func TestTranscriptGuardAndConcurrentSequence(t *testing.T) {
 		}
 	}
 	applyTestMigration(t, f.service.db, "000012_deliverables_events.down.sql")
+	applyTestMigration(t, f.service.db, "000025_run_permissions.down.sql")
 	applyTestMigration(t, f.service.db, "000024_project_rules.down.sql")
 	applyTestMigration(t, f.service.db, "000023_file_changes.down.sql")
 	applyTestMigration(t, f.service.db, "000022_run_inputs.down.sql")

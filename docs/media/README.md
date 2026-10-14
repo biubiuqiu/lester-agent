@@ -2,7 +2,7 @@
 
 The current video records the real production frontend with controlled REST/native HTTP SSE fixtures. A persistent caption identifies the task as **sample data, no live model**. It is an interface walkthrough, not evidence of model performance, backend writes, or queue consumption. Pending adjustment and queued task receipts deliberately remain pending; the recording does not imply that the model applied them. The retained file-review record is sample data too.
 
-The story covers Plan approval, default Enter-to-queue, explicit current-task clarification, automatic file tabs, HTML preview/source, retained change review, and closing/reopening a tab with an unfinished draft. The Chinese UI has English instructional captions and no audio. The GIF is a short preview/source teaser; the MP4 contains the whole story.
+The story starts by selecting Auto approval for ordinary sample file operations, independently of Plan. It covers Plan approval, default Enter-to-queue, explicit current-task clarification, automatic file tabs, HTML preview/source, retained change review, and closing/reopening a tab with an unfinished draft. The Chinese UI has English instructional captions and no audio. The GIF is a short preview/source teaser; the MP4 contains the whole story.
 
 To reproduce (Node/pnpm, Chromium, Python 3 and system ffmpeg with libx264/libvpx-vp9 required):
 

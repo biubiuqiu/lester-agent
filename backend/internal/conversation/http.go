@@ -114,17 +114,18 @@ func (h *Handler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Content       string            `json:"content"`
-		SubmissionID  uuid.UUID         `json:"submission_id"`
-		ExecutionMode string            `json:"execution_mode"`
-		AttachmentIDs []uuid.UUID       `json:"attachment_ids"`
-		ContextIDs    []uuid.UUID       `json:"context_ids"`
-		References    []reference.Input `json:"references"`
+		Content        string            `json:"content"`
+		SubmissionID   uuid.UUID         `json:"submission_id"`
+		ExecutionMode  string            `json:"execution_mode"`
+		PermissionMode string            `json:"permission_mode"`
+		AttachmentIDs  []uuid.UUID       `json:"attachment_ids"`
+		ContextIDs     []uuid.UUID       `json:"context_ids"`
+		References     []reference.Input `json:"references"`
 	}
 	if !httpapi.Decode(w, r, &req) {
 		return
 	}
-	runID, err := h.service.SendSubmission(r.Context(), p.WorkspaceID, p.UserID, id, req.SubmissionID, req.Content, req.AttachmentIDs, req.ContextIDs, req.References, req.ExecutionMode)
+	runID, err := h.service.SendSubmission(r.Context(), p.WorkspaceID, p.UserID, id, req.SubmissionID, req.Content, req.AttachmentIDs, req.ContextIDs, req.References, req.ExecutionMode, req.PermissionMode)
 	if err != nil {
 		if errors.Is(err, ErrRunInProgress) || errors.Is(err, ErrSubmissionConflict) || errors.Is(err, ErrQueuedInputPriority) {
 			httpapi.Error(w, http.StatusConflict, err)

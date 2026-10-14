@@ -137,6 +137,16 @@ func Router(deps Dependencies) http.Handler {
 			private.Patch("/conversations/{id}/organization", deps.Conversations.Organize)
 			private.Post("/conversations/{id}/messages", deps.Conversations.Send)
 			private.Get("/conversations/{id}/submissions/{submissionID}", deps.Conversations.Submission)
+			// New clients use these dedicated submissions. Older APIs return 404
+			// instead of silently ignoring the requested permission profile.
+			private.Post("/conversations/{id}/permissions/messages", deps.Conversations.Send)
+			private.Get("/conversations/{id}/permissions/inputs", deps.Conversations.RunInputs)
+			private.Post("/conversations/{id}/permissions/inputs", deps.Conversations.AcceptRunInput)
+			private.Get("/conversations/{id}/permissions/inputs/{inputID}", deps.Conversations.RunInput)
+			private.Post("/conversations/{id}/permissions/inputs/{inputID}/action", deps.Conversations.ChangeRunInput)
+			private.Get("/conversations/{id}/permissions", deps.Conversations.RunPermissions)
+			private.Get("/conversations/{id}/permissions/{permissionID}", deps.Conversations.RunPermissions)
+			private.Post("/conversations/{id}/permissions/{permissionID}/respond", deps.Conversations.RespondRunPermission)
 			private.Get("/conversations/{id}/interactions", deps.Conversations.RunInteractions)
 			private.Get("/conversations/{id}/interactions/{interactionID}", deps.Conversations.RunInteraction)
 			private.Post("/conversations/{id}/interactions/{interactionID}/respond", deps.Conversations.RespondRunInteraction)

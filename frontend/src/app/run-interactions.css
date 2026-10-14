@@ -100,3 +100,24 @@
 .composer-queue-item{animation:composer-queue-enter 160ms ease-out both}
 @keyframes composer-queue-enter{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 @media(prefers-reduced-motion:reduce){.composer-queue-item{animation:none}}
+.workspace-shell .permission-mode{display:inline-flex;align-items:center;flex:none;gap:5px;min-height:32px;border:0;border-radius:7px;padding:5px 8px;background:transparent;color:var(--muted);font-size:11px;cursor:pointer}
+.permission-mode.full{color:#b74837}.permission-mode:disabled{opacity:.5;cursor:default}
+.permission-menu{padding:6px;border:1px solid var(--line);border-radius:14px;background:#fff;box-shadow:0 12px 36px #2331261f;color:var(--ink);overflow:auto;z-index:130}
+.permission-menu>small{display:block;padding:9px;color:var(--muted);font-size:11px}
+.permission-menu button{display:flex;align-items:center;gap:12px;width:100%;padding:13px 10px;border:0;border-radius:9px;background:transparent;text-align:left;color:inherit;cursor:pointer}
+.permission-menu button:hover,.permission-menu button:focus-visible{background:#f2f5ef}
+.permission-menu button>svg{flex:none}.permission-menu button>span{flex:1;min-width:0}.permission-menu strong{display:block;font-size:14px;font-weight:550}.permission-menu small{display:block;margin-top:5px;font-size:11px;line-height:1.6;color:var(--muted)}
+.permission-menu button.full,.permission-menu button.full small{color:#b74837}
+.permission-approvals{max-height:min(280px,32dvh);overflow:auto;overscroll-behavior:contain;margin:0 0 8px;font-size:12px;color:var(--ink)}
+.permission-card{border:1px solid #d8e3d3;border-radius:13px;padding:13px 15px;background:#f8fbf5}.permission-card+article{margin-top:8px}
+.permission-card header{display:flex;align-items:center;gap:8px}.permission-card strong{font-weight:550}.permission-card header code{margin-left:auto;font-size:10px;color:var(--muted)}
+.permission-card pre{max-height:120px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;line-height:1.6;background:#fff;border-radius:7px;padding:9px}
+.permission-card p{color:var(--muted);font-size:10px;line-height:1.6}.permission-card>div{display:flex;flex-wrap:wrap;gap:6px}
+.permission-approvals button{border:1px solid var(--line);border-radius:7px;padding:7px 9px;background:#fff;color:var(--ink);font:inherit;font-size:11px;cursor:pointer}.permission-approvals button:disabled{opacity:.5}
+.permission-history{font-size:10px;color:var(--muted)}.permission-history summary{cursor:pointer;padding:5px}.permission-history p{padding:3px 8px}
+@media(max-width:600px){.workspace-shell .permission-mode{padding:5px;font-size:10px}.permission-mode>span{max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.permission-card{padding:11px}.permission-approvals button{min-height:36px}}
+.permission-menu button[aria-pressed="true"]>svg:last-child{color:var(--dark)}
+@media(max-height:650px){.permission-approvals:has(.permission-card){max-height:20dvh}.composer-dock:has(.permission-card) .composer-queue-list{max-height:12dvh}}
+@media(max-width:600px){.workspace-shell .permission-mode{min-width:32px;gap:3px}.permission-mode>span{display:none}}
+.queue-permission{display:block;margin-top:5px;color:var(--muted);font-size:10px}
+.permission-history code{display:inline-block;max-width:75%;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom;white-space:nowrap}

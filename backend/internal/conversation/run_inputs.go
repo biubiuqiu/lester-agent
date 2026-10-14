@@ -24,14 +24,15 @@ var ErrQueuedInputPriority = errors.New("an accepted queued task is waiting to s
 var ErrRunInputRejected = errors.New("run input was not accepted")
 
 type RunInputRequest struct {
-	ID            uuid.UUID         `json:"id"`
-	RunID         uuid.UUID         `json:"run_id"`
-	Kind          string            `json:"kind"`
-	Content       string            `json:"content"`
-	AttachmentIDs []uuid.UUID       `json:"attachment_ids,omitempty"`
-	ContextIDs    []uuid.UUID       `json:"context_ids,omitempty"`
-	References    []reference.Input `json:"references,omitempty"`
-	ExecutionMode string            `json:"execution_mode,omitempty"`
+	ID             uuid.UUID         `json:"id"`
+	RunID          uuid.UUID         `json:"run_id"`
+	Kind           string            `json:"kind"`
+	Content        string            `json:"content"`
+	AttachmentIDs  []uuid.UUID       `json:"attachment_ids,omitempty"`
+	ContextIDs     []uuid.UUID       `json:"context_ids,omitempty"`
+	References     []reference.Input `json:"references,omitempty"`
+	ExecutionMode  string            `json:"execution_mode,omitempty"`
+	PermissionMode string            `json:"permission_mode,omitempty"`
 }
 
 type RunInput struct {
@@ -63,7 +64,7 @@ func (s *Service) AcceptRunInput(ctx context.Context, workspaceID, userID, conve
 	if request.ID == uuid.Nil || request.RunID == uuid.Nil || request.Kind != "adjust" && request.Kind != "next" || utf8.RuneCountInString(request.Content) > 100000 {
 		return nil, fmt.Errorf("%w: invalid run input", ErrRunInputRejected)
 	}
-	if request.Kind == "adjust" && (len(request.AttachmentIDs) > 0 || len(request.ContextIDs) > 0 || len(request.References) > 0 || request.ExecutionMode != "") {
+	if request.Kind == "adjust" && (len(request.AttachmentIDs) > 0 || len(request.ContextIDs) > 0 || len(request.References) > 0 || request.ExecutionMode != "" || request.PermissionMode != "") {
 		return nil, fmt.Errorf("%w: current-task adjustments accept text only and cannot change execution mode", ErrRunInputRejected)
 	}
 	mode := "execute"
@@ -72,6 +73,10 @@ func (s *Service) AcceptRunInput(ctx context.Context, workspaceID, userID, conve
 	}
 	if mode != "execute" && mode != "plan" {
 		return nil, fmt.Errorf("%w: invalid next-task execution mode", ErrRunInputRejected)
+	}
+	permission, permissionErr := permissionMode(request.PermissionMode)
+	if permissionErr != nil {
+		return nil, fmt.Errorf("%w: invalid permission mode", ErrRunInputRejected)
 	}
 	raw, err := json.Marshal(request)
 	if err != nil {
@@ -142,10 +147,13 @@ func (s *Service) AcceptRunInput(ctx context.Context, workspaceID, userID, conve
 		status = "queued"
 	}
 	item := &RunInput{ID: request.ID, AfterRunID: request.RunID, Kind: request.Kind, Status: status, Content: content, Request: raw, RequestDigest: hash}
-	if err = tx.QueryRow(ctx, `INSERT INTO run_inputs(id,workspace_id,conversation_id,after_run_id,submitted_by,kind,request,request_digest,content,metadata,model_deployment_id,execution_mode,status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING accepted_order,revision,created_at`, request.ID, workspaceID, conversationID, request.RunID, userID, request.Kind, raw, hash, content, metadata, modelID, mode, status).Scan(&item.AcceptedOrder, &item.Revision, &item.CreatedAt); err != nil {
+	if err = tx.QueryRow(ctx, `INSERT INTO run_inputs(id,workspace_id,conversation_id,after_run_id,submitted_by,kind,request,request_digest,content,metadata,model_deployment_id,execution_mode,status,permission_mode) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING accepted_order,revision,created_at`, request.ID, workspaceID, conversationID, request.RunID, userID, request.Kind, raw, hash, content, metadata, modelID, mode, status, permission).Scan(&item.AcceptedOrder, &item.Revision, &item.CreatedAt); err != nil {
 		return nil, err
 	}
 	if request.Kind == "adjust" {
+		if _, err = tx.Exec(ctx, `UPDATE run_permissions SET status='cancelled' WHERE run_id=$1 AND status='pending'`, request.RunID); err != nil {
+			return nil, err
+		}
 		if _, err = tx.Exec(ctx, `UPDATE run_interactions SET status='cancelled',response=jsonb_build_object('superseded_by_input_id',$2::text),responded_at=now() WHERE run_id=$1 AND status='pending'`, request.RunID, request.ID); err != nil {
 			return nil, err
 		}

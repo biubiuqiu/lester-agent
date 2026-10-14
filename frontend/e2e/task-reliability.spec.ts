@@ -43,7 +43,7 @@ test("accepted send survives a failed refresh without restoring its draft or los
   let failRefresh = false;
   await context.route(`**${prefix}**`, async route => {
     const path = new URL(route.request().url()).pathname;
-    if (path === `${prefix}/messages` && route.request().method() === "POST") failRefresh = true;
+    if (path === `${prefix}/permissions/messages` && route.request().method() === "POST") failRefresh = true;
     if (path === prefix && route.request().method() === "GET" && failRefresh) {
       failRefresh = false;
       return route.fulfill({ status: 503, json: { error: "fixture sync unavailable" } });
@@ -183,7 +183,7 @@ test("a lost send response is looked up by submission ID instead of replaying th
   let submission = "", posts = 0, reads = 0;
   await context.route(`**${prefix}**`, async route => {
     const path = new URL(route.request().url()).pathname;
-    if (path === `${prefix}/messages` && route.request().method() === "POST") {
+    if (path === `${prefix}/permissions/messages` && route.request().method() === "POST") {
       posts++; const body = route.request().postDataJSON(); submission = body.submission_id;
       api.messages.push({ id: "lost-response-user", role: "user", content: body.content, created_at: new Date().toISOString() });
       api.conversation!.run_status = "running";

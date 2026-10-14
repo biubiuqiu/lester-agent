@@ -8,6 +8,7 @@ export type ViewState = {
   contexts: ContextReference[];
   agentSlug: string;
   executionMode: "execute" | "plan";
+  permissionMode: "standard" | "auto" | "full";
   interactionDrafts: Record<string, { answers: Record<string, { option_id?: string; text?: string }>; feedback: string }>;
   sendNotice: string;
   text: string;
@@ -26,19 +27,19 @@ export type ViewState = {
 };
 const prefix = "lester.view.v1.";
 const draftPrefix = "lester.draft.v1.";
-const draftFields = ["text", "contexts", "reference", "executionMode", "agentSlug", "interactionDrafts", "sendNotice", "files", "missingFiles"] as const;
+const draftFields = ["text", "contexts", "reference", "executionMode", "permissionMode", "agentSlug", "interactionDrafts", "sendNotice", "files", "missingFiles"] as const;
 function stored(read: () => string | null) { try { return JSON.parse(read() || "null"); } catch { return null; } }
 const cache = new Map<string, ViewState>();
 let writeScope: string | null = "";
 export function resumeViewState(scope: string) { writeScope = scope; }
-const defaults = (): ViewState => ({ contexts: [], agentSlug: "lester", executionMode: "execute", interactionDrafts: {}, sendNotice: "", text: "", files: [], missingFiles: [], reference: null, tabs: [], closedTabs: [], unreadFiles: [], selected: null, treeOpen: true, directories: [""], modes: {}, positions: {}, thread: { top: 0, following: true } });
+const defaults = (): ViewState => ({ contexts: [], agentSlug: "lester", executionMode: "execute", permissionMode: "standard", interactionDrafts: {}, sendNotice: "", text: "", files: [], missingFiles: [], reference: null, tabs: [], closedTabs: [], unreadFiles: [], selected: null, treeOpen: true, directories: [""], modes: {}, positions: {}, thread: { top: 0, following: true } });
 export const viewKey = (userId: string, workspaceId: string, conversationId: string) => `${userId}.${workspaceId}.${conversationId}`;
 
 function persistDraft(key: string, value: ViewState) {
   try {
     window.localStorage.setItem(draftPrefix + key, JSON.stringify({ version: 1,
       text: value.text.slice(0, 100_000), contexts: value.contexts, reference: value.reference,
-      executionMode: value.executionMode, agentSlug: value.agentSlug,
+      executionMode: value.executionMode, permissionMode: value.permissionMode, agentSlug: value.agentSlug,
       interactionDrafts: value.interactionDrafts, sendNotice: value.sendNotice,
       attachmentNames: [...value.files.map(file => file.name), ...value.missingFiles],
     }));
@@ -58,6 +59,7 @@ export function readView(key: string): ViewState {
       value.contexts = Array.isArray(saved.contexts) ? saved.contexts.filter((v: unknown) => v && typeof v === "object" && "id" in v && typeof v.id === "string" && "title" in v && typeof v.title === "string" && (!("type" in v) || v.type === "context" || v.type === "conversation" || v.type === "skill")).map((item: ContextReference) => ({ id: item.id, title: item.title, ...(item.type ? { type: item.type } : {}) })).slice(0, 8) : [];
       value.agentSlug = typeof saved.agentSlug === "string" && saved.agentSlug.length <= 50 ? saved.agentSlug : "lester";
       value.executionMode = saved.executionMode === "plan" ? "plan" : "execute";
+      value.permissionMode = saved.permissionMode === "full" || saved.permissionMode === "auto" ? saved.permissionMode : "standard";
       if (saved.interactionDrafts && typeof saved.interactionDrafts === "object") for (const [id, raw] of Object.entries(saved.interactionDrafts).slice(-8)) {
         if (!/^[0-9a-f-]{36}$/i.test(id) || !raw || typeof raw !== "object") continue;
         const draft = raw as { answers?: Record<string, { option_id?: string; text?: string }>; feedback?: string };

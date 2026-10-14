@@ -49,6 +49,7 @@ export const siteDocs: SiteDoc[] = [
     slug: "usage", navTitle: "使用指南", title: "和 Lester 一起完成工作",
     description: "从描述目标，到查看成果，再继续把它做好。",
     sections: [
+      { id: "permissions", title: "权限设置", content: <><ul><li><strong><T>{"默认权限"}</T></strong><p><T>{"读取普通文件无需确认；修改文件和执行命令前确认。"}</T></p></li><li><strong><T>{"自动审批"}</T></strong><p><T>{"自动完成普通文件操作；敏感路径和不确定的命令需确认。"}</T></p></li><li><strong><T>{"完全访问权限"}</T></strong><p><T>{"在已授权的 Computer 内执行，无需逐次确认。"}</T></p></li></ul><Note><T>{"审批仅适用于当前任务和这次操作，不会扩大 Computer 范围。"}</T></Note></> },
       { id: "account", title: "注册、登录与个人资料", content: <>
         <p><T>{"使用邮箱和密码，或部署方已配置的 Google / GitHub 登录。启用邮件服务时，新邮箱注册需验证；登录页可重新发送验证邮件或找回密码。未配置邮件服务时，保留自部署即时注册方式。"}</T></p>
         <p><T>{"access token 有效 2 小时，refresh token 有效 30 天。持续使用会自动轮换并重新计算 30 天，可持续续期；30 天未续期需重新登录。退出登录或重设密码会撤销令牌。"}</T></p>

@@ -108,3 +108,22 @@ test("oversized HTTP fallback attempts stay out of storage and quota failures ne
   await sendConversationMessage("quota-http", { content: "hello", attachment_ids: [] });
   assert.equal(writes, 1); assert.equal(posts, 2);
 });
+
+test("permission-aware sends never fall back to an API that ignores permissions", async t => {
+  clearMessageSubmissions();const paths:string[]=[];
+  t.mock.method(globalThis,"fetch",async(path:string)=>{paths.push(path);return Response.json({error:"old API"},{status:404});});
+  await assert.rejects(sendConversationMessage("protocol",{content:"private task",attachment_ids:[],permission_mode:"standard"}),/权限服务不可用/);
+  assert.deepEqual(paths,["/api/v1/conversations/protocol/permissions/messages"]);
+});
+test("default permission preserves legacy retry identity but changing the mode does not",async t=>{
+  clearMessageSubmissions();const ids:string[]=[];
+  t.mock.method(globalThis,"fetch",async(path:string,init?:RequestInit)=>{
+    if(path.includes("/submissions/"))return Response.json({error:"missing"},{status:404});
+    ids.push(JSON.parse(String(init?.body)).submission_id);return Response.json({error:"lost"},{status:503});
+  });
+  const payload={content:"same task",attachment_ids:[]};
+  await assert.rejects(sendConversationMessage("mode-identity",payload));
+  await assert.rejects(sendConversationMessage("mode-identity",{...payload,permission_mode:"standard"}));
+  await assert.rejects(sendConversationMessage("mode-identity",{...payload,permission_mode:"full"}));
+  assert.equal(ids[0],ids[1]);assert.notEqual(ids[1],ids[2]);
+});

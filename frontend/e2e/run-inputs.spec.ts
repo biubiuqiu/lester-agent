@@ -1,7 +1,7 @@
 import { test as base, expect, type Page } from "@playwright/test";
 import { WorkspaceApi, conversationId, prompt } from "./workspace-api";
 import type { RunInput, RunInputRequest } from "../src/lib/run-input";
-const prefix = `/api/v1/conversations/${conversationId}/inputs`;
+const prefix = `/api/v1/conversations/${conversationId}/permissions/inputs`;
 const test = base.extend<{ api: WorkspaceApi }>({ api: async ({ context, page }, runFixture) => {
   const api = new WorkspaceApi(), errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
