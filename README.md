@@ -40,23 +40,25 @@ Back up first, retain `.env`, encryption keys and volumes, and apply earlier mis
 
 ## Watch the walkthrough
 
-[![Lester walkthrough: generate a page, inspect its source, and refine it in conversation](docs/media/lester-walkthrough.gif)](docs/media/lester-walkthrough.mp4)
+[![Lester walkthrough: plan, queue a task, preview files, review changes and recover a draft](docs/media/lester-walkthrough.gif)](docs/media/lester-walkthrough.mp4)
 
-**[Watch or download the full MP4 — 65 seconds](docs/media/lester-walkthrough.mp4)** · [Still preview](docs/media/lester-walkthrough.png)
+**[Watch or download the full MP4 — 58 seconds](docs/media/lester-walkthrough.mp4)** · [Still preview](docs/media/lester-walkthrough.png)
 
-Recorded in the real local application with English instructional captions and no voiceover. The application UI is currently Chinese. Waiting time between operations is trimmed; generation and edits are real model runs. The animated preview plays directly in this README. Select it to open the video file, or use the MP4 link if your Markdown viewer does not support inline video playback.
+Recorded in the current production frontend with Chinese UI and English instructional captions, without voiceover. **This is an illustrative task using controlled REST/SSE sample data, not a live model run or generation-speed benchmark.** The video shows real interface controls; queued tasks and current-task clarifications remain pending in this example. The GIF is a short preview/source teaser; select it for the full story.
 
 | Time | Operation |
 | --- | --- |
-| 00:00 | Describe a coffee landing page in the home composer |
-| 00:06 | Send the task and watch Lester create the HTML file |
-| 00:22 | Open the generated file card and resize the preview panel |
-| 00:28 | Switch between rendered HTML and source code |
-| 00:34 | Test the page's light/dark theme toggle |
-| 00:38 | Reference the file and request a headline change and storage fallback |
-| 00:55 | See the updated preview and test the toggle again |
+| 00:00 | Describe a goal and select Plan before execution |
+| 00:06 | Review and explicitly approve the plan |
+| 00:12 | Press Enter while running to queue the next task |
+| 00:18 | Explicitly add a clarification to the current task |
+| 00:26 | Inspect the HTML result in automatically opened file tabs |
+| 00:33 | Switch between rendered preview and source |
+| 00:40 | Review a retained before-and-after file change |
+| 00:46 | Leave an unfinished message, close the tab and reopen the conversation |
+| 00:51 | Find the draft restored without sending it automatically |
 
-The recording starts in a signed-in workspace with a model already configured. Follow the setup below for a fresh installation.
+The recording starts in a signed-in sample workspace. Follow the setup below for a fresh installation. [Recording source and reproduction instructions](docs/media/README.md) keep the walkthrough up to date with future releases.
 
 ## Quick start
 
@@ -117,7 +119,7 @@ GATEWAY_PORT=13180
 WEB_ORIGIN=http://localhost:13180
 ```
 
-Restart Compose and open [http://localhost:13180/app](http://localhost:13180/app). This is the local address used in the recording; the repository default remains port `13000`.
+Restart Compose and open [http://localhost:13180/app](http://localhost:13180/app). The repository default remains port `13000`; the illustrative walkthrough uses an isolated browser fixture server.
 
 Check service status with:
 
