@@ -114,6 +114,7 @@ jobs:
       - name: Run Go static checks
         run: go vet ./...
       - name: Run unit and PostgreSQL integration tests
+        shell: bash
         run: go test -count=1 -timeout=10m -json ./... | tee "$RUNNER_TEMP/backend-tests.jsonl"
       - name: Report failing Go tests in annotations
         if: failure()
@@ -270,7 +271,35 @@ jobs:
         env:
           LESTER_TEST_RUNTIME_IMAGE: lester-sandbox-runtime:local
           LESTER_TEST_DOCKER_IMAGE: lester-sandbox-runtime:local
-        run: go test -count=1 -timeout=5m ./internal/sandbox ./internal/agenttool ./internal/commandtask
+        shell: bash
+        run: go test -count=1 -timeout=5m -json ./internal/sandbox ./internal/agenttool ./internal/commandtask | tee "$RUNNER_TEMP/sandbox-tests.jsonl"
+      - name: Report failing Docker integration tests in annotations
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ["RUNNER_TEMP"]) / "sandbox-tests.jsonl"
+          if not path.exists():
+              raise SystemExit(0)
+          output, failures = {}, []
+          for line in path.read_text().splitlines():
+              try:
+                  event = json.loads(line)
+              except ValueError:
+                  continue
+              key = (event.get("Package", ""), event.get("Test", ""))
+              if event.get("Output"):
+                  output.setdefault(key, []).append(event["Output"])
+              if event.get("Action") == "fail":
+                  failures.append(key)
+          for package, test in failures:
+              message = f"{package} / {test or 'package'}\n" + "".join(output.get((package, test), []))[-6000:]
+              message = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+              print("::error title=Docker integration test failure::" + message)
+          PY
       - name: Clean up fixture volume
         if: always()
         run: docker volume rm lester-runtime-check-workspace || test "$(docker volume ls -q --filter name=^lester-runtime-check-workspace$)" = ""
