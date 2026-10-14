@@ -30,6 +30,7 @@ for (const locale of ["zh-CN", "en", "ja", "ko", "fr", "es"] as Locale[]) {
             expect(bounds!.width).toBeGreaterThan(25);
             expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(321);
           }
+          expect((await toolbar.getByRole("combobox", { name: t("当前模型"), exact: true }).boundingBox())!.width).toBeGreaterThanOrEqual(90);
           await page.setViewportSize(initialViewport);
         }
         await page.screenshot({ path: testInfo.outputPath("new-task.png") });
@@ -68,6 +69,12 @@ for (const locale of ["zh-CN", "en", "ja", "ko", "fr", "es"] as Locale[]) {
         const viewport = page.viewportSize()!;
         await page.setViewportSize({ width: compact ? 320 : 1100, height: viewport.height });
         if (compact) {
+          await expect.poll(async () => tabs.evaluate(nav => {
+            const tab = nav.querySelector('[aria-selected="true"]')?.parentElement;
+            if (!tab) return false;
+            const frame = nav.getBoundingClientRect(), selected = tab.getBoundingClientRect();
+            return selected.x >= frame.x - 1 && selected.right <= frame.right + 1;
+          })).toBe(true);
           const controls = panel.locator(".computer-panel-header button, .workspace-tools > summary");
           for (const control of await controls.all()) {
             if (!await control.isVisible()) continue;

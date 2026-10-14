@@ -1525,5 +1525,7 @@
   "修改文件": "Change file",
   "读取敏感文件": "Read sensitive file",
   "将写入 {0} 字节": "Will write {0} bytes",
-  "权限服务不可用，请完成升级后重试。": "Permissions are unavailable. Complete the service upgrade and try again."
+  "权限服务不可用，请完成升级后重试。": "Permissions are unavailable. Complete the service upgrade and try again.",
+  "还没有可用的 Skill": "No skills available yet",
+  "这里会展示工作区中可用的技能包。": "Available skill packages in your workspace will appear here."
 }

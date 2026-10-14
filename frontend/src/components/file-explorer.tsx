@@ -78,8 +78,14 @@ export function FileExplorer({ conversationId }: { conversationId: string }) {
   const tabId = (path: string) => `${tabPrefix}-${encodeURIComponent(path)}`;
   const tabList = useRef<HTMLElement>(null);
   useEffect(() => {
-    tabList.current?.querySelector('[aria-selected="true"]')?.parentElement?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [selected?.path]);
+    const node = tabList.current;
+    if (!node) return;
+    const reveal = () => node.querySelector('[aria-selected="true"]')?.parentElement?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    const observer = new ResizeObserver(reveal);
+    observer.observe(node);
+    reveal();
+    return () => observer.disconnect();
+  }, [selected?.path, tabs.length]);
   const [expanded, setTreeExpanded] = useState<Set<string>>(() => new Set(readView(storageKey).directories));
   const changesMenu = useRef<HTMLDetailsElement>(null);
   useEffect(() => {

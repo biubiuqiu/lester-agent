@@ -34,9 +34,15 @@ export class WorkspaceApi {
   private completed = false;
   private submissions = new Map<string, { run_id: string; status: string; message_id: string }>();
   private streams = new Set<ServerResponse>();
-  private server = createServer((_request, response) => {
+  private eventJournal: { id: number; data: string }[] = [];
+  private server = createServer((request, response) => {
     response.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store", "Access-Control-Allow-Origin": "http://127.0.0.1:13020", "Access-Control-Allow-Credentials": "true" });
     response.write(": fixture connected\n\n");
+    const requested = Number(new URL(request.url || "/events", "http://127.0.0.1").searchParams.get("last_event_id") || 0);
+    const cursor = Number.isSafeInteger(requested) && requested >= 0 ? requested : 0;
+    // Match production replay: events emitted while a route replaces its
+    // stream remain available to the next connection without test sleeps.
+    for (const event of this.eventJournal) if (event.id > cursor) response.write(event.data);
     this.streams.add(response);
     response.on("close", () => this.streams.delete(response));
   });
@@ -46,7 +52,7 @@ export class WorkspaceApi {
     const streamURL = `http://127.0.0.1:${(this.server.address() as AddressInfo).port}/events`;
     await context.route("**/api/v1/**", async route => {
       if (new URL(route.request().url()).pathname === "/api/v1/events") {
-        await route.continue({ url: streamURL });
+        await route.continue({ url: streamURL + new URL(route.request().url()).search });
         return;
       }
       await this.respond(route);
@@ -92,7 +98,9 @@ export class WorkspaceApi {
 
   private emit(id: number, type: string, payload: Record<string, unknown>) {
     const event = { id, type, payload, conversation_id: conversationId, run_id: "fixture-run", created_at: new Date().toISOString() };
-    for (const stream of this.streams) stream.write(`id: ${id}\ndata: ${JSON.stringify(event)}\n\n`);
+    const data = `id: ${id}\ndata: ${JSON.stringify(event)}\n\n`;
+    this.eventJournal.push({ id, data });
+    for (const stream of this.streams) stream.write(data);
   }
 
   writeFile(path: string, content: string) {

@@ -202,3 +202,25 @@ test("a lost send response is looked up by submission ID instead of replaying th
   expect(posts).toBe(1); expect(reads).toBe(1);
   expect(submission).toMatch(/^[0-9a-f-]{36}$/);
 });
+
+test("file completion events replay after a disconnected conversation stream", async ({ page, context, api }, info) => {
+  await start(page, api);
+  let release!: () => void;
+  const reconnect = new Promise<void>(resolve => { release = resolve; });
+  await context.route("**/api/v1/events*", async route => { await reconnect; await route.fallback(); });
+  try {
+    await page.reload();
+    await page.getByRole("textbox", { name: "消息输入框", exact: true }).fill("事件回放期间保留的草稿");
+    await expect(page.getByRole("button", { name: "运行中输入", exact: true })).toBeEnabled();
+    await expect.poll(() => api.streamCount).toBe(0);
+    api.finish();
+    api.writeFile("replay.html", "<!doctype html><h1>事件回放产物</h1>");
+    release();
+    await expect.poll(() => api.streamCount).toBeGreaterThan(0);
+    const tabs = page.getByRole("tablist", { name: "已打开文件", exact: true });
+    await expect(tabs.getByRole("tab", { name: "replay.html", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "停止生成", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("textbox", { name: "消息输入框", exact: true })).toHaveValue("事件回放期间保留的草稿");
+    await page.screenshot({ path: info.outputPath("replayed-files.png") });
+  } finally { release(); }
+});
