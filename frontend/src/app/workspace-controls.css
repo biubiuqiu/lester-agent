@@ -1,0 +1,99 @@
+/* Shared chrome recipes. Keep document/iframe/terminal content independent. */
+.workspace-shell {
+  --control-size: 32px;
+  --control-radius: 9px;
+  --control-hover: #f1f3ef;
+  --control-selected: #eaf0e8;
+  --control-focus: #607d67;
+}
+.workspace-shell :is(.conversation-header,.compose-actions,.computer-panel-header,.file-tab-strip,.file-preview-header) svg {
+  width: 16px; height: 16px; flex-shrink: 0; stroke-width: 1.65;
+}
+.workspace-shell :is(.conversation-header,.compose-actions,.computer-panel-header,.file-tab-strip,.file-preview-header) :is(button,a,select,summary) {
+  transition: background-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+}
+.workspace-shell :is(.conversation-header,.compose-actions,.computer-panel-header,.file-tab-strip,.file-preview-header) :is(button,a,select,summary):focus-visible {
+  outline: 2px solid var(--control-focus); outline-offset: 2px;
+}
+.workspace-shell :is(.conversation-options-button,.workspace-panel-button,.open-deliverables-button,.open-files-button,.compose-actions .icon-button,.compose-actions .context-add,.composer-agent-picker,.permission-mode,.execution-mode,.active-task-actions>button,.file-directory-toggle,.file-focus-toggle,.file-reopen-button,.file-preview-actions button,.file-preview-actions a) {
+  border-radius: var(--control-radius);
+}
+.workspace-shell :is(.conversation-header,.compose-actions) button:not(:disabled):not(.send-button):hover {
+  background: var(--control-hover);
+}
+.workspace-shell .conversation-header { height: 60px; }
+.workspace-shell .conversation-header .agent-heading strong { font-size: 13px; font-weight: 550; }
+.workspace-shell .conversation-header .agent-heading small { font-size: 11px; font-weight: 400; }
+.workspace-shell .compose-box {
+  border-color: #e0e5dd; border-radius: 20px;
+  padding: 14px 14px 10px; box-shadow: 0 2px 8px #23312605;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.workspace-shell .compose-box:focus-within { border-color: #a7b7a8; box-shadow: 0 0 0 3px #52755d08; }
+.workspace-shell .new-chat-composer .compose-box { padding: 20px 18px 12px; border-radius: 24px; box-shadow: 0 4px 20px #23312606; }
+.workspace-shell .compose-actions { gap: 4px; padding-top: 6px; }
+.workspace-shell .compose-actions :is(.icon-button,.context-add) {
+  width: var(--control-size); height: var(--control-size); flex-basis: var(--control-size);
+  border: 0; background: transparent;
+}
+.workspace-shell .compose-actions :is(.composer-agent-picker,.permission-mode,.execution-mode) { min-height: var(--control-size); font-size: 12px; font-weight: 400; }
+.workspace-shell .compose-actions .model-selector select { min-height: var(--control-size); font-size: 12px; font-weight: 400; border-radius: var(--control-radius); }
+.workspace-shell .compose-actions :is(.composer-agent-picker,.permission-mode) > svg:last-child,
+.workspace-shell .compose-actions .model-selector > svg { width: 12px; height: 12px; }
+.workspace-shell .compose-actions .send-button { width: 34px; height: 34px; border-radius: 50%; background: #365940; box-shadow: none; }
+.workspace-shell .compose-actions .send-button svg { width: 17px; height: 17px; stroke-width: 1.8; }
+.workspace-shell .compose-actions .send-button.stop-button { background: #29372d; }
+.workspace-shell .compose-actions .send-button:not(:disabled):active { transform: scale(.97); }
+.workspace-shell .composer-keyboard-hint { color: #7a847c; font-size: 11px; }
+.workspace-shell .computer-panel-header { background: #f8f9f6; }
+.workspace-shell .file-tab-strip { min-height: 46px; padding: 0 8px; gap: 4px; background: #f8f9f6; }
+.workspace-shell .file-tab-strip .open-file-tabs { padding: 4px 0; gap: 4px; scrollbar-width: thin; }
+.workspace-shell .open-file-tabs > div { border: 1px solid transparent; border-radius: 9px; padding: 0 3px; }
+.workspace-shell .open-file-tabs > div.active { background: #fff; border-color: #e0e5dd; box-shadow: 0 1px 3px #23312605; }
+.workspace-shell .open-file-tabs button[role=tab] { display: flex; align-items: center; gap: 7px; min-width: 0; max-width: 200px; height: 32px; padding: 0 7px; font-weight: 400; }
+.workspace-shell .open-file-tabs .file-tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-shell .file-tab-glyph { display: flex; flex: none; color: var(--muted); }
+.workspace-shell .file-tab-glyph .file-kind { color: inherit; width: 15px; height: 15px; }
+.workspace-shell .open-file-tabs > div.active button[role=tab] { color: #2c4834; font-weight: 550; }
+.workspace-shell .open-file-tabs > div > button:last-of-type { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border-radius: 6px; }
+.workspace-shell .open-file-tabs > div > button:last-of-type svg { width: 13px; height: 13px; }
+.workspace-shell .open-file-tabs > div > button:last-of-type:hover { background: var(--control-hover); }
+.workspace-shell .file-preview-header { min-height: 46px; background: #fff; gap: 8px; }
+.workspace-shell .file-preview-tabs { background: #f2f4ef; border-radius: 9px; padding: 3px; height: 34px; gap: 2px; }
+.workspace-shell .file-preview-tabs button { height: 28px; padding: 0 9px; border-radius: 7px; }
+.workspace-shell .file-preview-tabs button.active { background: #fff; color: #2c4834; box-shadow: 0 1px 3px #23312612; }
+.workspace-shell .file-preview-actions { gap: 3px; }
+.workspace-shell .file-preview-actions :is(button,a):hover:not(:disabled) { background: var(--control-hover); }
+.permission-menu { padding: 7px; border-color: #e0e5dd; box-shadow: 0 6px 24px #23312616; }
+.permission-menu button { gap: 10px; padding: 12px; border-radius: 10px; }
+.permission-menu button > svg { stroke-width: 1.65; }
+.permission-menu strong { font-size: 13px; font-weight: 550; }
+.permission-menu small { font-size: 12px; line-height: 1.55; }
+.permission-menu button[aria-pressed=true] { background: #f0f4ec; }
+@media (hover:hover) and (pointer:fine) {
+  .workspace-shell .open-file-tabs > div:not(.active) > button:last-of-type { opacity: 0; }
+  .workspace-shell .open-file-tabs > div:hover > button:last-of-type,
+  .workspace-shell .open-file-tabs > div:focus-within > button:last-of-type { opacity: 1; }
+}
+@media (max-width:700px) {
+  .workspace-shell { --control-size: 40px; }
+  .workspace-shell .conversation-header { height: 64px; }
+  .workspace-shell .compose-box { padding: 12px 10px 8px; }
+  .workspace-shell .new-chat-composer .compose-box { padding: 16px 12px 10px; }
+  .workspace-shell .compose-actions .send-button { width: 40px; height: 40px; }
+  .workspace-shell .file-preview-header { gap: 4px; }
+  .workspace-shell .open-file-tabs button[role=tab] { height: 40px; max-width: 170px; }
+  .workspace-shell .open-file-tabs > div > button:last-of-type { width: 36px; height: 36px; }
+  .workspace-shell .file-preview-actions :is(button,a) { min-width: 40px; min-height: 40px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .workspace-shell :is(.conversation-header,.compose-actions,.computer-panel-header,.file-tab-strip,.file-preview-header) :is(button,a,select,summary),
+  .workspace-shell .compose-box { transition: none; }
+  .workspace-shell .compose-actions .send-button:not(:disabled):active { transform: none; }
+}
+
+.workspace-shell .permission-mode.full { color: #b74837; }
+.workspace-shell .conversation-sidebar svg.lucide { width: 16px; height: 16px; stroke-width: 1.65; }
+.workspace-shell .compose-actions .send-button:disabled { background: #e9eee5; color: #6f856f; opacity: 1; cursor: default; }
+
+.workspace-shell .composer-queue { padding-bottom: 16px; }
