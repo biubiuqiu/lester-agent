@@ -34,6 +34,7 @@ for (const locale of ["zh-CN", "en", "ja", "ko", "fr", "es"] as Locale[]) {
           await page.setViewportSize(initialViewport);
         }
         await page.screenshot({ path: testInfo.outputPath("new-task.png") });
+        await page.getByRole("button", { name: t("添加内容"), exact: true }).click();
         await page.getByRole("button", { name: t("选择 Agent"), exact: true }).click();
         await expect(page.locator(".composer-agent-popover")).toBeVisible();
         await page.getByRole("combobox", { name: t("选择 Agent"), exact: true }).press("Escape");

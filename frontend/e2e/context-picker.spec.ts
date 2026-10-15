@@ -35,6 +35,7 @@ for (const existing of [false, true]) {
         await page.setViewportSize({ width: testInfo.project.use.viewport!.width, height: 480 });
       }
       await composer.fill("保留这个草稿 ");
+      await page.getByRole("button", { name: "添加内容", exact: true }).click();
       await page.getByRole("button", { name: "@ 添加引用", exact: true }).click();
       const options = page.getByRole("listbox", { name: "引用对象" }).getByRole("option");
       await expect(options).toHaveCount(8);
@@ -61,6 +62,7 @@ for (const existing of [false, true]) {
       await composer.press("Escape");
       await expect(options).toHaveCount(0);
       await expect(composer).toHaveValue("保留这个草稿 @项目背景2");
+      await page.getByRole("button", { name: "添加内容", exact: true }).click();
       await page.getByRole("button", { name: "@ 添加引用", exact: true }).click();
       await expect(options).toHaveCount(7);
       await page.locator(".conversation-header").click({ position: { x: 1, y: 1 } });

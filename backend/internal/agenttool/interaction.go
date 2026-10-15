@@ -115,3 +115,26 @@ func PlanReadOnlyTool(name string) bool {
 	}
 	return false
 }
+
+// EnterPlan only reduces authority. Leaving Plan still requires the existing
+// exact-version, user-approved propose_plan interaction.
+type EnterPlan struct{}
+
+func (EnterPlan) Definition() model.Tool {
+	return model.Tool{Name: "enter_plan_mode", Description: "Enter read-only planning when the user requests it or before a complex, multi-file or architectural change that needs a reviewed approach. Explain briefly why. Use this before any mutations, as a standalone tool call. Then inspect with list_files/read and propose_plan for explicit review. Do small, clear tasks directly; do not re-enter for an already approved plan unless its scope materially changes.", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"reason": map[string]any{"type": "string", "maxLength": 1000}}, "required": []string{"reason"}, "additionalProperties": false}}
+}
+func (EnterPlan) Execute(ctx context.Context, env Environment, raw json.RawMessage) (any, error) {
+	var input struct {
+		Reason string `json:"reason"`
+	}
+	if err := decodeArguments(raw, &input); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(input.Reason) == "" || utf8.RuneCountInString(input.Reason) > 1000 {
+		return nil, errors.New("provide a brief planning reason")
+	}
+	if env.EnterPlan == nil {
+		return nil, errors.New("planning service unavailable")
+	}
+	return env.EnterPlan(ctx, input.Reason)
+}

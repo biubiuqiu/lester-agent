@@ -25,6 +25,7 @@ async function login(page: Page) {
   await expect(page.getByRole("textbox", { name: "消息输入框", exact: true })).toBeVisible();
 }
 async function choose(page: Page, title: string) {
+  await page.getByRole("button", { name: "添加内容", exact: true }).click();
   await page.getByRole("button", { name: "@ 添加引用", exact: true }).click();
   await page.getByRole("option", { name: new RegExp(title) }).click();
 }
@@ -66,6 +67,7 @@ test("mixed references preview, persist and send only typed IDs on explicit subm
   await page.reload();
   await expect(input).toHaveValue("请整理 ");
   await expect(page.locator(".context-references > span")).toHaveCount(3);
+  await page.getByRole("button", { name: "添加内容", exact: true }).click();
   await page.getByRole("button", { name: "@ 添加引用", exact: true }).click();
   await expect(options).toHaveCount(0); // selected items cannot be duplicated
   await input.press("Escape");
@@ -95,6 +97,7 @@ test("failed first send keeps all reference drafts; new-task grants exclude the 
   expect(api.mutations.filter(item => item.path.endsWith("/messages"))).toHaveLength(1);
   // Delete a focused chip without modifying the request, and inspect the remaining category.
   await page.getByRole("button", { name: "查看会话引用 产品 讨论", exact: true }).press("Delete");
+  await page.getByRole("button", { name: "添加内容", exact: true }).click();
   await page.getByRole("button", { name: "@ 添加引用", exact: true }).click();
   await page.getByRole("group", { name: "引用类型", exact: true }).getByRole("button", { name: "会话", exact: true }).click();
   await expect(page.getByRole("listbox", { name: "引用对象" }).getByRole("option")).toHaveCount(1);
@@ -118,6 +121,7 @@ test("reference search retries safely, composition does not select, and caret su
   await login(page);
   const input = page.getByRole("textbox", { name: "消息输入框", exact: true });
   await input.fill("保留草稿");
+  await page.getByRole("button", { name: "添加内容", exact: true }).click();
   await page.getByRole("button", { name: "@ 添加引用", exact: true }).click();
   await expect(page.locator(".mention-picker [role=alert]")).toContainText("引用对象加载失败");
   api.failReferenceSearch = false;

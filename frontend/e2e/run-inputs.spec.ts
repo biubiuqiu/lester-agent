@@ -55,17 +55,16 @@ test("unknown acceptance preserves draft and shows an honest error", async ({ co
   await expect(input).toHaveValue("不要丢掉这个调整");
   expect(posts).toBe(1);
 });
-test("queued task captures selected Plan mode without changing the running task", async ({ context, page, api }) => {
+test("queued task starts normally so the Agent can choose planning independently", async ({ context, page, api }) => {
   let accepted: RunInput | undefined;
   await context.route(`**${prefix}`, route => {
     if (route.request().method() === "GET") return route.fulfill({ json: { inputs: accepted ? [accepted] : [] } });
     const request = route.request().postDataJSON() as RunInputRequest;
-    expect(request.kind).toBe("next"); expect(request.execution_mode).toBe("plan");
+    expect(request.kind).toBe("next"); expect(request.execution_mode ?? "execute").toBe("execute");
     accepted = receipt(request); return route.fulfill({ status: 202, json: accepted });
   });
   const input = await start(page, api);
   await input.fill("接下来先审查代码");
-  await page.getByRole("button", { name: "先规划，再执行", exact: true }).click();
   await page.getByRole("button", { name: "运行中输入", exact: true }).click();
   await page.getByRole("button", { name: "排队下一任务", exact: true }).click();
   await expect(input).toHaveValue("");

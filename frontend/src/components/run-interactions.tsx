@@ -29,7 +29,7 @@ export function RunInteractions({ conversationId, storageKey, active, revision, 
       pending = true;
       try {
         const next = await api<Interactions>(`/api/v1/conversations/${conversationId}/interactions`);
-        if (alive) { setData(previous => ({ ...next, execution_mode: previous.interactions.some(item => item.run_id === currentRun.current && item.status === "approved") ? "execute" : next.execution_mode, interactions: next.interactions.map(item => {
+        if (alive) { setData(previous => ({ ...next, execution_mode: previous.execution_mode === "execute" && previous.interactions.some(item => item.run_id === currentRun.current && item.status === "approved") ? "execute" : next.execution_mode, interactions: next.interactions.map(item => {
           const confirmed = previous.interactions.find(old => old.id === item.id && old.status !== "pending");
           return item.status === "pending" && confirmed ? confirmed : item;
         }) })); setError(""); }

@@ -13,12 +13,11 @@ const test = base.extend<{ api: WorkspaceApi }>({
     finally { await api.close(); }
   },
 });
-async function start(page: Page, api: WorkspaceApi, plan = false) {
+async function start(page: Page, api: WorkspaceApi) {
   await page.goto("/app");
   await page.getByLabel("邮箱", { exact: true }).fill("browser@example.test");
   await page.getByLabel("密码", { exact: true }).fill("fixture-password-123");
   await page.getByRole("button", { name: "登录", exact: true }).click();
-  if (plan) { await page.getByRole("button", { name: "先规划，再执行", exact: true }).click(); await expect(page.getByRole("button", { name: "先规划，再执行", exact: true })).toHaveAttribute("aria-pressed", "true"); }
   const input = page.getByRole("textbox", { name: "消息输入框", exact: true });
   await input.fill(prompt); await input.press("Enter");
   await expect(page).toHaveURL(`/app/c/${conversationId}`);
@@ -28,15 +27,15 @@ async function start(page: Page, api: WorkspaceApi, plan = false) {
 const planItem = { id: itemId, run_id: "fixture-run", kind: "plan", request_digest: digest, status: "pending", request: { kind: "plan", title: "先审阅再修改", steps: ["读取当前文件", "完成明确的修改", "运行验证"] } };
 const questionItem = { id: itemId, run_id: "fixture-run", kind: "question", request_digest: digest, status: "pending", request: { kind: "question", questions: [{ id: "format", prompt: "希望交付什么形式？", options: [{ id: "html", label: "网页", description: "可直接预览" }, { id: "document", label: "文档" }] }] } };
 
-test("Plan submission is explicit, exact approval survives stale polling and keeps the composer draft", async ({ page, context, api }, info) => {
+test("Agent-selected Plan requires explicit review, exact approval survives stale polling and keeps the composer draft", async ({ page, context, api }, info) => {
   let lists = 0, approvals = 0;
   await context.route(`**${prefix}`, route => { lists++; return route.fulfill({ json: { interactions: [planItem], execution_mode: "plan" } }); });
   await context.route(`**${prefix}/${itemId}/respond`, route => {
     approvals++; expect(route.request().postDataJSON()).toEqual({ request_digest: digest, decision: "approve" });
     return route.fulfill({ json: { ...planItem, status: "approved", response: { decision: "approve", request_digest: digest } } });
   });
-  const input = await start(page, api, true);
-  expect(api.mutations.find(item => item.path.endsWith("/messages"))?.body.execution_mode).toBe("plan");
+  const input = await start(page, api);
+  expect(api.mutations.find(item => item.path.endsWith("/messages"))?.body.execution_mode ?? "execute").toBe("execute");
   await expect(page.getByRole("button", { name: "批准并执行", exact: true })).toBeVisible();
   await input.fill("批准过程中保留的追问");
   await expect(page.locator(".composer-motion-ghost")).toHaveCount(0);
@@ -83,7 +82,7 @@ test("plan revisions require explicit feedback and keep execution read-only", as
     expect(route.request().postDataJSON()).toEqual({ request_digest: digest, decision: "request_changes", feedback: "先保留旧文件，只生成新文件" });
     return route.fulfill({ json: { ...planItem, status: "changes_requested", response: route.request().postDataJSON() } });
   });
-  const input = await start(page, api, true);
+  const input = await start(page, api);
   await expect(page.getByRole("button", { name: "调整计划", exact: true })).toBeDisabled();
   await input.fill("保留聊天草稿");
   await page.getByRole("textbox", { name: "调整意见", exact: true }).fill("先保留旧文件，只生成新文件");
@@ -108,4 +107,16 @@ test("pending answers survive refresh, then cancellation removes all decision co
   await expect(page.locator(".interaction-receipt>summary")).toHaveText("已取消");
   await page.locator(".interaction-receipt>summary").click();
   await expect(page.locator(".interaction-content")).toContainText("此请求已撤销，旧回答或批准不会启动任务。");
+});
+
+test("Agent re-entering Plan after an approved scope stays visibly read-only", async ({page,context,api})=>{
+ let mode="execute";
+ await context.route(`**${prefix}`,route=>route.fulfill({json:{interactions:[{...planItem,status:"approved"}],execution_mode:mode}}));
+ const input=await start(page,api);await input.fill("保留后续要求");
+ await expect(page.locator(".interaction-mode")).toHaveCount(0);
+ mode="plan";api.planModeEvent();await expect(page.locator(".interaction-mode")).toContainText("Plan");
+ // A second response with historical approval must not mask the new read-only mode.
+ await page.evaluate(()=>document.dispatchEvent(new Event("visibilitychange")));
+ await expect(page.locator(".interaction-mode")).toContainText("Plan");await expect(input).toHaveValue("保留后续要求");
+ expect(api.mutations.filter(item=>item.path.includes("/respond"))).toHaveLength(0);
 });

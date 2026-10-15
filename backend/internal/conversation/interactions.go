@@ -376,3 +376,48 @@ func (s *Service) runModeContext(ctx context.Context, conversationID, runID uuid
 	}
 	return mode, permissionNote, nil
 }
+
+// enterRunPlanMode is a durable authority reduction, never an approval. Tool
+// batches execute sequentially and every later call rechecks the fresh mode.
+func (s *Service) enterRunPlanMode(ctx context.Context, conversationID, runID uuid.UUID, callID, reason string) (map[string]any, error) {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	var locked uuid.UUID
+	if err = tx.QueryRow(ctx, `SELECT id FROM conversations WHERE id=$1 FOR UPDATE`, conversationID).Scan(&locked); err != nil {
+		return nil, err
+	}
+	var status, mode string
+	if err = tx.QueryRow(ctx, `SELECT status,execution_mode FROM runs WHERE id=$1 AND conversation_id=$2 FOR UPDATE`, runID, conversationID).Scan(&status, &mode); err != nil {
+		return nil, err
+	}
+	if status != "running" {
+		return nil, ErrRunNotActive
+	}
+	var recorded string
+	if callID == "" {
+		return nil, errors.New("missing trusted planning call")
+	}
+	if err = tx.QueryRow(ctx, `SELECT call->'arguments'->>'reason' FROM messages m CROSS JOIN LATERAL jsonb_array_elements(m.tool_calls) call WHERE m.conversation_id=$1 AND m.run_id=$2 AND m.role='assistant' AND call->>'id'=$3 AND call->>'name'='enter_plan_mode' ORDER BY m.seq DESC LIMIT 1`, conversationID, runID, callID).Scan(&recorded); err != nil || recorded != reason {
+		return nil, errors.New("planning must originate from the exact durable tool call")
+	}
+	var applied bool
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM run_events WHERE run_id=$1 AND type='EXECUTION_MODE_CHANGED' AND payload->>'tool_call_id'=$2)`, runID, callID).Scan(&applied); err != nil {
+		return nil, err
+	}
+	if !applied {
+		if _, err = tx.Exec(ctx, `UPDATE runs SET execution_mode='plan',approved_plan_digest=NULL WHERE id=$1`, runID); err != nil {
+			return nil, err
+		}
+		if err = eventlog.Append(ctx, tx, runID, conversationID, "EXECUTION_MODE_CHANGED", map[string]any{"execution_mode": "plan", "reason": reason, "tool_call_id": callID}); err != nil {
+			return nil, err
+		}
+		mode = "plan"
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return map[string]any{"execution_mode": mode, "execution_approval": false, "instruction": "Read-only planning is active when execution_mode is plan. Inspect with list_files/read, then propose_plan. Only explicit approval of the exact plan enables changes; do not execute mutations in this tool batch."}, nil
+}

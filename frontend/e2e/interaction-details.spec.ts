@@ -67,6 +67,7 @@ test("selected context inspection uses current contents and keyboard removal pre
   await login(page);
   const input = page.getByRole("textbox", { name: "消息输入框", exact: true });
   await input.fill("保留草稿 ");
+  await page.getByRole("button", { name: "添加内容", exact: true }).click();
   await page.getByRole("button", { name: "@ 添加引用", exact: true }).click();
   await page.getByRole("option", { name: /项目背景/ }).click();
   api.contextEntries[0] = { ...api.contextEntries[0], version: 2, content: "更新后的背景资料" };

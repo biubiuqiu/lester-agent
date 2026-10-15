@@ -92,6 +92,8 @@ export class WorkspaceApi {
     this.emit(this.nextEventId++, type, payload);
   }
 
+  planModeEvent() { this.emit(this.nextEventId++, "EXECUTION_MODE_CHANGED", { execution_mode: "plan", reason: "Fixture architectural change" }); }
+
   contextEvent(type: "CONTEXT_COMPACTING" | "CONTEXT_COMPACTED" | "CONTEXT_COMPACTION_FAILED", payload: Record<string, unknown> = {}) {
     this.emit(this.nextEventId++, type, payload);
   }

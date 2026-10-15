@@ -21,6 +21,7 @@ import "./mentions.css";
 import "./workspace-controls.css";
 import "./interface-polish.css";
 import "./session-awareness.css";
+import "./composer-controls.css";
 import "@xterm/xterm/css/xterm.css";
 export const metadata:Metadata={title:"Lester",description:"Open-source AI Agent Workspace"};
 export default async function RootLayout({children}:{children:React.ReactNode}){const {locale,messages}=await getI18n();return <html lang={locale}><body><I18nProvider locale={locale} messages={messages}>{children}</I18nProvider></body></html>}

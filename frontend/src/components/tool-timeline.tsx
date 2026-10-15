@@ -208,6 +208,9 @@ function activityLabel(activity: ToolActivity, t: ReturnType<typeof useT>) {
   }
   const verb = activity.status === "running" ? "正在：{0}" : activity.status === "failed" ? "未能：{0}" : activity.status === "cancelled" ? "已停止：{0}" : "已完成：{0}";
   const action = ({
+    enter_plan_mode: "进入规划",
+    propose_plan: "提交计划",
+    ask_user_question: "澄清需求",
     bash: "运行命令",
     read: "读取文件",
     write: "写入文件",

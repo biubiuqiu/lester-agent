@@ -253,3 +253,94 @@ func TestPlanToolsCannotExecuteAliasesAndApprovalContinuesSameRun(t *testing.T) 
 		t.Fatal("approved execution was not observed")
 	}
 }
+
+func TestAgentEntersPlanBeforeLaterBatchMutationsAndApprovalContinuesSameRun(t *testing.T) {
+	f := newTranscriptFixture(t, false)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	server, files := newTranscriptSandboxServer(t, map[string]string{"old.txt": "original"})
+	f.service.sandboxes = sandbox.NewClient(server.URL, "")
+	runID := f.startRun(t, "plan first")
+	if _, err := f.service.db.Exec(ctx, `UPDATE runs SET permission_mode='full' WHERE id=$1`, runID); err != nil {
+		t.Fatal(err)
+	}
+	env := agenttool.Environment{RunID: runID, ConversationID: f.conversationID, SandboxID: "test", WorkDir: conversationWorkDir(f.conversationID), Sandboxes: f.service.sandboxes, AuthorizeTool: func(ctx context.Context, name string, args json.RawMessage) error {
+		return f.service.authorizeRunTool(ctx, f.conversationID, runID, name, args)
+	}}
+	steps := []string{"Create the requested file", "Verify it"}
+	client := &scriptedModel{respond: func(step int, req model.ModelRequest) []model.ModelEvent {
+		if step == 0 {
+			if !slices.ContainsFunc(req.Tools, func(tool model.Tool) bool { return tool.Name == "enter_plan_mode" }) {
+				t.Fatal("normal mode cannot enter planning")
+			}
+			return []model.ModelEvent{
+				{ToolCall: &model.ToolCall{ID: "enter-plan", Name: "enter_plan_mode", Arguments: json.RawMessage(`{"reason":"A substantial architectural change needs review"}`)}},
+				{ToolCall: &model.ToolCall{ID: "too-soon", Index: 1, Name: "write", Arguments: json.RawMessage(`{"file_path":"old.txt","content":"bad"}`)}},
+			}
+		}
+		if step == 1 {
+			if slices.ContainsFunc(req.Tools, func(tool model.Tool) bool { return tool.Name == "bash" || tool.Name == "write" }) || !slices.ContainsFunc(req.Tools, func(tool model.Tool) bool { return tool.Name == "list_files" }) {
+				t.Fatal("Plan schemas expose mutations or cannot list files")
+			}
+			raw, _ := json.Marshal(map[string]any{"title": "Create result", "steps": steps})
+			return []model.ModelEvent{{ToolCall: &model.ToolCall{ID: "plan-execution", Name: "propose_plan", Arguments: raw}}}
+		}
+		if !slices.ContainsFunc(req.Tools, func(tool model.Tool) bool { return tool.Name == "write" }) || slices.ContainsFunc(req.Tools, func(tool model.Tool) bool { return tool.Name == "propose_plan" }) {
+			t.Fatal("approval did not restore normal schemas")
+		}
+		if step == 2 {
+			if _, err := f.service.enterRunPlanMode(ctx, f.conversationID, runID, "enter-plan", "A substantial architectural change needs review"); err != nil {
+				t.Fatal(err)
+			}
+			var mode string
+			if err := f.service.db.QueryRow(ctx, `SELECT execution_mode FROM runs WHERE id=$1`, runID).Scan(&mode); err != nil || mode != "execute" {
+				t.Fatal("replayed mode call reset approved execution")
+			}
+
+			return []model.ModelEvent{{ToolCall: &model.ToolCall{ID: "create", Name: "write", Arguments: json.RawMessage(`{"file_path":"new.txt","content":"approved result"}`)}}}
+		}
+		return []model.ModelEvent{{Delta: "done"}}
+	}}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		f.service.executor.executeTurns(ctx, f.conversationID, runID, &Computer{SandboxID: "test", WorkDir: env.WorkDir}, client, model.ModelRequest{Messages: modelHistory(f.messages(t)), Tools: f.service.tools.Definitions()})
+	}()
+	deadline := time.Now().Add(5 * time.Second)
+	var pending *RunInteraction
+	for time.Now().Before(deadline) {
+		items, _, err := f.service.RunInteractions(ctx, f.workspaceID, f.conversationID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(items) > 0 {
+			pending = &items[0]
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if pending == nil {
+		t.Fatalf("plan never became pending; messages: %#v", f.messages(t))
+	}
+	if files.content("old.txt") != "original" || files.content("new.txt") != "" {
+		t.Fatal("file created before approval")
+	}
+	if _, err := f.service.enterRunPlanMode(ctx, f.conversationID, runID, "forged-call", "A substantial architectural change needs review"); err == nil {
+		t.Fatal("unrecorded mode change accepted")
+	}
+	var permission string
+	if err := f.service.db.QueryRow(ctx, `SELECT permission_mode FROM runs WHERE id=$1`, runID).Scan(&permission); err != nil || permission != "full" {
+		t.Fatal("planning changed task permissions")
+	}
+	if _, err := f.service.RespondRunInteraction(ctx, f.workspaceID, f.userID, f.conversationID, pending.ID, InteractionResponse{RequestDigest: pending.RequestDigest, Decision: "approve"}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("approved plan did not continue")
+	}
+	if files.content("new.txt") != "approved result" || client.step != 4 {
+		t.Fatal("approved execution was not observed")
+	}
+}

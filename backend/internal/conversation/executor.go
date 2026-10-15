@@ -552,6 +552,9 @@ func (e *runExecutor) runTool(ctx context.Context, runID, conversationID uuid.UU
 			}
 			return s.authorizePermission(toolCtx, conversationID, runID, call.ID, name, args)
 		},
+		EnterPlan: func(toolCtx context.Context, reason string) (map[string]any, error) {
+			return s.enterRunPlanMode(toolCtx, conversationID, runID, call.ID, reason)
+		},
 		Interact: func(toolCtx context.Context, request agenttool.InteractionRequest) (map[string]any, error) {
 			return s.waitRunInteraction(toolCtx, conversationID, runID, call.ID, request)
 		},
