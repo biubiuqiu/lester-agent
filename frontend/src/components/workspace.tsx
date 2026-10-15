@@ -14,6 +14,7 @@ import { ArrowLeft, Bot, Check, ChevronDown, FileText, Folder, GripVertical, Max
 import { readView, updateView, viewKey, resumeViewState } from "@/lib/conversation-view-state";
 import { useConversationScroll } from "./use-conversation-scroll";
 import { ArtifactIcon } from "./workspace-icons";
+import { CloudTasks } from "./cloud-tasks";
 import { ProjectRail } from "./project-rail";
 import type { Project } from "@/lib/api";
 import { Brand } from "./brand";
@@ -168,6 +169,7 @@ export function Workspace({ conversationId, projectId, initialAgentSlug }: { con
   const modelMutations = useRef(new Map<string, number>());
   const modelSequence = useRef(0);
   const [streamAttempt, setStreamAttempt] = useState(0);
+  const [taskRevision, setTaskRevision] = useState(0);
   const [streamError, setStreamError] = useState({ conversationId: "", message: "" });
   const panelWidthRef = useRef(panelWidth);
   const layoutHydrated = useSyncExternalStore(subscribeToHydration, getClientSnapshot, getServerSnapshot);
@@ -326,6 +328,7 @@ export function Workspace({ conversationId, projectId, initialAgentSlug }: { con
           [conversation]: mergeRunEvents(previous[conversation] ?? [], [event]),
         }));
       }
+      if (event.type.startsWith("RUN_") || event.type.startsWith("INTERACTION_") || event.type.startsWith("PERMISSION_")) setTaskRevision(value => Math.max(value, event.id));
       const nextStatus = eventRunStatus(event.type);
       if (nextStatus) {
         setConversations((previous) => previous.map((item) => item.id === conversation
@@ -526,7 +529,7 @@ export function Workspace({ conversationId, projectId, initialAgentSlug }: { con
 
 
 
-      <div className="conversation-list">{loading ? <p className="muted-block"><T>{"正在载入…"}</T></p> : <ProjectRail projects={projects} conversations={visibleConversations} currentId={conversationId} selectedProject={selectedProject} unread={unreadRunResults} onOpen={openConversation} onNew={id=>{setMobileMenu(false);setConversationSearch("");router.push(`/app/p/${id}`);}} search={conversationSearch} onSearch={setConversationSearch} onProjects={setProjects} onConversation={updateOrganizedConversation}/>}</div>
+      <div className="conversation-list">{user ? <CloudTasks key={`${user.user_id}:${user.workspace_id}`} revision={taskRevision} onOpen={openConversation} /> : null}{loading ? <p className="muted-block"><T>{"正在载入…"}</T></p> : <ProjectRail projects={projects} conversations={visibleConversations} currentId={conversationId} selectedProject={selectedProject} unread={unreadRunResults} onOpen={openConversation} onNew={id=>{setMobileMenu(false);setConversationSearch("");router.push(`/app/p/${id}`);}} search={conversationSearch} onSearch={setConversationSearch} onProjects={setProjects} onConversation={updateOrganizedConversation}/>}</div>
       <div className="sidebar-footer"><UserMenu user={user} /></div>
     </aside>
     <section className={`conversation-main ${displayedCurrent ? "" : "empty-conversation"}`}>

@@ -147,6 +147,8 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml ps
 - **Publish HTML artifacts.** Deploy a single HTML file or a static directory, including local images and videos, to durable S3-compatible storage. Share a public URL and manage deployments on the dedicated Artifacts page.
 - **Manage your profile.** The account menu groups profile, model, Computer, and Skill settings. Display names, uploaded avatars, built-in themes, linked Google/GitHub identities and passwords can be managed in **个人资料**.
 
+The [Cloud tasks panel](#cloud-tasks-recovery-and-usage) brings together pending reviews, task status, background commands and source-labeled model usage across conversations.
+
 The executor is separated from the conversation service but still runs inside API. Critical run transitions, events, and outbox intents commit atomically in PostgreSQL. Redis publication failures retain events for retries with stable IDs; clients deduplicate repeats. Graceful shutdown interrupts runs and releases their guards without replaying tools. An independent Worker and automatic task resumption are not implemented.
 
 Task-file cards appear after a run finishes, fails, or stops, and only reference files confirmed to exist. The right-hand file inventory and previews keep updating during execution. You can draft the next message during a run, but cannot send overlapping runs in the same conversation.
@@ -445,7 +447,7 @@ Fresh installs apply 004–005 automatically. Migration 004 preserves old chat o
 
 ### Deliverable registration and reliable events upgrade
 
-The current version requires migrations 001–025. Migration 013 is described in [Accounts and sign-in](#accounts-and-sign-in). The historical 004–005 commands above are insufficient for a full upgrade; apply every missing migration in numeric order. For a database already on 001–011, back it up, stop API writes, apply 012 once, then complete 013, 014 and 015 below before rebuilding API/Web:
+The current version requires migrations 001–026. Migration 013 is described in [Accounts and sign-in](#accounts-and-sign-in). The historical 004–005 commands above are insufficient for a full upgrade; apply every missing migration in numeric order. For a database already on 001–011, back it up, stop API writes, apply 012 once, then complete 013, 014 and 015 below before rebuilding API/Web:
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
@@ -454,7 +456,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T post
   < backend/migrations/000012_deliverables_events.up.sql
 ```
 
-New Compose volumes initialize migrations 001–025; existing volumes never upgrade automatically. Do not delete volumes. Rolling back 012 drops registered metadata and pending delivery intents while preserving Computer files, messages, run events, and published artifacts. Stop the updated API before rollback and restore a compatible application version. Monitor pending outbox count and disk space during prolonged Redis outages.
+New Compose volumes initialize migrations 001–026; existing volumes never upgrade automatically. Do not delete volumes. Rolling back 012 drops registered metadata and pending delivery intents while preserving Computer files, messages, run events, and published artifacts. Stop the updated API before rollback and restore a compatible application version. Monitor pending outbox count and disk space during prolonged Redis outages.
 
 ## Skills and attachments
 
@@ -742,7 +744,7 @@ done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
 ```
 
-Fresh Compose volumes initialize 001–025 automatically; existing volumes never re-run init scripts. PowerShell can pipe `Get-Content -Raw` into the same `exec -T postgres` command. Rolling back 013 removes identity/token/avatar references and therefore **refuses while accounts without passwords exist**; arrange password recovery before a downgrade and restore a compatible application version. Existing workspace files and projects are not moved. PostgreSQL-backed auth tests use mock identity providers and a local SMTP fixture; live third-party consent/delivery require deployment validation.
+Fresh Compose volumes initialize 001–026 automatically; existing volumes never re-run init scripts. PowerShell can pipe `Get-Content -Raw` into the same `exec -T postgres` command. Rolling back 013 removes identity/token/avatar references and therefore **refuses while accounts without passwords exist**; arrange password recovery before a downgrade and restore a compatible application version. Existing workspace files and projects are not moved. PostgreSQL-backed auth tests use mock identity providers and a local SMTP fixture; live third-party consent/delivery require deployment validation.
 
 ## Administration
 
@@ -792,7 +794,7 @@ done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
 ```
 
-Migration 015 invalidates old sessions: users sign in once after upgrade. Accounts, profiles, projects and files remain intact. Retain `.env`, encryption keys and volumes. Fresh Compose volumes initialize 001–025; Helm requires SQL before deployment. Rolling back 015 also invalidates current credentials and must be paired with compatible API/Web. The lifetimes are fixed application defaults; no extra environment variables are required.
+Migration 015 invalidates old sessions: users sign in once after upgrade. Accounts, profiles, projects and files remain intact. Retain `.env`, encryption keys and volumes. Fresh Compose volumes initialize 001–026; Helm requires SQL before deployment. Rolling back 015 also invalidates current credentials and must be paired with compatible API/Web. The lifetimes are fixed application defaults; no extra environment variables are required.
 
 
 ## Runtime reliability upgrade
@@ -845,7 +847,7 @@ Restoring a confirmed modification of an existing retained text file requires ex
 
 The project menu provides **Project rules** with content, version and SHA-256. Saving a stale version preserves the editor draft and refuses overwrite. Initial sends and accepted queued tasks snapshot rules from the project settings at acceptance; later edits or conversation moves affect future accepted tasks only. The input message exposes the accepted source/version/content. Rules are explicit user guidance and grant no tools, @ access or Plan approval. Platform constraints and the latest direct user requirements take precedence. File arrivals during an open settings/review dialog still add tabs without opening a covering preview.
 
-For databases already on 001–022, back up and stop API writes, then apply `000023_file_changes.up.sql` and `000024_project_rules.up.sql` once in order. Earlier versions apply every missing migration; fresh Compose volumes initialize 001–025. Stop active tasks and restore compatible API/Web before rollback. Roll back 024 before 023 when downgrading this batch. 024 removes editable project rules while accepted message snapshots remain; 023 removes review/rollback records. Neither rollback restores file or external effects. Preserve database backups, keys and Computer volumes.
+For databases already on 001–022, back up and stop API writes, then apply `000023_file_changes.up.sql` and `000024_project_rules.up.sql` once in order. Earlier versions apply every missing migration; fresh Compose volumes initialize 001–026. Stop active tasks and restore compatible API/Web before rollback. Roll back 024 before 023 when downgrading this batch. 024 removes editable project rules while accepted message snapshots remain; 023 removes review/rollback records. Neither rollback restores file or external effects. Preserve database backups, keys and Computer volumes.
 
 ## Task permissions
 
@@ -864,3 +866,13 @@ Existing conversations offer **Session recap** and the local `/recap` command. T
 ## Composer controls and automatic planning
 
 The composer groups attachments, @ references (contexts, conversations and Skills) and Agent selection under **+**. Typing `@` and pasting images remain available. Model selection sits on the right beside the circular Send button; permissions stay visible and independent. New and queued tasks start normally so the Agent can choose planning for each task. Active tasks keep their accepted model; model switching unlocks after completion. Agent-selected planning requires upgraded **API and Web together**, without a new database migration; apply all existing migrations first.
+
+## Cloud tasks, recovery and usage
+
+Open **Cloud tasks** in the conversation sidebar to see the latest task in each conversation. Filter all, active, needs-attention or finished tasks, inspect queued/held counts and registered-deliverable metadata, and open the original conversation for approvals or recovery. Background commands that outlive an Agent reply are listed separately; unknown command outcomes remain needs-attention, and unfinished commands keep that conversation out of the Finished filter. Counts are workspace-scoped and come from PostgreSQL, not from which tabs are open. The list uses stable cursor pages (20 by default, at most 50), polls while visible on the first page and refreshes on existing workspace task events; after loading more pages, use Refresh to return to the latest page. It opens no additional SSE connection. Merely viewing a task never sends a message, approves an operation or resumes work. Background file arrivals still register tabs but do not raise a workspace panel over a modal or an expanded file review. A failed read displays an error instead of an empty list. “Completed” means the run ended, not that its output was accepted or tested; deliverable counts are registration metadata, not verified current file snapshots.
+
+The API now reconciles abandoned runs on startup and in bounded pages of 30 every 15 seconds. Ownership is proven by the existing PostgreSQL session advisory guard, including across API replicas; a quiet or long-running task is never failed merely because of its age. A released owner becomes interrupted/failed (or cancelled if cancellation was pending), unresolved tool outcomes stay unknown, pending approvals/questions are revoked and future queued inputs are held. No tool is automatically replayed. Closing the browser does not cancel a live executor; restarting API still interrupts its in-process execution. Recovery is an explicit new task after checking current results, not transparent continuation through a crash.
+
+Expand **Time and model usage** for elapsed wall time (including waits), model-request count, provider-reported input/output and separately labeled estimates for requests without reported input. Cached input is counted once across provider conventions; compaction requests are included. Missing output counters stay unknown rather than zero, and reported zero output is preserved. There is no monetary cost estimate or billing claim. The authenticated read endpoints are `GET /api/v1/tasks` and `GET /api/v1/conversations/{id}/runs/{runID}/usage`; neither exposes prompts, provider keys or raw provider usage maps.
+
+Existing installations through migration 025: back up PostgreSQL, stop API writes/active tasks, apply `backend/migrations/000026_cloud_task_indexes.up.sql` once and rebuild **API and Web together**. This migration only adds query indexes and preserves all task/file data; fresh Compose initialization includes it. Rollback drops only these indexes. Do not delete volumes. The three delivered cloud priorities and remaining architecture boundaries are described in [Cloud Agent priorities](docs/cloud-agent-priorities.md).

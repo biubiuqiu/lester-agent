@@ -113,6 +113,7 @@ func newTranscriptFixture(t *testing.T, legacy bool) transcriptFixture {
 	applyTestMigration(t, db, "000023_file_changes.up.sql")
 	applyTestMigration(t, db, "000024_project_rules.up.sql")
 	applyTestMigration(t, db, "000025_run_permissions.up.sql")
+	applyTestMigration(t, db, "000026_cloud_task_indexes.up.sql")
 	return f
 }
 

@@ -25,6 +25,8 @@ test("actual review is lazy, exports original records and restores only after co
   await expect(page.getByRole("button", { name: "撤回此文件修改", exact: true })).toBeDisabled();
   const download = page.waitForEvent("download"); await page.getByRole("button", { name: "导出审阅记录", exact: true }).click(); expect((await download).suggestedFilename()).toBe(`lester-file-review-${changeId}.json`);
   api.finish(); await expect(page.getByRole("button", { name: "撤回此文件修改", exact: true })).toBeEnabled();
+  await expect(page.locator(".open-file-tabs [role=tab]").filter({ hasText: "index.html" })).toHaveCount(1);
+  if (info.project.name === "mobile") await expect(page.locator("#conversation-workspace-panel")).not.toHaveAttribute("open");
   await input.fill("审阅时保留的草稿"); await page.getByRole("button", { name: "撤回此文件修改", exact: true }).click(); expect(writes).toBe(0);
   await expect(page.locator(".composer-motion-ghost")).toHaveCount(0); await page.screenshot({ path: info.outputPath("file-review-confirm.png") });
   await page.getByRole("button", { name: "确认恢复", exact: true }).click(); await expect(page.getByText("已恢复修改前的文件内容", { exact: true })).toBeVisible(); await expect(input).toHaveValue("审阅时保留的草稿"); expect(writes).toBe(1); expect(inspected).toBe(1);

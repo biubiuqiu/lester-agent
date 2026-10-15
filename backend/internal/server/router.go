@@ -130,6 +130,8 @@ func Router(deps Dependencies) http.Handler {
 			private.Post("/model-deployments/{id}/test", deps.Models.TestDeployment)
 			private.Get("/skills", deps.Skills.List)
 			private.Get("/events", deps.Conversations.WorkspaceEvents)
+			private.Get("/tasks", deps.Conversations.CloudTasks)
+			private.Get("/conversations/{id}/runs/{runID}/usage", deps.Conversations.RunUsage)
 			private.Get("/conversations", deps.Conversations.List)
 			private.Post("/conversations", deps.Conversations.Create)
 			private.Get("/conversations/{id}", deps.Conversations.Get)

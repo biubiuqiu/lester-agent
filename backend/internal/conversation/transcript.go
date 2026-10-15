@@ -347,6 +347,9 @@ func (s *Service) finishFailedRun(ctx context.Context, runID, conversationID uui
 	if _, err = tx.Exec(ctx, `UPDATE run_interactions SET status='cancelled',responded_at=now() WHERE run_id=$1 AND status='pending'`, runID); err != nil {
 		return err
 	}
+	if _, err = tx.Exec(ctx, `UPDATE run_permissions SET status='cancelled' WHERE run_id=$1 AND status='pending'`, runID); err != nil {
+		return err
+	}
 	if _, err = tx.Exec(ctx, `UPDATE model_request_usage SET status='failed',error_kind='interrupted',usage=COALESCE(usage,'{"source":"missing"}'::jsonb),finished_at=now() WHERE run_id=$1 AND status='started'`, runID); err != nil {
 		return err
 	}

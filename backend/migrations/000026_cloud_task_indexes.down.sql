@@ -1,0 +1,5 @@
+DROP INDEX command_tasks_workspace_active_idx;
+DROP INDEX run_interactions_pending_run_idx;
+DROP INDEX run_events_run_activity_idx;
+DROP INDEX runs_active_conversation_idx;
+DROP INDEX runs_conversation_latest_idx;
