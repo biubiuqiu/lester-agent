@@ -1,0 +1,28 @@
+.session-awareness { flex: none; min-height: 0; max-height: 34dvh; overflow: auto; overscroll-behavior: contain; border-bottom: 1px solid var(--line); padding: 4px clamp(16px,3vw,48px); background: #fff; font-size: 12px; }
+.session-awareness-tools { display: flex; align-items: center; gap: 4px; max-width: 780px; margin: auto; }
+.session-awareness button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; border: 0; border-radius: 8px; background: transparent; padding: 6px 8px; color: var(--muted); font: inherit; cursor: pointer; }
+.session-awareness button:hover,.session-awareness button[aria-expanded=true],.session-awareness button[aria-pressed=true] { background: #eef3eb; color: #34533d; }
+.session-awareness :focus-visible { outline: 2px solid #607d67; outline-offset: -2px; }
+.session-awareness svg { width: 15px; height: 15px; stroke-width: 1.65; flex: none; }
+.session-awareness-tools small { font-size: 11px; font-variant-numeric: tabular-nums; }
+.session-awareness-tools i { width: 5px; height: 5px; border-radius: 50%; background: #56775e; }
+.session-recap,.session-context { max-width: 780px; margin: 8px auto 10px; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; background: #fafbf8; overflow-wrap: anywhere; }
+.session-awareness header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.session-awareness header strong { font-size: 13px; font-weight: 550; }
+.session-awareness header > span { color: var(--muted); }
+.session-awareness header > button { margin-left: auto; }
+.session-awareness p { margin: 6px 0 12px; line-height: 1.7; white-space: pre-wrap; }
+.session-awareness small,.session-awareness .recap-note { color: var(--muted); font-size: 11px; line-height: 1.65; }
+.session-awareness h3 { font-size: 12px; font-weight: 550; margin: 16px 0 8px; }
+.session-awareness ul { margin: 8px 0; padding-left: 18px; line-height: 1.8; }
+.session-awareness pre { white-space: pre-wrap; max-height: 180px; overflow: auto; font-size: 12px; }
+.recap-files { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.recap-files small { flex-basis: 100%; }
+.recap-files button { max-width: 100%; overflow-wrap: anywhere; text-align: left; }
+.recap-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.recap-preference { display: flex; align-items: center; gap: 7px; min-height: 32px; color: var(--muted); }
+.recap-preference input { accent-color: #506c57; }
+.process-group { margin: 8px 0; padding: 0 0 0 10px; border-left: 1px solid var(--line); }
+.process-group > summary { min-height: 32px; padding: 7px 4px; font-size: 12px; color: var(--muted); cursor: pointer; }
+.process-group > summary:focus-visible { outline: 2px solid #607d67; outline-offset: 1px; }
+@media(max-width:700px) { .session-awareness { padding: 3px 12px; max-height: 30dvh; }.session-awareness-tools button { min-height: 40px; padding: 6px; font-size: 11px; }.session-recap,.session-context { padding: 12px; }.session-awareness button { min-height: 36px; } }

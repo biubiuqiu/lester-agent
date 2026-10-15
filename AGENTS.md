@@ -329,3 +329,5 @@ Before handing off a code change:
 6. Run `helm lint` and render the chart when Helm deployment files change.
 7. Update README and AGENTS guidance when the change makes either document inaccurate.
 8. Report what changed, what was verified, and any remaining limitation without overstating support.
+
+- Session recap is a local, bounded factual presentation, never execution authority or model context. It quotes the latest goal/reply and verified current-file links; no invented validation or completion claims. Automatic return recaps require two minutes away and new evidence, never expand over unsent text/files/references, and respect account-scoped opt-out/logout cleanup. `/recap` in an existing conversation must not submit a task or queue input. Context overview distinguishes latest accepted message snapshots from draft materials and never claims a complete provider request or that a reference was read. Compact process groups only confirmed completions; failures, cancellations and unknown outcomes remain inspectable. Recovery adds instructions to the draft; it never replays tools automatically.

@@ -74,7 +74,7 @@ export function AgentActivityIndicator({ agent, state, runId, events }: { agent:
   );
 }
 
-export function RunFailureRecovery({ reason, lastPrompt, onPrepare }: { reason: string; lastPrompt?: string; onPrepare: (content: string) => void }) {
+export function RunFailureRecovery({ reason, lastPrompt, onPrepare, stopped }: { reason: string; lastPrompt?: string; onPrepare: (content: string) => void; stopped?: boolean }) {
   const t = useT();
 
   const retryPrompt = lastPrompt?.trim();
@@ -83,7 +83,7 @@ export function RunFailureRecovery({ reason, lastPrompt, onPrepare }: { reason: 
     <section className="run-recovery" aria-label={t("任务恢复选项")}>
       <span className="run-recovery-icon"><AlertCircle /></span>
       <div className="run-recovery-copy">
-        <strong><T>{"这次任务没有完成"}</T></strong><p><T>{"先检查现有结果，再决定是否继续；重试可能重复已执行的操作。"}</T></p>
+        <strong>{t(stopped ? "已停止" : "这次任务没有完成")}</strong><p><T>{"先检查现有结果，再决定是否继续；重试可能重复已执行的操作。"}</T></p>
         <details><summary><T>{"查看原因"}</T></summary><code>{reason}</code></details>
       </div>
       <div className="run-recovery-actions">

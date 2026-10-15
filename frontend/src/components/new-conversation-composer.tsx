@@ -83,6 +83,7 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (text.trim() === "/recap") { setError(t("请在已有会话中使用 /recap。")); return; }
     if (submitting.current || (!text.trim() && !files.length) || !model) return;
     submitting.current = true;
     capturePosition();

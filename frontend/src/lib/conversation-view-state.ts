@@ -5,6 +5,8 @@ import { clearMessageSubmissions } from "./message-submission";
 
 // View layout remains tab-local; account-scoped drafts survive closing tabs/windows.
 export type ViewState = {
+  recap: { enabled: boolean; seenAt: number; eventId: number; messageId: string };
+  detailedProcess: boolean;
   contexts: ContextReference[];
   agentSlug: string;
   executionMode: "execute" | "plan";
@@ -27,18 +29,18 @@ export type ViewState = {
 };
 const prefix = "lester.view.v1.";
 const draftPrefix = "lester.draft.v1.";
-const draftFields = ["text", "contexts", "reference", "executionMode", "permissionMode", "agentSlug", "interactionDrafts", "sendNotice", "files", "missingFiles"] as const;
+const draftFields = ["recap", "detailedProcess", "text", "contexts", "reference", "executionMode", "permissionMode", "agentSlug", "interactionDrafts", "sendNotice", "files", "missingFiles"] as const;
 function stored(read: () => string | null) { try { return JSON.parse(read() || "null"); } catch { return null; } }
 const cache = new Map<string, ViewState>();
 let writeScope: string | null = "";
 export function resumeViewState(scope: string) { writeScope = scope; }
-const defaults = (): ViewState => ({ contexts: [], agentSlug: "lester", executionMode: "execute", permissionMode: "standard", interactionDrafts: {}, sendNotice: "", text: "", files: [], missingFiles: [], reference: null, tabs: [], closedTabs: [], unreadFiles: [], selected: null, treeOpen: true, directories: [""], modes: {}, positions: {}, thread: { top: 0, following: true } });
+const defaults = (): ViewState => ({ recap: { enabled: true, seenAt: 0, eventId: 0, messageId: "" }, detailedProcess: false, contexts: [], agentSlug: "lester", executionMode: "execute", permissionMode: "standard", interactionDrafts: {}, sendNotice: "", text: "", files: [], missingFiles: [], reference: null, tabs: [], closedTabs: [], unreadFiles: [], selected: null, treeOpen: true, directories: [""], modes: {}, positions: {}, thread: { top: 0, following: true } });
 export const viewKey = (userId: string, workspaceId: string, conversationId: string) => `${userId}.${workspaceId}.${conversationId}`;
 
 function persistDraft(key: string, value: ViewState) {
   try {
     window.localStorage.setItem(draftPrefix + key, JSON.stringify({ version: 1,
-      text: value.text.slice(0, 100_000), contexts: value.contexts, reference: value.reference,
+      text: value.text.slice(0, 100_000), recap: value.recap, detailedProcess: value.detailedProcess, contexts: value.contexts, reference: value.reference,
       executionMode: value.executionMode, permissionMode: value.permissionMode, agentSlug: value.agentSlug,
       interactionDrafts: value.interactionDrafts, sendNotice: value.sendNotice,
       attachmentNames: [...value.files.map(file => file.name), ...value.missingFiles],
@@ -56,6 +58,8 @@ export function readView(key: string): ViewState {
     const draft = stored(() => window.localStorage.getItem(draftPrefix + key));
     const saved = draft?.version === 1 ? { ...(session?.version === 1 ? session : {}), ...draft } : session;
     if (saved && saved.version === 1) {
+      if (saved.recap && typeof saved.recap === "object") value.recap = { enabled: saved.recap.enabled !== false, seenAt: Number.isSafeInteger(saved.recap.seenAt) && saved.recap.seenAt > 0 ? saved.recap.seenAt : 0, eventId: Number.isSafeInteger(saved.recap.eventId) && saved.recap.eventId >= 0 ? saved.recap.eventId : 0, messageId: typeof saved.recap.messageId === "string" ? saved.recap.messageId.slice(0, 100) : "" };
+      value.detailedProcess = saved.detailedProcess === true;
       value.contexts = Array.isArray(saved.contexts) ? saved.contexts.filter((v: unknown) => v && typeof v === "object" && "id" in v && typeof v.id === "string" && "title" in v && typeof v.title === "string" && (!("type" in v) || v.type === "context" || v.type === "conversation" || v.type === "skill")).map((item: ContextReference) => ({ id: item.id, title: item.title, ...(item.type ? { type: item.type } : {}) })).slice(0, 8) : [];
       value.agentSlug = typeof saved.agentSlug === "string" && saved.agentSlug.length <= 50 ? saved.agentSlug : "lester";
       value.executionMode = saved.executionMode === "plan" ? "plan" : "execute";

@@ -30,7 +30,7 @@ type NarrativeItem =
   | { kind: "context"; event: RunEvent; id: number }
   | { kind: "cancellation"; event: RunEvent };
 
-export function RunNarrative({ events, hideFinalText = false }: { events: RunEvent[]; hideFinalText?: boolean }) {
+export function RunNarrative({ events, hideFinalText = false, detailed = false }: { events: RunEvent[]; hideFinalText?: boolean; detailed?: boolean }) {
   const t = useT();
 
   const status = runStatus(events);
@@ -41,9 +41,7 @@ export function RunNarrative({ events, hideFinalText = false }: { events: RunEve
   }
   if (items.length === 0) return null;
 
-  return (
-    <section className="run-narrative" aria-label={t("工具执行过程")}>
-      {items.map((item) => {
+  const rows = items.map((item) => {
         if (item.kind === "text") {
           const text = String(item.event.payload.text ?? "");
           return text ? <div className="assistant-progress" key={`text-${item.event.id}`}><MessageContent content={text} quoteSource={t("引用回答")} /></div> : null;
@@ -52,9 +50,19 @@ export function RunNarrative({ events, hideFinalText = false }: { events: RunEve
         if (item.kind === "cancellation") return <RunCancellation key={`cancellation-${item.event.id}`} />;
         if (item.kind === "context") return <ContextActivity event={item.event} running={status === "running"} key={`context-${item.id}`} />;
         return <ToolActivityRow activity={item.activity} key={`tool-${item.activity.id}`} />;
-      })}
-    </section>
-  );
+      });
+  const blocks = [];
+  for (let index = 0; index < items.length;) {
+    let end = index;
+    while (end < items.length && items[end].kind === "tool" && (items[end] as { kind: "tool"; activity: ToolActivity }).activity.status === "completed") end++;
+    if (!detailed && end - index >= 3) {
+      blocks.push(<details className="process-group" key={`group-${index}`}><summary>{t("工具操作 · {0}", [end - index])}</summary>{rows.slice(index, end)}</details>);
+      index = end;
+    } else { blocks.push(rows[index]); index++; }
+  }
+  const count = items.filter(item => item.kind === "tool").length;
+  const canFold = hideFinalText && items.every(item => item.kind !== "failure" && item.kind !== "cancellation" && (item.kind !== "tool" || item.activity.status === "completed") && (item.kind !== "context" || item.event.type === "CONTEXT_COMPACTED"));
+  return <section className="run-narrative" aria-label={t("工具执行过程")}>{!detailed && status === "completed" && count >= 3 && canFold ? <details className="process-group"><summary>{t("工具操作 · {0}", [count])}</summary>{rows}</details> : blocks}</section>;
 }
 
 function ContextActivity({ event, running }: { event: RunEvent; running: boolean }) {
