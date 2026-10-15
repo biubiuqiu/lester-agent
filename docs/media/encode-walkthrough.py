@@ -19,7 +19,8 @@ with tempfile.TemporaryDirectory(prefix="lester-walkthrough-") as directory:
     # Normalize timestamps between the closed tab and its replacement.
     for number in (1, 2):
         run("ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(source / f"part-0{number}.webm"),
-            "-an", "-c:v", "libx264", "-preset", "slow", "-crf", "22", "-pix_fmt", "yuv420p", str(work / f"part-{number}.mp4"))
+            "-an", "-vf", "scale=in_range=auto:out_range=tv", "-color_range", "tv",
+            "-c:v", "libx264", "-preset", "slow", "-crf", "22", "-pix_fmt", "yuv420p", str(work / f"part-{number}.mp4"))
     (work / "concat.txt").write_text("file 'part-1.mp4'\nfile 'part-2.mp4'\n")
     movie = target / "lester-walkthrough.mp4"
     run("ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(work / "concat.txt"),

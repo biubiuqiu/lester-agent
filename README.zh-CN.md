@@ -10,9 +10,9 @@
 
 [![Lester 操作演示](docs/media/lester-walkthrough.gif)](docs/media/lester-walkthrough.mp4)
 
-[观看完整视频 · 60 秒](docs/media/lester-walkthrough.mp4)：权限选择、计划审阅与批准、运行中排队和补充要求、多标签 HTML 预览与源码、文件修改审阅，以及关闭标签页后的草稿恢复。
+[观看完整视频 · 80 秒](docs/media/lester-walkthrough.mp4)：加号添加材料、右侧模型选择、Agent 主动进入 Plan 后审阅批准、运行中排队与补充要求、多标签 HTML 预览与源码、文件修改审阅、会话回顾与上下文概览，以及关闭标签页后的草稿恢复。
 
-演示录制自当前生产前端，采用受控 REST/SSE 示例数据，中文界面、英文字幕、无配音。视频持续标明示例任务，不代表真实模型生成速度；排队和补充要求在示例中保持待处理状态。[录制脚本与更新方法](docs/media/README.md)。
+演示录制自当前生产前端，采用受控 REST/SSE 示例数据，中文界面、英文字幕、无配音。视频持续标明示例任务，不代表真实模型生成速度；Agent 进入 Plan 的判断也由示例脚本模拟；排队和补充要求在示例中保持待处理状态。[录制脚本与更新方法](docs/media/README.md)。
 
 ## 项目官网与帮助文档
 

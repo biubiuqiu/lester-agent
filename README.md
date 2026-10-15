@@ -40,23 +40,24 @@ Back up first, retain `.env`, encryption keys and volumes, and apply earlier mis
 
 ## Watch the walkthrough
 
-[![Lester walkthrough: plan, queue a task, preview files, review changes and recover a draft](docs/media/lester-walkthrough.gif)](docs/media/lester-walkthrough.mp4)
+[![Lester walkthrough: add materials, Agent-selected Plan, queue tasks, inspect results and recap](docs/media/lester-walkthrough.gif)](docs/media/lester-walkthrough.mp4)
 
-**[Watch or download the full MP4 — 60 seconds](docs/media/lester-walkthrough.mp4)** · [Still preview](docs/media/lester-walkthrough.png)
+**[Watch or download the full MP4 — 80 seconds](docs/media/lester-walkthrough.mp4)** · [Still preview](docs/media/lester-walkthrough.png)
 
-Recorded in the current production frontend with Chinese UI and English instructional captions, without voiceover. **This is an illustrative task using controlled REST/SSE sample data, not a live model run or generation-speed benchmark.** The video shows real interface controls; queued tasks and current-task clarifications remain pending in this example. The GIF is a short preview/source teaser; select it for the full story.
+Recorded in the current production frontend with Chinese UI and English instructional captions, without voiceover. **This is an illustrative task using controlled REST/SSE sample data, not a live model run or generation-speed benchmark.** The video shows the simplified composer and real interface controls; the Agent’s decision to enter Plan is scripted for the example, and queued tasks and current-task clarifications remain pending in this example. The GIF is a short preview/source teaser; select it for the full story.
 
 | Time | Operation |
 | --- | --- |
-| 00:00 | Choose permissions and Plan, then describe a goal |
-| 00:08 | Review and explicitly approve the plan |
-| 00:15 | Press Enter while running to queue the next task |
-| 00:20 | Explicitly add a clarification to the current task |
-| 00:28 | Inspect the HTML result in automatically opened file tabs |
-| 00:35 | Switch between rendered preview and source |
-| 00:42 | Review a retained before-and-after file change |
-| 00:48 | Leave an unfinished message, close the tab and reopen the conversation |
-| 00:53 | Find the draft restored without sending it automatically |
+| 00:00 | Add materials with +; choose the model on the right |
+| 00:13 | Agent-selected read-only Plan, followed by explicit plan approval |
+| 00:25 | Press Enter while running to queue the next task |
+| 00:31 | Explicitly add a clarification to the current task |
+| 00:39 | Inspect the HTML result in automatically opened file tabs |
+| 00:46 | Switch between rendered preview and source |
+| 00:52 | Review a retained before-and-after file change |
+| 00:59 | Open /recap and inspect accepted context materials |
+| 01:08 | Leave a draft and close the tab |
+| 01:13 | Reopen the conversation; the draft is restored without sending |
 
 The recording starts in a signed-in sample workspace. Follow the setup below for a fresh installation. [Recording source and reproduction instructions](docs/media/README.md) keep the walkthrough up to date with future releases.
 

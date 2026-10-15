@@ -4,10 +4,11 @@ import { WorkspaceApi, conversationId } from "../e2e/workspace-api";
 import type { RunInput, RunInputRequest } from "../src/lib/run-input";
 
 // Controlled REST/SSE data; every control is the production UI. No live model calls.
-const html = `<!doctype html><html lang="en"><meta charset="utf-8"><title>Lester — Make it happen</title><style>body{margin:0;background:#f6f8f4;color:#243c30;font-family:system-ui}main{padding:72px 40px}small{letter-spacing:.2em}h1{font-size:60px;line-height:1.1;font-weight:500;letter-spacing:-3px;margin:55px 0 25px}p{max-width:370px;line-height:1.8;color:#66736a}a{display:inline-block;margin-top:25px;padding:14px 22px;background:#345b43;color:white;border-radius:30px;text-decoration:none}footer{margin-top:100px;font-size:12px;color:#66736a}</style><main><small>LESTER / YOUR PERSONAL AGENT</small><h1>Think it through.<br>Make it happen.</h1><p>A quiet workspace for ambitious ideas. Plan, create, and refine — with your files right beside you.</p><a href="https://github.com/biubiuqiu/lester-agent">View on GitHub ↗</a><footer id="details">Open source. Self hosted. Yours.</footer></main></html>`;
+const html = `<!doctype html><html lang="en"><meta charset="utf-8"><title>Lester — Make it happen</title><style>body{margin:0;background:#f6f8f4;color:#243c30;font-family:system-ui}main{padding:72px 40px}small{letter-spacing:.2em}h1{font-size:60px;line-height:1.1;font-weight:500;letter-spacing:-3px;margin:55px 0 25px}p{max-width:370px;line-height:1.8;color:#66736a}a{display:inline-block;margin-top:25px;padding:14px 22px;background:#345b43;color:white;border-radius:30px;text-decoration:none}footer{margin-top:100px;font-size:12px;color:#66736a}</style><main><small>LESTER / YOUR PERSONAL AGENT</small><h1>Make it<br>happen.</h1><p>A quiet workspace for ambitious ideas. Plan, create, and refine — with your files right beside you.</p><a href="https://github.com/biubiuqiu/lester-agent">View on GitHub ↗</a><footer id="details">Open source. Self hosted. Yours.</footer></main></html>`;
 
 test("record the current workspace story", async ({ context, page }, info) => {
   const api = new WorkspaceApi(), errors: string[] = [], chapters: { seconds: number; title: string }[] = [];
+  api.contextEntries = [{ id: "brand-brief", title: "Lester 品牌定位", description: "品牌口号与首页定位", content: "Lester. Make it happen. 开源 AI 工作搭档，从想法到成果。", version: 1, updated_at: new Date().toISOString() }];
   const started = Date.now();
   const observe = (p: Page) => p.on("pageerror", e => errors.push(e.message));
   observe(page);
@@ -17,9 +18,13 @@ test("record the current workspace story", async ({ context, page }, info) => {
   await context.addInitScript(() => {
     if (window !== window.top) return;
     addEventListener("DOMContentLoaded", () => {
+      // Reserve a recording-only footer so captions never cover model/Send.
+      const style = document.createElement("style");
+      style.textContent = ".workspace-shell{height:calc(100dvh - 84px)!important}";
+      document.head.append(style);
       const bar = document.createElement("div"); bar.id = "walkthrough-caption";
       bar.style.cssText = "position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:2147483647;pointer-events:none;background:#183527f2;color:#fff;padding:12px 22px;border-radius:12px;font:16px system-ui;box-shadow:0 4px 20px #0002;text-align:center;white-space:nowrap";
-      bar.innerHTML = '<span id="walkthrough-title">Lester · From an idea to a result</span><span style="display:block;font-size:10px;letter-spacing:.12em;margin-top:5px;opacity:.7">ILLUSTRATIVE TASK · SAMPLE DATA · NO LIVE MODEL</span>';
+      bar.innerHTML = '<span id="walkthrough-title">Lester. Make it happen.</span><span style="display:block;font-size:10px;letter-spacing:.12em;margin-top:5px;opacity:.7">ILLUSTRATIVE TASK · SAMPLE DATA · NO LIVE MODEL</span>';
       document.body.append(bar);
     });
   });
@@ -31,9 +36,9 @@ test("record the current workspace story", async ({ context, page }, info) => {
   const hold = (p: Page, ms = 4500) => p.waitForTimeout(ms);
   const prefix = `/api/v1/conversations/${conversationId}`;
   const plan = { id: "44444444-4444-4444-8444-444444444444", run_id: "fixture-run", kind: "plan", request_digest: "a".repeat(64), status: "pending", request: { kind: "plan", title: "制作 Lester 极简介绍页", steps: ["梳理主标题与项目定位", "制作自适应 HTML，使用鼠尾草绿", "检查预览和页面结构"] } };
-  let approved = false;
+  let approved = false, planning = false, planReady = false;
   const inputs: RunInput[] = [];
-  await context.route(`**${prefix}/interactions`, r => r.fulfill({ json: { interactions: [approved ? { ...plan, status: "approved", response: { decision: "approve", request_digest: plan.request_digest } } : plan], execution_mode: approved ? "execute" : "plan" } }));
+  await context.route(`**${prefix}/interactions`, r => r.fulfill({ json: { interactions: planReady ? [approved ? { ...plan, status: "approved", response: { decision: "approve", request_digest: plan.request_digest } } : plan] : [], execution_mode: planning && !approved ? "plan" : "execute" } }));
   await context.route(`**${prefix}/interactions/${plan.id}/respond`, r => { approved = true; return r.fulfill({ json: { ...plan, status: "approved", response: r.request().postDataJSON() } }); });
   await context.route(`**${prefix}/permissions/inputs`, r => {
     if (r.request().method() === "GET") return r.fulfill({ json: { inputs } });
@@ -48,17 +53,29 @@ test("record the current workspace story", async ({ context, page }, info) => {
     await page.goto("/app");
     const input = page.getByRole("textbox", { name: "消息输入框", exact: true });
     await expect(input).toBeVisible();
-    await caption(page, "01 / Choose permissions and Plan, then describe your goal.");
+    await caption(page, "01 / Add materials with +. Choose your model on the right.");
+    await page.getByRole("button", { name: "添加内容", exact: true }).click();
+    await expect(page.getByRole("button", { name: "添加附件", exact: true })).toBeVisible();
+    await hold(page, 3000);
+    await page.getByRole("button", { name: "@ 添加引用", exact: true }).click();
+    await page.getByRole("option").filter({ hasText: "Lester 品牌定位" }).click();
+    await expect(page.locator(".context-references")).toContainText("Lester 品牌定位");
+    await expect(page.getByRole("combobox", { name: "当前模型", exact: true })).toBeEnabled();
+    await hold(page, 1500);
     await page.getByRole("button", { name: "权限设置", exact: true }).click();
     await hold(page, 2000);
     await page.getByRole("group", { name: "权限设置", exact: true }).getByRole("button").filter({ hasText: "自动审批" }).click();
-    await page.getByRole("button", { name: "先规划，再执行", exact: true }).click();
     await input.pressSequentially("制作一个 Lester 的极简介绍页：大标题、项目定位、GitHub 入口。", { delay: 55 });
     await hold(page, 2500); await input.press("Enter");
     await expect(page).toHaveURL(`/app/c/${conversationId}`);
     await expect.poll(() => api.streamCount).toBeGreaterThan(0);
+    expect(api.mutations.find(item => item.path.endsWith("/messages"))?.body.execution_mode ?? "execute").toBe("execute");
+    await expect(page.locator(".composer-motion-ghost")).toHaveCount(0);
+    planning = true; api.planModeEvent();
+    await caption(page, "02 / The Agent chooses Plan for this complex task. Review before execution.");
+    await expect(page.locator(".interaction-mode")).toContainText("Plan");
+    await hold(page, 2500); planReady = true;
     await expect(page.getByRole("button", { name: "批准并执行", exact: true })).toBeVisible();
-    await caption(page, "02 / Review the plan. Execution starts with your approval.");
     await hold(page); await page.getByRole("button", { name: "批准并执行", exact: true }).click();
     await expect(page.locator(".interaction-receipt>summary")).toContainText("计划已批准");
     await hold(page, 2000);
@@ -86,7 +103,19 @@ test("record the current workspace story", async ({ context, page }, info) => {
     await page.locator(".file-changes>summary").filter({ hasText: "文件修改审阅" }).click(); await page.locator(".file-change-card>summary").click();
     await expect(page.locator(".diff-added")).toHaveText("+Palette: sage green");
     await expect(page.locator(".diff-removed")).toHaveText("−Palette: neutral gray"); await page.screenshot({ path: info.outputPath("file-review.png") }); await hold(page, 6000);
-    await caption(page, "08 / An unfinished message stays a draft, even after closing the tab.");
+    await page.locator(".file-change-card>summary").click();
+    await page.locator(".file-changes>summary").filter({ hasText: "文件修改审阅" }).click();
+    await caption(page, "08 / Open a factual recap, then inspect the materials behind the task.");
+    await input.fill("/recap"); await input.press("Enter");
+    const recap = page.getByRole("region", { name: "会话回顾", exact: true });
+    await expect(recap).toContainText("最近目标"); await expect(input).toHaveValue("");
+    await hold(page, 4500);
+    await page.getByRole("button", { name: "关闭回顾", exact: true }).click();
+    await page.getByRole("button", { name: "上下文概览", exact: true }).click();
+    await expect(page.getByRole("region", { name: "上下文概览", exact: true })).toContainText("Lester 品牌定位");
+    await page.screenshot({ path: info.outputPath("context-overview.png") }); await hold(page, 4500);
+    await page.getByRole("button", { name: "关闭上下文概览", exact: true }).click();
+    await caption(page, "09 / An unfinished message stays a draft, even after closing the tab.");
     const draft = "明天继续：添加一个常见问题区，保持极简。";
     await input.pressSequentially(draft, { delay: 75 }); await hold(page, 3000);
     await page.close();
