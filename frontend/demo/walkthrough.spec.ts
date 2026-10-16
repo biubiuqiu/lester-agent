@@ -10,7 +10,10 @@ test("record the current workspace story", async ({ context, page }, info) => {
   const api = new WorkspaceApi(), errors: string[] = [], chapters: { seconds: number; title: string }[] = [];
   api.contextEntries = [{ id: "brand-brief", title: "Lester 品牌定位", description: "品牌口号与首页定位", content: "Lester. Make it happen. 开源 AI 工作搭档，从想法到成果。", version: 1, updated_at: new Date().toISOString() }];
   const started = Date.now();
-  const observe = (p: Page) => p.on("pageerror", e => errors.push(e.message));
+  const observe = (p: Page) => {
+    p.on("pageerror", e => errors.push(e.message));
+    p.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
+  };
   observe(page);
   await api.install(context);
   await context.addCookies([{ name: "lester_access_token", value: "browser-test-access", url: "http://127.0.0.1:13020", httpOnly: true }, { name: "lester_locale", value: "zh-CN", url: "http://127.0.0.1:13020" }]);
@@ -49,8 +52,27 @@ test("record the current workspace story", async ({ context, page }, info) => {
   const change = { id: "55555555-5555-4555-8555-555555555555", run_id: "fixture-run", path: "notes.txt", operation: "edit", status: "confirmed", before_exists: true, before_sha256: "a".repeat(64), after_sha256: "b".repeat(64), retained: true, rollback_status: "none", before_content: "Palette: neutral gray\nLayout: generous spacing\n", after_content: "Palette: sage green\nLayout: generous spacing\n" };
   await context.route(`**${prefix}/file-changes`, r => r.fulfill({ json: { changes: api.conversation?.run_status === "completed" ? [{ ...change, before_content: undefined, after_content: undefined }] : [] } }));
   await context.route(`**${prefix}/file-changes/${change.id}`, r => r.fulfill({ json: change }));
+  // These additional conversations and usage records are illustrative data too.
+  const observedAt = "2026-10-16T02:00:00Z", startedAt = "2026-10-16T01:58:25Z";
+  const taskDefaults = { project: "个人项目", agent: "Lester", started_at: startedAt, completed_at: null, last_activity_at: observedAt, queued: 0, deliverables: 0, background_commands: 0, unknown_commands: 0 };
+  await context.route("**/api/v1/tasks?*", route => {
+    expect(route.request().method()).toBe("GET");
+    const filter = new URL(route.request().url()).searchParams.get("filter");
+    const tasks = api.conversation?.run_status === "completed" ? [
+      { ...taskDefaults, run_id: "fixture-run", conversation_id: conversationId, title: api.conversation.title, state: "completed", completed_at: observedAt, queued: inputs.filter(item => item.kind === "next").length, deliverables: 2 },
+      { ...taskDefaults, run_id: "sample-plan", conversation_id: "33333333-3333-4333-8333-333333333333", title: "帮助文档改造（示例）", state: "waiting_plan" },
+      { ...taskDefaults, run_id: "sample-command", conversation_id: "66666666-6666-4666-8666-666666666666", title: "部署环境检查（示例）", state: "running", background_commands: 1 },
+    ] : [];
+    return route.fulfill({ json: { tasks: tasks.filter(item => filter === "attention" ? item.state === "waiting_plan" : filter === "active" ? item.state !== "completed" : filter === "finished" ? item.state === "completed" : true), next_cursor: "", attention_count: tasks.length ? 1 : 0, observed_at: observedAt } });
+  });
+  let usageReads = 0;
+  await context.route(`**${prefix}/runs/fixture-run/usage`, route => {
+    expect(route.request().method()).toBe("GET"); usageReads++;
+    return route.fulfill({ json: { run_id: "fixture-run", status: "completed", started_at: startedAt, completed_at: observedAt, observed_at: observedAt, elapsed_seconds: 95, requests: 3, in_flight: 0, actual_input_tokens: 2400, actual_input_requests: 2, actual_output_tokens: 680, actual_output_requests: 2, estimated_input_tokens: 320, estimated_input_requests: 1, missing_output_requests: 1 } });
+  });
   try {
     await page.goto("/app");
+    await expect(page).toHaveTitle(/Lester/);
     const input = page.getByRole("textbox", { name: "消息输入框", exact: true });
     await expect(input).toBeVisible();
     await caption(page, "01 / Add materials with +. Choose your model on the right.");
@@ -115,9 +137,37 @@ test("record the current workspace story", async ({ context, page }, info) => {
     await expect(page.getByRole("region", { name: "上下文概览", exact: true })).toContainText("Lester 品牌定位");
     await page.screenshot({ path: info.outputPath("context-overview.png") }); await hold(page, 4500);
     await page.getByRole("button", { name: "关闭上下文概览", exact: true }).click();
-    await caption(page, "09 / An unfinished message stays a draft, even after closing the tab.");
     const draft = "明天继续：添加一个常见问题区，保持极简。";
-    await input.pressSequentially(draft, { delay: 75 }); await hold(page, 3000);
+    await input.fill(draft);
+    const mutationsBeforePanel = api.mutations.length;
+    await caption(page, "09 / See tasks across conversations, including background command status.");
+    await page.getByRole("button", { name: "云端任务", exact: true }).click();
+    const tasksDialog = page.getByRole("dialog", { name: "云端任务", exact: true });
+    await expect(tasksDialog.locator(".cloud-task-card")).toHaveCount(3);
+    await expect(tasksDialog).toContainText("1 个会话后台命令运行中");
+    await expect(tasksDialog).toContainText("2 项已登记成果");
+    expect(usageReads).toBe(0);
+    await page.screenshot({ path: info.outputPath("cloud-tasks.png") }); await hold(page, 4500);
+    await caption(page, "10 / Filter to tasks waiting for your review. Your draft stays untouched.");
+    await tasksDialog.getByRole("button", { name: "需处理", exact: true }).click();
+    await expect(tasksDialog.locator(".cloud-task-card")).toHaveCount(1);
+    await expect(tasksDialog).toContainText("等待计划审阅");
+    await page.screenshot({ path: info.outputPath("cloud-attention.png") }); await hold(page, 4500);
+    await tasksDialog.getByRole("button", { name: "全部任务", exact: true }).click();
+    const resultTask = tasksDialog.locator(".cloud-task-card").first();
+    await caption(page, "11 / Inspect elapsed time and tokens. Reported, estimated, and missing stay separate.");
+    await resultTask.getByText("耗时与模型用量", { exact: true }).click();
+    await expect(resultTask).toContainText("1 分 35 秒");
+    await expect(resultTask).toContainText("2,400");
+    await expect(resultTask).toContainText("320");
+    await expect(resultTask).toContainText("未计为零");
+    expect(usageReads).toBe(1);
+    await page.screenshot({ path: info.outputPath("cloud-usage.png") }); await hold(page, 6500);
+    await tasksDialog.getByRole("button", { name: "关闭任务面板", exact: true }).click();
+    await expect(input).toHaveValue(draft);
+    expect(api.mutations).toHaveLength(mutationsBeforePanel);
+    await caption(page, "12 / An unfinished message stays a draft, even after closing the tab.");
+    await input.clear(); await input.pressSequentially(draft, { delay: 75 }); await hold(page, 3000);
     await page.close();
     await page.video()!.saveAs(info.outputPath("part-01.webm"));
     const restored = await context.newPage(); observe(restored);

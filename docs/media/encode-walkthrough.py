@@ -8,11 +8,13 @@ import tempfile
 
 source = Path(sys.argv[1]).resolve()
 chapters = json.loads((source / "chapters.json").read_text())
-teaser_start = str(next(item["seconds"] for item in chapters if item["title"].startswith("05 /")) + 2)
 target = Path(__file__).resolve().parent
 
 def run(*args):
     subprocess.run(args, check=True)
+
+def chapter_start(prefix, offset):
+    return str(next(item["seconds"] for item in chapters if item["title"].startswith(prefix)) + offset)
 
 with tempfile.TemporaryDirectory(prefix="lester-walkthrough-") as directory:
     work = Path(directory)
@@ -25,9 +27,13 @@ with tempfile.TemporaryDirectory(prefix="lester-walkthrough-") as directory:
     movie = target / "lester-walkthrough.mp4"
     run("ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(work / "concat.txt"),
         "-c", "copy", "-movflags", "+faststart", str(movie))
-    # Short looping teaser: actual preview/source segment. Full story is in MP4.
-    run("ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-ss", teaser_start, "-t", "14", "-i", str(movie),
-        "-filter_complex", "fps=6,scale=720:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96[p];[b][p]paletteuse=dither=bayer", "-loop", "0", str(target / "lester-walkthrough.gif"))
+    # Fourteen-second sampler of actual footage; the MP4 keeps the complete story.
+    run("ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+        "-ss", chapter_start("05 /", 2), "-t", "6", "-i", str(movie),
+        "-ss", chapter_start("09 /", .75), "-t", "4", "-i", str(movie),
+        "-ss", chapter_start("11 /", 1.5), "-t", "4", "-i", str(movie),
+        "-filter_complex", "[0:v]setpts=PTS-STARTPTS[v0];[1:v]setpts=PTS-STARTPTS[v1];[2:v]setpts=PTS-STARTPTS[v2];[v0][v1][v2]concat=n=3:v=1:a=0,fps=6,scale=720:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96[p];[b][p]paletteuse=dither=bayer",
+        "-loop", "0", str(target / "lester-walkthrough.gif"))
     shutil.copyfile(source / "poster.png", target / "lester-walkthrough.png")
     duration = subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", str(movie)], text=True).strip()
     print(f"Duration: {duration}s. Update README chapters from:")
