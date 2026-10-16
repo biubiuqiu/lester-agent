@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 import { Activity, ArrowUpRight, RefreshCw, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useI18n, useT } from "./i18n";
@@ -69,7 +70,7 @@ export function CloudTasks({ revision, onOpen }: { revision: number; onOpen: (id
         {current && !current.tasks.length && !loading && !error ? <p className="cloud-task-empty">{t("当前筛选下没有任务")}</p> : null}
         {current?.next_cursor ? <button type="button" className="cloud-task-more" disabled={loading || more} onClick={() => void loadMore()}>{t(more ? "正在加载…" : "加载更多")}</button> : null}
       </div>
-      <footer>{t("查看任务不会启动执行；需要确认时请打开会话。")}</footer>
+      <footer><span>{t("查看任务不会启动执行；需要确认时请打开会话。")}</span><Link href="/app/settings/automations">{t("管理自动任务")}</Link></footer>
     </dialog>, document.body) : null}
   </>;
 }

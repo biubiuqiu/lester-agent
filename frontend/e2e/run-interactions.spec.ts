@@ -120,3 +120,35 @@ test("Agent re-entering Plan after an approved scope stays visibly read-only", a
  await expect(page.locator(".interaction-mode")).toContainText("Plan");await expect(input).toHaveValue("保留后续要求");
  expect(api.mutations.filter(item=>item.path.includes("/respond"))).toHaveLength(0);
 });
+
+test("questions dock above the composer, keep multi-select notes across reload and submit only after review",async({page,context,api},info)=>{
+ const request={...questionItem,request:{kind:"question",questions:[
+  {id:"format",header:"交付形式",prompt:"这次希望交付什么？",options:[{id:"html",label:"网页",description:"直接预览",recommended:true},{id:"document",label:"文档",description:"便于阅读和分享"}]},
+  {id:"features",header:"界面细节",prompt:"哪些交互细节需要一起完善？",multi_select:true,options:[{id:"queue",label:"消息队列",description:"工作中安排下一条任务"},{id:"recap",label:"会话回顾",description:"回来看清进展"},{id:"files",label:"文件预览",description:"在旁边查看成果"}]},
+  {id:"note",header:"其他要求",prompt:"还有哪些要求？"},
+ ]}};
+ let answered=false,responses=0;let body:Record<string,unknown>|null=null;
+ await context.route(`**${prefix}`,route=>route.fulfill({json:{interactions:[answered?{...request,status:"answered",response:body}:request],execution_mode:"plan"}}));
+ await context.route(`**${prefix}/${itemId}/respond`,route=>{responses++;body=route.request().postDataJSON();answered=true;return route.fulfill({json:{...request,status:"answered",response:body}});});
+ const input=await start(page,api);await input.fill("回答问题期间保留的聊天草稿");
+ const dock=page.locator(".question-dock");await expect(dock).toContainText("这次希望交付什么？");await expect(dock.locator("input:checked")).toHaveCount(0);await expect(dock.getByRole("button",{name:"下一题",exact:true})).toBeDisabled();
+ await expect(input).toBeFocused();await input.pressSequentially("123");await expect(dock.getByRole("radio",{name:/网页.*推荐.*直接预览/})).not.toBeChecked();await input.fill("回答问题期间保留的聊天草稿");
+ await dock.getByRole("radio",{name:/网页.*推荐.*直接预览/}).focus();await page.keyboard.press("1");await expect(dock.getByRole("radio",{name:/网页.*推荐.*直接预览/})).toBeChecked();expect(responses).toBe(0);
+ await dock.getByRole("button",{name:"下一题",exact:true}).click();await dock.getByRole("checkbox",{name:"消息队列 工作中安排下一条任务"}).check();await dock.getByRole("checkbox",{name:"文件预览 在旁边查看成果"}).check();await dock.getByRole("textbox",{name:"补充回答",exact:true}).fill("保留额外要求\n不要丢掉我的文字");
+ await page.screenshot({path:info.outputPath("question-multi-select.png")});
+ await page.reload();await expect(dock).toContainText("还有哪些要求？");await dock.getByRole("tab",{name:"界面细节",exact:true}).click();await expect(dock.getByRole("checkbox",{name:"消息队列 工作中安排下一条任务"})).toBeChecked();await expect(dock.getByRole("checkbox",{name:"文件预览 在旁边查看成果"})).toBeChecked();await expect(dock.getByRole("textbox",{name:"补充回答",exact:true})).toHaveValue("保留额外要求\n不要丢掉我的文字");
+ await dock.getByRole("tab",{name:"其他要求",exact:true}).click();await dock.getByRole("textbox",{name:"补充回答",exact:true}).fill("先解释清楚，等待我的下一步指令。");await dock.getByRole("button",{name:"核对回答",exact:true}).click();await expect(dock).toContainText("消息队列 · 文件预览");await expect(dock).toContainText("保留额外要求");expect(responses).toBe(0);
+ await page.screenshot({path:info.outputPath("question-review.png")});
+ await expect.poll(async()=>{const box=await dock.boundingBox(),composer=await page.locator(".composer").boundingBox();return Boolean(box&&composer&&box.y+box.height<=composer.y+1);}).toBe(true);
+ await expect(page.getByRole("button",{name:"停止生成",exact:true})).toBeInViewport();await expect(input).toBeInViewport();
+ if(info.project.name==="mobile"){
+   await page.setViewportSize({width:393,height:520});
+   const withinViewport=async()=>{for(const locator of [input,page.getByRole("button",{name:"停止生成",exact:true}),dock.getByRole("button",{name:"提交回答",exact:true})]){const visible=await locator.evaluate(element=>{const bounds=element.getBoundingClientRect();return bounds.top>=-1&&bounds.bottom<=innerHeight+1;});if(!visible)return false;}return true;};
+   await expect.poll(withinViewport).toBe(true);
+   const longDraft="保留我的长草稿，回答问题时仍然可以查看和停止。".repeat(50);await input.fill(longDraft);await expect.poll(()=>input.evaluate(element=>element.scrollHeight>element.clientHeight)).toBe(true);await expect.poll(withinViewport).toBe(true);await expect(input).toHaveValue(longDraft);
+   await input.fill("回答问题期间保留的聊天草稿");await page.screenshot({path:info.outputPath("question-short-viewport.png")});
+  }
+  await dock.getByRole("button",{name:"提交回答",exact:true}).click();await expect(page.locator(".interaction-receipt>summary")).toHaveText("已回答");expect(responses).toBe(1);
+ expect(body).toEqual({request_digest:digest,answers:{format:{option_id:"html",text:""},features:{option_id:"",option_ids:["queue","files"],text:"保留额外要求\n不要丢掉我的文字"},note:{text:"先解释清楚，等待我的下一步指令。"}}});
+ await expect(input).toHaveValue("回答问题期间保留的聊天草稿");await expect(page.getByText("Plan · 仅查看与规划",{exact:true})).toBeVisible();await expect(page.getByRole("button",{name:"批准并执行",exact:true})).toHaveCount(0);await expect(dock.locator(".question-card")).toHaveCount(0);
+});

@@ -12,6 +12,7 @@ require (
 	github.com/minio/minio-go/v7 v7.0.95
 	github.com/openkruise/agents-api v0.3.0
 	github.com/redis/go-redis/v9 v9.12.1
+	github.com/robfig/cron/v3 v3.0.1
 	golang.org/x/crypto v0.57.0
 	golang.org/x/net v0.60.0
 	golang.org/x/oauth2 v0.30.0

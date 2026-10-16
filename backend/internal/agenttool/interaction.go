@@ -15,11 +15,14 @@ type QuestionOption struct {
 	ID          string `json:"id"`
 	Label       string `json:"label"`
 	Description string `json:"description,omitempty"`
+	Recommended bool   `json:"recommended,omitempty"`
 }
 type UserQuestion struct {
-	ID      string           `json:"id"`
-	Prompt  string           `json:"prompt"`
-	Options []QuestionOption `json:"options,omitempty"`
+	ID          string           `json:"id"`
+	Prompt      string           `json:"prompt"`
+	Options     []QuestionOption `json:"options,omitempty"`
+	Header      string           `json:"header,omitempty"`
+	MultiSelect bool             `json:"multi_select,omitempty"`
 }
 type InteractionRequest struct {
 	Kind      string         `json:"kind"`
@@ -37,12 +40,19 @@ func (r InteractionRequest) Validate() error {
 		}
 		seen := map[string]bool{}
 		for _, q := range r.Questions {
-			if !interactionIDPattern.MatchString(q.ID) || seen[q.ID] || strings.TrimSpace(q.Prompt) == "" || utf8.RuneCountInString(q.Prompt) > 2000 || len(q.Options) > 6 || len(q.Options) == 1 {
+			if !interactionIDPattern.MatchString(q.ID) || seen[q.ID] || strings.TrimSpace(q.Prompt) == "" || utf8.RuneCountInString(q.Prompt) > 2000 || len(q.Options) > 6 || len(q.Options) == 1 || utf8.RuneCountInString(q.Header) > 12 || q.MultiSelect && len(q.Options) < 2 {
 				return errors.New("invalid question ID, prompt or options")
 			}
 			seen[q.ID] = true
 			options := map[string]bool{}
+			recommended := 0
 			for _, o := range q.Options {
+				if o.Recommended {
+					recommended++
+				}
+				if recommended > 1 {
+					return errors.New("offer at most one recommended choice")
+				}
 				if !interactionIDPattern.MatchString(o.ID) || options[o.ID] || strings.TrimSpace(o.Label) == "" || utf8.RuneCountInString(o.Label) > 160 || utf8.RuneCountInString(o.Description) > 500 {
 					return errors.New("invalid question option")
 				}
@@ -71,7 +81,9 @@ func (r InteractionRequest) Validate() error {
 type AskUserQuestion struct{}
 
 func (AskUserQuestion) Definition() model.Tool {
-	return model.Tool{Name: "ask_user_question", Description: "Ask the user one to three structured questions only when needed information or a meaningful choice is missing. Answers are information, never execution approval. The run waits for an explicit answer; never choose an option for the user.", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"questions": map[string]any{"type": "array", "minItems": 1, "maxItems": 3, "items": map[string]any{"type": "object", "properties": map[string]any{"id": map[string]any{"type": "string"}, "prompt": map[string]any{"type": "string"}, "options": map[string]any{"type": "array", "maxItems": 6, "items": map[string]any{"type": "object", "properties": map[string]any{"id": map[string]any{"type": "string"}, "label": map[string]any{"type": "string"}, "description": map[string]any{"type": "string"}}, "required": []string{"id", "label"}, "additionalProperties": false}}}, "required": []string{"id", "prompt"}, "additionalProperties": false}}}, "required": []string{"questions"}, "additionalProperties": false}}
+	option := map[string]any{"type": "object", "properties": map[string]any{"id": map[string]any{"type": "string"}, "label": map[string]any{"type": "string"}, "description": map[string]any{"type": "string"}, "recommended": map[string]any{"type": "boolean", "description": "Recommend at most one option; never select it for the user."}}, "required": []string{"id", "label"}, "additionalProperties": false}
+	question := map[string]any{"type": "object", "properties": map[string]any{"id": map[string]any{"type": "string"}, "header": map[string]any{"type": "string", "maxLength": 12, "description": "Optional short navigation label."}, "prompt": map[string]any{"type": "string"}, "multi_select": map[string]any{"type": "boolean", "description": "Allow multiple offered options together with optional free text."}, "options": map[string]any{"type": "array", "maxItems": 6, "items": option}}, "required": []string{"id", "prompt"}, "additionalProperties": false}
+	return model.Tool{Name: "ask_user_question", Description: "Ask one to three structured questions only when needed information or a meaningful choice is missing. Offer concise options with useful tradeoffs; use multi_select for independent choices. Free text remains valid alongside selections. Answers are information, never execution approval or an instruction to continue despite a request to wait. The run waits for an explicit answer; never preselect an option or assume a timeout is consent.", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"questions": map[string]any{"type": "array", "minItems": 1, "maxItems": 3, "items": question}}, "required": []string{"questions"}, "additionalProperties": false}}
 }
 func (AskUserQuestion) Execute(ctx context.Context, env Environment, raw json.RawMessage) (any, error) {
 	var input struct {

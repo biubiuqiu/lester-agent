@@ -2,6 +2,7 @@ import { clearRunInputs } from "./run-input";
 import type { ContextReference } from "./api";
 import { clearAttachmentUploads } from "./attachment-uploads";
 import { clearMessageSubmissions } from "./message-submission";
+import type { QuestionAnswer } from "./user-question";
 
 // View layout remains tab-local; account-scoped drafts survive closing tabs/windows.
 export type ViewState = {
@@ -11,7 +12,7 @@ export type ViewState = {
   agentSlug: string;
   executionMode: "execute" | "plan";
   permissionMode: "standard" | "auto" | "full";
-  interactionDrafts: Record<string, { answers: Record<string, { option_id?: string; text?: string }>; feedback: string }>;
+  interactionDrafts: Record<string, { answers: Record<string, QuestionAnswer>; feedback: string }>;
   sendNotice: string;
   text: string;
   files: File[];
@@ -66,9 +67,9 @@ export function readView(key: string): ViewState {
       value.permissionMode = saved.permissionMode === "full" || saved.permissionMode === "auto" ? saved.permissionMode : "standard";
       if (saved.interactionDrafts && typeof saved.interactionDrafts === "object") for (const [id, raw] of Object.entries(saved.interactionDrafts).slice(-8)) {
         if (!/^[0-9a-f-]{36}$/i.test(id) || !raw || typeof raw !== "object") continue;
-        const draft = raw as { answers?: Record<string, { option_id?: string; text?: string }>; feedback?: string };
-        const answers: Record<string, { option_id?: string; text?: string }> = {};
-        if (draft.answers && typeof draft.answers === "object") for (const [key, answer] of Object.entries(draft.answers).slice(0, 3)) if (/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,39}$/.test(key) && answer && typeof answer === "object") answers[key] = { option_id: typeof answer.option_id === "string" ? answer.option_id.slice(0, 40) : "", text: typeof answer.text === "string" ? answer.text.slice(0, 6000) : "" };
+        const draft = raw as { answers?: Record<string, QuestionAnswer>; feedback?: string };
+        const answers: Record<string, QuestionAnswer> = {};
+        if (draft.answers && typeof draft.answers === "object") for (const [key, answer] of Object.entries(draft.answers).slice(0, 3)) if (/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,39}$/.test(key) && answer && typeof answer === "object") answers[key] = { option_id: typeof answer.option_id === "string" ? answer.option_id.slice(0, 40) : "", ...(Array.isArray(answer.option_ids)?{option_ids:[...new Set(answer.option_ids.filter((id:unknown)=>typeof id==="string"&&/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,39}$/.test(id)))].slice(0,6)}:{}), text: typeof answer.text === "string" ? answer.text.slice(0, 6000) : "" };
         value.interactionDrafts[id] = { answers, feedback: typeof draft.feedback === "string" ? draft.feedback.slice(0, 6000) : "" };
       }
       value.sendNotice = typeof saved.sendNotice === "string" ? saved.sendNotice.slice(0, 2000) : "";

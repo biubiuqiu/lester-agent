@@ -64,6 +64,29 @@ Recorded in the current production frontend with Chinese UI and English instruct
 
 The recording starts in a signed-in sample workspace. Follow the setup below for a fresh installation. [Recording source and reproduction instructions](docs/media/README.md) keep the walkthrough up to date with future releases.
 
+## Scheduled tasks and inbound webhooks
+
+Open **Automations** from the account menu or **Manage automations** in Cloud tasks. Select the project, model, Agent, task instructions and permissions. Schedule one execution, daily/weekly work or a five-field Cron expression in an IANA time zone. New definitions are disabled unless explicitly enabled. Repeating tasks follow daylight saving time; one-off dates use the browser's local time. The server checks persisted triggers about every ten seconds and creates an independent conversation for each execution. **Run now** explicitly accepts one manual event, including while the schedule is paused.
+
+If an earlier task, pending question/approval or active/unknown background command remains, scheduled occurrences are recorded as skipped; webhook/manual events wait in acceptance order. Missed periods during downtime coalesce into one occurrence. Pausing/deleting cancels pending events; stop already-dispatching tasks in their conversation. Each trigger snapshots task configuration, while ordinary conversation acceptance snapshots current project rules and Agent resources. Account/membership and model access are checked again before execution. Standard permissions can wait for confirmation; auto approval/full access require an explicit selection and retain the existing Computer boundary.
+
+Choose **Webhook** to obtain a generic inbound endpoint and a one-time secret. Store the secret securely on the sender and use HTTPS in production:
+
+```bash
+# Set LESTER_WEBHOOK_SECRET securely on the sender; do not put it in the URL.
+curl -X POST 'https://lester.example/api/v1/hooks/<automation-id>' \
+  -H "Authorization: Bearer $LESTER_WEBHOOK_SECRET" \
+  -H 'X-Lester-Event-ID: issue-123-created' \
+  -H 'Content-Type: application/json' \
+  -d '{"issue":123}'
+```
+
+The body must be a JSON object up to 32 KiB. Its contents are task data and cannot change permissions, workspace, model or references. Reusing an event ID with the same canonical JSON returns the original receipt; different data conflicts. Credentials are stored only as hashes, shown only on creation/reset and rotated explicitly. Cookies and query parameters do not authenticate webhooks. Limits are 100 definitions per account, 30 new manual/webhook events per minute per definition and 20 pending events per definition; duplicates do not consume a new-event slot. History shows the last 20 triggers and opens their actual conversation. An uncertain start only checks the original submission receipt; it never starts the same event again. This interface does not include outgoing callbacks or native GitHub/other-app webhook adapters.
+
+Existing databases through 026: back up, stop API writes/active tasks, apply `backend/migrations/000027_automations.up.sql` once, then rebuild **API and Web together**. Fresh Compose now mounts every migration 001–027, including the previously missing 016–026 initialization mounts. Do not delete volumes. Rolling back 027 deletes automation definitions/trigger records but preserves conversations, files and already-performed operations. Executor and scheduler remain in API; this does not provide automatic continuation after an API crash. [Behavior, API and recovery details](docs/automations-and-questions.md).
+
+Pending structured questions now stay directly above the composer. They support one to three questions, single/multiple choices, an optional recommendation, free text alongside selections, keyboard navigation and a final review for multiple questions. Recommended choices are never preselected. Answers survive reloads, never approve Plan/tools, and remain inspectable as conversation receipts. Stop and the ordinary chat draft remain available.
+
 ## Quick start
 
 ### Prerequisites
@@ -450,7 +473,7 @@ Fresh installs apply 004–005 automatically. Migration 004 preserves old chat o
 
 ### Deliverable registration and reliable events upgrade
 
-The current version requires migrations 001–026. Migration 013 is described in [Accounts and sign-in](#accounts-and-sign-in). The historical 004–005 commands above are insufficient for a full upgrade; apply every missing migration in numeric order. For a database already on 001–011, back it up, stop API writes, apply 012 once, then complete 013, 014 and 015 below before rebuilding API/Web:
+The current version requires migrations 001–027. Migration 013 is described in [Accounts and sign-in](#accounts-and-sign-in). The historical 004–005 commands above are insufficient for a full upgrade; apply every missing migration in numeric order. For a database already on 001–011, back it up, stop API writes, apply 012 once, then complete 013, 014 and 015 below before rebuilding API/Web:
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
@@ -459,7 +482,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T post
   < backend/migrations/000012_deliverables_events.up.sql
 ```
 
-New Compose volumes initialize migrations 001–026; existing volumes never upgrade automatically. Do not delete volumes. Rolling back 012 drops registered metadata and pending delivery intents while preserving Computer files, messages, run events, and published artifacts. Stop the updated API before rollback and restore a compatible application version. Monitor pending outbox count and disk space during prolonged Redis outages.
+New Compose volumes initialize migrations 001–027; existing volumes never upgrade automatically. Do not delete volumes. Rolling back 012 drops registered metadata and pending delivery intents while preserving Computer files, messages, run events, and published artifacts. Stop the updated API before rollback and restore a compatible application version. Monitor pending outbox count and disk space during prolonged Redis outages.
 
 ## Skills and attachments
 
@@ -747,7 +770,7 @@ done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
 ```
 
-Fresh Compose volumes initialize 001–026 automatically; existing volumes never re-run init scripts. PowerShell can pipe `Get-Content -Raw` into the same `exec -T postgres` command. Rolling back 013 removes identity/token/avatar references and therefore **refuses while accounts without passwords exist**; arrange password recovery before a downgrade and restore a compatible application version. Existing workspace files and projects are not moved. PostgreSQL-backed auth tests use mock identity providers and a local SMTP fixture; live third-party consent/delivery require deployment validation.
+Fresh Compose volumes initialize 001–027 automatically; existing volumes never re-run init scripts. PowerShell can pipe `Get-Content -Raw` into the same `exec -T postgres` command. Rolling back 013 removes identity/token/avatar references and therefore **refuses while accounts without passwords exist**; arrange password recovery before a downgrade and restore a compatible application version. Existing workspace files and projects are not moved. PostgreSQL-backed auth tests use mock identity providers and a local SMTP fixture; live third-party consent/delivery require deployment validation.
 
 ## Administration
 
@@ -797,7 +820,7 @@ done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
 ```
 
-Migration 015 invalidates old sessions: users sign in once after upgrade. Accounts, profiles, projects and files remain intact. Retain `.env`, encryption keys and volumes. Fresh Compose volumes initialize 001–026; Helm requires SQL before deployment. Rolling back 015 also invalidates current credentials and must be paired with compatible API/Web. The lifetimes are fixed application defaults; no extra environment variables are required.
+Migration 015 invalidates old sessions: users sign in once after upgrade. Accounts, profiles, projects and files remain intact. Retain `.env`, encryption keys and volumes. Fresh Compose volumes initialize 001–027; Helm requires SQL before deployment. Rolling back 015 also invalidates current credentials and must be paired with compatible API/Web. The lifetimes are fixed application defaults; no extra environment variables are required.
 
 
 ## Runtime reliability upgrade
@@ -850,7 +873,7 @@ Restoring a confirmed modification of an existing retained text file requires ex
 
 The project menu provides **Project rules** with content, version and SHA-256. Saving a stale version preserves the editor draft and refuses overwrite. Initial sends and accepted queued tasks snapshot rules from the project settings at acceptance; later edits or conversation moves affect future accepted tasks only. The input message exposes the accepted source/version/content. Rules are explicit user guidance and grant no tools, @ access or Plan approval. Platform constraints and the latest direct user requirements take precedence. File arrivals during an open settings/review dialog still add tabs without opening a covering preview.
 
-For databases already on 001–022, back up and stop API writes, then apply `000023_file_changes.up.sql` and `000024_project_rules.up.sql` once in order. Earlier versions apply every missing migration; fresh Compose volumes initialize 001–026. Stop active tasks and restore compatible API/Web before rollback. Roll back 024 before 023 when downgrading this batch. 024 removes editable project rules while accepted message snapshots remain; 023 removes review/rollback records. Neither rollback restores file or external effects. Preserve database backups, keys and Computer volumes.
+For databases already on 001–022, back up and stop API writes, then apply `000023_file_changes.up.sql` and `000024_project_rules.up.sql` once in order. Earlier versions apply every missing migration; fresh Compose volumes initialize 001–027. Stop active tasks and restore compatible API/Web before rollback. Roll back 024 before 023 when downgrading this batch. 024 removes editable project rules while accepted message snapshots remain; 023 removes review/rollback records. Neither rollback restores file or external effects. Preserve database backups, keys and Computer volumes.
 
 ## Task permissions
 

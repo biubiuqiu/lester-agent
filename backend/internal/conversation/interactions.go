@@ -68,8 +68,9 @@ type RunInteraction struct {
 	CreatedAt     time.Time                    `json:"created_at"`
 }
 type QuestionAnswer struct {
-	OptionID string `json:"option_id,omitempty"`
-	Text     string `json:"text,omitempty"`
+	OptionID  string   `json:"option_id,omitempty"`
+	OptionIDs []string `json:"option_ids,omitempty"`
+	Text      string   `json:"text,omitempty"`
 }
 type InteractionResponse struct {
 	RequestDigest string                    `json:"request_digest"`
@@ -85,11 +86,21 @@ func interactionResponseStatus(request agenttool.InteractionRequest, response In
 		}
 		for _, q := range request.Questions {
 			answer, ok := response.Answers[q.ID]
-			if !ok || answer.OptionID == "" && strings.TrimSpace(answer.Text) == "" || utf8.RuneCountInString(answer.Text) > 6000 {
+			if !ok || answer.OptionID == "" && len(answer.OptionIDs) == 0 && strings.TrimSpace(answer.Text) == "" || utf8.RuneCountInString(answer.Text) > 6000 {
 				return "", errors.New("invalid or missing question answer")
 			}
 			if answer.OptionID != "" && !slices.ContainsFunc(q.Options, func(o agenttool.QuestionOption) bool { return o.ID == answer.OptionID }) {
 				return "", errors.New("question option was not offered")
+			}
+			if q.MultiSelect && answer.OptionID != "" || !q.MultiSelect && len(answer.OptionIDs) > 0 || len(answer.OptionIDs) > len(q.Options) {
+				return "", errors.New("answer selection does not match the question")
+			}
+			seen := map[string]bool{}
+			for _, id := range answer.OptionIDs {
+				if seen[id] || !slices.ContainsFunc(q.Options, func(o agenttool.QuestionOption) bool { return o.ID == id }) {
+					return "", errors.New("invalid multi-select answer")
+				}
+				seen[id] = true
 			}
 		}
 		return "answered", nil

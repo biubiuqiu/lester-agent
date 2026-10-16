@@ -1,0 +1,50 @@
+# 自动任务、入站 Webhook 与结构化提问
+
+更新日期：2026-10-16。定时和外部事件共用持久化触发记录，并通过现有会话执行器接入；不引入 Workflow/DAG 编辑器。
+
+## 调度与派发
+
+自动任务位于 `/app/settings/automations`。支持单次 UTC 时刻及五段 Cron/IANA 时区，界面提供每天、每周与高级表达式；拒绝秒字段、`@every`、内嵌 TZ 和服务端 `Local`。重复任务按时区民用时间计算，夏令时缺失时刻按 Cron 库跳过；时钟回拨的重复时刻遵循该时区的 Cron 语义。首次保存默认暂停，显式启用后计算下次时间。
+
+API 启动立即扫描，以十秒间隔、最多二十个定义的 `FOR UPDATE SKIP LOCKED` 事务接受到期事件。停机错过多个周期合并成一次，并把下一次设置到当前时间之后；单次事件将 next_run_at 清空。定义修改影响以后接受的事件，已经接受的任务配置不改写。
+
+每个触发预分配会话 UUID、提交 UUID 和固定输入快照。派发器按数据库生成的单调接收序号分批检查，保持同一定义接收顺序，不以事务开始时间或墙上时钟推断先后。前一 Agent 运行/停止中或相关后台命令仍活跃/未知时，定时事件留一条跳过记录；Webhook 和手动事件等待。等待用户回答或权限确认也属于仍在执行。失败后的下一次独立日程仍按配置运行，不会重放失败事件。
+
+定义与事件按相同顺序加锁。派发会话前持久化 dispatching，并持有独立 PostgreSQL session advisory guard；多副本不能同时启动同一事件。恢复 dispatching/unknown 时仅查询原 workspace、actor、conversation、submission 的回执。找到回执则关联原 run，未找到则保留未知，不再调用 Start。后续出现的延迟回执仍能关联。已有执行器继续检查会话锁、Plan 和权限；账户停用、验证失效或工作区成员关系撤销会阻止新接受执行。
+
+暂停/删除取消 pending 事件，已经进入 dispatching 的任务需到会话停止，不承诺撤销副作用。执行器和调度器在 API 内，数据库使用既有 direct/session pooling 连接要求；这不是独立 Worker，也不保证进程重启后自动续跑工具。
+
+## 入站协议与管理 API
+
+入站：`POST /api/v1/hooks/{id}`，请求头 `Authorization: Bearer <secret>`、`X-Lester-Event-ID: <stable-event-id>`，正文为最多 32 KiB 的 JSON 对象。事件 ID 为 1–128 个 ASCII 字母、数字或 `._:-`。发送方使用稳定的业务事件 ID；重试不要生成新 ID。同一 ID/规范化 JSON 返回同一触发 UUID；改变数据返回 409。密钥由密码学随机数生成，只存 SHA-256，创建/重置后展示一次，列表/模型上下文/日志不包含凭证。原始 URL 和 Cookie 不提供 Webhook 身份。
+
+事件数据附在固定任务指示后，不选择模型、项目、权限、Skill 或引用。发送方需显式实现通用 Bearer/事件 ID 协议；本次不实现 GitHub 原生签名、应用连接器或完成后外发回调。以 202 表示事件已受理，实际状态查询管理记录；不可将 202 当成模型已完成。暂停返回 409，凭证无效返回 401，数据/格式无效返回 400，接收限额返回 429。
+
+管理 API 均要求登录并按 workspace + creator 隔离：
+
+| 接口 | 行为 |
+| --- | --- |
+| `GET /api/v1/automations` | 至多 100 个本人定义 |
+| `GET /api/v1/automations/{id}` | 原定义和版本，不显示密钥 |
+| `PUT /api/v1/automations/{id}` | 客户端预分配 UUID，revision=0 创建；后续按版本更新 |
+| `DELETE /api/v1/automations/{id}?revision=N` | 版本校验后停用、软删除并取消 pending |
+| `POST /api/v1/automations/{id}/rotate` | 带 revision 重置 Webhook 凭证 |
+| `POST /api/v1/automations/{id}/trigger` | 带稳定 UUID `id` 接受一次显式手动触发，可用于暂停的定义 |
+| `GET /api/v1/automations/{id}/deliveries` | 最近 20 次真实触发，不启动执行 |
+| `GET /api/v1/automations/{id}/deliveries/{deliveryID}` | 读取原手动受理回执，不自动重发 |
+
+每个定义每分钟接受最多三十个新手动/Webhook 事件和二十个 pending 事件。重复记录先查询，不消耗新额度。每个账户/工作区最多一百个未删除定义。界面把加载失败、成功空列表、等待、已进入会话、跳过、撤销和未知明确区分；查看记录和语言切换不发送任务。Webhook 密钥只存在当前编辑界面，不写浏览器持久存储。
+
+## 结构化问题的公开参考与实现
+
+参考 [Claude Code 官方 CHANGELOG](https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md) 中 AskUserQuestion 的公开记录：不默认超时继续、自由文字使用中性措辞、避免多选丢弃 Other 文本、保留回答记录，以及键盘退出时不丢输入。本次参考公开行为并接入 Lester 已有工具协议。
+
+工具保留 1–3 题和最多六个选项，增加可选 header（最多 12 字符）、multi_select 和单个 recommended 标记。推荐不预选。旧单选格式 `option_id` 保留，多选使用唯一且确实提供过的 `option_ids`；两种格式不可混用，自由文字可与选项并存，也可单独回答。服务端验证题目、选项、长度、原请求 digest 和仍在执行的 run；回答保持信息语义，不改变执行权限。
+
+待答卡通过同一个 interaction reader 定位到聊天框上方，不另开 SSE/重复轮询，不嵌套 form。逐题填写，多题核对后一次提交；数字快捷键只作用于卡片，文本输入保留普通输入和换行。问题页签支持方向键、Home/End；下一步不提交给 Agent。回答刷新后回到第一道未答题，已填单选、多选和补充字保留。确认后在会话中显示折叠回执，停止/中断撤销旧控件。原聊天草稿与停止按钮保持可用。
+
+## 升级与验证
+
+先备份、停止 API 写入与活跃任务，按编号执行尚未应用的迁移到 `000027_automations.up.sql`，同步重建 API/Web。新 Compose 挂载 001–027；修正了此前 016–026 未挂载而文档声称已初始化的问题。回滚 027 仅删除自动任务定义和触发记录，不删除会话或文件，不撤销外部操作；恢复兼容版本并保留原数据卷。
+
+后端验证使用隔离 PostgreSQL schema、受控执行回执和真实会话受理路径，覆盖并发、原事件去重、时区/DST、恢复、凭证轮换和权限撤销。浏览器使用生产构建与受控 REST/SSE 数据检查桌面/手机操作、六语言、草稿、提问核对与丢失响应；这些检查不使用生产模型凭证，也不代表外部服务或实际模型速度测试。

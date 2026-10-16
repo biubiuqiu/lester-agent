@@ -31,6 +31,18 @@ services:
       - ../backend/migrations/000013_account_identity.up.sql:/docker-entrypoint-initdb.d/013.sql:ro
       - ../backend/migrations/000014_user_guides.up.sql:/docker-entrypoint-initdb.d/014.sql:ro
       - ../backend/migrations/000015_rotating_tokens.up.sql:/docker-entrypoint-initdb.d/015.sql:ro
+      - ../backend/migrations/000016_run_submissions.up.sql:/docker-entrypoint-initdb.d/016.sql:ro
+      - ../backend/migrations/000017_model_budget.up.sql:/docker-entrypoint-initdb.d/017.sql:ro
+      - ../backend/migrations/000018_command_tasks.up.sql:/docker-entrypoint-initdb.d/018.sql:ro
+      - ../backend/migrations/000019_model_request_usage.up.sql:/docker-entrypoint-initdb.d/019.sql:ro
+      - ../backend/migrations/000020_context_checkpoints.up.sql:/docker-entrypoint-initdb.d/020.sql:ro
+      - ../backend/migrations/000021_run_interactions.up.sql:/docker-entrypoint-initdb.d/021.sql:ro
+      - ../backend/migrations/000022_run_inputs.up.sql:/docker-entrypoint-initdb.d/022.sql:ro
+      - ../backend/migrations/000023_file_changes.up.sql:/docker-entrypoint-initdb.d/023.sql:ro
+      - ../backend/migrations/000024_project_rules.up.sql:/docker-entrypoint-initdb.d/024.sql:ro
+      - ../backend/migrations/000025_run_permissions.up.sql:/docker-entrypoint-initdb.d/025.sql:ro
+      - ../backend/migrations/000026_cloud_task_indexes.up.sql:/docker-entrypoint-initdb.d/026.sql:ro
+      - ../backend/migrations/000027_automations.up.sql:/docker-entrypoint-initdb.d/027.sql:ro
     healthcheck:
       test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
       interval: 3s

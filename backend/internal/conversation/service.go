@@ -118,6 +118,10 @@ func (s *Service) SetAgentSkillInstaller(fn func(context.Context, uuid.UUID, uui
 func (s *Service) SetAgentObjectStore(store blob.Store) { s.agentObjects = store }
 
 func (s *Service) Create(ctx context.Context, workspaceID, userID uuid.UUID, agent, title string, modelID uuid.UUID, projectIDs ...uuid.UUID) (Conversation, error) {
+	return s.createWithID(ctx, uuid.New(), workspaceID, userID, agent, title, modelID, projectIDs...)
+}
+
+func (s *Service) createWithID(ctx context.Context, id, workspaceID, userID uuid.UUID, agent, title string, modelID uuid.UUID, projectIDs ...uuid.UUID) (Conversation, error) {
 	if agent == "" {
 		agent = "lester"
 	}
@@ -152,7 +156,7 @@ func (s *Service) Create(ctx context.Context, workspaceID, userID uuid.UUID, age
 		}
 	}
 	var c Conversation
-	err = tx.QueryRow(ctx, `INSERT INTO conversations(workspace_id,created_by,agent_slug,agent_name,agent_instructions,agent_skill_slugs,agent_skills_installed,title,project_id,model_deployment_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$10,COALESCE(NULLIF($9,'00000000-0000-0000-0000-000000000000'::uuid),(SELECT id FROM model_deployments WHERE (workspace_id=$1 OR workspace_id=$11) AND is_default AND enabled ORDER BY (workspace_id=$1) DESC LIMIT 1))) RETURNING id,workspace_id,created_by,agent_slug,agent_name,COALESCE(model_deployment_id,'00000000-0000-0000-0000-000000000000'),title,created_at,updated_at,project_id,pinned`, workspaceID, userID, agent, definition.Name, definition.Instructions, definition.SkillSlugs, len(definition.SkillSlugs) == 0, title, modelID, projectID, model.SystemWorkspaceID).Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.AgentName, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.ProjectID, &c.Pinned)
+	err = tx.QueryRow(ctx, `INSERT INTO conversations(workspace_id,created_by,agent_slug,agent_name,agent_instructions,agent_skill_slugs,agent_skills_installed,title,project_id,model_deployment_id,id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$10,COALESCE(NULLIF($9,'00000000-0000-0000-0000-000000000000'::uuid),(SELECT id FROM model_deployments WHERE (workspace_id=$1 OR workspace_id=$11) AND is_default AND enabled ORDER BY (workspace_id=$1) DESC LIMIT 1)),$12) RETURNING id,workspace_id,created_by,agent_slug,agent_name,COALESCE(model_deployment_id,'00000000-0000-0000-0000-000000000000'),title,created_at,updated_at,project_id,pinned`, workspaceID, userID, agent, definition.Name, definition.Instructions, definition.SkillSlugs, len(definition.SkillSlugs) == 0, title, modelID, projectID, model.SystemWorkspaceID, id).Scan(&c.ID, &c.WorkspaceID, &c.CreatedBy, &c.AgentSlug, &c.AgentName, &c.ModelDeploymentID, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.ProjectID, &c.Pinned)
 	if err != nil {
 		return Conversation{}, err
 	}

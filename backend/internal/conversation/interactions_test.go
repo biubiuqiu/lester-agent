@@ -14,6 +14,72 @@ import (
 	"github.com/google/uuid"
 )
 
+func TestMultiSelectQuestionPreservesFreeTextAndRejectsAmbiguousAnswers(t *testing.T) {
+	request := agenttool.InteractionRequest{Kind: "question", Questions: []agenttool.UserQuestion{{ID: "features", Header: "Features", Prompt: "Which details?", MultiSelect: true, Options: []agenttool.QuestionOption{{ID: "queue", Label: "Queue", Recommended: true}, {ID: "recap", Label: "Recap"}, {ID: "files", Label: "Files"}}}}}
+	if err := request.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	response := InteractionResponse{Answers: map[string]QuestionAnswer{"features": {OptionIDs: []string{"queue", "files"}, Text: "Keep my extra requirement"}}}
+	if status, err := interactionResponseStatus(request, response); err != nil || status != "answered" {
+		t.Fatal(status, err)
+	}
+	raw, _ := json.Marshal(response)
+	var restored InteractionResponse
+	if err := json.Unmarshal(raw, &restored); err != nil || len(restored.Answers["features"].OptionIDs) != 2 || restored.Answers["features"].Text != "Keep my extra requirement" {
+		t.Fatal("selection or free text lost")
+	}
+	for _, answer := range []QuestionAnswer{{OptionIDs: []string{"queue", "queue"}}, {OptionIDs: []string{"foreign"}}, {OptionID: "queue"}, {OptionID: "queue", OptionIDs: []string{"recap"}}, {}} {
+		if _, err := interactionResponseStatus(request, InteractionResponse{Answers: map[string]QuestionAnswer{"features": answer}}); err == nil {
+			t.Fatalf("accepted invalid answer: %#v", answer)
+		}
+	}
+	if _, err := interactionResponseStatus(request, InteractionResponse{Answers: map[string]QuestionAnswer{"features": {Text: "A different option: wait for my next instruction"}}}); err != nil {
+		t.Fatal("free text alone rejected", err)
+	}
+	request.Questions[0].MultiSelect = false
+	if _, err := interactionResponseStatus(request, response); err == nil {
+		t.Fatal("single-choice question accepted array")
+	}
+}
+
+func TestMultiSelectAnswerUsesDurableReceiptAndNeverApprovesPlan(t *testing.T) {
+	f := newTranscriptFixture(t, false)
+	ctx := context.Background()
+	runID := f.startRun(t, "plan only")
+	if _, err := f.service.db.Exec(ctx, `UPDATE runs SET execution_mode='plan' WHERE id=$1`, runID); err != nil {
+		t.Fatal(err)
+	}
+	request := agenttool.InteractionRequest{Kind: "question", Questions: []agenttool.UserQuestion{{ID: "features", Header: "Features", Prompt: "Pick features", MultiSelect: true, Options: []agenttool.QuestionOption{{ID: "queue", Label: "Queue"}, {ID: "recap", Label: "Recap"}}}}}
+	callID := uuid.NewString()
+	args, _ := json.Marshal(map[string]any{"questions": request.Questions})
+	if err := f.service.appendMessage(ctx, f.conversationID, runID, model.Message{Role: "assistant", ToolCalls: []model.ToolCall{{ID: callID, Name: "ask_user_question", Arguments: args}}}, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	item, err := f.service.createRunInteraction(ctx, f.conversationID, runID, callID, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := InteractionResponse{RequestDigest: item.RequestDigest, Answers: map[string]QuestionAnswer{"features": {OptionIDs: []string{"queue", "recap"}, Text: "Explain before executing"}}}
+	for range 2 {
+		answered, err := f.service.RespondRunInteraction(ctx, f.workspaceID, f.userID, f.conversationID, item.ID, response)
+		if err != nil || answered.Status != "answered" {
+			t.Fatal(err)
+		}
+	}
+	var mode string
+	if err = f.service.db.QueryRow(ctx, `SELECT execution_mode FROM runs WHERE id=$1`, runID).Scan(&mode); err != nil || mode != "plan" {
+		t.Fatal("answer granted execution")
+	}
+	stored, err := f.service.RunInteraction(ctx, f.workspaceID, f.conversationID, item.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var read InteractionResponse
+	if err = json.Unmarshal(stored.Response, &read); err != nil || len(read.Answers["features"].OptionIDs) != 2 || read.Answers["features"].Text != "Explain before executing" {
+		t.Fatal("durable answer lost data")
+	}
+}
+
 func recordedInteraction(t *testing.T, f transcriptFixture, runID uuid.UUID, kind string) (*RunInteraction, agenttool.InteractionRequest) {
 	t.Helper()
 	request := agenttool.InteractionRequest{Kind: "question", Questions: []agenttool.UserQuestion{{ID: "choice", Prompt: "Which result do you need?", Options: []agenttool.QuestionOption{{ID: "html", Label: "HTML"}, {ID: "document", Label: "Document"}}}}}

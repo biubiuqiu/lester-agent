@@ -7,6 +7,7 @@ import (
 	"github.com/biubiuqiu/lester-agent/backend/internal/agent"
 	"github.com/biubiuqiu/lester-agent/backend/internal/artifact"
 	"github.com/biubiuqiu/lester-agent/backend/internal/auth"
+	"github.com/biubiuqiu/lester-agent/backend/internal/automation"
 	"github.com/biubiuqiu/lester-agent/backend/internal/contextlibrary"
 	"github.com/biubiuqiu/lester-agent/backend/internal/conversation"
 	"github.com/biubiuqiu/lester-agent/backend/internal/deliverable"
@@ -20,6 +21,7 @@ import (
 )
 
 type Dependencies struct {
+	Automations       *automation.Handler
 	References        *reference.Handler
 	Contexts          *contextlibrary.Handler
 	Agents            *agent.Handler
@@ -41,6 +43,9 @@ func Router(deps Dependencies) http.Handler {
 	router.Use(middleware.RequestID, httpapi.ClientIP(deps.TrustedProxyCIDRs), httpapi.Recover(deps.Logger), httpapi.AccessLog(deps.Logger), httpapi.CORS(deps.WebOrigin), auth.MutationOrigin(deps.WebOrigin))
 	router.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { httpapi.JSON(w, 200, map[string]bool{"ok": true}) })
 	router.Route("/api/v1", func(api chi.Router) {
+		if deps.Automations != nil {
+			api.Post("/hooks/{id}", deps.Automations.Webhook)
+		}
 		api.Get("/auth/options", deps.Auth.Capabilities)
 		api.Get("/auth/oauth/{provider}/start", deps.Auth.OAuthStart)
 		api.Get("/auth/oauth/{provider}/callback", deps.Auth.OAuthCallback)
@@ -55,6 +60,16 @@ func Router(deps Dependencies) http.Handler {
 		api.With(deps.Auth.Middleware).Get("/auth/session", deps.Auth.SessionStatus)
 		api.Group(func(private chi.Router) {
 			private.Use(deps.Auth.Middleware)
+			if deps.Automations != nil {
+				private.Get("/automations", deps.Automations.List)
+				private.Get("/automations/{id}", deps.Automations.Get)
+				private.Put("/automations/{id}", deps.Automations.Save)
+				private.Delete("/automations/{id}", deps.Automations.Delete)
+				private.Post("/automations/{id}/rotate", deps.Automations.Rotate)
+				private.Post("/automations/{id}/trigger", deps.Automations.Trigger)
+				private.Get("/automations/{id}/deliveries", deps.Automations.History)
+				private.Get("/automations/{id}/deliveries/{deliveryID}", deps.Automations.Delivery)
+			}
 			private.Get("/me", deps.Auth.Me)
 			private.Get("/me/guides", deps.Auth.Guides)
 			private.Patch("/me/guides/{topic}", deps.Auth.SaveGuide)

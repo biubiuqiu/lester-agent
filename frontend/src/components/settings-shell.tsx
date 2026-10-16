@@ -4,12 +4,12 @@ import { T, useT } from "@/components/i18n";
 
 
 import { ReactNode, useEffect, useRef } from "react";
-import { Box, ChevronLeft, Database, ServerCog, UserRound } from "lucide-react";
+import { Box, ChevronLeft, Clock3, Database, ServerCog, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Brand } from "./brand";
 import { GuideLauncher } from "./user-guide";
 
-export function SettingsShell({ active, children, returnTo = "/app" }: { active: "profile" | "models" | "sandbox" | "skills"; children: ReactNode; returnTo?: string }) {
+export function SettingsShell({ active, children, returnTo = "/app" }: { active: "profile" | "models" | "sandbox" | "skills" | "automations"; children: ReactNode; returnTo?: string }) {
   const router = useRouter();
   const t = useT();
   const navigation = useRef<HTMLElement>(null);
@@ -33,6 +33,7 @@ export function SettingsShell({ active, children, returnTo = "/app" }: { active:
         <button aria-current={active === "models" ? "page" : undefined} className={active === "models" ? "active" : ""} onClick={() => router.push("/app/settings/models")}><Database /><T>{"模型"}</T></button>
         <button aria-current={active === "sandbox" ? "page" : undefined} className={active === "sandbox" ? "active" : ""} onClick={() => router.push("/app/settings/sandbox")}><ServerCog />Computer</button>
         <button aria-current={active === "skills" ? "page" : undefined} className={active === "skills" ? "active" : ""} onClick={() => router.push("/app/settings/skills")}><Box /><T>{"Skill 广场"}</T></button>
+        <button aria-current={active === "automations" ? "page" : undefined} className={active === "automations" ? "active" : ""} onClick={() => router.push("/app/settings/automations")}><Clock3 /><T>{"自动任务"}</T></button>
       </nav>
       <div className="settings-sidebar-utilities"><LanguageSelect />
       <GuideLauncher />

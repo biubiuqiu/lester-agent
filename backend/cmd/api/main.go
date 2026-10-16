@@ -14,6 +14,7 @@ import (
 	"github.com/biubiuqiu/lester-agent/backend/internal/agenttool"
 	"github.com/biubiuqiu/lester-agent/backend/internal/artifact"
 	"github.com/biubiuqiu/lester-agent/backend/internal/auth"
+	"github.com/biubiuqiu/lester-agent/backend/internal/automation"
 	"github.com/biubiuqiu/lester-agent/backend/internal/blob"
 	"github.com/biubiuqiu/lester-agent/backend/internal/config"
 	"github.com/biubiuqiu/lester-agent/backend/internal/contextlibrary"
@@ -109,6 +110,7 @@ func run() error {
 		logger.Error("seed skills", "error", err)
 		return err
 	}
+	automationService := &automation.Service{DB: db, Runner: automation.ConversationRunner{Service: conversationService}}
 	authService := auth.New(db, redisClient, cfg.AccessTokenTTL, cfg.SessionCookieSecure)
 	var mailer auth.Mailer
 	if cfg.SMTPHost != "" {
@@ -121,7 +123,7 @@ func run() error {
 	if err = authService.Configure(auth.Options{WebOrigin: cfg.WebOrigin, RegistrationEnabled: cfg.RegistrationEnabled, Providers: auth.DefaultProviders(cfg.GoogleClientID, cfg.GoogleClientSecret, cfg.GitHubClientID, cfg.GitHubClientSecret), Mailer: mailer, Avatars: objectStore}); err != nil {
 		return err
 	}
-	handler := server.Router(server.Dependencies{References: &reference.Handler{Service: reference.Service{DB: db}}, Deliverables: &deliverable.Handler{Service: deliverableService}, Contexts: &contextlibrary.Handler{Service: &contextlibrary.Service{DB: db}}, Agents: &agent.Handler{Service: &agent.Service{DB: db, Objects: objectStore}}, AgentBuilder: &agent.BuilderHandler{DB: db, Models: modelStore}, Logger: logger, WebOrigin: cfg.WebOrigin, TrustedProxyCIDRs: cfg.TrustedProxyCIDRs, Auth: authService, Models: model.NewHandler(modelStore), Conversations: conversationHandler, Skills: skill.NewHandler(skillService, conversationService), Projects: &project.Handler{Service: &project.Service{DB: db}}, Artifacts: &artifact.Handler{Service: artifactService}})
+	handler := server.Router(server.Dependencies{Automations: &automation.Handler{Service: automationService}, References: &reference.Handler{Service: reference.Service{DB: db}}, Deliverables: &deliverable.Handler{Service: deliverableService}, Contexts: &contextlibrary.Handler{Service: &contextlibrary.Service{DB: db}}, Agents: &agent.Handler{Service: &agent.Service{DB: db, Objects: objectStore}}, AgentBuilder: &agent.BuilderHandler{DB: db, Models: modelStore}, Logger: logger, WebOrigin: cfg.WebOrigin, TrustedProxyCIDRs: cfg.TrustedProxyCIDRs, Auth: authService, Models: model.NewHandler(modelStore), Conversations: conversationHandler, Skills: skill.NewHandler(skillService, conversationService), Projects: &project.Handler{Service: &project.Service{DB: db}}, Artifacts: &artifact.Handler{Service: artifactService}})
 	server := &http.Server{Addr: cfg.HTTPAddr, Handler: handler, ReadHeaderTimeout: 10 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
 	dispatcher := &eventlog.Dispatcher{DB: db, Publish: func(ctx context.Context, channel string, data []byte) error {
 		return redisClient.Publish(ctx, channel, data).Err()
@@ -132,6 +134,7 @@ func run() error {
 	go conversationService.MonitorSandboxes(ctx, cfg.SandboxMonitorInterval)
 	go conversationService.MonitorInputQueue(ctx)
 	go conversationService.MonitorRuns(ctx)
+	go automationService.Run(ctx)
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, stop := context.WithTimeout(context.Background(), 10*time.Second)

@@ -1,21 +1,24 @@
 "use client";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useT } from "./i18n";
 import { api, ApiError } from "@/lib/api";
 import { readView, updateView } from "@/lib/conversation-view-state";
 import { sameInteractionResponse } from "@/lib/interaction-response";
+import type { QuestionAnswer, UserQuestion } from "@/lib/user-question";
+import { StructuredQuestions } from "./structured-questions";
 
-type Answer = { option_id?: string; text?: string };
+type Answer = QuestionAnswer;
 type Response = { request_digest: string; answers?: Record<string, Answer>; decision?: string; feedback?: string };
 type Interaction = {
   id: string; run_id: string; kind: "question" | "plan"; request_digest: string;
   status: "pending" | "answered" | "approved" | "rejected" | "changes_requested" | "cancelled";
-  request: { title?: string; steps?: string[]; questions?: { id: string; prompt: string; options?: { id: string; label: string; description?: string }[] }[] };
+  request: { title?: string; steps?: string[]; questions?: UserQuestion[] };
   response?: Response;
 };
 type Interactions = { interactions: Interaction[]; execution_mode: "plan" | "execute" };
 
-export function RunInteractions({ conversationId, storageKey, active, revision, runId }: { conversationId: string; storageKey: string; active: boolean; revision: number; runId?: string }) {
+export function RunInteractions({ conversationId, storageKey, active, revision, runId, questionTargetId }: { conversationId: string; storageKey: string; active: boolean; revision: number; runId?: string; questionTargetId?: string }) {
   const t = useT();
   const [data, setData] = useState<Interactions>({ interactions: [], execution_mode: "execute" });
   const [error, setError] = useState("");
@@ -47,10 +50,11 @@ export function RunInteractions({ conversationId, storageKey, active, revision, 
     setData(previous => ({ ...previous, execution_mode: item.status === "approved" && item.run_id === currentRun.current ? "execute" : previous.execution_mode, interactions: previous.interactions.map(old => old.id === item.id ? item : old) }));
   };
   if (!error && !data.interactions.length && (!active || data.execution_mode !== "plan")) return null;
+  const target = questionTargetId && typeof document !== "undefined" ? document.getElementById(questionTargetId) : null;
   return <section className="run-interactions" aria-label={t("任务协作")}>
     {active && data.execution_mode === "plan" ? <p className="interaction-mode">{t("Plan · 仅查看与规划")}</p> : null}
     {error ? <p role="alert">{error} <button type="button" onClick={() => refresh.current()}>{t("重试")}</button></p> : null}
-    {data.interactions.toReversed().map(item => <InteractionCard key={item.id} item={item} conversationId={conversationId} storageKey={storageKey} onConfirmed={confirmed} />)}
+    {data.interactions.toReversed().map(item => {const card=<InteractionCard key={item.id} item={item} conversationId={conversationId} storageKey={storageKey} onConfirmed={confirmed}/>;return item.kind==="question"&&item.status==="pending"&&target?createPortal(card,target,item.id):card;})}
   </section>;
 }
 
@@ -84,10 +88,8 @@ function InteractionCard({ item, conversationId, storageKey, onConfirmed }: { it
   }
   const status = ({ pending: item.kind === "plan" ? "计划等待批准" : "等待你的回答", answered: "已回答", approved: "计划已批准", rejected: "计划已拒绝", changes_requested: "请调整计划", cancelled: "已取消" })[item.status];
   if (item.status !== "pending") return <details className={`interaction-receipt ${item.status}`}><summary>{t(status)}{item.request.title ? ` · ${item.request.title}` : ""}</summary><InteractionContent item={item} /></details>;
-  const submitAnswers = (event: FormEvent) => { event.preventDefault(); void respond({ request_digest: item.request_digest, answers }); };
-  const validAnswers = (item.request.questions || []).every(question => Boolean(answers[question.id]?.option_id || answers[question.id]?.text?.trim()));
-  return <article className="interaction-card" aria-busy={pending}>
-    <h3>{item.kind === "plan" ? item.request.title : t("需要你的选择")}</h3>
+  return <article className={`interaction-card ${item.kind==="question"?"question-card":""}`} aria-busy={pending} aria-label={item.kind==="question"?t("等待你的回答"):undefined}>
+    {item.kind==="plan"?<h3>{item.request.title}</h3>:null}
     {item.kind === "plan" ? <>
       <ol>{item.request.steps?.map((step, index) => <li key={index}>{step}</li>)}</ol>
       <p className="interaction-hint">{t("批准仅适用于本次任务和当前计划版本，随后可修改文件或执行命令。")}</p>
@@ -97,16 +99,7 @@ function InteractionCard({ item, conversationId, storageKey, onConfirmed }: { it
         <button type="button" disabled={pending || !feedback.trim()} onClick={() => void respond({ request_digest: item.request_digest, decision: "request_changes", feedback })}>{t("调整计划")}</button>
         <button type="button" disabled={pending} onClick={() => void respond({ request_digest: item.request_digest, decision: "reject", ...(feedback ? { feedback } : {}) })}>{t("暂不执行")}</button>
       </div>
-    </> : <form onSubmit={submitAnswers}>
-      {item.request.questions?.map(question => <fieldset key={question.id} disabled={pending}>
-        <legend>{question.prompt}</legend>
-        {question.options?.map(option => <label className="interaction-option" key={option.id}><input type="radio" name={`${item.id}-${question.id}`} value={option.id} checked={answers[question.id]?.option_id === option.id} onChange={() => changeAnswer(question.id, { ...answers[question.id], option_id: option.id })} /><span><strong>{option.label}</strong>{option.description ? <small>{option.description}</small> : null}</span></label>)}
-        {question.options?.length ? <label className="interaction-option"><input type="radio" name={`${item.id}-${question.id}`} value="" checked={answers[question.id]?.option_id === ""} onChange={() => changeAnswer(question.id, { ...answers[question.id], option_id: "" })} /><span>{t("自由回答")}</span></label> : null}
-        <label>{t("补充回答")}<textarea rows={2} maxLength={6000} value={answers[question.id]?.text || ""} onChange={event => changeAnswer(question.id, { ...answers[question.id], text: event.target.value })} /></label>
-      </fieldset>)}
-      <p className="interaction-hint">{t("回答用于澄清需求，不会批准修改或执行操作。")}</p>
-      <button className="primary" disabled={pending || !validAnswers}>{t("提交回答")}</button>
-    </form>}
+    </> : <StructuredQuestions id={item.id} questions={item.request.questions||[]} answers={answers} pending={pending} onChange={changeAnswer} onSubmit={()=>void respond({request_digest:item.request_digest,answers})}/>}
     {error ? <p role="alert">{error} <button type="button" disabled={pending} onClick={async () => { try { const current = await api<Interaction>(`/api/v1/conversations/${conversationId}/interactions/${item.id}`); onConfirmed(current); setError(""); } catch { setError(t("待答请求加载失败，请重试。")); } }}>{t("检查状态")}</button></p> : null}
   </article>;
 }
@@ -115,7 +108,7 @@ function InteractionContent({ item }: { item: Interaction }) {
   const t = useT();
   return <div className="interaction-content">
     {item.request.steps?.length ? <ol>{item.request.steps.map((step, index) => <li key={index}>{step}</li>)}</ol> : null}
-    {item.request.questions?.map(question => { const answer = item.response?.answers?.[question.id]; const option = question.options?.find(value => value.id === answer?.option_id); return <div key={question.id}><strong>{question.prompt}</strong>{option ? <p>{option.label}</p> : null}{answer?.text ? <p>{answer.text}</p> : null}</div>; })}
+    {item.request.questions?.map(question => { const answer = item.response?.answers?.[question.id]; const options = question.options?.filter(value => value.id === answer?.option_id || answer?.option_ids?.includes(value.id)); return <div key={question.id}><strong>{question.prompt}</strong>{options?.length ? <p>{options.map(option=>option.label).join(" · ")}</p> : null}{answer?.text ? <p>{answer.text}</p> : null}</div>; })}
     {item.response?.feedback ? <p>{item.response.feedback}</p> : null}
     {item.status === "cancelled" ? <p>{t("此请求已撤销，旧回答或批准不会启动任务。")}</p> : null}
   </div>;
