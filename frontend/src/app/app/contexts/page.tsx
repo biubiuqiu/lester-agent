@@ -14,10 +14,11 @@ export default function ContextLibrary() {
   const [entries, setEntries] = useState<ContextEntry[]>([]);
   const [query, setQuery] = useState(""); const [editing, setEditing] = useState<ContextEntry | "new" | null>(null);
   const [error, setError] = useState(""); const [notice, setNotice] = useState("");
-  const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(false); const [busy, setBusy] = useState(false);
+  const [listLoading, setListLoading] = useState(true), [listError, setListError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [dirty, setDirty] = useState(false);
-  const pending = useRef(false); const request = useRef(0);
+  const pending = useRef(false); const request = useRef(0), listRequest = useRef(0);
   function canLeave() { return !dirty || window.confirm(t("尚有未保存的修改，确定放弃吗？")); }
   useEffect(() => {
     if (!dirty) return;
@@ -25,8 +26,19 @@ export default function ContextLibrary() {
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
-  async function load() { const result = await api<{ entries: ContextEntry[] }>("/api/v1/contexts"); setEntries(result.entries); }
-  useEffect(() => { let active = true; api<{ entries: ContextEntry[] }>("/api/v1/contexts").then((r) => { if (active) setEntries(r.entries); }).catch((e: unknown) => { if (active) setError(e instanceof Error ? e.message : "加载失败"); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, []);
+  async function load() {
+    const token = ++listRequest.current; setListLoading(true); setListError("");
+    try { const result = await api<{ entries: ContextEntry[] }>("/api/v1/contexts"); if (token === listRequest.current) setEntries(result.entries); }
+    catch (reason) { if (token === listRequest.current) setListError(reason instanceof Error ? reason.message : "加载失败"); }
+    finally { if (token === listRequest.current) setListLoading(false); }
+  }
+  useEffect(() => {
+    let active = true; const token = ++listRequest.current;
+    api<{ entries: ContextEntry[] }>("/api/v1/contexts").then(result => { if (active && token === listRequest.current) setEntries(result.entries); })
+      .catch((reason: unknown) => { if (active && token === listRequest.current) setListError(reason instanceof Error ? reason.message : "加载失败"); })
+      .finally(() => { if (active && token === listRequest.current) setListLoading(false); });
+    return () => { active = false; };
+  }, []);
   async function open(id: string) {
     if (pending.current || !canLeave()) return;
     setDirty(false);
@@ -59,10 +71,11 @@ export default function ContextLibrary() {
     <section className="context-library-main">
       <div className="settings-heading"><div><p className="eyebrow">Context library</p><h1><T>{"把常用背景，留在手边"}</T></h1><p><T>{"维护术语、项目背景与写作要求。在聊天中输入 @，按需引用。"}</T></p></div><button className="primary-button" disabled={busy} onClick={() => { if (!canLeave()) return; setDirty(false); request.current++; setLoading(false); setEditing("new"); setConfirmDelete(false); setError(""); setNotice(""); }}><Plus size={16} /><T>{"新建词条"}</T></button></div>
       {error && <p className="settings-error" role="alert">{t(error)}</p>}{notice && <p className="success-banner" role="status">{t(notice)}</p>}
+      {listError ? <p className="settings-error context-list-error" role="alert">{t(listError)} <button type="button" className="text-button" disabled={listLoading || busy} onClick={() => void load()}>{t("重试")}</button></p> : null}
       <div className="context-library-grid">
-        <aside className="context-library-list"><label className="admin-search"><Search size={16} /><input aria-label={t("搜索上下文")} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("搜索名称或简介…")} /></label><p className="context-list-count">{entries.length} <T>{"个词条 · 仅自己可见"}</T></p>
+        <aside className="context-library-list"><label className="admin-search"><Search size={16} /><input aria-label={t("搜索上下文")} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("搜索名称或简介…")} /></label><p className="context-list-count">{listLoading ? t("正在加载…") : listError ? t("加载失败") : <>{entries.length} <T>{"个词条 · 仅自己可见"}</T></>}</p>
           {visible.map((entry) => <button type="button" key={entry.id} disabled={busy} className={selected?.id === entry.id ? "active" : ""} onClick={() => void open(entry.id)}><strong>{entry.title}</strong><small>{entry.description || t("无简介")}</small></button>)}
-          {!visible.length && <p className="muted-block">{loading ? t("正在加载…") : entries.length ? t("没有匹配的词条") : t("还没有词条。可以从团队术语、产品介绍或输出格式开始。")}</p>}
+          {!visible.length && !listLoading && !listError ? <p className="muted-block">{entries.length ? t("没有匹配的词条") : t("还没有词条。可以从团队术语、产品介绍或输出格式开始。")}</p> : null}
         </aside>
         <section className="context-library-editor">
           {editing ? <form key={selected ? `${selected.id}:${selected.version}` : "new"} onSubmit={save} onChange={() => setDirty(true)}>

@@ -11,6 +11,7 @@ export class AutoOpenFiles {
   private cursor: number;
   private pending = new Map<string, number>();
   private openedVersions = new Map<string, string>();
+  private dismissed = new Set<string>();
 
   constructor(private conversationId: string, initialEvents: FileEvent[] = []) {
     this.cursor = Math.max(0, ...initialEvents.map((event) => event.id));
@@ -25,13 +26,19 @@ export class AutoOpenFiles {
       const raw = event.type === "FILE_UPDATED" ? event.payload.path : event.type === "DELIVERABLE_REGISTERED" ? event.payload.entry_path : undefined;
       if (typeof raw !== "string") continue;
       const path = this.enqueue(raw, now);
-      if (path) paths.push(path);
+      if (path) { this.dismissed.delete(path); paths.push(path); }
     }
     return paths;
   }
 
   changed(files: FileEntry[], now = Date.now()) {
-    for (const file of files) if (!file.is_dir && this.openedVersions.get(file.path) !== version(file) && !this.pending.has(file.path)) this.enqueue(file.path, now);
+    for (const file of files) if (!file.is_dir && !this.dismissed.has(file.path) && this.openedVersions.get(file.path) !== version(file) && !this.pending.has(file.path)) this.enqueue(file.path, now);
+  }
+
+  dismiss(path: string) {
+    this.pending.delete(path);
+    this.dismissed.delete(path); this.dismissed.add(path);
+    while (this.dismissed.size > 64) this.dismissed.delete(this.dismissed.values().next().value!);
   }
 
   private enqueue(raw: string, now: number) {
@@ -45,6 +52,14 @@ export class AutoOpenFiles {
 
   take(files: FileEntry[], now = Date.now()) {
     const inventory = new Map(files.filter((file) => !file.is_dir).map((file) => [file.path, file]));
+    // A user close wins over queued notifications and the scan already in
+    // flight. Acknowledge that version at the next verified inventory boundary;
+    // subsequent live events or genuinely later inventory changes still work.
+    for (const path of this.dismissed) {
+      const file = inventory.get(path);
+      if (!file) continue;
+      this.pending.delete(path); this.openedVersions.delete(path); this.openedVersions.set(path, version(file)); this.dismissed.delete(path);
+    }
     const ready: FileEntry[] = [];
     for (const [path, expires] of this.pending) {
       if (expires <= now) { this.pending.delete(path); continue; }

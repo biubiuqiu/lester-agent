@@ -3,6 +3,7 @@ import type { ContextReference } from "./api";
 import { clearAttachmentUploads } from "./attachment-uploads";
 import { clearMessageSubmissions } from "./message-submission";
 import type { QuestionAnswer } from "./user-question";
+import { clearProjectViews, resumeProjectViews } from "./project-view-state";
 
 // View layout remains tab-local; account-scoped drafts survive closing tabs/windows.
 export type ViewState = {
@@ -33,8 +34,9 @@ const draftPrefix = "lester.draft.v1.";
 const draftFields = ["recap", "detailedProcess", "text", "contexts", "reference", "executionMode", "permissionMode", "agentSlug", "interactionDrafts", "sendNotice", "files", "missingFiles"] as const;
 function stored(read: () => string | null) { try { return JSON.parse(read() || "null"); } catch { return null; } }
 const cache = new Map<string, ViewState>();
+const draftSnapshots = new Map<string, string | null>();
 let writeScope: string | null = "";
-export function resumeViewState(scope: string) { writeScope = scope; }
+export function resumeViewState(scope: string) { writeScope = scope; resumeProjectViews(scope); }
 const defaults = (): ViewState => ({ recap: { enabled: true, seenAt: 0, eventId: 0, messageId: "" }, detailedProcess: false, contexts: [], agentSlug: "lester", executionMode: "execute", permissionMode: "standard", interactionDrafts: {}, sendNotice: "", text: "", files: [], missingFiles: [], reference: null, tabs: [], closedTabs: [], unreadFiles: [], selected: null, treeOpen: true, directories: [""], modes: {}, positions: {}, thread: { top: 0, following: true } });
 export const viewKey = (userId: string, workspaceId: string, conversationId: string) => `${userId}.${workspaceId}.${conversationId}`;
 
@@ -52,11 +54,15 @@ function persistDraft(key: string, value: ViewState) {
 export function readView(key: string): ViewState {
   if (!key || typeof window === "undefined" || writeScope === null || !key.startsWith(writeScope)) return defaults();
   const cached = cache.get(key);
-  if (cached) return cached;
+  let draftRaw: string | null = null;
+  try { draftRaw = window.localStorage.getItem(draftPrefix + key); } catch { if (cached) return cached; }
+  if (cached && draftSnapshots.get(key) === draftRaw) return cached;
   const value = defaults();
   try {
-    const session = stored(() => window.sessionStorage.getItem(prefix + key));
-    const draft = stored(() => window.localStorage.getItem(draftPrefix + key));
+    // Another tab may have changed the draft while this tab kept its layout in
+    // memory. Refresh shared fields before applying a reference/recap patch.
+    const session = cached ? { ...cached, version: 1, attachmentNames: [...cached.files.map(file => file.name), ...cached.missingFiles] } : stored(() => window.sessionStorage.getItem(prefix + key));
+    const draft = stored(() => draftRaw);
     const saved = draft?.version === 1 ? { ...(session?.version === 1 ? session : {}), ...draft } : session;
     if (saved && saved.version === 1) {
       if (saved.recap && typeof saved.recap === "object") value.recap = { enabled: saved.recap.enabled !== false, seenAt: Number.isSafeInteger(saved.recap.seenAt) && saved.recap.seenAt > 0 ? saved.recap.seenAt : 0, eventId: Number.isSafeInteger(saved.recap.eventId) && saved.recap.eventId >= 0 ? saved.recap.eventId : 0, messageId: typeof saved.recap.messageId === "string" ? saved.recap.messageId.slice(0, 100) : "" };
@@ -82,6 +88,10 @@ export function readView(key: string): ViewState {
       value.treeOpen = saved.treeOpen !== false;
       value.directories = Array.isArray(saved.directories) ? saved.directories.filter((p: unknown) => typeof p === "string").slice(-64) : [""];
       value.missingFiles = Array.isArray(saved.attachmentNames) ? saved.attachmentNames.filter((p: unknown) => typeof p === "string").slice(0, 100) : [];
+      for (const file of cached?.files || []) {
+        const index = value.missingFiles.indexOf(file.name);
+        if (index >= 0) { value.files.push(file); value.missingFiles.splice(index, 1); }
+      }
       if (saved.modes && typeof saved.modes === "object") for (const [path, mode] of Object.entries(saved.modes).slice(-16)) {
         if (mode === "preview" || mode === "source") value.modes[path] = mode;
       }
@@ -94,6 +104,7 @@ export function readView(key: string): ViewState {
     }
   } catch { /* Storage may be unavailable; in-memory navigation still works. */ }
   cache.set(key, value);
+  draftSnapshots.set(key, draftRaw);
   return value;
 }
 
@@ -102,9 +113,10 @@ export function updateView(key: string, patch: Partial<ViewState>) {
   const next = { ...readView(key), ...patch };
   cache.delete(key);
   cache.set(key, next);
-  while (cache.size > 50) cache.delete(cache.keys().next().value!);
+  while (cache.size > 50) { const old = cache.keys().next().value!; cache.delete(old); draftSnapshots.delete(old); }
   // Layout/scroll updates must not overwrite another tab's more recent draft.
   if (draftFields.some(field => Object.hasOwn(patch, field))) persistDraft(key, next);
+  try { draftSnapshots.set(key, window.localStorage.getItem(draftPrefix + key)); } catch { /* Keep the last readable snapshot. */ }
   try {
     const { files, missingFiles, ...serializable } = next;
     window.sessionStorage.setItem(prefix + key, JSON.stringify({ ...serializable, text: next.text.slice(0, 100_000), version: 1, attachmentNames: [...files.map((file) => file.name), ...missingFiles] }));
@@ -117,6 +129,8 @@ export function clearViewState() {
   // Unmount/pagehide callbacks after logout must not write the cleared draft back.
   writeScope = null;
   cache.clear();
+  draftSnapshots.clear();
+  clearProjectViews();
   clearAttachmentUploads();
   clearMessageSubmissions();
   clearRunInputs();

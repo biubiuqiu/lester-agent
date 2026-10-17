@@ -8,6 +8,7 @@ import type { Conversation, Project, UserProfile } from "@/lib/api";
 import { updateView, viewKey } from "@/lib/conversation-view-state";
 import { listDirectory, relativeFilePath } from "@/lib/file-inventory";
 import { projectResults, type ProjectDeliverable, type ProjectResultPage } from "@/lib/project-workbench";
+import { readProjectView, saveProjectView } from "@/lib/project-view-state";
 import { useI18n, useT } from "./i18n";
 import { ProjectRulesEditor } from "./project-rules";
 import { ConversationRunMark, type UnreadRunResult } from "./run-awareness";
@@ -17,20 +18,37 @@ export function ProjectWorkbench({ project, conversations, user, unread, onOpen 
   unread: Record<string, UnreadRunResult>; onOpen: (id: string) => void;
 }) {
   const t = useT(), { locale } = useI18n(), router = useRouter(), id = useId();
-  const [tab, setTab] = useState<"results" | "conversations">("results");
-  const [search, setSearch] = useState(""), [query, setQuery] = useState(""), [kind, setKind] = useState("");
-  const [feed, setFeed] = useState<{ key: string; data: ProjectResultPage } | null>(null);
-  const [loading, setLoading] = useState(true), [error, setError] = useState(""), [attempt, setAttempt] = useState(0);
+  const storageKey = viewKey(user.user_id, user.workspace_id, project.id);
+  const [initial] = useState(() => readProjectView(storageKey));
+  const [tab, setTab] = useState(initial.tab);
+  const [search, setSearch] = useState(initial.search), [query, setQuery] = useState(initial.search.trim()), [kind, setKind] = useState(initial.kind);
+  const [feed, setFeed] = useState<{ key: string; data: ProjectResultPage } | null>(initial.feed);
+  const [loading, setLoading] = useState(!initial.paged || !initial.feed), [error, setError] = useState(""), [attempt, setAttempt] = useState(0);
   const [more, setMore] = useState(false), [opening, setOpening] = useState("");
-  const [actionError, setActionError] = useState(""), [rules, setRules] = useState(false), [conversationLimit, setConversationLimit] = useState(24);
-  const generation = useRef(0), paged = useRef(false), morePending = useRef(false), action = useRef<AbortController | null>(null);
+  const [actionError, setActionError] = useState(""), [rules, setRules] = useState(false), [conversationLimit, setConversationLimit] = useState(initial.conversationLimit);
+  const generation = useRef(0), paged = useRef(initial.paged), morePending = useRef(false), action = useRef<AbortController | null>(null);
+  const surface = useRef<HTMLDivElement>(null), restore = useRef(true), initialFeed = useRef(initial.feed);
+  const snapshot = useRef(initial);
   const queryKey = JSON.stringify([project.id, query, kind]);
   useEffect(() => { const timer = setTimeout(() => setQuery(search.trim()), 250); return () => clearTimeout(timer); }, [search]);
   useEffect(() => () => action.current?.abort(), []);
   useEffect(() => {
+    snapshot.current = { tab, search, kind, conversationLimit, feed, paged: paged.current, scroll: snapshot.current.scroll };
+    saveProjectView(storageKey, snapshot.current);
+  }, [storageKey, tab, search, kind, conversationLimit, feed]);
+  useEffect(() => () => saveProjectView(storageKey, snapshot.current, true), [storageKey]);
+  useEffect(() => {
+    if (restore.current && (tab === "conversations" || feed?.key === queryKey)) {
+      if (surface.current) surface.current.scrollTop = initial.scroll;
+      restore.current = false;
+    }
+  }, [tab, feed, queryKey, initial.scroll]);
+  useEffect(() => {
     if (tab !== "results") return;
     const epoch = ++generation.current, controller = new AbortController();
-    let pending = false; paged.current = false; morePending.current = false;
+    const keepPages = initialFeed.current?.key === queryKey && paged.current;
+    initialFeed.current = null;
+    let pending = false; paged.current = Boolean(keepPages); morePending.current = false;
     const load = async () => {
       if (pending || document.hidden) return;
       pending = true; setLoading(true); setError(""); setMore(false);
@@ -41,7 +59,8 @@ export function ProjectWorkbench({ project, conversations, user, unread, onOpen 
       finally { pending = false; if (!controller.signal.aborted && generation.current === epoch) setLoading(false); }
     };
     const visible = () => { if (!paged.current && !morePending.current) void load(); };
-    void load(); const timer = setInterval(visible, 15000); document.addEventListener("visibilitychange", visible);
+    if (!keepPages) void load();
+    const timer = setInterval(visible, 15000); document.addEventListener("visibilitychange", visible);
     return () => { controller.abort(); generation.current = epoch + 1; clearInterval(timer); document.removeEventListener("visibilitychange", visible); };
   }, [project.id, query, kind, queryKey, attempt, tab, t]);
 
@@ -88,7 +107,7 @@ export function ProjectWorkbench({ project, conversations, user, unread, onOpen 
   const stamp = (value: string) => new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
   const states: Record<string, string> = { idle: "已就绪", running: "正在工作", cancelling: "正在停止", completed: "已完成", failed: "需要检查", cancelled: "已停止" };
 
-  return <div className="project-workbench">
+  return <div className="project-workbench" ref={surface} onScroll={event => { snapshot.current = { ...snapshot.current, scroll: event.currentTarget.scrollTop }; saveProjectView(storageKey, snapshot.current); }}>
     <div className="project-workbench-content">
       <header className="project-workbench-heading">
         <div><p className="project-eyebrow"><Folder size={14} />{t("项目工作台")}</p><h1>{project.name}</h1></div>

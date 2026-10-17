@@ -164,6 +164,9 @@ export function Workspace({ conversationId, projectId, initialAgentSlug, project
   });
   const [panelResize, setPanelResize] = useState<{ startX: number; startWidth: number } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [workspaceAttempt, setWorkspaceAttempt] = useState(0), [bootstrapError, setBootstrapError] = useState("");
+  const [conversationAttempt, setConversationAttempt] = useState(0);
+  const [conversationLoad, setConversationLoad] = useState({ id: "", pending: false, error: "" });
   const [pageError, setPageError] = useState("");
   const [syncRetryConversation, setSyncRetryConversation] = useState("");
   const [modelSavingConversations, setModelSavingConversations] = useState<string[]>([]);
@@ -247,6 +250,7 @@ export function Workspace({ conversationId, projectId, initialAgentSlug, project
       setDeployments(deploymentResult.deployments);
       resumeViewState(`${userResult.user_id}.${userResult.workspace_id}.`);
       setUser(userResult);
+      setBootstrapError("");
       const unread = readUnreadRunResults(userResult.workspace_id);
       const activeConversationId = activeConversationIdRef.current;
       if (activeConversationId && unread[activeConversationId]) {
@@ -255,10 +259,10 @@ export function Workspace({ conversationId, projectId, initialAgentSlug, project
       }
       setUnreadRunResults(unread);
     }).catch((reason: unknown) => {
-      setPageError(reason instanceof Error ? reason.message : "工作区加载失败");
+      if (active) setBootstrapError(reason instanceof Error ? reason.message : "工作区加载失败");
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [workspaceAttempt]);
 
   useEffect(() => {
     if (!conversationId) return;
@@ -271,6 +275,7 @@ export function Workspace({ conversationId, projectId, initialAgentSlug, project
         ]);
         if (!active) return;
         setCurrent(data.conversation);
+        setConversationLoad({ id: conversationId, pending: false, error: "" });
         setMessages(data.messages);
         setEventsByConversation((previous) => ({
           ...previous,
@@ -283,7 +288,7 @@ export function Workspace({ conversationId, projectId, initialAgentSlug, project
         setPageError("");
         setSyncRetryConversation(previous => previous === conversationId ? "" : previous);
       } catch (reason: unknown) {
-        if (active) setPageError(reason instanceof Error ? reason.message : "对话加载失败");
+        if (active) setConversationLoad({ id: conversationId, pending: false, error: reason instanceof Error ? reason.message : "对话加载失败" });
       }
     };
     refreshConversationRef.current = refresh;
@@ -292,7 +297,7 @@ export function Workspace({ conversationId, projectId, initialAgentSlug, project
       active = false;
       if (refreshConversationRef.current === refresh) refreshConversationRef.current = null;
     };
-  }, [conversationId]);
+  }, [conversationId, conversationAttempt]);
 
   useEffect(() => {
     const workspaceId = user?.workspace_id;
@@ -503,7 +508,7 @@ export function Workspace({ conversationId, projectId, initialAgentSlug, project
   const modelSaving = Boolean(conversationId && modelSavingConversations.includes(conversationId));
   const modelLocked = modelSaving || runState === "sending" || runState === "running" || runState === "stopping";
   const modelHint = modelSaving ? t("正在保存模型，保存后可发送。") : modelLocked ? t("当前任务结束后可切换模型；切换后用于后续任务。") : t("切换模型后用于后续任务。");
-  const displayedCurrent = current?.id === conversationId ? current : null;
+  const displayedCurrent = user && current?.id === conversationId ? current : null;
   const selectedProject = displayedCurrent?.project_id || projectId || projects.find(p=>p.is_default)?.id;
   const newConversationPath = selectedProject ? `/app/p/${selectedProject}` : "/app";
   function updateOrganizedConversation(id: string, patch: Partial<Conversation>) {
@@ -518,7 +523,8 @@ export function Workspace({ conversationId, projectId, initialAgentSlug, project
     }
     setCurrent(prev => prev?.id === id ? {...prev, ...patch} : prev);
   }
-  const visibleError = pageError || (streamError.conversationId === "*" || streamError.conversationId === conversationId ? streamError.message : "");
+  const conversationError = conversationLoad.id === conversationId ? conversationLoad.error : "";
+  const visibleError = bootstrapError || conversationError || pageError || (streamError.conversationId === "*" || streamError.conversationId === conversationId ? streamError.message : "");
   const activeLabel = runState === "sending" ? t("发送中") : runState === "running" ? t("正在工作") : runState === "stopping" ? t("正在停止") : runState === "cancelled" ? t("已停止") : runState === "failed" ? t("上次运行失败") : runState === "unconfirmed" ? t("发送结果待确认") : t("已就绪");
   const renderedSidebarCollapsed = layoutHydrated && sidebarCollapsed;
   const renderedPanelWidth = layoutHydrated && viewportWidth ? clampPanelWidth(panelWidth, renderedSidebarCollapsed) : defaultPanelWidth;
@@ -535,8 +541,8 @@ export function Workspace({ conversationId, projectId, initialAgentSlug, project
     </aside>
     <section className={`conversation-main ${displayedCurrent ? "" : "empty-conversation"} ${projectOverview ? "project-overview-mode" : ""}`}>
       <header className="conversation-header"><div className="conversation-header-leading"><button className="icon-button mobile-menu" onClick={() => setMobileMenu(true)} aria-label={t("打开会话栏")}><Menu /></button><button type="button" className="sidebar-restore-button" onClick={() => setConversationSidebar(false)} title={t("展开会话栏")} aria-label={t("展开会话栏")}><PanelLeftOpen /></button>{displayedCurrent ? <div className="agent-heading"><span className="agent-avatar">{agentName(displayedCurrent.agent_slug,displayedCurrent.agent_name,t)[0]}</span><span><strong title={displayedCurrent.title}>{displayedCurrent.title}</strong><small className={`run-state ${runState}`} title={`${agentName(displayedCurrent.agent_slug,displayedCurrent.agent_name,t)} · ${activeLabel}`}><span className="conversation-agent-name">{agentName(displayedCurrent.agent_slug,displayedCurrent.agent_name,t)}</span><span className="conversation-state-separator" aria-hidden="true"> · </span><span className="conversation-run-label">{activeLabel}</span></small></span></div> : <Brand />}</div>{displayedCurrent || projectOverview ? null : <button className="new-button mobile-new" onClick={() => { setMobileMenu(false); router.push(newConversationPath); }}><Plus /><T>{"新会话"}</T></button>}<GuideLauncher /><Link className="workspace-artifacts-link" href={`/app/artifacts?returnTo=${encodeURIComponent(conversationId ? `/app/c/${conversationId}` : newConversationPath)}`} aria-label={t("打开已发布站点")} title={t("已发布站点")}><ArtifactIcon size={18}/><span><T>{"已发布站点"}</T></span></Link>{displayedCurrent?.created_agent_id ? <OpenAgentButton /> : null}{displayedCurrent ? <><OpenWorkspaceButton /><span className="mobile-results-entry"><OpenResultsButton compact /></span></> : null}{displayedCurrent ? <ConversationOptions key={displayedCurrent.id}><label className="field"><T>{"当前模型"}</T><select aria-label={t("切换模型")} disabled={modelLocked} title={modelHint} value={displayedCurrent.model_deployment_id || ""} autoFocus onChange={event => { void chooseModel(event.target.value); }}>{deployments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><small role="status">{modelHint}</small><OpenFilesButton menu /><Link href={`/app/p/${displayedCurrent.project_id}/overview`}>{t("项目工作台")}</Link><GuideLauncher /><Link href={`/app/artifacts?returnTo=${encodeURIComponent(`/app/c/${displayedCurrent.id}`)}`}><T>{"管理已发布站点"}</T></Link></ConversationOptions> : null}</header>
-      {visibleError ? <div className="workspace-error" role="alert">{visibleError}{syncRetryConversation === conversationId ? <button type="button" onClick={() => { void refreshConversationRef.current?.(true); }}>{t("重新同步状态")}</button> : null}</div> : null}
-      {displayedCurrent ? <ConversationView key={displayedCurrent.id} conversation={displayedCurrent} messages={messages} events={eventsByConversation[displayedCurrent.id] ?? []} runState={runState} modelSaving={modelSaving} runId={runStatus.conversationId === conversationId ? runStatus.runId : undefined} onSend={sendMessage} onStop={stopRun} modelPicker={<label className="model-selector composer-model"><select aria-label={t("当前模型")} disabled={modelLocked} title={modelHint} value={displayedCurrent.model_deployment_id || ""} onChange={(event) => chooseModel(event.target.value)}>{deployments.length === 0 ? <option value=""><T>{"请先配置模型"}</T></option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown /></label>} /> : loading || conversationId ? <div className="workspace-loading"><T>{"正在载入对话…"}</T></div> : user && projectOverview ? (projects.find(item => item.id === projectId) ? <ProjectWorkbench key={projectId} project={projects.find(item => item.id === projectId)!} conversations={conversations} user={user} unread={unreadRunResults} onOpen={openConversation} /> : !visibleError ? <p className="project-missing" role="alert">{t("项目不存在或无法访问")}</p> : null) : user ? <NewConversationComposer key={`${selectedProject}:${initialAgentSlug||"lester"}`} deployments={deployments} user={user} projectId={selectedProject} projectName={projects.find(p=>p.id===selectedProject)?.name} initialAgentSlug={initialAgentSlug} /> : null}
+      {visibleError ? <div className="workspace-error" role="alert">{t(visibleError)}{bootstrapError || conversationError ? <button type="button" disabled={loading || conversationLoad.pending} onClick={() => { if (bootstrapError) { setLoading(true); setWorkspaceAttempt(value => value + 1); } if (conversationError && conversationId) { setConversationLoad({ id: conversationId, pending: true, error: "" }); setConversationAttempt(value => value + 1); } }}>{t("重试")}</button> : syncRetryConversation === conversationId ? <button type="button" onClick={() => { void refreshConversationRef.current?.(true); }}>{t("重新同步状态")}</button> : null}</div> : null}
+      {displayedCurrent ? <ConversationView key={displayedCurrent.id} conversation={displayedCurrent} messages={messages} events={eventsByConversation[displayedCurrent.id] ?? []} runState={runState} modelSaving={modelSaving} runId={runStatus.conversationId === conversationId ? runStatus.runId : undefined} onSend={sendMessage} onStop={stopRun} modelPicker={<label className="model-selector composer-model"><select aria-label={t("当前模型")} disabled={modelLocked} title={modelHint} value={displayedCurrent.model_deployment_id || ""} onChange={(event) => chooseModel(event.target.value)}>{deployments.length === 0 ? <option value=""><T>{"请先配置模型"}</T></option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown /></label>} /> : loading || conversationId && (conversationLoad.id !== conversationId || conversationLoad.pending) ? <div className="workspace-loading" role="status"><T>{"正在载入对话…"}</T></div> : conversationId || bootstrapError ? <div className="workspace-loading"><Link href="/app">{t("返回工作区")}</Link></div> : user && projectOverview ? (projects.find(item => item.id === projectId) ? <ProjectWorkbench key={projectId} project={projects.find(item => item.id === projectId)!} conversations={conversations} user={user} unread={unreadRunResults} onOpen={openConversation} /> : !visibleError ? <p className="project-missing" role="alert">{t("项目不存在或无法访问")}</p> : null) : user ? <NewConversationComposer key={`${selectedProject}:${initialAgentSlug||"lester"}`} deployments={deployments} user={user} projectId={selectedProject} projectName={projects.find(p=>p.id===selectedProject)?.name} initialAgentSlug={initialAgentSlug} /> : null}
     </section>
     {displayedCurrent ? <ComputerPanel conversationId={displayedCurrent.id} createdAgentId={displayedCurrent.agent_slug === "agent-designer" ? displayedCurrent.created_agent_id : undefined} agentRevision={eventsByConversation[displayedCurrent.id]?.findLast(event => event.type === "AGENT_SAVED")?.id ?? 0} skillRevision={eventsByConversation[displayedCurrent.id]?.findLast(event => event.type === "SKILL_INSTALLED")?.id ?? 0} width={renderedPanelWidth} maxWidth={renderedPanelMaxWidth} resizing={Boolean(panelResize)} onResizeStart={(clientX) => setPanelResize({ startX: clientX, startWidth: renderedPanelWidth })} onWidthChange={updatePanelWidth} /> : null}
     {runNotice ? <RunNoticeToast notice={runNotice} onOpen={() => openConversation(runNotice.conversationId)} onDismiss={() => setRunNotice(null)} /> : null}

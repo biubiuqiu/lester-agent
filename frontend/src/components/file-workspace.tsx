@@ -295,6 +295,8 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, live
     panelIntent.current = true;
     const index = tabsRef.current.findIndex((file) => file.path === path);
     if (index < 0) return;
+    for (const pendingPath of autoOpen.current!.receive(liveFileEvents)) watchDirectory(pendingPath.split("/").slice(0, -1).join("/"));
+    autoOpen.current!.dismiss(path);
     const recent = [...readView(storageKey).closedTabs.filter(item => item !== path), path].slice(-8);
     updateView(storageKey, { closedTabs: recent }); setClosedTabs(recent);
     const next = tabsRef.current.filter((file) => file.path !== path);

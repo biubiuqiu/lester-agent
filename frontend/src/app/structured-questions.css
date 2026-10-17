@@ -5,4 +5,17 @@
 .question-card textarea{min-height:54px;max-height:130px;background:#fafcf7}.question-footer{flex:none;padding:10px 18px 13px;border-top:1px solid #edf0e9;background:#fbfcf9}.question-footer>p{font-size:10px;color:#8a947f;line-height:1.6;margin:0 0 9px}.question-footer>div{display:flex;align-items:center;justify-content:flex-end;gap:8px}.question-card .question-footer button{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:32px;font-size:11px}.question-card button.primary{border-color:#426039;background:#426039;color:#fff}.question-card>p[role=alert]{margin:0;padding:10px 18px;line-height:1.6;font-size:11px;color:#946947}
 .question-review article{padding:8px 0 12px;border-bottom:1px solid #edf0e8}.question-review header{display:flex;align-items:center;gap:8px}.question-review header strong{flex:1;line-height:1.6;overflow-wrap:anywhere;font-weight:500}.question-review header button{flex:none;border:0;padding:3px 6px;font-size:10px}.question-review p{font-size:12px;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere;margin:7px 0 0;color:#65765b}.question-review small{color:#a0794a;font-size:10px}
 @media(max-width:600px){.question-dock>.question-card{margin:6px 10px 0}.structured-questions{max-height:42dvh}.question-header{padding:11px 13px 8px}.question-body{padding:12px 13px 7px}.question-footer{padding:9px 13px 11px}.question-card .question-body h3{font-size:13px}.question-card textarea{font-size:16px}.question-card .interaction-option{min-height:42px;box-sizing:border-box}.question-card .interaction-option kbd{display:none}.question-card .question-footer button{min-height:36px}}
-@media(max-height:650px){.structured-questions{max-height:38dvh}.question-footer>p{display:none}.workspace-shell .conversation-main:has(>.question-dock:not(:empty))>.thread{padding-block:0}.workspace-shell .conversation-main:has(>.question-dock:not(:empty)) .composer textarea{max-height:80px}}
+@media(max-height:650px){
+  .question-footer>p{display:none}
+  .workspace-shell .conversation-main:has(>.question-dock:not(:empty))>.thread{padding-block:0}
+  .structured-questions{max-height:48dvh}
+  .workspace-shell .conversation-main:has(>.question-dock:not(:empty)) .composer-queue-list{max-height:9dvh}
+  .workspace-shell .conversation-main:has(>.question-dock:not(:empty)) .queue-history{max-height:9dvh}
+  .workspace-shell .conversation-main:has(>.question-dock:not(:empty)) .composer textarea{max-height:42px;min-height:42px}
+  .workspace-shell .conversation-main:has(>.question-dock:not(:empty))>.composer{padding-top:6px}
+  .workspace-shell .conversation-main:has(>.question-dock:not(:empty)) .compose-box{padding-block:8px}
+  .workspace-shell .conversation-main:has(>.question-dock:not(:empty))>.composer>.composer-status.active{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  .question-header{padding-block:7px}
+  .question-footer{padding-block:8px}
+  .question-choice-hint{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+}

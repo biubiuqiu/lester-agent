@@ -66,3 +66,21 @@ test("tabs reuse paths, retain positions/metadata and cap without dropping the s
   assert.equal(burst.length, 8);
   assert(burst.some(file => file.path === "0.html"), "background writes must not evict the file being read");
 });
+
+test("closing cancels delayed auto-opens until inventory settles, while later writes remain visible", () => {
+  const queue = new AutoOpenFiles("c1");
+  queue.receive([event(1, "notes.txt")], 0);
+  queue.take([file("notes.txt")], 1);
+  queue.receive([event(2, "notes.txt")], 2);
+  queue.dismiss("notes.txt");
+  queue.changed([file("notes.txt", "2")], 3);
+  assert.deepEqual(queue.take([file("notes.txt", "2")], 4), []);
+  queue.receive([event(2, "notes.txt")], 5);
+  queue.changed([file("notes.txt", "2")], 5);
+  assert.deepEqual(queue.take([file("notes.txt", "2")], 6), []);
+  queue.changed([file("notes.txt", "3")], 7);
+  assert.equal(queue.take([file("notes.txt", "3")], 8).length, 1);
+  queue.dismiss("notes.txt");
+  queue.receive([event(3, "notes.txt")], 9);
+  assert.equal(queue.take([file("notes.txt", "3")], 10).length, 1, "a later explicit write remains visible even without a metadata change");
+});

@@ -29,3 +29,13 @@
   color: var(--faint);
   font-size: 11px;
 }
+
+.workspace-loading > a {
+  padding: 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: #426039;
+  background: #f8faf6;
+  text-decoration: none;
+  font-size: 12px;
+}

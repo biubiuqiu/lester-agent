@@ -68,3 +68,26 @@ test("durable draft restores after session storage disappears, without restoring
   clearViewState();
   assert.equal(values["lester.draft.v1." + key], undefined);
 });
+
+test("reference and recap updates retain another tab's latest draft and local File objects", () => {
+  clearViewState(); resumeViewState("u.w.");
+  const key = "u.w.shared", file = new File(["local"], "report.txt");
+  updateView(key, { text: "old", files: [file], tabs: ["old.html"], selected: "old.html" });
+  const remote = JSON.parse(values["lester.draft.v1." + key]);
+  values["lester.draft.v1." + key] = JSON.stringify({ ...remote, text: "newer draft from another tab", permissionMode: "auto" });
+  updateView(key, { reference: "index.html", selected: null });
+  assert.equal(readView(key).text, "newer draft from another tab");
+  assert.equal(readView(key).permissionMode, "auto");
+  assert.equal(readView(key).files[0], file);
+  assert.deepEqual(readView(key).tabs, ["old.html"]);
+  assert.equal(readView(key).selected, null);
+  const saved = JSON.parse(values["lester.draft.v1." + key]);
+  assert.equal(saved.text, "newer draft from another tab");
+  assert.equal(saved.reference, "index.html");
+  values["lester.draft.v1." + key] = JSON.stringify({ ...saved, text: "latest", attachmentNames: ["remote.png"] });
+  updateView(key, { recap: { enabled: true, seenAt: 100, eventId: 1, messageId: "m" } });
+  assert.equal(readView(key).text, "latest");
+  assert.deepEqual(readView(key).files, []);
+  assert.deepEqual(readView(key).missingFiles, ["remote.png"]);
+  clearViewState();
+});

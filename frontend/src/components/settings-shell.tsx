@@ -24,20 +24,27 @@ export function SettingsShell({ active, children, returnTo = "/app" }: { active:
     reveal();
     return () => observer.disconnect();
   }, [active, t]);
-  const returnPath = /^\/app(?:\/p\/[A-Za-z0-9_-]+)?$/.test(returnTo) ? returnTo : "/app";
+  const returnPath = () => {
+    const requested = new URLSearchParams(window.location.search).get("returnTo") || returnTo;
+    return /^\/app(?:\/p\/[A-Za-z0-9_-]+)?$/.test(requested) ? requested : "/app";
+  };
+  const navigate = (section: string) => {
+    const back = returnPath();
+    router.push(`/app/settings/${section}${back === "/app" ? "" : `?returnTo=${encodeURIComponent(back)}`}`);
+  };
   return <main className="settings-shell">
     <aside className="settings-sidebar">
       <div className="settings-sidebar-brand"><Brand /></div>
       <nav ref={navigation}>
-        <button aria-current={active === "profile" ? "page" : undefined} className={active === "profile" ? "active" : ""} onClick={() => router.push("/app/settings/profile")}><UserRound /><T>{"个人资料"}</T></button>
-        <button aria-current={active === "models" ? "page" : undefined} className={active === "models" ? "active" : ""} onClick={() => router.push("/app/settings/models")}><Database /><T>{"模型"}</T></button>
-        <button aria-current={active === "sandbox" ? "page" : undefined} className={active === "sandbox" ? "active" : ""} onClick={() => router.push("/app/settings/sandbox")}><ServerCog />Computer</button>
-        <button aria-current={active === "skills" ? "page" : undefined} className={active === "skills" ? "active" : ""} onClick={() => router.push("/app/settings/skills")}><Box /><T>{"Skill 广场"}</T></button>
-        <button aria-current={active === "automations" ? "page" : undefined} className={active === "automations" ? "active" : ""} onClick={() => router.push("/app/settings/automations")}><Clock3 /><T>{"自动任务"}</T></button>
+        <button aria-current={active === "profile" ? "page" : undefined} className={active === "profile" ? "active" : ""} onClick={() => navigate("profile")}><UserRound /><T>{"个人资料"}</T></button>
+        <button aria-current={active === "models" ? "page" : undefined} className={active === "models" ? "active" : ""} onClick={() => navigate("models")}><Database /><T>{"模型"}</T></button>
+        <button aria-current={active === "sandbox" ? "page" : undefined} className={active === "sandbox" ? "active" : ""} onClick={() => navigate("sandbox")}><ServerCog />Computer</button>
+        <button aria-current={active === "skills" ? "page" : undefined} className={active === "skills" ? "active" : ""} onClick={() => navigate("skills")}><Box /><T>{"Skill 广场"}</T></button>
+        <button aria-current={active === "automations" ? "page" : undefined} className={active === "automations" ? "active" : ""} onClick={() => navigate("automations")}><Clock3 /><T>{"自动任务"}</T></button>
       </nav>
       <div className="settings-sidebar-utilities"><LanguageSelect />
       <GuideLauncher />
-      <button className="back-button" aria-label={t("返回工作区")} title={t("返回工作区")} onClick={() => router.push(returnPath)}><ChevronLeft /><span><T>{"返回工作区"}</T></span></button></div>
+      <button className="back-button" aria-label={t("返回工作区")} title={t("返回工作区")} onClick={() => router.push(returnPath())}><ChevronLeft /><span><T>{"返回工作区"}</T></span></button></div>
     </aside>
     <section className="settings-main">{children}</section>
   </main>;

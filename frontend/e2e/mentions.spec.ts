@@ -138,7 +138,8 @@ test("reference search retries safely, composition does not select, and caret su
   await expect(page.locator(".context-references > span")).toHaveCount(0);
   await input.press("Enter");
   await expect(input).toHaveValue("前缀  后缀");
-  expect(await input.evaluate((node: HTMLTextAreaElement) => node.selectionStart)).toBe(3);
+  // Selection is restored after the controlled textarea commits its new value.
+  await expect.poll(() => input.evaluate((node: HTMLTextAreaElement) => node.selectionStart)).toBe(3);
   await expect(page.locator(".context-references")).toContainText("Conversation Reader");
   expect(api.mutations.filter(item => item.path.startsWith("/api/v1/conversations"))).toEqual([]);
 });
