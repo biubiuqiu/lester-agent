@@ -151,7 +151,7 @@ export function DeployDialog({
           <p>
             {result.file_count} <T>{"个文件 ·"}</T>{formatSize(result.size_bytes)}
           </p>
-          <Link href={`/app/artifacts?returnTo=${encodeURIComponent(`/app/c/${conversation}`)}`}><T>{"查看所有产物"}</T></Link>
+          <Link href={`/app/artifacts?returnTo=${encodeURIComponent(`/app/c/${conversation}`)}`}><T>{"查看已发布站点"}</T></Link>
         </div>
       ) : (
         <form
@@ -161,7 +161,7 @@ export function DeployDialog({
           }}
         >
           <p className="deployment-note">
-            <T>{"部署后生成公开链接，可在产物管理中下线。只选择你希望分享的页面和资源。"}</T></p>
+            <T>{"部署后生成公开链接，可在已发布站点中下线。只选择你希望分享的页面和资源。"}</T></p>
           {conversations ? (
             <label className="field">
               <T>{"来源会话"}</T><select
@@ -271,9 +271,11 @@ export function PublishFileButton({
 export function ArtifactManager({
   projects,
   conversations,
+  initialProject = "",
 }: {
   projects: Project[];
   conversations: Conversation[];
+  initialProject?: string;
 }) {
   const { locale, t } = useI18n();
 
@@ -282,7 +284,7 @@ export function ArtifactManager({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [search, setSearch] = useState("");
-  const [project, setProject] = useState("");
+  const [project, setProject] = useState(() => projects.some(item => item.id === initialProject) ? initialProject : "");
   const [choice, setChoice] = useState<PublishChoice | null>(null);
   const [copied, setCopied] = useState("");
   const [preview, setPreview] = useState<Artifact | null>(null);
@@ -321,9 +323,9 @@ export function ArtifactManager({
     }
   }
   const sourceConversations = conversations.filter(c => !project || c.project_id === project);
-  const filtered = items.filter(
+  const scopedItems = items.filter(item => !project || item.project_id === project);
+  const filtered = scopedItems.filter(
     (a) =>
-      (!project || a.project_id === project) &&
       a.name.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
   );
   return (
@@ -331,7 +333,7 @@ export function ArtifactManager({
       <header className="artifact-heading">
         <div>
           <p className="eyebrow">YOUR PUBLISHED WORK</p>
-          <h1><T>{"产物管理"}</T></h1>
+          <h1><T>{"已发布站点"}</T></h1>
           <p><T>{"把对话中的成果变成可分享的页面。"}</T></p>
         </div>
         <button
@@ -348,19 +350,19 @@ export function ArtifactManager({
           <T>{"部署站点"}</T></button>
       </header>
       <div className="artifact-summary" aria-label={t("部署概况")}>
-        <span><strong>{items.length}</strong> <T>{"全部产物"}</T></span>
-        <span><i /> <strong>{items.filter(a => a.status === "published").length}</strong> <T>{"已发布"}</T></span>
-        <span><strong>{items.filter(a => a.status === "unpublished").length}</strong> <T>{"已下线"}</T></span>
+        <span><strong>{scopedItems.length}</strong> <T>{"全部站点"}</T></span>
+        <span><i /> <strong>{scopedItems.filter(a => a.status === "published").length}</strong> <T>{"已发布"}</T></span>
+        <span><strong>{scopedItems.filter(a => a.status === "unpublished").length}</strong> <T>{"已下线"}</T></span>
       </div>
       <div className="artifact-filters">
         <input
-          aria-label={t("搜索产物")}
+          aria-label={t("搜索已发布站点")}
           placeholder={t("搜索站点名称")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         <select
-          aria-label={t("按项目筛选产物")}
+          aria-label={t("按项目筛选站点")}
           value={project}
           onChange={(e) => setProject(e.target.value)}
         >
@@ -373,7 +375,7 @@ export function ArtifactManager({
         </select>
         <button
           className="icon-button"
-          aria-label={t("刷新产物")}
+          aria-label={t("刷新站点")}
           onClick={() => void refresh()}
         >
           <RefreshCw />
@@ -392,7 +394,7 @@ export function ArtifactManager({
       ) : !filtered.length ? (
         <div className="artifact-empty">
           <ArtifactIcon size={38} />
-          <h2>{items.length ? t("没有匹配的产物") : t("让成果拥有自己的链接")}</h2>
+          <h2>{scopedItems.length ? t("没有匹配的站点") : t("让成果拥有自己的链接")}</h2>
           <p>
             <T>{"在对话中生成 HTML 后，点击文件工具栏的“部署”，或让 Lester 帮你发布。"}</T></p>
         </div>

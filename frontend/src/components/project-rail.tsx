@@ -17,6 +17,8 @@ export function ProjectRail({
   unread,
   onOpen,
   onNew,
+  onProject,
+  projectPage = false,
   search,
   onSearch,
   onProjects,
@@ -29,6 +31,8 @@ export function ProjectRail({
   unread: Record<string, UnreadRunResult>;
   onOpen: (id: string) => void;
   onNew: (id: string) => void;
+  onProject: (id: string) => void;
+  projectPage?: boolean;
   search: string;
   onSearch: (value: string) => void;
   onProjects: (projects: Project[]) => void;
@@ -166,6 +170,8 @@ export function ProjectRail({
               <div className="tree-project-row">
                 <button className="tree-project-toggle" aria-label={t("{0}项目 {1}", [opened ? t("收起") : t("展开"), project.name])} aria-expanded={opened} onClick={() => setCollapsed(prev => ({ ...prev, [project.id]: opened }))}>
                   <ChevronRight className={opened ? "tree-chevron expanded" : "tree-chevron"} size={12} />
+                </button>
+                <button type="button" className="tree-project-link" aria-label={t("打开项目 {0}", [project.name])} aria-current={projectPage && selectedProject === project.id ? "page" : undefined} onClick={() => onProject(project.id)}>
                   <span className="tree-project-icon"><ProjectIcon size={17} /></span>
                   <span className="tree-project-name" title={project.name}>{project.name}</span>
                   {project.pinned ? <Pin size={11} /> : null}

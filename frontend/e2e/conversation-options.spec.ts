@@ -67,7 +67,9 @@ for (const locale of ["zh-CN", "fr"] as const) {
         expect(after).toEqual(before);
         if (previewBefore) expect(await panel.boundingBox()).toEqual(previewBefore);
         expect(await popup.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-        expect(await popup.getByRole("link").evaluate(element => getComputedStyle(element).textDecorationLine)).toBe("none");
+        await expect(popup.getByRole("link", { name: t("项目工作台"), exact: true })).toHaveAttribute("href", "/app/p/fixture-project/overview");
+        await expect(popup.getByRole("link", { name: t("管理已发布站点"), exact: true })).toBeVisible();
+        for (const link of await popup.getByRole("link").all()) expect(await link.evaluate(element => getComputedStyle(element).textDecorationLine)).toBe("none");
         await page.screenshot({ path: info.outputPath("options-open.png") });
         await select.press("Escape");
         await expect(popup).toHaveCount(0);

@@ -8,10 +8,16 @@ export function ProjectRulesEditor({ project, onClose }: { project: Project; onC
   const dialog = useRef<HTMLDialogElement>(null);
   const [rules, setRules] = useState<ProjectRules>(), [text, setText] = useState(""), [error, setError] = useState(""), [busy, setBusy] = useState(false);
   useEffect(() => {
+    const previous = document.activeElement;
+    const fallback = previous instanceof HTMLElement ? previous.closest(".rail-menu")?.querySelector<HTMLElement>(".rail-actions-trigger") : null;
     dialog.current?.showModal();
     let alive = true;
     api<ProjectRules>(`/api/v1/projects/${project.id}/rules`).then(value => { if (alive) { setRules(value); setText(value.content); } }).catch(() => { if (alive) setError("项目规则加载失败，请重试。"); });
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+      if (previous instanceof HTMLElement && previous.isConnected && previous.getClientRects().length) previous.focus({ preventScroll: true });
+      else if (fallback?.isConnected) fallback.focus({ preventScroll: true });
+    };
   }, [project.id]);
   async function reload() {
     setBusy(true);

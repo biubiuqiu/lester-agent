@@ -20,7 +20,7 @@ export const guides: Guide[] = [
   ] },
   { topic: "projects", title: "项目与会话", description: "按工作组织任务，快速找回历史", steps: [
     { title: "用项目装下同一类工作", body: "会话栏按项目组织。默认项目可以直接使用；点击项目区的 + 为不同产品、客户或主题创建新项目。", target: ".project-rail", hint: "手机端先点左上角菜单打开会话栏。" },
-    { title: "开始会话，不需要先建空任务", body: "进入项目后写下目标，发送第一条消息才创建会话。用搜索找回历史任务，展开项目查看其中的会话。", target: ".project-rail" },
+    { title: "开始会话，不需要先建空任务", body: "点击项目名称查看成果和会话，点「新任务」或侧栏 ＋ 准备任务，发送第一条消息才创建会话。搜索和展开箭头仍可找回历史任务。", target: ".project-rail" },
     { title: "把重要工作放在手边", body: "项目和会话的更多菜单支持置顶。会话菜单还可以把任务移动到另一个项目；任务的消息和文件仍然保留。", target: ".project-rail" },
   ] },
   { topic: "files", title: "文件与成果", description: "多标签预览、查看代码和下载", steps: [
@@ -54,9 +54,9 @@ export const guides: Guide[] = [
     { title: "保护账号，找回访问", body: "在个人资料中设置或更换密码。部署配置邮件服务后可以验证邮箱，并从登录页找回密码；重设密码后，其他设备需要重新登录。", target: ".account-security", hint: "未配置的第三方登录或邮件功能不会显示为可用。" },
   ] },
   { topic: "publishing", title: "产物发布", description: "把完成的成果变成可分享网址", path: "/app/artifacts", steps: [
-    { title: "预览之后，再决定是否分享", body: "产物管理集中查看已经发布的内容。会话内的文件和成果默认留在工作区；自动预览不会自动公开文件。", target: ".artifact-manager", hint: "只在需要公开分享时进行发布。" },
+    { title: "预览之后，再决定是否分享", body: "已发布站点集中查看公开发布记录。会话内的文件和成果默认留在工作区；自动预览不会自动公开文件。", target: ".artifact-manager", hint: "只在需要公开分享时进行发布。" },
     { title: "明确选择要发布的文件", body: "从会话中选择入口文件和需要的资源，检查发布范围，再提交发布。公开链接可以被拿到网址的人访问，先确认内容适合分享。", target: ".artifact-manager" },
-    { title: "查看、更新或停止分享", body: "发布完成后在产物管理中打开网址。需要更新时重新发布；不再分享时取消发布。工作区的对话和原始文件仍然保留。", target: ".artifact-manager" },
+    { title: "查看、更新或停止分享", body: "发布完成后在已发布站点中打开网址。需要更新时重新发布；不再分享时取消发布。工作区的对话和原始文件仍然保留。", target: ".artifact-manager" },
   ] },
 ];
 

@@ -20,9 +20,15 @@ async function start(page: Page, api: WorkspaceApi) {
   const input = page.getByRole("textbox", { name: "消息输入框", exact: true });
   await input.fill(prompt); await input.press("Enter");
   await expect(page).toHaveURL(`/app/c/${conversationId}`);
+  await expect(page.getByRole("button", { name: "停止生成", exact: true })).toBeVisible();
   await expect.poll(() => api.streamCount).toBeGreaterThan(0);
   api.finish();
   await expect(page.getByRole("button", { name: "停止生成", exact: true })).toHaveCount(0);
+  // Completion also delivers files. Let the actual preview settle, then return
+  // from the mobile modal before interacting with commands in the transcript.
+  await expect(page.locator('iframe[title="index.html preview"]')).toBeVisible();
+  const returnToChat = page.getByRole("button", { name: "返回对话", exact: true });
+  if (await returnToChat.isVisible()) await returnToChat.click();
 }
 
 test("background logs survive Agent completion, paginate and stop without stale state regression", async ({ page, context, api }, info) => {

@@ -64,6 +64,14 @@ Recorded in the current production frontend with Chinese UI and English instruct
 
 The recording starts in a signed-in sample workspace. Follow the setup below for a fresh installation. [Recording source and reproduction instructions](docs/media/README.md) keep the walkthrough up to date with future releases.
 
+## Project workspace
+
+Click a project name in the sidebar to open its workspace. The separate chevron expands conversations; **+** starts a task using the existing project draft. The workspace opens with **Deliverables** and also provides **Conversations**, project rules and a project-filtered **Published sites** entry.
+
+The catalogue combines registered HTML/Markdown deliverables from the project's conversations, including unpublished work. Search by title, file path or source conversation, filter by type, and load 24 records at a time. Each card retains its source and registration update time. Registration does not prove file availability, review or task success. Preview/continue first check the source file; continuing returns to the original conversation with the file reference and existing draft, without sending. Files discovered only through a live directory listing remain available inside their conversation.
+
+`/app/p/{projectId}/overview` is the workspace; `/app/p/{projectId}` continues to start a task. This is a metadata view: no file relocation, automatic publication, extra SSE or model call. It reuses existing schema/indexes; rebuild API and Web together, with no migration beyond the existing 001–027 requirement.
+
 ## Scheduled tasks and inbound webhooks
 
 Open **Automations** from the account menu or **Manage automations** in Cloud tasks. Select the project, model, Agent, task instructions and permissions. Schedule one execution, daily/weekly work or a five-field Cron expression in an IANA time zone. New definitions are disabled unless explicitly enabled. Repeating tasks follow daylight saving time; one-off dates use the browser's local time. The server checks persisted triggers about every ten seconds and creates an independent conversation for each execution. **Run now** explicitly accepts one manual event, including while the schedule is paused.
@@ -137,7 +145,7 @@ To restart an existing installation without rebuilding, omit `--build`.
 4. Type a goal in the home composer. Sending the first message creates the conversation and starts the task.
 5. Open a resulting file card to preview its contents, inspect source, download it, or reference it in a follow-up message.
 
-The setup page returns you to the original project with your message draft preserved. Saving configuration does not verify provider access; the first task confirms whether the model can be called. Home-screen task examples only fill the composer and never send automatically. On phones, the conversation's **…** menu contains model switching and published-artifact management, while **文件** opens the file panel. Assistant file names displayed as inline code can open the preview when they match a file in the current inventory.
+The setup page returns you to the original project with your message draft preserved. Saving configuration does not verify provider access; the first task confirms whether the model can be called. Home-screen task examples only fill the composer and never send automatically. On phones, the conversation's **…** menu contains model switching and Published sites, while **文件** opens the file panel. Assistant file names displayed as inline code can open the preview when they match a file in the current inventory.
 
 If the default port is occupied or reserved by Windows, choose an available port and update **both** settings in `deploy/.env`:
 

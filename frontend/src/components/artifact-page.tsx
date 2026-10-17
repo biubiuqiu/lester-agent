@@ -10,7 +10,7 @@ import { ArtifactManager } from "./artifact-manager";
 import { Brand } from "./brand";
 import { GuideLauncher } from "./user-guide";
 
-export function ArtifactPage({ returnTo = "/app" }: { returnTo?: string }) {
+export function ArtifactPage({ returnTo = "/app", initialProject = "" }: { returnTo?: string; initialProject?: string }) {
   const t = useT();
 
   const [attempt, setAttempt] = useState(0);
@@ -32,7 +32,7 @@ export function ArtifactPage({ returnTo = "/app" }: { returnTo?: string }) {
       })
       .catch((reason: unknown) => {
         if (active) {
-          setError(reason instanceof Error ? reason.message : "产物页面加载失败");
+          setError(reason instanceof Error ? reason.message : "站点页面加载失败");
         }
       })
       .finally(() => {
@@ -57,14 +57,14 @@ export function ArtifactPage({ returnTo = "/app" }: { returnTo?: string }) {
       {loading ? (
         <div className="artifact-page-loading">
           <LoaderCircle className="spin" size={20} />
-          <T>{"正在载入产物管理…"}</T></div>
+          <T>{"正在载入已发布站点…"}</T></div>
       ) : error ? (
         <div className="artifact-page-error" role="alert">
           {t(error)}
           <button type="button" onClick={() => { setError(""); setLoading(true); setAttempt(value => value + 1); }}><T>{"重新加载"}</T></button>
         </div>
       ) : (
-        <ArtifactManager projects={projects} conversations={conversations} />
+        <ArtifactManager projects={projects} conversations={conversations} initialProject={initialProject} />
       )}
     </main>
   );

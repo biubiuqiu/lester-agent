@@ -125,7 +125,7 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
   }
 
   return <div className={`new-chat-home ${busy ? "composer-docked" : ""}`}><div className="new-chat-content">
-    {projectName?<p className="new-project-context">{projectName}</p>:null}
+    {projectName?<p className="new-project-context"><Link href={`/app/p/${projectId}/overview`} aria-label={t("打开项目 {0}", [projectName])}>{projectName}</Link></p>:null}
     <h1>{t("有什么想交给 {0}？", [selectedAgent?.builtin ? t(selectedAgent.name) : selectedAgent?.name || "Lester"])}</h1>
     <form className="composer new-chat-composer" onSubmit={submit} aria-label={t("开始新对话")} aria-busy={busy}>
       {busy ? <p role="status" className="composer-status active"><T>{"正在创建会话并发送消息…"}</T></p> : null}

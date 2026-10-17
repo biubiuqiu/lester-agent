@@ -112,6 +112,7 @@ func Router(deps Dependencies) http.Handler {
 			}
 			if deps.Deliverables != nil {
 				private.Get("/conversations/{id}/deliverables", deps.Deliverables.List)
+				private.Get("/projects/{id}/deliverables", deps.Deliverables.ProjectList)
 			}
 			private.Patch("/me", deps.Auth.UpdateProfile)
 			private.Patch("/me/password", deps.Auth.ChangePassword)
