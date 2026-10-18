@@ -32,6 +32,17 @@ test("registration opens the verified entry and coalesces writes in arrival orde
   assert.deepEqual(queue.take([file("a.html"), file("b.md")], 1).map((file) => file.path), ["b.md", "a.html"]);
 });
 
+test("command supervisor files never auto-open, while user-authored state.json still opens", () => {
+  const queue = new AutoOpenFiles("c1");
+  const internal = [".lester/tasks/t1/state.json", ".lester/tasks/t1/output.log", ".lester/tasks/t1/owner.json", "nested/.lester/tasks/t2/state.json"];
+  const outputs = ["state.json", "site/index.html"];
+  assert.deepEqual(queue.receive([...internal, ...outputs].map((path, i) => event(i + 1, path)), 0), outputs);
+  queue.changed([...internal, ...outputs].map(path => file(path)), 1);
+  assert.deepEqual(queue.take([...internal, ...outputs].map(path => file(path)), 2).map(entry => entry.path), outputs);
+  queue.changed(internal.map(path => file(path, "2")), 3);
+  assert.deepEqual(queue.take(internal.map(path => file(path, "2")), 4), []);
+});
+
 test("shell inventory changes open new versions, but do not duplicate an explicit write", () => {
   const queue = new AutoOpenFiles("c1");
   queue.receive([event(1, "index.html")], 0);

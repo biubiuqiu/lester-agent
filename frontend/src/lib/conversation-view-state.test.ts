@@ -19,6 +19,21 @@ test("drafts and view state are isolated by user, workspace and conversation", (
   for (const key of [viewKey("u2", "w1", "c1"), viewKey("u1", "w2", "c1"), viewKey("u1", "w1", "c2")]) assert.equal(readView(key).text, "");
   assert.deepEqual(readView(a).thread, { top: 350, following: false });
 });
+test("restoring a conversation drops old runtime tabs without dropping actual user files or drafts", () => {
+  values["lester.view.v1.runtime-tabs"] = JSON.stringify({
+    version: 1, text: "keep my draft", tabs: [".lester/tasks/t1/state.json", "state.json", "index.html"],
+    selected: ".lester/tasks/t1/state.json", closedTabs: ["notes.txt", ".lester/tasks/t1/output.log"],
+    directories: ["", ".lester/tasks/t1", "site"], unreadFiles: [".lester/tasks/t1/state.json", "state.json"],
+  });
+  const restored = readView("runtime-tabs");
+  assert.deepEqual(restored.tabs, ["state.json", "index.html"]);
+  assert.equal(restored.selected, null);
+  assert.deepEqual(restored.closedTabs, ["notes.txt"]);
+  assert.deepEqual(restored.directories, ["", "site"]);
+  assert.deepEqual(restored.unreadFiles, ["state.json"]);
+  assert.equal(restored.text, "keep my draft");
+});
+
 test("switching retains File objects, persistence contains only attachment names", () => {
   const file = new File(["private"], "report.txt");
   updateView("attachments", { files: [file] });

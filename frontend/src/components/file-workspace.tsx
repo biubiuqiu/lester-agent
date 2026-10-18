@@ -10,6 +10,7 @@ import { readView, updateView } from "@/lib/conversation-view-state";
 import { artifactFiles } from "@/lib/artifact-files";
 import { deliverableKind } from "@/lib/deliverables";
 import { AutoOpenFiles, mergeFileTabs } from "@/lib/auto-open-files";
+import { isFileAutoOpenExcluded } from "@/lib/file-path-policy";
 import type { RunEvent } from "./tool-timeline";
 
 type Change = { path: string; kind: "added" | "updated" | "deleted" };
@@ -216,13 +217,14 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, live
           const current = new Map(next.files.map((file) => [file.path, file]));
           const changes: Change[] = [];
           for (const [path, file] of current) {
+            if (isFileAutoOpenExcluded(path)) continue;
             const before = old.get(path);
-            if (!before && !previous.limited && !path.startsWith(".agent/") && wasPathCovered(path, previous.directories)) changes.push({ path, kind: "added" });
-            else if (before && !path.startsWith(".agent/") && (file.size !== before.size || file.modified_at !== before.modified_at)) changes.push({ path, kind: "updated" });
+            if (!before && !previous.limited && wasPathCovered(path, previous.directories)) changes.push({ path, kind: "added" });
+            else if (before && (file.size !== before.size || file.modified_at !== before.modified_at)) changes.push({ path, kind: "updated" });
           }
           // A partial/failed listing cannot prove that a file was deleted.
           if (!next.limited && !previous.limited) for (const path of old.keys()) {
-            if (!current.has(path) && !path.startsWith(".agent/")) changes.push({ path, kind: "deleted" });
+            if (!current.has(path) && !isFileAutoOpenExcluded(path)) changes.push({ path, kind: "deleted" });
           }
           if (changes.length) setObserved((value) => {
             const merged = new Map((value.runId === owner ? value.changes : []).map((item) => [item.path, item]));
@@ -312,7 +314,7 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, live
     for (const event of events) {
       if (event.run_id !== runId || event.type !== "FILE_UPDATED") continue;
       const path = relativeFilePath(conversationId ?? "", String(event.payload.path ?? ""));
-      if (path && !path.startsWith(".agent/")) entries.set(path, { path, kind: "updated" });
+      if (path && !isFileAutoOpenExcluded(path)) entries.set(path, { path, kind: "updated" });
     }
     if (observed.runId === runId) for (const change of observed.changes) entries.set(change.path, change);
     return [...entries.values()].slice(-200);

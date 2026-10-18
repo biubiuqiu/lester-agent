@@ -37,6 +37,28 @@ test("inventory discovers nested files and explicitly opened excluded directorie
   assert.equal(second.signature, repeated.signature);
 });
 
+test("automatic scans skip command runtime files but explicit directory browsing remains available", async (context) => {
+  const calls: string[] = [];
+  const tree: Record<string, FileEntry[]> = {
+    "": [file(".lester", true), file("state.json"), file("site", true)],
+    ".lester": [file(".lester/tasks", true)],
+    ".lester/tasks": [file(".lester/tasks/t1", true)],
+    ".lester/tasks/t1": [file(".lester/tasks/t1/state.json"), file(".lester/tasks/t1/output.log")],
+    site: [file("site/index.html")],
+  };
+  context.mock.method(globalThis, "fetch", async (input: string | URL | Request) => {
+    const path = new URL(input instanceof Request ? input.url : input, "http://localhost").searchParams.get("path") || "";
+    calls.push(path);
+    return Response.json({ files: tree[path] || [] });
+  });
+  const result = await scanFiles("c", new AbortController().signal, []);
+  assert.deepEqual(result.files.map(entry => entry.path), ["site/index.html", "state.json"]);
+  assert.equal(result.limited, false);
+  assert.ok(!calls.some(path => path.startsWith(".lester")));
+  const explicit = await scanFiles("c", new AbortController().signal, [".lester/tasks/t1"]);
+  assert.ok(explicit.files.some(entry => entry.path === ".lester/tasks/t1/state.json"));
+});
+
 test("reopening an HTML directory keeps its nested assets in the verified inventory", async (context) => {
   const inventory: Record<string, FileEntry[]> = {
     "": [file("website", true)],

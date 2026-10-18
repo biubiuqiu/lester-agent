@@ -1,8 +1,8 @@
 import { api, type FileEntry } from "./api";
+import { isFileAutoOpenExcluded } from "./file-path-policy";
 
 export type Directory = { entries: FileEntry[]; error: string };
 export type FileState = { directories: Record<string, Directory>; files: FileEntry[]; signature: string; limited: boolean; error: string };
-const skippedDirectories = new Set([".git", ".agent", "node_modules", ".next", ".venv", "venv", "__pycache__", ".cache"]);
 
 // A newly opened, previously skipped directory is discovery, not file creation.
 export function wasPathCovered(path: string, directories: Record<string, Directory>) {
@@ -36,7 +36,7 @@ export async function scanFiles(conversationId: string, signal: AbortSignal, wat
   const files: FileEntry[] = [];
   const queue = [...new Set(["", ...watched])].map((path) => ({
     path,
-    depth: path.split("/").some((part) => skippedDirectories.has(part)) ? 5 : Math.min(5, path.split("/").filter(Boolean).length),
+    depth: isFileAutoOpenExcluded(path) ? 5 : Math.min(5, path.split("/").filter(Boolean).length),
   }));
   const scheduled = new Set(queue.map((item) => item.path));
   const visited = new Set<string>();
@@ -53,7 +53,7 @@ export async function scanFiles(conversationId: string, signal: AbortSignal, wat
         directories[path] = { entries, error: "" };
         for (const file of entries) {
           if (!file.is_dir) { if (files.length < 2000) files.push(file); else limited = true; }
-          else if (!skippedDirectories.has(file.name)) {
+          else if (!isFileAutoOpenExcluded(file.path)) {
             if (depth < 5) {
               if (!scheduled.has(file.path)) { scheduled.add(file.path); queue.push({ path: file.path, depth: depth + 1 }); }
             } else limited = true;

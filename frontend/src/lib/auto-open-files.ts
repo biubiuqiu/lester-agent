@@ -1,8 +1,8 @@
 import type { FileEntry } from "./api";
 import { relativeFilePath } from "./file-inventory";
+import { isFileAutoOpenExcluded } from "./file-path-policy";
 
 type FileEvent = { id: number; conversation_id?: string; type: string; payload: Record<string, unknown> };
-const internalDirectories = new Set([".agent", ".git", "node_modules", ".next", ".venv", "venv", "__pycache__", ".cache"]);
 const version = (file: FileEntry) => `${file.modified_at}:${file.size}`;
 
 // Live notifications can precede inventory visibility. Retain bounded requests,
@@ -43,7 +43,7 @@ export class AutoOpenFiles {
 
   private enqueue(raw: string, now: number) {
     const path = relativeFilePath(this.conversationId, raw);
-    if (!path || path.length > 1000 || path.split("/").some((part) => internalDirectories.has(part) || part === "" || part === ".") || /[\u0000-\u001f]/.test(path)) return "";
+    if (!path || path.length > 1000 || isFileAutoOpenExcluded(path) || path.split("/").some((part) => part === "" || part === ".") || /[\u0000-\u001f]/.test(path)) return "";
     this.pending.delete(path);
     this.pending.set(path, now + 60_000);
     while (this.pending.size > 64) this.pending.delete(this.pending.keys().next().value!);

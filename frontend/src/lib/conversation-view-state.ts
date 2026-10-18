@@ -4,6 +4,7 @@ import { clearAttachmentUploads } from "./attachment-uploads";
 import { clearMessageSubmissions } from "./message-submission";
 import type { QuestionAnswer } from "./user-question";
 import { clearProjectViews, resumeProjectViews } from "./project-view-state";
+import { isInternalRuntimePath } from "./file-path-policy";
 
 // View layout remains tab-local; account-scoped drafts survive closing tabs/windows.
 export type ViewState = {
@@ -81,12 +82,14 @@ export function readView(key: string): ViewState {
       value.sendNotice = typeof saved.sendNotice === "string" ? saved.sendNotice.slice(0, 2000) : "";
       value.text = typeof saved.text === "string" ? saved.text.slice(0, 100_000) : "";
       value.reference = typeof saved.reference === "string" ? saved.reference : null;
-      value.tabs = Array.isArray(saved.tabs) ? saved.tabs.filter((p: unknown) => typeof p === "string").slice(-8) : [];
-      value.closedTabs = Array.isArray(saved.closedTabs) ? saved.closedTabs.filter((p: unknown) => typeof p === "string").slice(-8) : [];
-      value.unreadFiles = Array.isArray(saved.unreadFiles) ? saved.unreadFiles.filter((p: unknown) => typeof p === "string").slice(-200) : [];
+      // Older clients auto-opened command supervisor state/logs. Do not restore
+      // those tabs, unread badges or watches when the conversation is revisited.
+      value.tabs = Array.isArray(saved.tabs) ? saved.tabs.filter((p: unknown) => typeof p === "string" && !isInternalRuntimePath(p)).slice(-8) : [];
+      value.closedTabs = Array.isArray(saved.closedTabs) ? saved.closedTabs.filter((p: unknown) => typeof p === "string" && !isInternalRuntimePath(p)).slice(-8) : [];
+      value.unreadFiles = Array.isArray(saved.unreadFiles) ? saved.unreadFiles.filter((p: unknown) => typeof p === "string" && !isInternalRuntimePath(p)).slice(-200) : [];
       value.selected = value.tabs.includes(saved.selected) ? saved.selected : null;
       value.treeOpen = saved.treeOpen !== false;
-      value.directories = Array.isArray(saved.directories) ? saved.directories.filter((p: unknown) => typeof p === "string").slice(-64) : [""];
+      value.directories = Array.isArray(saved.directories) ? saved.directories.filter((p: unknown) => typeof p === "string" && !isInternalRuntimePath(p)).slice(-64) : [""];
       value.missingFiles = Array.isArray(saved.attachmentNames) ? saved.attachmentNames.filter((p: unknown) => typeof p === "string").slice(0, 100) : [];
       for (const file of cached?.files || []) {
         const index = value.missingFiles.indexOf(file.name);
