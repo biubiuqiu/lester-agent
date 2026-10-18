@@ -14,7 +14,7 @@ import { ArrowLeft, Bot, Check, ChevronDown, FileText, Folder, GripVertical, Max
 import { readView, updateView, viewKey, resumeViewState } from "@/lib/conversation-view-state";
 import { useConversationScroll } from "./use-conversation-scroll";
 import { ArtifactIcon } from "./workspace-icons";
-import { CloudTasks } from "./cloud-tasks";
+import { RecentConversations } from "./recent-conversations";
 import { ProjectRail } from "./project-rail";
 import { ProjectWorkbench } from "./project-workbench";
 import type { Project } from "@/lib/api";
@@ -538,7 +538,7 @@ export function Workspace({ conversationId, projectId, initialAgentSlug, project
 
 
 
-      <div className="conversation-list">{user ? <CloudTasks key={`${user.user_id}:${user.workspace_id}`} revision={taskRevision} onOpen={openConversation} /> : null}{loading ? <p className="muted-block"><T>{"正在载入…"}</T></p> : <ProjectRail projects={projects} conversations={visibleConversations} currentId={conversationId} selectedProject={selectedProject} unread={unreadRunResults} onOpen={openConversation} onNew={id=>{setMobileMenu(false);setConversationSearch("");router.push(`/app/p/${id}`);}} onProject={id=>{setMobileMenu(false);setConversationSearch("");router.push(`/app/p/${id}/overview`);}} projectPage={projectOverview} search={conversationSearch} onSearch={setConversationSearch} onProjects={setProjects} onConversation={updateOrganizedConversation}/>}</div>
+      <div className="conversation-list">{user ? <RecentConversations key={`${user.user_id}:${user.workspace_id}`} revision={taskRevision} onOpen={openConversation} conversations={conversations} projects={projects} currentId={conversationId} unread={unreadRunResults} /> : null}{loading ? <p className="muted-block"><T>{"正在载入…"}</T></p> : <ProjectRail projects={projects} conversations={visibleConversations} currentId={conversationId} selectedProject={selectedProject} unread={unreadRunResults} onOpen={openConversation} onNew={id=>{setMobileMenu(false);setConversationSearch("");router.push(`/app/p/${id}`);}} onProject={id=>{setMobileMenu(false);setConversationSearch("");router.push(`/app/p/${id}/overview`);}} projectPage={projectOverview} search={conversationSearch} onSearch={setConversationSearch} onProjects={setProjects} onConversation={updateOrganizedConversation}/>}</div>
       <div className="sidebar-footer"><UserMenu user={user} /></div>
     </aside>
     <section className={`conversation-main ${displayedCurrent ? "" : "empty-conversation"} ${projectOverview ? "project-overview-mode" : ""}`}>

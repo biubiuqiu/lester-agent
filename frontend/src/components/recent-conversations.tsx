@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { Activity, ArrowUpRight, RefreshCw, X } from "lucide-react";
-import { api } from "@/lib/api";
+import { Activity, ArrowLeft, ArrowUpRight, History, RefreshCw, X } from "lucide-react";
+import { api, type Conversation, type Project } from "@/lib/api";
 import { useI18n, useT } from "./i18n";
+import { RecentConversationList } from "./recent-conversation-list";
+import type { UnreadRunResult } from "./run-awareness";
 
 type Task = { run_id: string; conversation_id: string; title: string; project: string; agent: string; state: string; started_at: string; completed_at: string | null; last_activity_at: string; queued: number; deliverables: number; background_commands: number; unknown_commands: number };
 type Feed = { tasks: Task[]; next_cursor: string; attention_count: number; observed_at: string };
@@ -13,24 +15,31 @@ type Usage = { elapsed_seconds: number | null; requests: number; in_flight: numb
 const filters = { all: "全部任务", active: "进行中", attention: "需处理", finished: "已结束" };
 const states: Record<string, string> = { running: "正在工作", cancelling: "正在停止", waiting_permission: "等待操作确认", waiting_plan: "等待计划审阅", waiting_question: "等待你的回答", completed: "已完成", failed: "需要检查", cancelled: "已停止" };
 
-export function CloudTasks({ revision, onOpen }: { revision: number; onOpen: (id: string) => void }) {
+export function RecentConversations({ revision, onOpen, conversations, projects, currentId, unread }: { revision: number; onOpen: (id: string) => void; conversations: Conversation[]; projects: Project[]; currentId?: string; unread: Record<string, UnreadRunResult> }) {
   const t = useT(), { locale } = useI18n();
   const [open, setOpen] = useState(false), [filter, setFilter] = useState<keyof typeof filters>("all");
+  const [view, setView] = useState<"recent" | "tasks">("recent");
+  const taskOpen = open && view === "tasks";
   const [feed, setFeed] = useState<{ query: string; data: Feed } | null>(null);
   const [error, setError] = useState(false), [loading, setLoading] = useState(false), [more, setMore] = useState(false), [attempt, setAttempt] = useState(0);
   const [attention, setAttention] = useState(0);
   const pagesExpanded = useRef(false);
   const trigger = useRef<HTMLButtonElement>(null), dialog = useRef<HTMLDialogElement>(null), generation = useRef(0), morePending = useRef(false);
   const close = () => { dialog.current?.close(); setOpen(false); trigger.current?.focus(); };
-  useEffect(() => { if (open) dialog.current?.showModal(); }, [open]);
+  useEffect(() => {
+    const panel = dialog.current;
+    if (!open || !panel) return;
+    if (!panel.open) panel.showModal();
+    panel.querySelector<HTMLElement>(taskOpen ? ".recent-conversations-back" : "input[type=search]")?.focus({ preventScroll: true });
+  }, [open, taskOpen]);
   useEffect(() => {
     const epoch = ++generation.current, controller = new AbortController(); let pending = false; pagesExpanded.current = false; morePending.current = false;
     const load = async () => {
       if (pending || document.hidden) return;
       pending = true; setLoading(true); setMore(false); setError(false);
       try {
-        const query = open ? filter : "attention";
-        const data = await api<Feed>(`/api/v1/tasks?filter=${query}&limit=${open ? 20 : 1}`, { signal: controller.signal });
+        const query = taskOpen ? filter : "attention";
+        const data = await api<Feed>(`/api/v1/tasks?filter=${query}&limit=${taskOpen ? 20 : 1}`, { signal: controller.signal });
         if (generation.current === epoch) { setFeed({ query, data }); setAttention(data.attention_count); }
       } catch { if (!controller.signal.aborted && generation.current === epoch) setError(true); }
       finally { pending = false; if (generation.current === epoch) setLoading(false); }
@@ -40,7 +49,7 @@ export function CloudTasks({ revision, onOpen }: { revision: number; onOpen: (id
     void load(); const timer = window.setInterval(visible, 15000);
     document.addEventListener("visibilitychange", visible);
     return () => { generation.current = epoch + 1; controller.abort(); clearInterval(timer); document.removeEventListener("visibilitychange", visible); };
-  }, [open, filter, revision, attempt]);
+  }, [taskOpen, filter, revision, attempt]);
   const loadMore = async () => {
     if (morePending.current || !feed?.data.next_cursor || loading) return;
     morePending.current = true; setMore(true); const epoch = generation.current;
@@ -53,9 +62,10 @@ export function CloudTasks({ revision, onOpen }: { revision: number; onOpen: (id
   const current = feed?.query === filter ? feed.data : null;
   const stamp = (value: string) => new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
   return <>
-    <button ref={trigger} type="button" className="cloud-tasks-trigger" onClick={() => setOpen(true)} aria-label={t("云端任务")} title={error ? t("任务列表暂不可用") : t("云端任务")}><Activity size={17} /><span>{t("云端任务")}</span>{attention > 0 ? <small aria-label={t("{0} 个任务需要处理", [attention])}>{attention > 99 ? "99+" : attention}</small> : null}</button>
-    {open ? createPortal(<dialog ref={dialog} className="cloud-tasks-dialog" aria-label={t("云端任务")} onCancel={event => { event.preventDefault(); close(); }}>
-      <header><div><h2>{t("云端任务")}</h2><p>{t("每个会话的最近任务")}</p></div><button type="button" onClick={() => setAttempt(value => value + 1)} aria-label={t("刷新任务")} disabled={loading || more}><RefreshCw size={17} /></button><button type="button" onClick={close} aria-label={t("关闭任务面板")} autoFocus><X size={19} /></button></header>
+    <button ref={trigger} type="button" className="cloud-tasks-trigger" onClick={() => { setView("recent"); setOpen(true); }} aria-label={t("最近会话")} title={t("最近会话")}><History size={17} /><span>{t("最近会话")}</span>{attention > 0 ? <small aria-label={t("{0} 个任务需要处理", [attention])}>{attention > 99 ? "99+" : attention}</small> : null}</button>
+    {open ? createPortal(<dialog ref={dialog} className={`cloud-tasks-dialog ${taskOpen ? "" : "recent-conversations-dialog"}`} aria-label={t(taskOpen ? "任务状态" : "最近会话")} onCancel={event => { event.preventDefault(); close(); }}>
+      <header>{taskOpen ? <button type="button" className="recent-conversations-back" onClick={() => setView("recent")} aria-label={t("返回最近会话")}><ArrowLeft size={18} /></button> : null}<div><h2>{t(taskOpen ? "任务状态" : "最近会话")}</h2>{taskOpen ? <p>{t("每个会话的最近任务")}</p> : null}</div>{taskOpen ? <button type="button" onClick={() => setAttempt(value => value + 1)} aria-label={t("刷新任务")} disabled={loading || more}><RefreshCw size={17} /></button> : <button type="button" className="recent-task-status" onClick={() => setView("tasks")} aria-label={t("查看任务状态")}><Activity size={15} /><span>{t("任务状态")}</span></button>}<button type="button" onClick={close} aria-label={t("关闭会话面板")}><X size={19} /></button></header>
+      {!taskOpen ? <RecentConversationList conversations={conversations} projects={projects} currentId={currentId} unread={unread} onOpen={id => { close(); onOpen(id); }} /> : <>
       <div className="cloud-task-filters" role="group" aria-label={t("筛选任务")}>{(Object.keys(filters) as (keyof typeof filters)[]).map(value => <button type="button" key={value} aria-pressed={filter === value} onClick={() => { morePending.current = false; setMore(false); setFilter(value); }}>{t(filters[value])}</button>)}</div>
       <div className="cloud-task-list" aria-busy={loading}>
         {error ? <p role="alert">{t("任务列表暂不可用")} <button type="button" onClick={() => setAttempt(value => value + 1)}>{t("重试")}</button></p> : null}
@@ -71,6 +81,7 @@ export function CloudTasks({ revision, onOpen }: { revision: number; onOpen: (id
         {current?.next_cursor ? <button type="button" className="cloud-task-more" disabled={loading || more} onClick={() => void loadMore()}>{t(more ? "正在加载…" : "加载更多")}</button> : null}
       </div>
       <footer><span>{t("查看任务不会启动执行；需要确认时请打开会话。")}</span><Link href="/app/settings/automations">{t("管理自动任务")}</Link></footer>
+      </>}
     </dialog>, document.body) : null}
   </>;
 }

@@ -1783,5 +1783,18 @@
   "操作结果尚未确认": "Resultado de la operación sin confirmar",
   "显示执行过程": "Mostrar el proceso de ejecución",
   "复制选项": "Opciones de copia",
-  "上下文概览区分已受理材料与待发送材料，不代表完整模型请求。默认对话展示最终回复、当前输出和实际异常；中途说明、工具记录和上下文整理可在“执行详情”查看。右上角“更多会话选项”中的“显示执行过程”可展开全部过程，仅改变当前会话的展示，不改变模型上下文或操作权限。": "El contexto distingue los materiales aceptados de los borradores y no representa la solicitud completa al modelo. Por defecto, la conversación muestra las respuestas finales, la salida actual y los problemas reales. Los comentarios intermedios, las herramientas y la organización del contexto están en Detalles de ejecución. Mostrar el proceso de ejecución, en las opciones de conversación de arriba a la derecha, despliega todo el proceso de esta conversación sin cambiar el contexto del modelo ni los permisos."
+  "上下文概览区分已受理材料与待发送材料，不代表完整模型请求。默认对话展示最终回复、当前输出和实际异常；中途说明、工具记录和上下文整理可在“执行详情”查看。右上角“更多会话选项”中的“显示执行过程”可展开全部过程，仅改变当前会话的展示，不改变模型上下文或操作权限。": "El contexto distingue los materiales aceptados de los borradores y no representa la solicitud completa al modelo. Por defecto, la conversación muestra las respuestas finales, la salida actual y los problemas reales. Los comentarios intermedios, las herramientas y la organización del contexto están en Detalles de ejecución. Mostrar el proceso de ejecución, en las opciones de conversación de arriba a la derecha, despliega todo el proceso de esta conversación sin cambiar el contexto del modelo ni los permisos.",
+  "最近会话": "Conversaciones recientes",
+  "任务状态": "Estado de tareas",
+  "返回最近会话": "Volver a conversaciones recientes",
+  "查看任务状态": "Ver estado de tareas",
+  "关闭会话面板": "Cerrar panel de conversaciones",
+  "搜索会话或项目": "Buscar conversaciones o proyectos",
+  "项目不可用": "Proyecto no disponible",
+  "还没有会话，发送一个目标开始吧。": "Aún no hay conversaciones. Envía un objetivo para empezar.",
+  "显示更多会话": "Mostrar más conversaciones",
+  "最近会话与任务状态": "Conversaciones recientes y estado de tareas",
+  "从侧栏打开“最近会话”，跨项目按最近活动查看会话；每条显示当前所属项目，可按会话标题或项目名搜索，点击后回到原会话。查看列表或切换会话不会自动发送草稿或启动任务。": "Abre Conversaciones recientes en la barra lateral para ver conversaciones de todos los proyectos por actividad reciente. Cada entrada muestra su proyecto actual. Busca por título de conversación o nombre de proyecto y selecciona una entrada para volver a ella. Ver la lista o cambiar de conversación nunca envía un borrador ni inicia una tarea automáticamente.",
+  "在“最近会话”面板选择“任务状态”，可查看每个会话的最近任务，筛选进行中、需处理与已结束状态。等待计划、操作确认或回答时，打开原会话处理；列表不会批准或重新执行任务。成果数量仅表示已登记，不代表内容验收通过。Agent 回复结束后，后台命令仍可能运行，面板会单独列出；状态未确认的命令仍需要检查。": "En Conversaciones recientes, selecciona Estado de tareas para ver la última tarea de cada conversación y filtrar las activas, pendientes de atención o finalizadas. Abre la conversación original para revisar un plan, confirmar una operación o responder una pregunta; la lista nunca aprueba ni vuelve a ejecutar tareas. El número de resultados solo indica su registro, no su aceptación. Los comandos en segundo plano pueden seguir ejecutándose tras la respuesta del Agent y se muestran por separado; los estados sin confirmar todavía requieren revisión.",
+  "从账户菜单或任务状态面板进入“自动任务”。选择项目、模型和任务内容，设置单次、每天、每周或五段 Cron。重复任务使用指定 IANA 时区并随夏令时变化；单次时间按当前浏览器本地时间保存。保存默认不启用，勾选启用后才会定时触发。": "Abre Automatizaciones desde el menú de cuenta o el panel Estado de tareas. Elige el proyecto, modelo y contenido de la tarea, y configura una ejecución única, diaria, semanal o Cron de cinco campos. Las tareas recurrentes usan la zona IANA elegida y el horario de verano; los horarios únicos se guardan desde la hora local del navegador. Las definiciones están desactivadas por defecto y solo se ejecutan tras activarlas."
 }

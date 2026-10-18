@@ -141,8 +141,9 @@ test("record the current workspace story", async ({ context, page }, info) => {
     await input.fill(draft);
     const mutationsBeforePanel = api.mutations.length;
     await caption(page, "09 / See tasks across conversations, including background command status.");
-    await page.getByRole("button", { name: "云端任务", exact: true }).click();
-    const tasksDialog = page.getByRole("dialog", { name: "云端任务", exact: true });
+    await page.getByRole("button", { name: "最近会话", exact: true }).click();
+    await page.getByRole("button", { name: "查看任务状态", exact: true }).click();
+    const tasksDialog = page.getByRole("dialog", { name: "任务状态", exact: true });
     await expect(tasksDialog.locator(".cloud-task-card")).toHaveCount(3);
     await expect(tasksDialog).toContainText("1 个会话后台命令运行中");
     await expect(tasksDialog).toContainText("2 项已登记成果");
@@ -163,7 +164,7 @@ test("record the current workspace story", async ({ context, page }, info) => {
     await expect(resultTask).toContainText("未计为零");
     expect(usageReads).toBe(1);
     await page.screenshot({ path: info.outputPath("cloud-usage.png") }); await hold(page, 6500);
-    await tasksDialog.getByRole("button", { name: "关闭任务面板", exact: true }).click();
+    await tasksDialog.getByRole("button", { name: "关闭会话面板", exact: true }).click();
     await expect(input).toHaveValue(draft);
     expect(api.mutations).toHaveLength(mutationsBeforePanel);
     await caption(page, "12 / An unfinished message stays a draft, even after closing the tab.");
