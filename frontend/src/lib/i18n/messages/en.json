@@ -1775,5 +1775,10 @@
   "补充当前任务": "Add to current task",
   "在当前步骤结束后补充这段文字，不停止任务。": "Add this text after the current step finishes, without stopping the task.",
   "发送后排队，当前任务完成后开始。": "Sending queues this message until the current task finishes.",
-  "任务运行时，发送或按 Enter 会排队下一任务；输入文字后可点击“补充当前任务”，在完整工具批次结束后加入补充，不打断或重放命令，也不批准 Plan。补充只接受文字；附件与 @ 引用需排队，并保留受理时的模型、权限与材料。新任务由 Agent 判断是否先规划。": "While a task is running, Send or Enter queues the next task. After typing, choose Add to current task to add text after the complete tool batch, without interrupting or replaying commands or approving Plan. Adjustments accept text only; attachments and @ references must be queued, retaining the accepted model, permissions and materials. The Agent decides whether each new task needs planning."
+  "任务运行时，发送或按 Enter 会排队下一任务；输入文字后可点击“补充当前任务”，在完整工具批次结束后加入补充，不打断或重放命令，也不批准 Plan。补充只接受文字；附件与 @ 引用需排队，并保留受理时的模型、权限与材料。新任务由 Agent 判断是否先规划。": "While a task is running, Send or Enter queues the next task. After typing, choose Add to current task to add text after the complete tool batch, without interrupting or replaying commands or approving Plan. Adjustments accept text only; attachments and @ references must be queued, retaining the accepted model, permissions and materials. The Agent decides whether each new task needs planning.",
+  "执行详情": "Execution details",
+  "后台命令仍需检查 · {0}": "Background commands to check · {0}",
+  "查看后台命令": "View background commands",
+  "对话页集中展示消息与成果。右上角“更多会话选项”可打开会话回顾、上下文概览和过程显示；已回答问题、命令、文件修改、审批和已处理消息集中在“执行详情”。待回答、待审批和未结束的后台命令仍单独显示。": "Conversations focus on messages and results. More conversation options in the upper-right opens recap, context overview and process display. Answered questions, commands, file changes, approvals and processed messages are grouped under Execution details. Pending questions, approvals and unsettled background commands stay visible separately.",
+  "会话回顾、上下文概览和过程显示位于右上角“更多会话选项”。": "Recap, context overview and process display are in More conversation options in the upper-right."
 }

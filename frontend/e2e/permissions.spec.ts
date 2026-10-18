@@ -1,3 +1,4 @@
+import { openConversationRecords } from "./conversation-controls";
 import { test as base, expect, type Page } from "@playwright/test";
 import { WorkspaceApi, conversationId } from "./workspace-api";
 const prefix = `/api/v1/conversations/${conversationId}/permissions`;
@@ -26,7 +27,7 @@ test("permission approval attaches above the input, confirms a lost receipt once
  await expect.poll(async()=>{const b=await input.boundingBox();return b&&b.y+b.height<=page.viewportSize()!.height;}).toBe(true);
  await page.screenshot({path:info.outputPath("permission-approval.png")});
  await page.getByRole("button",{name:"允许一次",exact:true}).click();await expect(page.locator(".permission-card")).toHaveCount(0);await expect(input).toHaveValue("审批时保留的补充草稿");expect(responses).toBe(1);
- await page.locator(".permission-history>summary").click();await expect(page.locator(".permission-history")).toContainText("已允许");
+ await openConversationRecords(page); await page.locator(".permission-history>summary").click();await expect(page.locator(".permission-history")).toContainText("已允许");
  api.finish();await expect(input).toHaveValue("审批时保留的补充草稿");
 });
 test("command approval offers no task-wide grant, and rejection never sends the composer draft",async({context,page,api},info)=>{

@@ -4,6 +4,7 @@ import { ListPlus, CornerDownRight, Trash2, RotateCcw } from "lucide-react";
 import { api } from "@/lib/api";
 import type { RunInput } from "@/lib/run-input";
 import { useT } from "./i18n";
+import { ConversationRecord } from "./conversation-presentation";
 const labels = { pending: "等待加入当前任务", queued: "等待下一任务", applied: "已加入当前任务", held: "已暂停，等待处理", started: "下一任务已开始", cancelled: "已取消" };
 const isWaiting = (item: RunInput) => ["pending", "queued", "held"].includes(item.status);
 export function RunInputs({ conversationId, revision, active, accepted, onRestore }: { conversationId: string; revision: number; active: boolean; accepted?: RunInput[]; onRestore: (content: string) => void }) {
@@ -42,9 +43,10 @@ export function RunInputs({ conversationId, revision, active, accepted, onRestor
     } catch { setError(t("操作结果未确认，请检查状态；不会自动重试。")); } finally { setPending(false); }
   }
   if (!receipts.length && !error) return null;
-  return <section className="composer-queue" aria-label={t("任务输入与队列")}>
+  return <>
+    {history.length ? <ConversationRecord slot="inputs"><details className="run-input-receipts"><summary>{t("已处理消息")} · {history.length}</summary><div className="queue-history">{history.map(item => <article key={item.id}><header><strong>{t(item.kind === "adjust" ? "调整当前任务" : "排队下一任务")}</strong><span>{t(labels[item.status])}</span></header><p>{item.content}</p></article>)}</div></details></ConversationRecord> : null}
+    {error || queued.length ? <section className="composer-queue" aria-label={t("任务输入与队列")}>
     {error ? <p className="queue-error" role="alert">{error}<button type="button" onClick={() => refresh.current()}>{t("检查状态")}</button></p> : null}
-    {history.length ? <details className="run-input-receipts"><summary>{t("已处理消息")} · {history.length}</summary><div className="queue-history">{history.map(item => <article key={item.id}><header><strong>{t(item.kind === "adjust" ? "调整当前任务" : "排队下一任务")}</strong><span>{t(labels[item.status])}</span></header><p>{item.content}</p></article>)}</div></details> : null}
     {queued.length ? <div className="composer-queue-list" aria-live="polite" aria-relevant="additions text">{queued.map(item => <article className="composer-queue-item" key={item.id} data-input-id={item.id}>
       {item.kind === "next" ? <ListPlus size={15} aria-hidden="true" /> : <CornerDownRight size={15} aria-hidden="true" />}
       <details className="queue-message"><summary title={item.content}><span>{item.content || (item.request?.attachment_ids?.length ? t("{0} 个附件", [item.request.attachment_ids.length]) : t("排队下一任务"))}</span></summary><p>{item.content}</p>{item.kind === "next" ? <small className="queue-permission">{t("权限设置")} · {t(item.request?.permission_mode === "full" ? "完全访问权限" : item.request?.permission_mode === "auto" ? "自动审批" : "默认权限")}</small> : null}</details>
@@ -56,5 +58,5 @@ export function RunInputs({ conversationId, revision, active, accepted, onRestor
       </div>
     </article>)}</div> : null}
 
-  </section>;
+  </section> : null}</>;
 }

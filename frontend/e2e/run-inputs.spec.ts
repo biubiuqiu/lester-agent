@@ -1,3 +1,4 @@
+import { openConversationRecords } from "./conversation-controls";
 import { test as base, expect, type Page } from "@playwright/test";
 import { WorkspaceApi, conversationId, prompt } from "./workspace-api";
 import type { RunInput, RunInputRequest } from "../src/lib/run-input";
@@ -208,7 +209,7 @@ test("queued messages attach to the composer immediately, survive scrolling, and
   await queue.locator("article").first().getByRole("button", { name: "取消", exact: true }).click();
   await expect(queue.locator("article")).toHaveCount(1); await expect(input).toHaveValue("还没发出的草稿");
   expect(cancelled).toBe(1);
-  await page.locator(".run-input-receipts>summary").click();
+  await openConversationRecords(page); await page.locator(".run-input-receipts>summary").click();
   await expect(page.locator(".queue-history")).toContainText("已取消");
   await attached();
   expect(consoleErrors).toEqual([]);

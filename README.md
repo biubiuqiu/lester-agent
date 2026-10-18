@@ -428,7 +428,7 @@ For an existing `deploy/.env` using the previous default `SANDBOX_IMAGE=python:3
 
 Restricted build environments may supply a prepopulated Playwright cache with BuildKit `--build-context browser-cache=/path/to/cache`; normal builds download the pinned browser automatically. The cache must contain binaries for the target architecture and the pinned Playwright revision. Optional `--secret id=proxy_ca,src=/path/to/combined-ca-bundle` supplies build-only TLS trust without persisting session certificates.
 
-`bash` accepts `run_in_background: true`, returning a managed task ID, actual Shell/status and `.lester/tasks/{taskId}/output.log`. Use `task_output` for stable byte-offset output pages and `stop_task` for explicit task cancellation. Starting a background process does not prove it succeeded. The conversation's **命令任务** disclosure exposes logs, download and a separate Stop command action; stopping Agent generation does not stop background tasks.
+`bash` accepts `run_in_background: true`, returning a managed task ID, actual Shell/status and `.lester/tasks/{taskId}/output.log`. Use `task_output` for stable byte-offset output pages and `stop_task` for explicit task cancellation. Starting a background process does not prove it succeeded. The conversation's **Execution details → 命令任务** disclosure exposes logs, download and a separate Stop command action; stopping Agent generation does not stop background tasks.
 
 Command truncation retains the beginning and end with omitted-byte counts. Text `read` streams a contiguous line range, returning one-based right-aligned line numbers, a tab, and original text, such as `"     1\tport: 8080"`. Use `offset`, `limit`, and `next_offset` to page; lines over 2,000 characters are explicitly truncated. Do not include added line-number prefixes in edits. Image reads return bounded `images[]` envelopes that integrations translate to native vision parts, not text containing base64.
 
@@ -862,6 +862,8 @@ The composer starts tasks normally. For complex multi-file or architectural work
 Structured questions collect information separately from approval. Answer drafts survive conversation navigation/refresh. Accepted responses are idempotent, and uncertain responses are confirmed through their scoped receipt without automatic resubmission. Cancellation/failure revokes pending requests. Refresh checks cross-replica session ownership; an abandoned executor is marked interrupted, never restarted by an old answer. Explicit in-run adjustments and next-task queuing remain pending in the alignment record.
 
 Databases already on 001–020 apply `000021_run_interactions.up.sql` once after a backup and stopping API writes. A database on 001–019 applies missing 020–024. Never rerun existing migrations. Stop affected active tasks before rolling back 021 and restore a compatible API/Web; original messages and files remain.
+
+Conversation pages keep messages and results primary. **More conversation options** in the upper-right contains recap, context overview and compact/detailed process controls. One collapsed **Execution details** entry collects answered questions, command logs, file reviews, approval history, processed follow-ups and supporting files. Pending questions, approvals, queue entries and read failures stay visible; unsettled background commands have a direct inspection entry. Opening these controls never starts or approves a task.
 
 ## Running-task adjustments and next-task queue
 

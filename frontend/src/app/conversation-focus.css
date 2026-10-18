@@ -1,0 +1,41 @@
+/* Conversation content stays primary; historical receipts share one disclosure. */
+.conversation-records { max-width: 780px; margin: 14px auto 20px; color: var(--muted); font-size: 12px; }
+.conversation-records:not(:has([data-record-slot] > *)) { display: none; }
+.conversation-records > summary { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 6px 2px; list-style: none; cursor: pointer; }
+.conversation-records > summary::-webkit-details-marker { display: none; }
+.conversation-records > summary > svg:first-child { transition: transform .15s ease; }
+.conversation-records[open] > summary > svg:first-child { transform: rotate(90deg); }
+.conversation-records > summary:hover { color: var(--ink); }
+.conversation-records summary:focus-visible,.conversation-records button:focus-visible { outline: 2px solid #607d67; outline-offset: 2px; }
+.conversation-records-body { padding: 4px 0 0 22px; border-left: 1px solid var(--line); }
+.conversation-records [data-record-slot]:empty { display: none; }
+.conversation-records [data-record-slot] + [data-record-slot]:has(> *) { margin-top: 8px; }
+.conversation-records [data-record-slot] > :is(details,div) { max-width: 100%; margin: 0; }
+.conversation-records .command-tasks { border: 0; border-radius: 0; padding: 0; }
+.conversation-records .permission-history { font-size: 12px; }
+.conversation-records :is(.command-tasks,.file-changes,.permission-history,.run-input-receipts,.related-files) > summary { min-height: 36px; padding: 8px 4px; }
+.conversation-records .interaction-receipt { margin: 0; padding: 0; border: 0; }
+.conversation-records .interaction-receipt > summary { min-height: 36px; padding: 8px 4px; }
+.conversation-records :is(pre,code,p) { overflow-wrap: anywhere; }
+.conversation-records .permission-history code { max-width: 100%; vertical-align: middle; }
+.conversation-records-error,.background-command-notice { max-width: 780px; margin: 14px auto; font-size: 12px; line-height: 1.6; }
+.conversation-records-error { color: #9b5436; }
+.background-command-notice { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; color: var(--muted); }
+.background-command-notice button,.conversation-records-error button { min-height: 32px; border: 0; border-radius: 7px; background: transparent; color: var(--sage-strong); padding: 4px 6px; cursor: pointer; }
+.background-command-notice button:hover { background: var(--sage); }
+.background-command-notice button:focus-visible { outline: 2px solid #607d67; outline-offset: 2px; }
+.conversation-tools-slot:empty { display: none; }
+.conversation-tools-slot:not(:empty) { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); }
+.conversation-options-popover .session-awareness-tools { display: grid; gap: 2px; margin: 0; }
+.conversation-options-popover .session-awareness-tools button { display: flex; align-items: center; justify-content: flex-start; width: 100%; gap: 10px; min-height: 40px; padding: 8px 10px; border: 0; border-radius: 7px; background: transparent; color: #365a43; font: inherit; text-align: left; cursor: pointer; }
+.conversation-options-popover .session-awareness-tools button:hover { background: #f1f4f0; }
+.conversation-options-popover .session-awareness-tools button:is([aria-expanded=true],[aria-pressed=true]) { background: var(--sage); color: var(--sage-strong); }
+.conversation-options-popover .session-awareness-tools svg { width: 15px; height: 15px; flex: none; stroke-width: 1.65; }
+.conversation-options-popover .session-awareness-tools small { margin-left: auto; }
+@media(max-width:700px) {
+ .conversation-records { margin-block: 10px 14px; }
+ .conversation-records > summary,.conversation-records :is(.command-tasks,.file-changes,.permission-history,.run-input-receipts,.related-files,.interaction-receipt) > summary { min-height: 40px; }
+ .conversation-records-body { padding-left: 12px; }
+ .background-command-notice button { min-height: 40px; }
+}
+@media(prefers-reduced-motion:reduce) { .conversation-records > summary > svg:first-child { transition: none; } }

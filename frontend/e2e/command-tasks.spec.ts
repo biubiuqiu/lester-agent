@@ -47,7 +47,7 @@ test("background logs survive Agent completion, paginate and stop without stale 
     return route.fallback();
   });
   await start(page, api);
-  await page.locator(".command-tasks>summary").click();
+  await page.getByRole("button", { name: "查看后台命令", exact: true }).click();
   const task = page.locator(".command-task-row").filter({ hasText: "后台检查" });
   await task.getByRole("button", { name: "查看日志", exact: true }).click();
   await expect(task.getByLabel("命令输出日志", { exact: true })).toHaveText("第一页：检查中🙂");
@@ -79,7 +79,7 @@ test("a lost stop receipt remains unknown until a scoped inspect confirms the re
     return route.fallback();
   });
   await start(page, api);
-  await page.locator(".command-tasks>summary").click();
+  await page.getByRole("button", { name: "查看后台命令", exact: true }).click();
   const task = page.locator(".command-task-row");
   await task.getByRole("button", { name: "停止命令", exact: true }).click();
   await expect(task.getByRole("alert")).toHaveText("停止结果未确认，请检查任务状态。");

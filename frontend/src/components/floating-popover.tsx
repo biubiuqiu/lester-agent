@@ -9,11 +9,12 @@ type Props = HTMLAttributes<HTMLDivElement> & {
   side?: "above" | "below";
   align?: "start" | "end";
   width?: number;
+  maxHeight?: number;
   matchAnchor?: boolean;
 };
 
 /** Body-level positioning keeps composer scroll containers from clipping menus. */
-export function FloatingPopover({ anchor, onClose, side = "above", align = "start", width = 400, matchAnchor = false, children, ...props }: Props) {
+export function FloatingPopover({ anchor, onClose, side = "above", align = "start", width = 400, maxHeight = 320, matchAnchor = false, children, ...props }: Props) {
   const popup = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<CSSProperties | null>(null);
   const close = useEffectEvent(onClose);
@@ -39,7 +40,7 @@ export function FloatingPopover({ anchor, onClose, side = "above", align = "star
         left: Math.max(left + margin, Math.min(align === "end" ? rect.right - popupWidth : rect.left, right - margin - popupWidth)),
         top: placement === "above" ? anchorTop - gap : anchorBottom + gap,
         transform: placement === "above" ? "translateY(-100%)" : undefined,
-        maxHeight: Math.min(320, room[placement]),
+        maxHeight: Math.min(maxHeight, room[placement]),
       };
       setPosition(previous => JSON.stringify(previous) === JSON.stringify(next) ? previous : next);
     };
@@ -58,7 +59,7 @@ export function FloatingPopover({ anchor, onClose, side = "above", align = "star
       window.visualViewport?.removeEventListener("resize", schedule);
       window.visualViewport?.removeEventListener("scroll", schedule);
     };
-  }, [anchor, side, align, width, matchAnchor]);
+  }, [anchor, side, align, width, maxHeight, matchAnchor]);
 
   useEffect(() => {
     const outside = (event: PointerEvent) => {

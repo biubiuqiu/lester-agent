@@ -1,4 +1,5 @@
 "use client";
+import { ConversationRecord } from "./conversation-presentation";
 import { T, useT } from "@/components/i18n";
 
 
@@ -348,10 +349,10 @@ export function ArtifactCards() {
   const registeredPaths = new Set(deliverables.map((item) => item.entry_path));
   const verified = artifactFiles(files.filter((file) => !deliverableKind(file) && !registeredPaths.has(file.path)), changes, running);
   if (!verified.length) return null;
-  return <details className="related-files"><summary><T>{"其他相关文件 ·"}</T>{verified.length}</summary><section className="artifact-cards" aria-label={t("任务文件")}>{verified.map((file) => <div className="artifact-card" key={file.path}>
+  return <ConversationRecord slot="files"><details className="related-files"><summary><T>{"其他相关文件 ·"}</T>{verified.length}</summary><section className="artifact-cards" aria-label={t("任务文件")}>{verified.map((file) => <div className="artifact-card" key={file.path}>
     <button type="button" onClick={() => open(file)} title={file.path} aria-label={t("查看 {0}", [file.name])}><FileText /><span><strong>{file.name}</strong><small>{file.name.includes(".") ? file.name.split(".").at(-1)?.toUpperCase() : t("文件")} · {file.size < 1024 ? `${file.size} B` : file.size < 1048576 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / 1048576).toFixed(1)} MB`}</small></span><span><T>{"查看"}</T></span></button>
     <FileDownload conversationId={conversationId} file={file} />
-  </div>)}</section></details>;
+  </div>)}</section></details></ConversationRecord>;
 }
 
 export function FileDownload({ conversationId, file, label }: { conversationId: string; file: FileEntry; label?: string }) {

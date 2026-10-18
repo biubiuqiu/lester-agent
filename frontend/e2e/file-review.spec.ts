@@ -1,3 +1,4 @@
+import { openConversationRecords } from "./conversation-controls";
 import { test as base, expect, type Page } from "@playwright/test";
 import { WorkspaceApi, conversationId, prompt } from "./workspace-api";
 const changeId = "55555555-5555-4555-8555-555555555555";
@@ -20,7 +21,7 @@ test("actual review is lazy, exports original records and restores only after co
   await context.route(`**${prefix}/${changeId}/rollback`, route => { writes++; rollbackId = route.request().postDataJSON().id; restored = true; return route.fulfill({ status: 503, json: { error: "lost HTTP receipt" } }); });
   await context.route(`**${prefix}/${changeId}/rollback/*`, route => { inspected++; return route.fulfill({ json: { id: rollbackId, file_change_id: changeId, status: "completed" } }); });
   const input = await start(page, api); expect(loaded).toBe(0);
-  await page.locator(".file-changes>summary").click(); await page.locator(".file-change-card>summary").click();
+  await openConversationRecords(page); await page.locator(".file-changes>summary").click(); await page.locator(".file-change-card>summary").click();
   await expect(page.locator(".diff-added")).toHaveText("+new heading"); await expect(page.locator(".diff-removed")).toHaveText("−old heading");
   await expect(page.getByRole("button", { name: "撤回此文件修改", exact: true })).toBeDisabled();
   const download = page.waitForEvent("download"); await page.getByRole("button", { name: "导出审阅记录", exact: true }).click(); expect((await download).suggestedFilename()).toBe(`lester-file-review-${changeId}.json`);
@@ -35,7 +36,7 @@ test("unconfirmed writes never display intended bytes and an open review follows
   let confirmed = false;
   await context.route(`**${prefix}`, route => route.fulfill({ json: { changes: [{ ...change, status: confirmed ? "confirmed" : "unknown" }] } }));
   await context.route(`**${prefix}/${changeId}`, route => route.fulfill({ json: { ...change, status: confirmed ? "confirmed" : "unknown", before_content: confirmed ? change.before_content : undefined, after_content: confirmed ? change.after_content : undefined } }));
-  await start(page, api); await page.locator(".file-changes>summary").click(); await page.locator(".file-change-card>summary").click();
+  await start(page, api); await openConversationRecords(page); await page.locator(".file-changes>summary").click(); await page.locator(".file-change-card>summary").click();
   await expect(page.getByText("原工具写入尚未确认，不能显示实际差异或恢复文件。", { exact: true })).toBeVisible(); await expect(page.locator(".file-diff")).toHaveCount(0); await expect(page.getByRole("button", { name: "撤回此文件修改", exact: true })).toHaveCount(0); confirmed = true; await expect(page.locator(".diff-added")).toHaveText("+new heading");
 });
 test("project rules preserve stale editor drafts and expose accepted source/version", async ({ context, page, api }, info) => {

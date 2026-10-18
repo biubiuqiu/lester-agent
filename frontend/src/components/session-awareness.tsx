@@ -9,6 +9,7 @@ import type { RunEvent } from "./tool-timeline";
 import { useFileWorkspace } from "./file-workspace";
 import { ProjectRulesReceipt } from "./project-rules";
 import { useT } from "./i18n";
+import { ConversationTools } from "./conversation-presentation";
 
 export function useSessionRecap(storageKey: string, messages: Message[], events: RunEvent[], draft: boolean) {
   const [open, setOpen] = useState(false), [available, setAvailable] = useState(false);
@@ -51,8 +52,8 @@ export function SessionAwareness({ messages, events, references, attachmentNames
 }) {
   const t = useT(), [contextOpen, setContextOpen] = useState(false);
   const recapButton = useRef<HTMLButtonElement>(null), contextButton = useRef<HTMLButtonElement>(null);
-  const closeRecap = () => { recap.close(); recapButton.current?.focus(); };
-  const closeContext = () => { setContextOpen(false); contextButton.current?.focus(); };
+  const closeRecap = () => { recap.close(); (recapButton.current || document.querySelector<HTMLButtonElement>(".conversation-options-button"))?.focus(); };
+  const closeContext = () => { setContextOpen(false); (contextButton.current || document.querySelector<HTMLButtonElement>(".conversation-options-button"))?.focus(); };
   const workspace = useFileWorkspace();
   const ordered = useMemo(() => orderedMessages(messages), [messages]);
   const userIndex = ordered.findLastIndex(message => message.role === "user");
@@ -63,12 +64,13 @@ export function SessionAwareness({ messages, events, references, attachmentNames
   const changedPaths = new Set(events.filter(event => event.run_id === runId && event.type === "FILE_UPDATED" && typeof event.payload.path === "string").map(event => String(event.payload.path)));
   const files = workspace.files.filter(file => !file.is_dir && changedPaths.has(file.path)).slice(0, 8);
   const compacted = events.findLast(event => event.type.startsWith("CONTEXT_COMPACT"));
-  return <section className="session-awareness" aria-label={t("会话导航")}>
-    <div className="session-awareness-tools">
-      <button ref={recapButton} type="button" onClick={() => { if (recap.open) recap.close(); else recap.show(); }} aria-expanded={recap.open} title={recap.available ? t("离开后有新进展") : "/recap"}><BookOpen /><span>{t("会话回顾")}</span>{recap.available ? <i aria-hidden="true" /> : null}</button>
-      <button ref={contextButton} type="button" aria-label={t("上下文概览")} onClick={() => setContextOpen(value => !value)} aria-expanded={contextOpen}><Layers /><span>{t("上下文概览")}</span><small aria-hidden="true">{materials + references.length + attachmentNames.length + Number(Boolean(fileReference))}</small></button>
+  return <>
+    <ConversationTools><div className="session-awareness-tools">
+      <button ref={recapButton} type="button" onClick={() => { setContextOpen(false); if (recap.open) recap.close(); else recap.show(); }} aria-expanded={recap.open} title={recap.available ? t("离开后有新进展") : "/recap"}><BookOpen /><span>{t("会话回顾")}</span>{recap.available ? <i aria-hidden="true" /> : null}</button>
+      <button ref={contextButton} type="button" aria-label={t("上下文概览")} onClick={() => { recap.close(); setContextOpen(value => !value); }} aria-expanded={contextOpen}><Layers /><span>{t("上下文概览")}</span>{materials + references.length + attachmentNames.length + Number(Boolean(fileReference)) > 0 ? <small aria-hidden="true">{materials + references.length + attachmentNames.length + Number(Boolean(fileReference))}</small> : null}</button>
       <button type="button" onClick={onDetail} aria-pressed={detailed}><ListTree /><span>{t(detailed ? "详细过程" : "简洁过程")}</span></button>
-    </div>
+    </div></ConversationTools>
+    {recap.open || contextOpen ? <section className="session-awareness" aria-label={t("会话导航")}>
     {recap.open ? <section className="session-recap" onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeRecap(); } }} aria-label={t("会话回顾")}>
       <header><strong>{t("会话回顾")}</strong><span>{status}</span><button type="button" aria-label={t("关闭回顾")} onClick={closeRecap}><X /></button></header>
       {user ? <><small>{t("最近目标")}</small><p>{recapExcerpt(user.content, 160)}</p></> : <p>{t("暂无可回顾的消息")}</p>}
@@ -90,5 +92,5 @@ export function SessionAwareness({ messages, events, references, attachmentNames
       <p className="recap-note">{t("引用不等于已读取；Skill 的实际加载与文件读取请查看执行过程。")}</p>
       {compacted ? <p>{t(compacted.type === "CONTEXT_COMPACTED" ? "历史已整理，继续任务" : compacted.type === "CONTEXT_COMPACTING" ? working ? "正在整理历史上下文" : "上下文整理已中断" : "保留原上下文，继续检查")}</p> : null}
     </section> : null}
-  </section>;
+  </section> : null}</>;
 }

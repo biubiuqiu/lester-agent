@@ -1,3 +1,4 @@
+import { openConversationRecords } from "./conversation-controls";
 import { test as base, expect, type Page } from "@playwright/test";
 import { WorkspaceApi, conversationId } from "./workspace-api";
 
@@ -52,7 +53,7 @@ for (const decision of ["allow", "deny"] as const) test(`independent AI ${decisi
   await expect(page.locator(".permission-reviewing")).toContainText("AI 正在审批命令");
   await expect(page.getByRole("button", { name: "允许一次", exact: true })).toHaveCount(0); await expect(page.getByRole("button", { name: "停止生成", exact: true })).toBeEnabled();
   reviewing = false; api.permissionEvent("PERMISSION_REVIEW_COMPLETED", { permission_id: command.id, decision });
-  await expect(page.locator(".permission-reviewing")).toHaveCount(0); await page.locator(".permission-history > summary").click();
+  await expect(page.locator(".permission-reviewing")).toHaveCount(0); await openConversationRecords(page); await page.locator(".permission-history > summary").click();
   await expect(page.locator(".permission-history")).toContainText("AI 审批"); await expect(page.locator(".permission-history")).toContainText(decision === "allow" ? "已允许" : "已拒绝"); await expect(input).toHaveValue("审查过程中继续写草稿");
   expect(api.mutations.filter(item => item.path.endsWith("/respond"))).toHaveLength(0);
   await page.screenshot({ path: info.outputPath(`ai-${decision}.png`) });

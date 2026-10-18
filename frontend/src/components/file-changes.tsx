@@ -4,6 +4,7 @@ import { api, ApiError } from "@/lib/api";
 import { fileDiff } from "@/lib/file-diff";
 import { randomId } from "@/lib/random-id";
 import { useT } from "./i18n";
+import { ConversationRecord } from "./conversation-presentation";
 type Change = { id: string; run_id: string; path: string; operation: string; status: string; before_exists: boolean; before_sha256: string; after_sha256: string; retained: boolean; rollback_status: string; before_content?: string; after_content?: string };
 type Rollback = { id: string; file_change_id: string; status: string };
 export function FileChanges({ conversationId, active, revision }: { conversationId: string; active: boolean; revision: number }) {
@@ -20,7 +21,7 @@ export function FileChanges({ conversationId, active, revision }: { conversation
     return () => { alive = false; if (timer) clearInterval(timer); document.removeEventListener("visibilitychange", visible); };
   }, [conversationId, active, revision]);
   if (!changes.length && !error) return null;
-  return <details className="file-changes"><summary>{t("文件修改审阅")} · {changes.length}</summary><p>{t("记录 Agent 写入和编辑工具的实际文件变化；不包含命令或外部操作的撤销。")}</p>{error ? <p role="alert">{t(error)}<button type="button" onClick={() => refresh.current()}>{t("重试")}</button></p> : null}{changes.map(change => <ChangeCard key={change.id} change={change} conversationId={conversationId} active={active} onRefresh={() => refresh.current()} />)}</details>;
+  return <>{error ? <p className="conversation-records-error" role="alert">{t(error)}<button type="button" onClick={() => refresh.current()}>{t("重试")}</button></p> : null}{changes.length ? <ConversationRecord slot="changes"><details className="file-changes"><summary>{t("文件修改审阅")} · {changes.length}</summary><p>{t("记录 Agent 写入和编辑工具的实际文件变化；不包含命令或外部操作的撤销。")}</p>{changes.map(change => <ChangeCard key={change.id} change={change} conversationId={conversationId} active={active} onRefresh={() => refresh.current()} />)}</details></ConversationRecord> : null}</>;
 }
 function ChangeCard({ change, conversationId, active, onRefresh }: { change: Change; conversationId: string; active: boolean; onRefresh: () => void }) {
   const t = useT();

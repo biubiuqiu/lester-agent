@@ -1775,5 +1775,10 @@
   "补充当前任务": "Añadir a la tarea actual",
   "在当前步骤结束后补充这段文字，不停止任务。": "Añade este texto al terminar el paso actual, sin detener la tarea.",
   "发送后排队，当前任务完成后开始。": "Al enviar, el mensaje queda en cola hasta que termine la tarea actual.",
-  "任务运行时，发送或按 Enter 会排队下一任务；输入文字后可点击“补充当前任务”，在完整工具批次结束后加入补充，不打断或重放命令，也不批准 Plan。补充只接受文字；附件与 @ 引用需排队，并保留受理时的模型、权限与材料。新任务由 Agent 判断是否先规划。": "Mientras se ejecuta una tarea, Enviar o Enter pone la siguiente tarea en cola. Tras escribir, elige Añadir a la tarea actual para incorporar el texto al terminar el lote completo de herramientas, sin interrumpir ni repetir comandos ni aprobar Plan. Solo se admite texto; los archivos adjuntos y referencias @ deben ir a la cola, conservando el modelo, los permisos y los materiales aceptados. El Agent decide si cada nueva tarea necesita planificación."
+  "任务运行时，发送或按 Enter 会排队下一任务；输入文字后可点击“补充当前任务”，在完整工具批次结束后加入补充，不打断或重放命令，也不批准 Plan。补充只接受文字；附件与 @ 引用需排队，并保留受理时的模型、权限与材料。新任务由 Agent 判断是否先规划。": "Mientras se ejecuta una tarea, Enviar o Enter pone la siguiente tarea en cola. Tras escribir, elige Añadir a la tarea actual para incorporar el texto al terminar el lote completo de herramientas, sin interrumpir ni repetir comandos ni aprobar Plan. Solo se admite texto; los archivos adjuntos y referencias @ deben ir a la cola, conservando el modelo, los permisos y los materiales aceptados. El Agent decide si cada nueva tarea necesita planificación.",
+  "执行详情": "Detalles de ejecución",
+  "后台命令仍需检查 · {0}": "Comandos en segundo plano por revisar · {0}",
+  "查看后台命令": "Ver comandos en segundo plano",
+  "对话页集中展示消息与成果。右上角“更多会话选项”可打开会话回顾、上下文概览和过程显示；已回答问题、命令、文件修改、审批和已处理消息集中在“执行详情”。待回答、待审批和未结束的后台命令仍单独显示。": "La conversación se centra en los mensajes y los resultados. Más opciones de conversación, arriba a la derecha, permite abrir el resumen, el contexto y la vista del proceso. Las preguntas respondidas, los comandos, los cambios en archivos, las aprobaciones y los mensajes procesados se agrupan en Detalles de ejecución. Las preguntas y aprobaciones pendientes y los comandos en segundo plano sin finalizar siguen visibles por separado.",
+  "会话回顾、上下文概览和过程显示位于右上角“更多会话选项”。": "El resumen, el contexto y la vista del proceso están en Más opciones de conversación, arriba a la derecha."
 }

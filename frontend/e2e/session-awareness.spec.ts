@@ -1,20 +1,21 @@
+import { openConversationOptions } from "./conversation-controls";
 import { test as base, expect, type Page } from "@playwright/test";
 import { WorkspaceApi, conversationId, prompt } from "./workspace-api";
 const test = base.extend<{ api: WorkspaceApi }>({ api: async ({ context }, run) => { const api = new WorkspaceApi(); await api.install(context); try { await run(api); expect(api.unexpected).toEqual([]); } finally { await context.close(); await api.close(); } } });
 async function start(page: Page) {
  await page.goto("/app"); await page.getByLabel("邮箱",{exact:true}).fill("browser@example.test"); await page.getByLabel("密码",{exact:true}).fill("fixture-password-123"); await page.getByRole("button",{name:"登录",exact:true}).click();
- const input=page.getByRole("textbox",{name:"消息输入框",exact:true});await input.fill(prompt);await input.press("Enter");await expect(page).toHaveURL(`/app/c/${conversationId}`);await expect(page.getByRole("button",{name:"会话回顾",exact:true})).toBeVisible();return input;
+ const input=page.getByRole("textbox",{name:"消息输入框",exact:true});await input.fill(prompt);await input.press("Enter");await expect(page).toHaveURL(`/app/c/${conversationId}`);await expect(page.getByRole("button",{name:"更多会话选项",exact:true})).toBeVisible();return input;
 }
 test("recap commands and context inspection preserve drafts and never submit or approve",async({page,api},info)=>{
  const input=await start(page);await expect.poll(()=>api.streamCount).toBeGreaterThan(0);
  api.messages[0].metadata={project_rules:{project_id:"fixture-project",project_name:"个人项目",source:"settings",version:2,sha256:"a".repeat(64),content:"已受理的规则快照"}};
  await page.reload();await input.fill("保留这份草稿");const before=api.mutations.length;
- await page.getByRole("button",{name:"会话回顾",exact:true}).click();const recap=page.getByRole("region",{name:"会话回顾",exact:true});await expect(recap).toContainText(prompt);await expect(input).toHaveValue("保留这份草稿");
- await page.getByRole("button",{name:"关闭回顾",exact:true}).click();await expect(page.getByRole("button",{name:"会话回顾",exact:true})).toBeFocused();
+ await openConversationOptions(page);await page.getByRole("button",{name:"会话回顾",exact:true}).click();const recap=page.getByRole("region",{name:"会话回顾",exact:true});await expect(recap).toContainText(prompt);await expect(input).toHaveValue("保留这份草稿");
+ await page.getByRole("button",{name:"关闭回顾",exact:true}).click();await expect(page.getByRole("button",{name:"更多会话选项",exact:true})).toBeFocused();
  await input.fill("/recap");await input.press("Enter");await expect(recap).toBeVisible();await expect(input).toHaveValue("");expect(api.mutations).toHaveLength(before);
- await page.getByRole("button",{name:"上下文概览",exact:true}).click();const context=page.getByRole("region",{name:"上下文概览",exact:true});await expect(context).toContainText("最近消息的材料");await expect(context.locator(".message-context")).toContainText("v2");
+ await openConversationOptions(page);await page.getByRole("button",{name:"上下文概览",exact:true}).click();const context=page.getByRole("region",{name:"上下文概览",exact:true});await expect(context).toContainText("最近消息的材料");await expect(context.locator(".message-context")).toContainText("v2");
  await page.screenshot({path:info.outputPath("recap-context.png")});await page.getByRole("button",{name:"关闭上下文概览",exact:true}).click();
- await page.getByRole("checkbox",{name:"自动回顾",exact:true}).uncheck();await page.reload();await page.getByRole("button",{name:"会话回顾",exact:true}).click();await expect(page.getByRole("checkbox",{name:"自动回顾",exact:true})).not.toBeChecked();expect(api.mutations).toHaveLength(before);
+ await openConversationOptions(page);await page.getByRole("button",{name:"会话回顾",exact:true}).click();await page.getByRole("checkbox",{name:"自动回顾",exact:true}).uncheck();await page.reload();await openConversationOptions(page);await page.getByRole("button",{name:"会话回顾",exact:true}).click();await expect(page.getByRole("checkbox",{name:"自动回顾",exact:true})).not.toBeChecked();expect(api.mutations).toHaveLength(before);
 });
 test("return recap waits for new evidence and never opens over an unsent draft",async({page,api},info)=>{
  const input=await start(page);await expect.poll(()=>api.streamCount).toBeGreaterThan(0);let now=Date.now();await page.clock.setFixedTime(now);await input.fill("离开前未发送的文字");
@@ -32,6 +33,6 @@ test("compact tool groups preserve errors and detailed mode shows every call",as
  await start(page);const make=(id:number,type:string,payload:Record<string,unknown>={})=>({id,type,payload,run_id:"fixture-run",conversation_id:conversationId,created_at:new Date().toISOString()});
  const events=[make(1,"RUN_STARTED"),...Array.from({length:3},(_,i)=>[make(2+i*2,"TOOL_STARTED",{tool:"read",arguments:{file_path:`file-${i}.txt`}}),make(3+i*2,"TOOL_COMPLETED",{tool:"read",result:{content:"fixture"}})]).flat(),make(8,"TOOL_STARTED",{tool:"bash",arguments:{command:"fixture-test"}}),make(9,"TOOL_FAILED",{tool:"bash",error:"fixture failure"})];
  await context.route(`**/api/v1/conversations/${conversationId}/events/history`,route=>route.fulfill({json:{events}}));await page.reload();await expect(page.locator(".process-group>summary")).toHaveText("工具操作 · 3");await expect(page.locator(".tool-activity.failed")).toBeVisible();
- await page.getByRole("button",{name:"简洁过程",exact:true}).click();await expect(page.locator(".process-group")).toHaveCount(0);await expect(page.locator(".tool-activity")).toHaveCount(4);await page.screenshot({path:info.outputPath("detailed-activity.png")});
- await page.reload();await expect(page.getByRole("button",{name:"详细过程",exact:true})).toHaveAttribute("aria-pressed","true");expect(api.mutations.filter(item=>item.path.includes("/inputs"))).toHaveLength(0);
+ await openConversationOptions(page);await page.getByRole("button",{name:"简洁过程",exact:true}).click();await expect(page.locator(".process-group")).toHaveCount(0);await expect(page.locator(".tool-activity")).toHaveCount(4);await page.screenshot({path:info.outputPath("detailed-activity.png")});
+ await page.reload();await openConversationOptions(page);await expect(page.getByRole("button",{name:"详细过程",exact:true})).toHaveAttribute("aria-pressed","true");expect(api.mutations.filter(item=>item.path.includes("/inputs"))).toHaveLength(0);
 });

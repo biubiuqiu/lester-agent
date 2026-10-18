@@ -7,6 +7,7 @@ import { readView, updateView } from "@/lib/conversation-view-state";
 import { sameInteractionResponse } from "@/lib/interaction-response";
 import type { QuestionAnswer, UserQuestion } from "@/lib/user-question";
 import { StructuredQuestions } from "./structured-questions";
+import { ConversationRecord } from "./conversation-presentation";
 
 type Answer = QuestionAnswer;
 type Response = { request_digest: string; answers?: Record<string, Answer>; decision?: string; feedback?: string };
@@ -51,11 +52,15 @@ export function RunInteractions({ conversationId, storageKey, active, revision, 
   };
   if (!error && !data.interactions.length && (!active || data.execution_mode !== "plan")) return null;
   const target = questionTargetId && typeof document !== "undefined" ? document.getElementById(questionTargetId) : null;
-  return <section className="run-interactions" aria-label={t("任务协作")}>
+  const waiting = data.interactions.filter(item => item.status === "pending");
+  const history = data.interactions.filter(item => item.status !== "pending");
+  return <>
+    {history.length ? <ConversationRecord slot="questions"><div className="interaction-history">{history.toReversed().map(item => <InteractionCard key={item.id} item={item} conversationId={conversationId} storageKey={storageKey} onConfirmed={confirmed} />)}</div></ConversationRecord> : null}
+    {error || waiting.length || active && data.execution_mode === "plan" ? <section className="run-interactions" aria-label={t("任务协作")}>
     {active && data.execution_mode === "plan" ? <p className="interaction-mode">{t("Plan · 仅查看与规划")}</p> : null}
     {error ? <p role="alert">{error} <button type="button" onClick={() => refresh.current()}>{t("重试")}</button></p> : null}
-    {data.interactions.toReversed().map(item => {const card=<InteractionCard key={item.id} item={item} conversationId={conversationId} storageKey={storageKey} onConfirmed={confirmed}/>;return item.kind==="question"&&item.status==="pending"&&target?createPortal(card,target,item.id):card;})}
-  </section>;
+    {waiting.toReversed().map(item => {const card=<InteractionCard key={item.id} item={item} conversationId={conversationId} storageKey={storageKey} onConfirmed={confirmed}/>;return item.kind==="question"&&item.status==="pending"&&target?createPortal(card,target,item.id):card;})}
+  </section> : null}</>;
 }
 
 function InteractionCard({ item, conversationId, storageKey, onConfirmed }: { item: Interaction; conversationId: string; storageKey: string; onConfirmed: (item: Interaction) => void }) {

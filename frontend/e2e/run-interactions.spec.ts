@@ -1,3 +1,4 @@
+import { openConversationRecords } from "./conversation-controls";
 import { test as base, expect, type Page } from "@playwright/test";
 import { WorkspaceApi, conversationId, prompt } from "./workspace-api";
 
@@ -67,7 +68,7 @@ test("a lost question response confirms by scoped receipt and never resubmits", 
   await page.screenshot({ path: info.outputPath("pending-question-review.png") });
   await page.getByRole("button", { name: "提交回答", exact: true }).click();
   await expect(page.locator(".interaction-receipt>summary")).toHaveText("已回答");
-  await page.locator(".interaction-receipt>summary").click();
+  await openConversationRecords(page); await page.locator(".interaction-receipt>summary").click();
   await expect(page.locator(".interaction-content")).toContainText("保留极简风格");
   await expect(page.getByRole("button", { name: "批准并执行", exact: true })).toHaveCount(0);
   await expect(input).toHaveValue("回答时保留的草稿");
@@ -105,7 +106,7 @@ test("pending answers survive refresh, then cancellation removes all decision co
   api.failRun("fixture owner interrupted");
   await expect(page.getByRole("button", { name: "提交回答", exact: true })).toHaveCount(0);
   await expect(page.locator(".interaction-receipt>summary")).toHaveText("已取消");
-  await page.locator(".interaction-receipt>summary").click();
+  await openConversationRecords(page); await page.locator(".interaction-receipt>summary").click();
   await expect(page.locator(".interaction-content")).toContainText("此请求已撤销，旧回答或批准不会启动任务。");
 });
 

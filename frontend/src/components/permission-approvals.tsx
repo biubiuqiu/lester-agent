@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { LoaderCircle, ShieldCheck } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { useT } from "./i18n";
+import { ConversationRecord } from "./conversation-presentation";
 
 type Permission = {
   id: string; run_id: string; tool: string; request_digest: string;
@@ -61,7 +62,7 @@ export function PermissionApprovals({ conversationId, runId, active, revision }:
   const reviewing = items.filter(item => item.status === "reviewing" && active && item.run_id === runId);
   const history = items.filter(item => !unresolved(item));
   if (!items.length && !error) return null;
-  return <section className="permission-approvals" aria-label={t("操作审批")}>
+  return <>{error || waiting.length || reviewing.length ? <section className="permission-approvals" aria-label={t("操作审批")}>
     {error ? <p role="alert">{error}<button type="button" onClick={() => refresh.current()}>{t("检查状态")}</button></p> : null}
     {reviewing.map(item => <article className="permission-card permission-reviewing" key={item.id} role="status"><header><LoaderCircle size={16} /><strong>{t("AI 正在审批命令")}</strong></header><pre>{operation(item)}</pre></article>)}
     {waiting.map(item => <article className="permission-card" key={item.id}>
@@ -75,6 +76,7 @@ export function PermissionApprovals({ conversationId, runId, active, revision }:
         {item.tool === "bash" ? <button type="button" disabled={pending} onClick={() => void respond(item, "full")}>{t("本次任务完全访问")}</button> : null}
         <button type="button" disabled={pending} onClick={() => void respond(item, "reject")}>{t("拒绝")}</button></div>
     </article>)}
-    {history.length ? <details className="permission-history"><summary>{t("审批记录")} · {history.length}</summary>{history.map(item => <p key={item.id}><code>{operation(item)}</code> · {item.decision_source === "llm" ? t("AI 审批") : t("操作审批")} · {t(item.status === "approved" ? "已允许" : item.status === "rejected" ? "已拒绝" : "已取消")}{item.review_reason ? <small className="permission-review-reason">{t(item.review_reason)}</small> : null}</p>)}</details> : null}
-  </section>;
+  </section> : null}
+    {history.length ? <ConversationRecord slot="permissions"><details className="permission-history"><summary>{t("审批记录")} · {history.length}</summary>{history.map(item => <p key={item.id}><code>{operation(item)}</code> · {item.decision_source === "llm" ? t("AI 审批") : t("操作审批")} · {t(item.status === "approved" ? "已允许" : item.status === "rejected" ? "已拒绝" : "已取消")}{item.review_reason ? <small className="permission-review-reason">{t(item.review_reason)}</small> : null}</p>)}</details></ConversationRecord> : null}
+  </>;
 }

@@ -63,6 +63,15 @@ for (const locale of ["zh-CN", "fr"] as const) {
         expect(bounds.x).toBeGreaterThanOrEqual(7);
         expect(bounds.x + bounds.width).toBeLessThanOrEqual(page.viewportSize()!.width - 7);
         expect(bounds.y).toBeGreaterThanOrEqual(before.y + before.height - 8);
+        // Session tools must be visible without scrolling through project/help
+        // links, including long translations on narrow screens.
+        for (const label of ["会话回顾", "上下文概览", "简洁过程"]) {
+          const action = popup.getByRole("button", { name: t(label), exact: true });
+          await expect(action).toBeVisible();
+          const actionBounds = (await action.boundingBox())!;
+          expect(actionBounds.y).toBeGreaterThanOrEqual(bounds.y);
+          expect(actionBounds.y + actionBounds.height).toBeLessThanOrEqual(bounds.y + bounds.height);
+        }
         const after = (await header.boundingBox())!;
         expect(after).toEqual(before);
         if (previewBefore) expect(await panel.boundingBox()).toEqual(previewBefore);
