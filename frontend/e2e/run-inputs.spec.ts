@@ -5,6 +5,11 @@ const prefix = `/api/v1/conversations/${conversationId}/permissions/inputs`;
 const test = base.extend<{ api: WorkspaceApi }>({ api: async ({ context, page }, runFixture) => {
   const api = new WorkspaceApi(), errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
+  page.on("console", message => {
+    // Authentication checks and the explicit lost-receipt fixtures return these
+    // statuses; unexpected asset failures and application errors still fail QA.
+    if (message.type() === "error" && !/Failed to load resource:.*status of (401|503)\b/.test(message.text())) errors.push(message.text());
+  });
   await api.install(context);
   try { await runFixture(api); expect(api.unexpected).toEqual([]); expect(errors).toEqual([]); } finally { await api.close(); }
 } });
@@ -31,15 +36,22 @@ test("typing preserves running drafts; adjustment is explicit and receipt loss n
   });
   await context.route(`**${prefix}/*`, route => { reads++; return route.fulfill({ json: accepted }); });
   const input = await start(page, api);
+  await expect(page).toHaveTitle(/Lester/);
+  await expect(page.getByRole("button", { name: "运行中输入", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "补充当前任务", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "发送到队列", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "停止生成", exact: true })).toBeEnabled();
+  await page.locator(".composer-dock > .compose-box").screenshot({ path: info.outputPath("empty-running-composer.png") });
   await input.fill("只优化颜色");
   expect(posts).toBe(0); await expect(input).toHaveValue("只优化颜色");
-  await page.getByRole("button", { name: "运行中输入", exact: true }).click();
-  await expect(page.getByRole("button", { name: "调整当前任务", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "补充当前任务", exact: true })).toBeVisible();
   await expect(page.locator(".composer-motion-ghost")).toHaveCount(0);
-  await page.screenshot({ path: info.outputPath("running-input-menu.png") });
-  await page.getByRole("button", { name: "调整当前任务", exact: true }).click();
+  await page.locator(".composer-dock > .compose-box").screenshot({ path: info.outputPath("current-task-supplement.png") });
+  await page.getByRole("button", { name: "补充当前任务", exact: true }).click();
   await expect(input).toHaveValue("");
   expect(posts).toBe(1); expect(reads).toBe(1);
+  await expect(input).toBeFocused();
+  await expect(page.getByRole("button", { name: "补充当前任务", exact: true })).toHaveCount(0);
   await expect(page.locator(".composer-queue")).toContainText("等待加入当前任务");
   await expect(page.getByRole("button", { name: "停止生成", exact: true })).toBeEnabled();
 });
@@ -49,11 +61,30 @@ test("unknown acceptance preserves draft and shows an honest error", async ({ co
   await context.route(`**${prefix}/*`, route => route.fulfill({ status: 503, json: { error: "unknown" } }));
   const input = await start(page, api);
   await input.fill("不要丢掉这个调整");
-  await page.getByRole("button", { name: "运行中输入", exact: true }).click();
-  await page.getByRole("button", { name: "调整当前任务", exact: true }).click();
+  await page.getByRole("button", { name: "补充当前任务", exact: true }).click();
   await expect(page.locator(".compose-error")).toContainText("结果待确认");
   await expect(input).toHaveValue("不要丢掉这个调整");
   expect(posts).toBe(1);
+});
+test("supplements keep selected attachments in the draft and require the queue", async ({ page, api }, info) => {
+  const input = await start(page, api);
+  await input.fill("这份材料请留给下一任务");
+  const supplement = page.getByRole("button", { name: "补充当前任务", exact: true });
+  await expect(supplement).toBeEnabled();
+  await page.locator('.composer input[type="file"]').setInputFiles({ name: "brief.txt", mimeType: "text/plain", buffer: Buffer.from("fixture brief") });
+  await expect(supplement).toBeDisabled();
+  await expect(supplement).toHaveAttribute("title", "附件和 @ 引用请使用下一任务队列。");
+  await expect(page.getByRole("button", { name: "发送到队列", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "停止生成", exact: true })).toBeEnabled();
+  await expect(page.locator(".pending-attachments")).toContainText("brief.txt");
+  await page.screenshot({ path: info.outputPath("attachment-requires-queue.png") });
+  expect(api.mutations.filter(item => item.path.endsWith("/inputs"))).toHaveLength(0);
+  await page.getByRole("button", { name: "移除 brief.txt", exact: true }).click();
+  await expect(supplement).toBeEnabled();
+  await expect(input).toHaveValue("这份材料请留给下一任务");
+  await input.fill("   ");
+  await expect(supplement).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "发送到队列", exact: true })).toHaveCount(0);
 });
 test("queued task starts normally so the Agent can choose planning independently", async ({ context, page, api }) => {
   let accepted: RunInput | undefined;
@@ -65,8 +96,7 @@ test("queued task starts normally so the Agent can choose planning independently
   });
   const input = await start(page, api);
   await input.fill("接下来先审查代码");
-  await page.getByRole("button", { name: "运行中输入", exact: true }).click();
-  await page.getByRole("button", { name: "排队下一任务", exact: true }).click();
+  await page.getByRole("button", { name: "发送到队列", exact: true }).click();
   await expect(input).toHaveValue("");
   await expect(page.locator(".composer-queue")).toContainText("等待下一任务");
   expect(api.mutations.filter(item => item.path.endsWith("/messages"))).toHaveLength(1);

@@ -211,7 +211,7 @@ test("file completion events replay after a disconnected conversation stream", a
   try {
     await page.reload();
     await page.getByRole("textbox", { name: "消息输入框", exact: true }).fill("事件回放期间保留的草稿");
-    await expect(page.getByRole("button", { name: "运行中输入", exact: true })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "补充当前任务", exact: true })).toBeEnabled();
     await expect.poll(() => api.streamCount).toBe(0);
     api.finish();
     api.writeFile("replay.html", "<!doctype html><h1>事件回放产物</h1>");

@@ -1432,7 +1432,6 @@
   "Agent 需要关键选择时，会在对话中显示问题和选项，也可补充自由回答。回答草稿随会话保存，刷新后可继续。问题回答不是执行批准；提交结果不确定时只检查原请求，不会自动重复提交。停止或中断任务会撤销待答请求，旧回答和批准不能重新启动任务。": "When an important choice is needed, the Agent shows questions and options in the conversation, with free-text answers available. Answer drafts are saved per conversation and survive refresh. Answers do not approve execution. Uncertain submissions are checked by their original receipt without automatic resubmission. Stopping or interrupting a task revokes pending requests; previous answers and approvals cannot restart it.",
   "已完成 001–019 的部署补齐 020（context_checkpoints）和 021（run_interactions）；已完成 001–020 时只执行 021。先备份并停止 API 写入，不重复旧迁移。回滚 021 前先停止相关活跃任务并配套兼容服务，原始消息和文件保留；回滚 020 只删除摘要检查点。": "Deployments on 001–019 apply missing 020 (context_checkpoints) and 021 (run_interactions); deployments already on 001–020 apply only 021. Back up and stop API writes first; never repeat old migrations. Stop affected active tasks and restore compatible services before rolling back 021. Original messages and files remain; rolling back 020 removes summary checkpoints only.",
   "自由回答": "Free-text answer",
-  "运行中输入": "While running",
   "调整当前任务": "Adjust current task",
   "排队下一任务": "Queue next task",
   "在当前工具步骤结束后加入指令；只接受文字。": "Add instructions after the current tool step finishes; text only.",
@@ -1496,7 +1495,6 @@
   "项目菜单中的“项目规则”可保存明确编写的项目约定，显示来源、版本和 SHA-256。任务和队列受理时固定规则快照；之后编辑规则或移动会话只影响未来受理的任务。过期版本不能覆盖新规则，编辑草稿保留。规则不授予工具权限，不替代平台限制或最新用户要求。": "The project menu’s “Project rules” stores explicitly authored conventions with source, version and SHA-256. Tasks and queue entries pin rules when accepted. Later edits or conversation moves affect only future accepted tasks. Stale versions cannot overwrite current rules and editor drafts remain. Rules grant no tool permissions and cannot replace platform constraints or the latest user requirements.",
   "已完成 001–022 时依次执行 023（file_changes）和 024（project_rules）；更早版本补齐所有缺失迁移。先备份、停止 API 写入并保留密钥与 Volume。回滚前停止任务并配套兼容服务；024 删除项目设置规则，已受理消息快照保留；023 删除审阅及恢复记录，不会撤销实际文件操作。": "If 001–022 are applied, apply 023 (file_changes) then 024 (project_rules). Earlier versions apply all missing migrations. Back up, stop API writes and preserve keys and volumes. Stop tasks and restore compatible services before rollback. 024 removes project settings rules while accepted message snapshots remain; 023 removes review/restore records without undoing actual file operations.",
   "发送到队列": "Send to queue",
-  "发送将排队，当前任务完成后开始；也可选择调整当前任务。": "Sending queues the next task; it starts after this task completes. You can also adjust the current task.",
   "草稿保存在当前浏览器，关闭标签页或窗口后再打开也会恢复；按用户、工作区与会话隔离。退出登录会清除本地草稿。附件原文件不会保存到浏览器，重新打开后需要重新选择。任务运行中按发送或 Enter 会明确排队，完成后开始；也可选择调整当前任务，在工具步骤安全结束后补充文字。": "Drafts are saved in this browser and restored after closing and reopening a tab or window, separately for each user, workspace and conversation. Logging out clears local drafts. Original attachment files are not stored in the browser and must be selected again. During a task, Send or Enter explicitly queues the next message to start after completion. You can also adjust the current task with text at a safe tool-step boundary.",
   "已处理消息": "Processed messages",
   "{0} 个附件": "{0} attachments",
@@ -1553,7 +1551,6 @@
   "添加内容": "Add content",
   "复杂任务由 Agent 主动进入 Plan，先只读检查并提出计划；简单任务可直接执行。Plan 中不能运行命令、修改文件或发布。计划可批准、提出调整或暂不执行，批准仅绑定本次任务与当前版本，权限设置保持独立。": "For complex tasks, the Agent can enter Plan to inspect read-only and propose an approach; simple tasks can proceed directly. Plan blocks commands, file changes and publication. Approve, revise or decline the exact plan for this task. Operation permissions remain separate.",
   "点击输入框的“＋”上传附件、添加 @ 引用或选择 Agent；也可直接输入 @ 或粘贴图片。模型在右侧选择，任务运行中暂不可切换。": "Use + to upload attachments, add @ references or choose an Agent. You can also type @ or paste images. Select the model on the right; it stays locked while a task is running.",
-  "运行中点击“运行中输入”，可选择调整当前任务或排队下一任务。调整只接受文字，在完整工具批次后加入，不打断或重放命令，也不批准 Plan。排队可包含附件与 @ 引用，并保存受理时的模型、权限与材料；新任务由 Agent 判断是否先规划。": "While running, use Running input to adjust the current task or queue the next one. Adjustments are text only and join after a complete tool batch, without interrupting or replaying commands or approving Plan. Queued tasks retain attachments, @ references and the accepted model, permissions and materials. The Agent decides whether each new task needs planning.",
   "进入规划": "Enter planning",
   "提交计划": "Submit plan",
   "澄清需求": "Clarify requirements",
@@ -1774,5 +1771,9 @@
   "自动审批超时或返回格式无效，请你确认这次操作。": "Automatic review timed out or returned an invalid response. Please review this operation.",
   "自动审批会使用当前任务的模型进行独立审查；允许后执行，拒绝则停止该操作，不确定或审查失败时交给你确认。敏感文件仍需确认，审批不会改变 Plan 或 Computer 的范围。": "Auto approval uses the current task’s model in a separate review call. Allowed operations execute; denied operations stop. Uncertainty or review failure asks for your confirmation. Sensitive files still require confirmation, and reviews never expand Plan or Computer boundaries.",
   "运行中修改权限会立即作用于当前任务尚未开始的操作，已排队任务保留发送时的权限。命令审批卡片也可选择“本次任务完全访问”。": "Changing permissions during a run immediately affects operations that have not started. Queued tasks keep their submitted permissions. Command approval cards also offer “Full access for this task”.",
-  "已有部署需备份并停止 API 写入与活跃任务，按顺序补齐迁移至 000028_permission_reviews.up.sql，再同步重建 API 与 Web。新 Compose 数据库初始化 001–028；不要删除数据卷。": "For an existing installation, back up and stop API writes and active tasks, apply all missing migrations through 000028_permission_reviews.up.sql in order, then rebuild API and Web together. New Compose databases initialize 001–028; do not delete data volumes."
+  "已有部署需备份并停止 API 写入与活跃任务，按顺序补齐迁移至 000028_permission_reviews.up.sql，再同步重建 API 与 Web。新 Compose 数据库初始化 001–028；不要删除数据卷。": "For an existing installation, back up and stop API writes and active tasks, apply all missing migrations through 000028_permission_reviews.up.sql in order, then rebuild API and Web together. New Compose databases initialize 001–028; do not delete data volumes.",
+  "补充当前任务": "Add to current task",
+  "在当前步骤结束后补充这段文字，不停止任务。": "Add this text after the current step finishes, without stopping the task.",
+  "发送后排队，当前任务完成后开始。": "Sending queues this message until the current task finishes.",
+  "任务运行时，发送或按 Enter 会排队下一任务；输入文字后可点击“补充当前任务”，在完整工具批次结束后加入补充，不打断或重放命令，也不批准 Plan。补充只接受文字；附件与 @ 引用需排队，并保留受理时的模型、权限与材料。新任务由 Agent 判断是否先规划。": "While a task is running, Send or Enter queues the next task. After typing, choose Add to current task to add text after the complete tool batch, without interrupting or replaying commands or approving Plan. Adjustments accept text only; attachments and @ references must be queued, retaining the accepted model, permissions and materials. The Agent decides whether each new task needs planning."
 }
