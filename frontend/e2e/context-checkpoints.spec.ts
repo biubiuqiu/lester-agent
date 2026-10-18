@@ -1,3 +1,4 @@
+import { openConversationRecords } from "./conversation-controls";
 import { test as base, expect, type Page } from "@playwright/test";
 import { WorkspaceApi, conversationId, prompt } from "./workspace-api";
 
@@ -32,7 +33,7 @@ test("context organization reports real events, stays collapsed and preserves th
   await expect(page.getByRole("button", { name: "停止生成", exact: true })).toBeVisible();
   api.contextEvent("CONTEXT_COMPACTED", { checkpoint_id: "fixture-cp", through_seq: 20, source_count: 16, estimated_before: 54000, estimated_after: 18000, source: "estimated" });
   await expect(row.locator("summary")).toHaveText("历史已整理，继续任务");
-  await row.locator("summary").click();
+  await openConversationRecords(page); await row.locator("summary").click();
   await expect(row).toContainText("请求输入估算：54000 → 18000 token；不是 Provider 精确计数。");
   await expect(input).toHaveValue("整理过程中保留的追问草稿");
   await expect(page.locator(".chat-message.user").filter({ hasText: prompt })).toHaveCount(1);
@@ -47,7 +48,7 @@ test("failed compaction reports the preserved boundary and interrupted work cann
   api.contextEvent("CONTEXT_COMPACTION_FAILED", { prior_checkpoint_preserved: true, error_kind: "protocol" });
   const row = page.locator(".tool-activity").filter({ hasText: "完整聊天记录仍然保留" });
   await expect(row.locator("summary")).toHaveText("保留原上下文，继续检查");
-  await row.locator("summary").click();
+  await openConversationRecords(page); await row.locator("summary").click();
   await expect(row).toContainText("本轮已停止自动整理。旧检查点保持不变，超出预算时任务会明确停止。");
   await expect(input).toHaveValue("失败后仍然保留的草稿");
   api.contextEvent("CONTEXT_COMPACTING");

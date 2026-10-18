@@ -5,8 +5,8 @@ import { createPortal } from "react-dom";
 import { ChevronRight, ListTree } from "lucide-react";
 import { useT } from "./i18n";
 
-type RecordSlot = "questions" | "commands" | "changes" | "permissions" | "inputs" | "files";
-const slots: RecordSlot[] = ["questions", "commands", "changes", "permissions", "inputs", "files"];
+type RecordSlot = "activity" | "questions" | "commands" | "changes" | "permissions" | "inputs" | "files";
+const slots: RecordSlot[] = ["activity", "questions", "commands", "changes", "permissions", "inputs", "files"];
 type ToolsHost = { element: HTMLDivElement; close: () => void };
 type Presentation = {
   history: HTMLDivElement | null;

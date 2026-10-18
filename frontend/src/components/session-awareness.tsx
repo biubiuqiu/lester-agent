@@ -68,7 +68,7 @@ export function SessionAwareness({ messages, events, references, attachmentNames
     <ConversationTools><div className="session-awareness-tools">
       <button ref={recapButton} type="button" onClick={() => { setContextOpen(false); if (recap.open) recap.close(); else recap.show(); }} aria-expanded={recap.open} title={recap.available ? t("离开后有新进展") : "/recap"}><BookOpen /><span>{t("会话回顾")}</span>{recap.available ? <i aria-hidden="true" /> : null}</button>
       <button ref={contextButton} type="button" aria-label={t("上下文概览")} onClick={() => { recap.close(); setContextOpen(value => !value); }} aria-expanded={contextOpen}><Layers /><span>{t("上下文概览")}</span>{materials + references.length + attachmentNames.length + Number(Boolean(fileReference)) > 0 ? <small aria-hidden="true">{materials + references.length + attachmentNames.length + Number(Boolean(fileReference))}</small> : null}</button>
-      <button type="button" onClick={onDetail} aria-pressed={detailed}><ListTree /><span>{t(detailed ? "详细过程" : "简洁过程")}</span></button>
+      <button type="button" onClick={onDetail} aria-pressed={detailed}><ListTree /><span>{t("显示执行过程")}</span></button>
     </div></ConversationTools>
     {recap.open || contextOpen ? <section className="session-awareness" aria-label={t("会话导航")}>
     {recap.open ? <section className="session-recap" onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeRecap(); } }} aria-label={t("会话回顾")}>

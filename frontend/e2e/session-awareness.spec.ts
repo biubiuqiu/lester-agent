@@ -1,4 +1,4 @@
-import { openConversationOptions } from "./conversation-controls";
+import { openConversationOptions, openConversationRecords } from "./conversation-controls";
 import { test as base, expect, type Page } from "@playwright/test";
 import { WorkspaceApi, conversationId, prompt } from "./workspace-api";
 const test = base.extend<{ api: WorkspaceApi }>({ api: async ({ context }, run) => { const api = new WorkspaceApi(); await api.install(context); try { await run(api); expect(api.unexpected).toEqual([]); } finally { await context.close(); await api.close(); } } });
@@ -29,10 +29,10 @@ test("stopped task recovery only prepares a draft and never replays work",async(
  const input=await start(page);await input.fill("保留我的补充");api.conversation!.run_status="cancelled";await page.reload();await expect(page.locator(".run-recovery")).toBeVisible();const before=api.mutations.length;
  await page.locator(".run-recovery").getByRole("button",{name:"从当前结果继续",exact:true}).click();await expect(input).toHaveValue(/保留我的补充[\s\S]*请检查当前会话目录/);expect(api.mutations).toHaveLength(before);
 });
-test("compact tool groups preserve errors and detailed mode shows every call",async({page,context,api},info)=>{
+test("focused reading preserves errors and detailed mode shows every call",async({page,context,api},info)=>{
  await start(page);const make=(id:number,type:string,payload:Record<string,unknown>={})=>({id,type,payload,run_id:"fixture-run",conversation_id:conversationId,created_at:new Date().toISOString()});
  const events=[make(1,"RUN_STARTED"),...Array.from({length:3},(_,i)=>[make(2+i*2,"TOOL_STARTED",{tool:"read",arguments:{file_path:`file-${i}.txt`}}),make(3+i*2,"TOOL_COMPLETED",{tool:"read",result:{content:"fixture"}})]).flat(),make(8,"TOOL_STARTED",{tool:"bash",arguments:{command:"fixture-test"}}),make(9,"TOOL_FAILED",{tool:"bash",error:"fixture failure"})];
- await context.route(`**/api/v1/conversations/${conversationId}/events/history`,route=>route.fulfill({json:{events}}));await page.reload();await expect(page.locator(".process-group>summary")).toHaveText("工具操作 · 3");await expect(page.locator(".tool-activity.failed")).toBeVisible();
- await openConversationOptions(page);await page.getByRole("button",{name:"简洁过程",exact:true}).click();await expect(page.locator(".process-group")).toHaveCount(0);await expect(page.locator(".tool-activity")).toHaveCount(4);await page.screenshot({path:info.outputPath("detailed-activity.png")});
- await page.reload();await openConversationOptions(page);await expect(page.getByRole("button",{name:"详细过程",exact:true})).toHaveAttribute("aria-pressed","true");expect(api.mutations.filter(item=>item.path.includes("/inputs"))).toHaveLength(0);
+ await context.route(`**/api/v1/conversations/${conversationId}/events/history`,route=>route.fulfill({json:{events}}));await page.reload();await expect(page.locator(".conversation-stream .tool-activity.completed")).toHaveCount(0);await openConversationRecords(page);await expect(page.locator(".conversation-records .tool-activity.completed")).toHaveCount(3);await expect(page.locator(".tool-activity.failed")).toBeVisible();
+ await openConversationOptions(page);await page.getByRole("button",{name:"显示执行过程",exact:true}).click();await expect(page.locator(".process-group")).toHaveCount(0);await expect(page.locator(".tool-activity")).toHaveCount(4);await page.screenshot({path:info.outputPath("detailed-activity.png")});
+ await page.reload();await openConversationOptions(page);await expect(page.getByRole("button",{name:"显示执行过程",exact:true})).toHaveAttribute("aria-pressed","true");expect(api.mutations.filter(item=>item.path.includes("/inputs"))).toHaveLength(0);
 });

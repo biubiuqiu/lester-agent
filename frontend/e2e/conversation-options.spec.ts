@@ -65,7 +65,7 @@ for (const locale of ["zh-CN", "fr"] as const) {
         expect(bounds.y).toBeGreaterThanOrEqual(before.y + before.height - 8);
         // Session tools must be visible without scrolling through project/help
         // links, including long translations on narrow screens.
-        for (const label of ["会话回顾", "上下文概览", "简洁过程"]) {
+        for (const label of ["会话回顾", "上下文概览", "显示执行过程"]) {
           const action = popup.getByRole("button", { name: t(label), exact: true });
           await expect(action).toBeVisible();
           const actionBounds = (await action.boundingBox())!;

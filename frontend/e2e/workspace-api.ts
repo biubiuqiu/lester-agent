@@ -101,6 +101,10 @@ export class WorkspaceApi {
 
   planModeEvent() { this.emit(this.nextEventId++, "EXECUTION_MODE_CHANGED", { execution_mode: "plan", reason: "Fixture architectural change" }); }
 
+  modelEvent(type: "MODEL_STARTED" | "MODEL_DELTA" | "MODEL_COMPLETED", payload: Record<string, unknown> = {}) {
+    this.emit(this.nextEventId++, type, payload);
+  }
+
   contextEvent(type: "CONTEXT_COMPACTING" | "CONTEXT_COMPACTED" | "CONTEXT_COMPACTION_FAILED", payload: Record<string, unknown> = {}) {
     this.emit(this.nextEventId++, type, payload);
   }

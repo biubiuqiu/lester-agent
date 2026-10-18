@@ -53,7 +53,8 @@ test("composer expands and bounds long drafts; typing active-run follow-ups neve
   await expect.poll(async () => (await input.boundingBox())!.height).toBeCloseTo(empty, 1);
   await start(page, api);
   await input.fill("请稍后继续处理这份材料");
-  await expect(page.getByText("发送将排队，当前任务完成后开始；也可选择调整当前任务。", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "发送到队列", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "补充当前任务", exact: true })).toBeEnabled();
   await expect(input).toHaveValue("请稍后继续处理这份材料");
   await page.locator('.composer input[type="file"]').setInputFiles({ name: "下一轮.txt", mimeType: "text/plain", buffer: Buffer.from("draft material") });
   await expect(page.locator(".pending-attachments")).toContainText("下一轮.txt");
@@ -125,7 +126,9 @@ test("response copying confirms real clipboard writes; quoting appends without s
   await expect(reply).toContainText("测试标题");
   await reply.getByRole("button", { name: "复制代码", exact: true }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("print('Lester')\n");
-  await reply.getByRole("button", { name: "保留格式复制", exact: true }).click();
+  await reply.getByRole("button", { name: "复制选项", exact: true }).click();
+  const copyMenu = page.getByRole("dialog", { name: "复制回答", exact: true });
+  await copyMenu.getByRole("button", { name: "保留格式复制", exact: true }).click();
   let rich = "";
   await expect.poll(async () => {
     rich = await page.evaluate(async () => {
@@ -137,8 +140,10 @@ test("response copying confirms real clipboard writes; quoting appends without s
   expect(rich).not.toContain("复制代码");
   await page.screenshot({ path: info.outputPath("copy-success.png") });
   await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => { throw Error("fixture clipboard denied"); } } }));
-  await reply.getByRole("button", { name: "复制回答", exact: true }).click();
-  await expect(reply.locator(".copy-error")).toContainText("复制失败");
+  await copyMenu.getByRole("button", { name: "复制回答", exact: true }).click();
+  await expect(copyMenu.locator(".copy-error")).toContainText("复制失败");
+  await page.keyboard.press("Escape");
+  await expect(reply.getByRole("button", { name: "复制选项", exact: true })).toBeFocused();
   const input = page.getByRole("textbox", { name: "消息输入框", exact: true });
   await input.fill("已有草稿");
   // Resizing the composer can scroll the thread and dismiss a text selection.

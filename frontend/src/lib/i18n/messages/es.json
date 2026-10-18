@@ -1547,7 +1547,6 @@
   "最近消息的材料": "Materiales del último mensaje",
   "在已有会话点击“会话回顾”或输入 /recap，查看最近目标、回复和文件更新。回顾只整理已加载的记录，不调用模型，不自动执行或批准操作。": "En una conversación existente, selecciona Resumen de sesión o escribe /recap para consultar el último objetivo, la respuesta y los cambios en archivos. Solo usa registros cargados; no llama al modelo, ejecuta tareas ni autoriza acciones.",
   "离开至少两分钟且有新进展时可自动展开；未发送草稿会阻止自动展开。在回顾中可关闭自动回顾。恢复操作仅将指令加入草稿，确认发送后才开始新任务。": "El resumen puede abrirse tras dos minutos de ausencia si hay novedades, salvo que exista un borrador sin enviar. Puedes desactivarlo en el panel. Las acciones de recuperación solo añaden instrucciones al borrador; debes enviarlo para iniciar otra tarea.",
-  "上下文概览区分最近用户消息的材料快照与待发送材料；不代表完整模型请求。简洁过程合并连续完成的工具记录，详细过程保留逐条记录，异常不会被当作成功隐藏。": "La vista del contexto distingue las instantáneas del último mensaje de usuario de los materiales sin enviar; no es la solicitud completa al modelo. La actividad resumida agrupa herramientas completadas consecutivamente y la detallada conserva cada registro. Los errores nunca se agrupan como éxitos.",
   "添加内容": "Añadir contenido",
   "复杂任务由 Agent 主动进入 Plan，先只读检查并提出计划；简单任务可直接执行。Plan 中不能运行命令、修改文件或发布。计划可批准、提出调整或暂不执行，批准仅绑定本次任务与当前版本，权限设置保持独立。": "En tareas complejas, el Agent puede entrar en Plan para revisar en modo de solo lectura y proponer un enfoque. Las tareas sencillas pueden ejecutarse directamente. Plan bloquea comandos, cambios de archivos y publicaciones. Puedes aprobar, revisar o rechazar el plan exacto de esta tarea. Los permisos siguen siendo independientes.",
   "点击输入框的“＋”上传附件、添加 @ 引用或选择 Agent；也可直接输入 @ 或粘贴图片。模型在右侧选择，任务运行中暂不可切换。": "Usa + para adjuntar archivos, añadir referencias @ o elegir un Agent. También puedes escribir @ o pegar imágenes. El modelo se elige a la derecha y permanece bloqueado durante la tarea.",
@@ -1780,5 +1779,9 @@
   "后台命令仍需检查 · {0}": "Comandos en segundo plano por revisar · {0}",
   "查看后台命令": "Ver comandos en segundo plano",
   "对话页集中展示消息与成果。右上角“更多会话选项”可打开会话回顾、上下文概览和过程显示；已回答问题、命令、文件修改、审批和已处理消息集中在“执行详情”。待回答、待审批和未结束的后台命令仍单独显示。": "La conversación se centra en los mensajes y los resultados. Más opciones de conversación, arriba a la derecha, permite abrir el resumen, el contexto y la vista del proceso. Las preguntas respondidas, los comandos, los cambios en archivos, las aprobaciones y los mensajes procesados se agrupan en Detalles de ejecución. Las preguntas y aprobaciones pendientes y los comandos en segundo plano sin finalizar siguen visibles por separado.",
-  "会话回顾、上下文概览和过程显示位于右上角“更多会话选项”。": "El resumen, el contexto y la vista del proceso están en Más opciones de conversación, arriba a la derecha."
+  "会话回顾、上下文概览和过程显示位于右上角“更多会话选项”。": "El resumen, el contexto y la vista del proceso están en Más opciones de conversación, arriba a la derecha.",
+  "操作结果尚未确认": "Resultado de la operación sin confirmar",
+  "显示执行过程": "Mostrar el proceso de ejecución",
+  "复制选项": "Opciones de copia",
+  "上下文概览区分已受理材料与待发送材料，不代表完整模型请求。默认对话展示最终回复、当前输出和实际异常；中途说明、工具记录和上下文整理可在“执行详情”查看。右上角“更多会话选项”中的“显示执行过程”可展开全部过程，仅改变当前会话的展示，不改变模型上下文或操作权限。": "El contexto distingue los materiales aceptados de los borradores y no representa la solicitud completa al modelo. Por defecto, la conversación muestra las respuestas finales, la salida actual y los problemas reales. Los comentarios intermedios, las herramientas y la organización del contexto están en Detalles de ejecución. Mostrar el proceso de ejecución, en las opciones de conversación de arriba a la derecha, despliega todo el proceso de esta conversación sin cambiar el contexto del modelo ni los permisos."
 }

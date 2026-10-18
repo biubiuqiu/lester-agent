@@ -30,7 +30,7 @@ type NarrativeItem =
   | { kind: "context"; event: RunEvent; id: number }
   | { kind: "cancellation"; event: RunEvent };
 
-export function RunNarrative({ events, hideFinalText = false, detailed = false }: { events: RunEvent[]; hideFinalText?: boolean; detailed?: boolean }) {
+export function RunNarrative({ events, hideFinalText = false, detailed = false, presentation = "full" }: { events: RunEvent[]; hideFinalText?: boolean; detailed?: boolean; presentation?: "full" | "focus" | "history" }) {
   const t = useT();
 
   const status = runStatus(events);
@@ -39,6 +39,15 @@ export function RunNarrative({ events, hideFinalText = false, detailed = false }
     const lastText = items.findLastIndex((item) => item.kind === "text");
     if (lastText >= 0) items = items.filter((_, index) => index !== lastText);
   }
+  // Routine event narration is inspected in Execution details. The conversation
+  // keeps the current streaming reply and actual problems visible. A final
+  // stream remains visible until its durable message arrives, without replay.
+  const tail = items.at(-1), latestModel = events.findLast(event => event.type === "MODEL_STARTED");
+  const liveText = tail?.kind === "text" && (!latestModel || tail.event.id > latestModel.id)
+    && (status === "running" || status === "completed" && !hideFinalText) ? tail : undefined;
+  const needsAttention = (item: NarrativeItem) => item.kind === "failure" || item.kind === "cancellation" || item.kind === "tool" && ["failed", "cancelled", "unknown"].includes(item.activity.status);
+  if (presentation === "focus") items = items.filter(item => item === liveText || needsAttention(item));
+  if (presentation === "history") items = items.filter(item => item !== liveText && !needsAttention(item));
   if (items.length === 0) return null;
 
   const rows = items.map((item) => {
@@ -118,7 +127,9 @@ function RunCancellation() {
 function narrativeItems(events: RunEvent[]): NarrativeItem[] {
   const items: NarrativeItem[] = [];
   let current: ToolActivity | null = null;
+  let textBoundary = true;
   for (const event of events) {
+    if (event.type === "MODEL_STARTED") { textBoundary = true; continue; }
     if (event.type.startsWith("CONTEXT_COMPACT")) {
       if (current) { items.push({ kind: "tool", activity: current }); current = null; }
       const previous = items.at(-1);
@@ -134,11 +145,12 @@ function narrativeItems(events: RunEvent[]): NarrativeItem[] {
       const text = event.type === "MODEL_DELTA" ? String(event.payload.delta ?? "") : String(event.payload.text ?? "");
       if (!text) continue;
       const previous = items.at(-1);
-      if (previous?.kind === "text" && previous.event.run_id === event.run_id) {
+      if (!textBoundary && previous?.kind === "text" && previous.event.run_id === event.run_id) {
         previous.event = { ...event, type: "MODEL_TEXT", payload: { text: String(previous.event.payload.text ?? "") + text } };
       } else {
         items.push({ kind: "text", event: { ...event, type: "MODEL_TEXT", payload: { text } } });
       }
+      textBoundary = false;
       continue;
     }
     if (event.type === "TOOL_STARTED") {
@@ -184,6 +196,8 @@ function narrativeItems(events: RunEvent[]): NarrativeItem[] {
     }
   }
   if (current) items.push({ kind: "tool", activity: current });
+  const completed = events.findLast(event => event.type === "RUN_COMPLETED");
+  if (completed) for (const item of items) if (item.kind === "tool" && item.activity.status === "running" && item.activity.id < completed.id) item.activity.status = "unknown";
   return items;
 }
 
@@ -199,10 +213,10 @@ function runStatus(events: RunEvent[]) {
 }
 
 function activityLabel(activity: ToolActivity, t: ReturnType<typeof useT>) {
+  if (activity.status === "unknown") return t(activity.tool === "bash" || activity.tool === "computer_exec" ? "命令状态尚未确认" : "操作结果尚未确认");
   if (activity.tool === "bash" || activity.tool === "computer_exec") {
     if (activity.events.some(event => event.type === "BACKGROUND_STARTED")) return t("已启动后台命令");
     const ended = activity.events.findLast(event => event.type === "COMMAND_COMPLETED");
-    if (activity.status === "unknown") return t("命令状态尚未确认");
     if (ended?.payload.status === "timed_out") return t("命令执行超时");
     if (ended && ended.payload.exit_code_known !== false && typeof ended.payload.exit_code === "number") return t("命令结束 · 退出码 {0}", [String(ended.payload.exit_code)]);
   }

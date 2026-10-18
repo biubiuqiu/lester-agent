@@ -16,6 +16,16 @@
 .conversation-records :is(.command-tasks,.file-changes,.permission-history,.run-input-receipts,.related-files) > summary { min-height: 36px; padding: 8px 4px; }
 .conversation-records .interaction-receipt { margin: 0; padding: 0; border: 0; }
 .conversation-records .interaction-receipt > summary { min-height: 36px; padding: 8px 4px; }
+.conversation-records [data-record-slot=activity] { display: grid; gap: 16px; }
+.conversation-records [data-record-slot=activity]:empty { display: none; }
+.conversation-records [data-record-slot=activity] .run-narrative { gap: 8px; }
+.conversation-records .assistant-progress { font-size: 13px; line-height: 1.75; }
+.message-copy-options { z-index: 130; display: grid; gap: 2px; overflow: auto; padding: 6px; border: 1px solid var(--line); border-radius: 10px; background: #fff; box-shadow: 0 8px 28px #2032251a; }
+.message-copy-options .copy-control { display: block; }
+.message-copy-options .content-copy { width: 100%; justify-content: flex-start; min-height: 40px; text-align: left; }
+.message-copy-options .copy-error { position: static; display: block; width: auto; margin: 4px; }
+.message-copy-options :focus-visible { outline: 2px solid #607d67; outline-offset: -2px; }
+.message-actions:has([aria-expanded=true]) { opacity: 1; }
 .conversation-records :is(pre,code,p) { overflow-wrap: anywhere; }
 .conversation-records .permission-history code { max-width: 100%; vertical-align: middle; }
 .conversation-records-error,.background-command-notice { max-width: 780px; margin: 14px auto; font-size: 12px; line-height: 1.6; }

@@ -2,13 +2,15 @@
 import { useT } from "@/components/i18n";
 
 
-import { Children, isValidElement, useRef, type ReactNode } from "react";
+import { Children, isValidElement, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { Copy } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useOptionalFileWorkspace } from "./file-workspace";
 import { relativeFilePath } from "@/lib/file-inventory";
 import { CopyButton } from "./copy-button";
 import { SelectionQuote } from "./selection-quote";
+import { FloatingPopover } from "./floating-popover";
 
 const remarkPlugins = [remarkGfm];
 
@@ -46,8 +48,25 @@ export function MessageContent({ content, linkFiles = false, actions = false, qu
         {content}
       </ReactMarkdown>
     </div>
-    {actions ? <div className="message-actions"><CopyButton text={content} label={t("复制回答")} compact /><CopyButton text={content} html={formattedHTML} label={t("保留格式复制")} /></div> : null}
+    {actions ? <MessageCopyActions content={content} html={formattedHTML} /> : null}
   </SelectionQuote>;
+}
+
+function MessageCopyActions({ content, html }: { content: string; html: () => string }) {
+  const t = useT(), id = useId(), anchor = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const frame = requestAnimationFrame(() => document.getElementById(id)?.querySelector<HTMLButtonElement>("button")?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [open, id]);
+  return <div className="message-actions" data-copy-exclude="true">
+    <button type="button" className="content-copy" ref={anchor} aria-label={t("复制选项")} title={t("复制选项")} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(value => !value)}><Copy size={14} aria-hidden="true" /></button>
+    {open ? <FloatingPopover anchor={anchor} width={230} id={id} role="dialog" aria-label={t("复制回答")} className="message-copy-options" onClose={reason => { setOpen(false); if (reason === "escape") anchor.current?.focus(); }}>
+      <CopyButton text={content} label={t("复制回答")} />
+      <CopyButton text={content} html={html} label={t("保留格式复制")} />
+    </FloatingPopover> : null}
+  </div>;
 }
 
 function textContent(node: ReactNode): string {

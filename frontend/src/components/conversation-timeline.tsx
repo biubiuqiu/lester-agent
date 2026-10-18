@@ -8,16 +8,20 @@ import { RunEvent, RunNarrative } from "./tool-timeline";
 import { FileText, MessageSquare, Puzzle } from "lucide-react";
 import { withoutPersistedModelText } from "@/lib/model-text-events";
 import { orderedMessages, runSegments, segmentOrder } from "@/lib/timeline-order";
+import { useMemo } from "react";
+import { ConversationRecord } from "./conversation-presentation";
 
 type TimelineItem =
   | { kind: "message"; id: string; order: number; message: Message }
   | { kind: "run"; id: string; order: number; events: RunEvent[]; hideFinalText: boolean };
 
 export function ConversationTimeline({ messages, events, detailed = false }: { messages: Message[]; events: RunEvent[]; detailed?: boolean }) {
-  const items = buildTimeline(messages, events);
-  return <div className="conversation-stream">{items.map((item) => item.kind === "message"
+  const items = useMemo(() => buildTimeline(messages, events), [messages, events]);
+  return <><div className="conversation-stream">{items.map((item) => item.kind === "message"
     ? <ChatMessage message={item.message} key={item.id} />
-    : <RunNarrative detailed={detailed} events={item.events} hideFinalText={item.hideFinalText} key={item.id} />)}</div>;
+    : <RunNarrative presentation={detailed ? "full" : "focus"} detailed={detailed} events={item.events} hideFinalText={item.hideFinalText} key={item.id} />)}</div>
+    {!detailed ? <ConversationRecord slot="activity">{items.filter(item => item.kind === "run").map(item => <RunNarrative presentation="history" detailed events={item.events} hideFinalText={item.hideFinalText} key={item.id} />)}</ConversationRecord> : null}
+  </>;
 }
 
 function ChatMessage({ message }: { message: Message }) {

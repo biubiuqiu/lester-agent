@@ -1547,7 +1547,6 @@
   "最近消息的材料": "Materials from the latest message",
   "在已有会话点击“会话回顾”或输入 /recap，查看最近目标、回复和文件更新。回顾只整理已加载的记录，不调用模型，不自动执行或批准操作。": "In an existing conversation, select Session recap or enter /recap to review the latest goal, reply and file updates. Recaps use loaded records only; they do not call a model, execute tasks or approve actions.",
   "离开至少两分钟且有新进展时可自动展开；未发送草稿会阻止自动展开。在回顾中可关闭自动回顾。恢复操作仅将指令加入草稿，确认发送后才开始新任务。": "A recap can open after at least two minutes away if there are updates, unless you have an unsent draft. Disable automatic recaps in the recap panel. Recovery actions only add instructions to the draft; a new task starts only when you send it.",
-  "上下文概览区分最近用户消息的材料快照与待发送材料；不代表完整模型请求。简洁过程合并连续完成的工具记录，详细过程保留逐条记录，异常不会被当作成功隐藏。": "Context overview separates material snapshots from the latest user message and unsent materials; it is not the complete model request. Compact activity groups consecutive completed tools; Detailed activity keeps individual records. Errors are never grouped as success.",
   "添加内容": "Add content",
   "复杂任务由 Agent 主动进入 Plan，先只读检查并提出计划；简单任务可直接执行。Plan 中不能运行命令、修改文件或发布。计划可批准、提出调整或暂不执行，批准仅绑定本次任务与当前版本，权限设置保持独立。": "For complex tasks, the Agent can enter Plan to inspect read-only and propose an approach; simple tasks can proceed directly. Plan blocks commands, file changes and publication. Approve, revise or decline the exact plan for this task. Operation permissions remain separate.",
   "点击输入框的“＋”上传附件、添加 @ 引用或选择 Agent；也可直接输入 @ 或粘贴图片。模型在右侧选择，任务运行中暂不可切换。": "Use + to upload attachments, add @ references or choose an Agent. You can also type @ or paste images. Select the model on the right; it stays locked while a task is running.",
@@ -1780,5 +1779,9 @@
   "后台命令仍需检查 · {0}": "Background commands to check · {0}",
   "查看后台命令": "View background commands",
   "对话页集中展示消息与成果。右上角“更多会话选项”可打开会话回顾、上下文概览和过程显示；已回答问题、命令、文件修改、审批和已处理消息集中在“执行详情”。待回答、待审批和未结束的后台命令仍单独显示。": "Conversations focus on messages and results. More conversation options in the upper-right opens recap, context overview and process display. Answered questions, commands, file changes, approvals and processed messages are grouped under Execution details. Pending questions, approvals and unsettled background commands stay visible separately.",
-  "会话回顾、上下文概览和过程显示位于右上角“更多会话选项”。": "Recap, context overview and process display are in More conversation options in the upper-right."
+  "会话回顾、上下文概览和过程显示位于右上角“更多会话选项”。": "Recap, context overview and process display are in More conversation options in the upper-right.",
+  "操作结果尚未确认": "Operation result is unconfirmed",
+  "显示执行过程": "Show execution process",
+  "复制选项": "Copy options",
+  "上下文概览区分已受理材料与待发送材料，不代表完整模型请求。默认对话展示最终回复、当前输出和实际异常；中途说明、工具记录和上下文整理可在“执行详情”查看。右上角“更多会话选项”中的“显示执行过程”可展开全部过程，仅改变当前会话的展示，不改变模型上下文或操作权限。": "Context overview distinguishes accepted materials from draft materials; it is not a complete model request. Conversations show final replies, current output and actual problems by default. Interim narration, tool records and context organization are available in Execution details. Show execution process in More conversation options displays the full process for this conversation; it does not change model context or operation permissions."
 }
