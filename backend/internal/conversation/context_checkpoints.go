@@ -160,11 +160,11 @@ func (e *runExecutor) compactContext(ctx context.Context, conversationID, runID 
 	if err != nil || budget.Exceeded {
 		return nil, errors.New("compaction request exceeds its own context budget")
 	}
-	(*requestIndex)++
-	index := *requestIndex
-	if err = e.service.startModelRequest(ctx, runID, index, "compaction", budget); err != nil {
+	index, err := e.service.startModelRequest(ctx, runID, "compaction", budget)
+	if err != nil {
 		return nil, err
 	}
+	*requestIndex = index
 	e.service.event(ctx, runID, conversationID, "CONTEXT_COMPACTING", map[string]any{"request_index": index})
 	compactionCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()

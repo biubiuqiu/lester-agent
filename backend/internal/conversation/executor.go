@@ -115,6 +115,7 @@ func (e *runExecutor) execute(ctx context.Context, workspaceID, conversationID, 
 		s.finishExecutionError(ctx, runID, conversationID, err)
 		return
 	}
+	ctx = context.WithValue(ctx, permissionReviewModelKey{}, permissionReviewModel{run: runID, workspace: workspaceID, client: client, deployment: deployment})
 	computer, err := s.ensureComputer(ctx, conversation)
 	if err != nil {
 		s.finishExecutionError(ctx, runID, conversationID, err)
@@ -317,12 +318,12 @@ func (e *runExecutor) executeTurns(ctx context.Context, conversationID, runID uu
 			s.finishExecutionError(ctx, runID, conversationID, errors.New("上下文超过已配置的预算；请缩短输入或调整模型预算。"))
 			return
 		}
-		requestIndex++
-		executionRequestIndex := requestIndex
-		if err = s.startModelRequest(ctx, runID, requestIndex, "execution", budget); err != nil {
+		requestIndex, err = s.startModelRequest(ctx, runID, "execution", budget)
+		if err != nil {
 			s.finishExecutionError(ctx, runID, conversationID, err)
 			return
 		}
+		executionRequestIndex := requestIndex
 		var usage *modelruntime.NormalizedUsage
 		finishedUsage := false
 		finishUsage := func(requestErr error) error {

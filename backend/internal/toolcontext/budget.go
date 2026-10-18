@@ -78,6 +78,10 @@ func (e *Estimator) Evaluate(request modelruntime.Request, config BudgetConfig) 
 // a conservative heuristic, not a tokenizer or a claimed provider limit.
 func EstimateInput(request modelruntime.Request) int {
 	tokens := 24 + textTokens(request.System) + textTokens(request.Model)
+	if request.ResponseSchema != nil {
+		schema, _ := json.Marshal(request.ResponseSchema.Schema)
+		tokens += 12 + textTokens(request.ResponseSchema.Name) + textTokens(string(schema))
+	}
 	for _, tool := range request.Tools {
 		schema, _ := json.Marshal(tool.InputSchema)
 		tokens += 12 + textTokens(tool.Name) + textTokens(tool.Description) + textTokens(string(schema))

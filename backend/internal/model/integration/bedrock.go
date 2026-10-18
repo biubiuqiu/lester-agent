@@ -94,6 +94,9 @@ func (c *bedrockClient) Generate(ctx context.Context, request modelruntime.Reque
 		messages = append(messages, map[string]any{"role": message.Role, "content": content})
 	}
 	payload := map[string]any{"anthropic_version": "bedrock-2023-05-31", "max_tokens": anthropicMaxTokens(request.MaxTokens), "system": request.System, "messages": messages}
+	if request.ResponseSchema != nil {
+		payload["output_config"] = map[string]any{"format": map[string]any{"type": "json_schema", "schema": request.ResponseSchema.Schema}}
+	}
 	if len(request.Tools) > 0 {
 		tools := make([]any, 0, len(request.Tools))
 		for _, tool := range request.Tools {

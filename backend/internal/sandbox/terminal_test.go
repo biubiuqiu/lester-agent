@@ -225,8 +225,13 @@ func exerciseTerminal(t *testing.T, open func() TerminalSession) {
 	output.wait(t, "37 93", 5*time.Second)
 	send("printf '%s%s\\n' HISTORY _RECALLED\r")
 	output.wait(t, "HISTORY_RECALLED", 5*time.Second)
+	// Output can arrive before Bash restores readline's terminal mode. Wait
+	// for the next prompt before sending history control keys; otherwise ^R
+	// can be interpreted by the kernel's canonical line discipline.
+	output.wait(t, "$ ", 5*time.Second)
 	send("\x1b[A\r")
 	output.wait(t, "HISTORY_RECALLED", 5*time.Second)
+	output.wait(t, "$ ", 5*time.Second)
 	send("\x12HISTORY\r")
 	output.wait(t, "HISTORY_RECALLED", 5*time.Second)
 	send(" HIST_IGNORED=lester_private_history_fixture; printf '%s%s\\n' SPACE _IGNORED\r")

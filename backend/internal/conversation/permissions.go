@@ -57,8 +57,8 @@ func permissionDigest(name string, args json.RawMessage) (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
-// Unknown commands always require review: this is an allowlist, not a claim
-// that arbitrary shell programs can be proven safe by inspecting their names.
+// Every command goes through operation review in auto mode. The independent
+// reviewer can allow, deny or defer to the user; other modes use user consent.
 func needsPermission(mode, name string, args json.RawMessage) (bool, bool) {
 	name = permissionTool(name)
 	if mode == "full" {
@@ -91,12 +91,6 @@ func needsPermission(mode, name string, args json.RawMessage) (bool, bool) {
 	case "write", "edit":
 		return mode != "auto", true
 	case "bash":
-		if mode == "auto" {
-			switch strings.TrimSpace(input.Command) {
-			case "pwd", "node --version", "python --version", "python3 --version", "go version":
-				return false, false
-			}
-		}
 		return true, false
 	default:
 		return true, false
@@ -104,14 +98,19 @@ func needsPermission(mode, name string, args json.RawMessage) (bool, bool) {
 }
 
 type RunPermission struct {
-	ID            uuid.UUID       `json:"id"`
-	RunID         uuid.UUID       `json:"run_id"`
-	Tool          string          `json:"tool"`
-	RequestDigest string          `json:"request_digest"`
-	Summary       json.RawMessage `json:"summary"`
-	AllowRun      bool            `json:"allow_run"`
-	Status        string          `json:"status"`
-	Decision      *string         `json:"decision,omitempty"`
+	ID              uuid.UUID       `json:"id"`
+	RunID           uuid.UUID       `json:"run_id"`
+	Tool            string          `json:"tool"`
+	RequestDigest   string          `json:"request_digest"`
+	Summary         json.RawMessage `json:"summary"`
+	AllowRun        bool            `json:"allow_run"`
+	Status          string          `json:"status"`
+	Decision        *string         `json:"decision,omitempty"`
+	DecisionSource  string          `json:"decision_source"`
+	ReviewDecision  *string         `json:"review_decision,omitempty"`
+	ReviewReason    string          `json:"review_reason"`
+	ReviewerModelID *uuid.UUID      `json:"reviewer_model_deployment_id,omitempty"`
+	Revision        int64           `json:"permission_revision"`
 }
 
 func permissionSummary(name string, args json.RawMessage) json.RawMessage {
@@ -139,7 +138,8 @@ func permissionSummary(name string, args json.RawMessage) json.RawMessage {
 func (s *Service) authorizePermission(ctx context.Context, conversationID, runID uuid.UUID, callID, name string, args json.RawMessage) error {
 	name = permissionTool(name)
 	var mode, status string
-	if err := s.db.QueryRow(ctx, `SELECT permission_mode,status FROM runs WHERE id=$1 AND conversation_id=$2`, runID, conversationID).Scan(&mode, &status); err != nil {
+	var revision int64
+	if err := s.db.QueryRow(ctx, `SELECT permission_mode,status,permission_revision FROM runs WHERE id=$1 AND conversation_id=$2`, runID, conversationID).Scan(&mode, &status, &revision); err != nil {
 		return err
 	}
 	if status != "running" {
@@ -162,11 +162,15 @@ func (s *Service) authorizePermission(ctx context.Context, conversationID, runID
 	if err = tx.QueryRow(ctx, `SELECT workspace_id FROM conversations WHERE id=$1 FOR UPDATE`, conversationID).Scan(&workspaceID); err != nil {
 		return err
 	}
-	if err = tx.QueryRow(ctx, `SELECT status FROM runs WHERE id=$1 AND conversation_id=$2 FOR UPDATE`, runID, conversationID).Scan(&status); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT status,permission_mode,permission_revision FROM runs WHERE id=$1 AND conversation_id=$2 FOR UPDATE`, runID, conversationID).Scan(&status, &mode, &revision); err != nil {
 		return err
 	}
 	if status != "running" {
 		return ErrRunNotActive
+	}
+	needed, allowRun = needsPermission(mode, name, args)
+	if !needed {
+		return tx.Commit(ctx)
 	}
 	// The prompt and its hash come from the actual durable call, never from a
 	// model-created approval request or a context summary.
@@ -185,7 +189,7 @@ func (s *Service) authorizePermission(ctx context.Context, conversationID, runID
 			tools = []string{"write", "edit"}
 		}
 		var granted bool
-		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM run_permissions WHERE run_id=$1 AND conversation_id=$2 AND tool=ANY($3::text[]) AND allow_run AND status='approved' AND decision='run')`, runID, conversationID, tools).Scan(&granted); err != nil {
+		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM run_permissions WHERE run_id=$1 AND conversation_id=$2 AND tool=ANY($3::text[]) AND allow_run AND status='approved' AND decision='run' AND permission_revision=$4)`, runID, conversationID, tools, revision).Scan(&granted); err != nil {
 			return err
 		}
 		if granted {
@@ -193,7 +197,11 @@ func (s *Service) authorizePermission(ctx context.Context, conversationID, runID
 		}
 	}
 	id := uuid.New()
-	if _, err = tx.Exec(ctx, `INSERT INTO run_permissions(id,workspace_id,conversation_id,run_id,tool_call_id,tool,request_digest,summary,allow_run) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(run_id,tool_call_id) DO NOTHING`, id, workspaceID, conversationID, runID, callID, name, digest, permissionSummary(name, args), allowRun); err != nil {
+	initialStatus := "pending"
+	if mode == "auto" && name == "bash" {
+		initialStatus = "reviewing"
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO run_permissions(id,workspace_id,conversation_id,run_id,tool_call_id,tool,request_digest,summary,allow_run,permission_revision,status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT(run_id,tool_call_id) DO NOTHING`, id, workspaceID, conversationID, runID, callID, name, digest, permissionSummary(name, args), allowRun, revision, initialStatus); err != nil {
 		return err
 	}
 	var storedDigest, storedStatus string
@@ -214,13 +222,14 @@ func (s *Service) authorizePermission(ctx context.Context, conversationID, runID
 	defer func() {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		_, _ = s.db.Exec(cleanupCtx, `UPDATE run_permissions SET status='cancelled' WHERE id=$1 AND status='pending'`, id)
+		_, _ = s.db.Exec(cleanupCtx, `UPDATE run_permissions SET status='cancelled',review_token=NULL WHERE id=$1 AND status IN ('pending','reviewing')`, id)
 	}()
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		var current, runStatus string
-		if err = s.db.QueryRow(ctx, `SELECT p.status,r.status FROM run_permissions p JOIN runs r ON r.id=p.run_id WHERE p.id=$1 AND r.conversation_id=$2`, id, conversationID).Scan(&current, &runStatus); err != nil {
+		var reviewDecision *string
+		if err = s.db.QueryRow(ctx, `SELECT p.status,r.status,r.permission_mode,r.permission_revision,p.review_decision FROM run_permissions p JOIN runs r ON r.id=p.run_id WHERE p.id=$1 AND r.conversation_id=$2`, id, conversationID).Scan(&current, &runStatus, &mode, &revision, &reviewDecision); err != nil {
 			return err
 		}
 		if runStatus != "running" {
@@ -230,14 +239,29 @@ func (s *Service) authorizePermission(ctx context.Context, conversationID, runID
 			if err = s.authorizeRunTool(ctx, conversationID, runID, name, args); err != nil {
 				return err
 			}
-			var consumed uuid.UUID
-			if err = s.db.QueryRow(ctx, `UPDATE run_permissions SET consumed_at=now() WHERE id=$1 AND status='approved' AND consumed_at IS NULL RETURNING id`, id).Scan(&consumed); err != nil {
-				return errors.New("permission was already consumed; do not replay this operation")
+			consumed, consumeErr := s.consumePermission(ctx, conversationID, runID, id, digest)
+			if consumeErr != nil {
+				return consumeErr
 			}
-			return nil
+			if consumed {
+				return nil
+			}
+			continue
 		}
-		if current != "pending" {
-			return fmt.Errorf("user did not authorize %s; do not retry or use another tool to perform the denied operation", name)
+		if current != "pending" && current != "reviewing" {
+			return fmt.Errorf("operation %s was not authorized; do not retry or use another tool to perform the denied operation", name)
+		}
+		if mode == "auto" && name == "bash" && reviewDecision == nil {
+			token, reviewRevision, claimErr := s.claimPermissionReview(ctx, conversationID, runID, id)
+			if claimErr != nil {
+				return claimErr
+			}
+			if token != uuid.Nil {
+				if err = s.reviewPermission(ctx, conversationID, runID, id, token, reviewRevision, digest, args); err != nil {
+					return err
+				}
+				continue
+			}
 		}
 		select {
 		case <-ctx.Done():
@@ -254,7 +278,7 @@ func (s *Service) runPermissions(ctx context.Context, workspaceID, conversationI
 	if !exists {
 		return nil, ErrInteractionNotFound
 	}
-	rows, err := s.db.Query(ctx, `SELECT p.id,p.run_id,p.tool,p.request_digest,p.summary,p.allow_run,CASE WHEN p.status='pending' AND r.status!='running' THEN 'cancelled' ELSE p.status END,p.decision FROM run_permissions p JOIN runs r ON r.id=p.run_id WHERE p.workspace_id=$1 AND p.conversation_id=$2 ORDER BY p.created_at DESC LIMIT 30`, workspaceID, conversationID)
+	rows, err := s.db.Query(ctx, `SELECT p.id,p.run_id,p.tool,p.request_digest,p.summary,p.allow_run,CASE WHEN p.status IN ('pending','reviewing') AND r.status!='running' THEN 'cancelled' ELSE p.status END,p.decision,p.decision_source,p.review_decision,p.review_reason,p.reviewer_model_deployment_id,p.permission_revision FROM run_permissions p JOIN runs r ON r.id=p.run_id WHERE p.workspace_id=$1 AND p.conversation_id=$2 ORDER BY p.created_at DESC LIMIT 30`, workspaceID, conversationID)
 	if err != nil {
 		return nil, err
 	}
@@ -262,7 +286,7 @@ func (s *Service) runPermissions(ctx context.Context, workspaceID, conversationI
 	result := []RunPermission{}
 	for rows.Next() {
 		var item RunPermission
-		if err = rows.Scan(&item.ID, &item.RunID, &item.Tool, &item.RequestDigest, &item.Summary, &item.AllowRun, &item.Status, &item.Decision); err != nil {
+		if err = rows.Scan(&item.ID, &item.RunID, &item.Tool, &item.RequestDigest, &item.Summary, &item.AllowRun, &item.Status, &item.Decision, &item.DecisionSource, &item.ReviewDecision, &item.ReviewReason, &item.ReviewerModelID, &item.Revision); err != nil {
 			return nil, err
 		}
 		result = append(result, item)
@@ -271,7 +295,7 @@ func (s *Service) runPermissions(ctx context.Context, workspaceID, conversationI
 }
 func (s *Service) runPermission(ctx context.Context, workspaceID, conversationID, id uuid.UUID) (*RunPermission, error) {
 	item := &RunPermission{ID: id}
-	err := s.db.QueryRow(ctx, `SELECT p.run_id,p.tool,p.request_digest,p.summary,p.allow_run,CASE WHEN p.status='pending' AND r.status!='running' THEN 'cancelled' ELSE p.status END,p.decision FROM run_permissions p JOIN runs r ON r.id=p.run_id WHERE p.id=$1 AND p.workspace_id=$2 AND p.conversation_id=$3`, id, workspaceID, conversationID).Scan(&item.RunID, &item.Tool, &item.RequestDigest, &item.Summary, &item.AllowRun, &item.Status, &item.Decision)
+	err := s.db.QueryRow(ctx, `SELECT p.run_id,p.tool,p.request_digest,p.summary,p.allow_run,CASE WHEN p.status IN ('pending','reviewing') AND r.status!='running' THEN 'cancelled' ELSE p.status END,p.decision,p.decision_source,p.review_decision,p.review_reason,p.reviewer_model_deployment_id,p.permission_revision FROM run_permissions p JOIN runs r ON r.id=p.run_id WHERE p.id=$1 AND p.workspace_id=$2 AND p.conversation_id=$3`, id, workspaceID, conversationID).Scan(&item.RunID, &item.Tool, &item.RequestDigest, &item.Summary, &item.AllowRun, &item.Status, &item.Decision, &item.DecisionSource, &item.ReviewDecision, &item.ReviewReason, &item.ReviewerModelID, &item.Revision)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrInteractionNotFound
 	}
@@ -279,7 +303,7 @@ func (s *Service) runPermission(ctx context.Context, workspaceID, conversationID
 }
 
 func (s *Service) respondPermission(ctx context.Context, workspaceID, userID, conversationID, id uuid.UUID, digest, decision string) (*RunPermission, error) {
-	if decision != "once" && decision != "run" && decision != "reject" {
+	if decision != "once" && decision != "run" && decision != "reject" && decision != "full" {
 		return nil, errors.New("invalid permission decision")
 	}
 	tx, err := s.db.Begin(ctx)
@@ -305,11 +329,12 @@ func (s *Service) respondPermission(ctx context.Context, workspaceID, userID, co
 		return nil, err
 	}
 	var status, mode string
-	if err = tx.QueryRow(ctx, `SELECT status,execution_mode FROM runs WHERE id=$1 FOR UPDATE`, runID).Scan(&status, &mode); err != nil {
+	var revision int64
+	if err = tx.QueryRow(ctx, `SELECT status,execution_mode,permission_revision FROM runs WHERE id=$1 FOR UPDATE`, runID).Scan(&status, &mode, &revision); err != nil {
 		return nil, err
 	}
 	item := &RunPermission{ID: id, RunID: runID}
-	if err = tx.QueryRow(ctx, `SELECT tool,request_digest,summary,allow_run,status,decision FROM run_permissions WHERE id=$1 FOR UPDATE`, id).Scan(&item.Tool, &item.RequestDigest, &item.Summary, &item.AllowRun, &item.Status, &item.Decision); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT tool,request_digest,summary,allow_run,status,decision,decision_source,review_decision,review_reason,reviewer_model_deployment_id,permission_revision FROM run_permissions WHERE id=$1 FOR UPDATE`, id).Scan(&item.Tool, &item.RequestDigest, &item.Summary, &item.AllowRun, &item.Status, &item.Decision, &item.DecisionSource, &item.ReviewDecision, &item.ReviewReason, &item.ReviewerModelID, &item.Revision); err != nil {
 		return nil, err
 	}
 	if digest != item.RequestDigest || decision == "run" && !item.AllowRun {
@@ -328,8 +353,19 @@ func (s *Service) respondPermission(ctx context.Context, workspaceID, userID, co
 	if status != "running" || mode == "plan" && !agenttool.PlanReadOnlyTool(item.Tool) {
 		return nil, ErrInteractionConflict
 	}
-	if _, err = tx.Exec(ctx, `UPDATE run_permissions SET status=$2,decision=$3,responded_by=$4 WHERE id=$1`, id, target, decision, userID); err != nil {
+	if decision == "full" {
+		revision++
+		if err = setRunPermissionModeTx(ctx, tx, conversationID, runID, userID, "full", revision); err != nil {
+			return nil, err
+		}
+	}
+	if _, err = tx.Exec(ctx, `UPDATE run_permissions SET status=$2,decision=$3,decision_source='user',responded_by=$4 WHERE id=$1`, id, target, decision, userID); err != nil {
 		return nil, err
+	}
+	if decision == "full" {
+		if err = eventlog.Append(ctx, tx, runID, conversationID, "PERMISSION_MODE_CHANGED", map[string]any{"permission_mode": "full", "revision": revision, "changed_by": userID}); err != nil {
+			return nil, err
+		}
 	}
 	if err = eventlog.Append(ctx, tx, runID, conversationID, "PERMISSION_RESPONDED", map[string]any{"permission_id": id, "status": target}); err != nil {
 		return nil, err
@@ -339,5 +375,7 @@ func (s *Service) respondPermission(ctx context.Context, workspaceID, userID, co
 	}
 	item.Status = target
 	item.Decision = &decision
+	item.DecisionSource = "user"
+	item.Revision = revision
 	return item, nil
 }

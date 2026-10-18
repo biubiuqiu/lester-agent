@@ -14,7 +14,7 @@ test("permission choice persists independently of Plan and is captured for the a
  await page.reload();
  await expect(page.getByRole("button",{name:"权限设置",exact:true})).toContainText("完全访问权限");await expect(page.getByRole("button",{name:"先规划，再执行",exact:true})).toHaveCount(0);
  await send(page);const accepted=api.mutations.find(item=>item.path.endsWith("/messages"))!;expect(accepted.body.permission_mode).toBe("full");expect(accepted.body.execution_mode ?? "execute").toBe("execute");
- await page.getByRole("button",{name:"权限设置",exact:true}).click();await expect(menu).toContainText("权限选择仅用于下一任务");await menu.getByRole("button").filter({hasText:"自动审批"}).click();expect(api.mutations.filter(item=>item.path.endsWith("/messages"))).toHaveLength(1);
+ await page.getByRole("button",{name:"权限设置",exact:true}).click();await expect(menu).toContainText("权限更改立即用于当前任务的后续操作");await menu.getByRole("button").filter({hasText:"自动审批"}).click();await expect(page.getByRole("button",{name:"权限设置",exact:true})).toContainText("自动审批");expect(api.currentPermissionMode).toBe("auto");expect(api.mutations.filter(item=>item.path.endsWith("/messages"))).toHaveLength(1);
 });
 test("permission approval attaches above the input, confirms a lost receipt once and retains the draft",async({context,page,api},info)=>{
  let responses=0;

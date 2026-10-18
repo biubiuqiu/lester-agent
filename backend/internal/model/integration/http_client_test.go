@@ -66,6 +66,53 @@ func TestOpenAIPayloadOmitsUnsetMaxTokens(t *testing.T) {
 	}
 }
 
+func TestStructuredReviewSchemaIsSentAndNeverSilentlyRetried(t *testing.T) {
+	schema := &modelruntime.JSONSchema{Name: "review", Schema: map[string]any{"type": "object", "additionalProperties": false, "required": []string{"decision"}, "properties": map[string]any{"decision": map[string]any{"type": "string", "enum": []string{"allow", "deny", "ask_user"}}}}}
+	for _, protocol := range []string{"openai", "anthropic"} {
+		t.Run(protocol, func(t *testing.T) {
+			calls := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				var payload map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+					t.Error(err)
+				}
+				if protocol == "openai" {
+					format, _ := payload["response_format"].(map[string]any)
+					detail, _ := format["json_schema"].(map[string]any)
+					if format["type"] != "json_schema" || detail["strict"] != true || detail["name"] != "review" || detail["schema"] == nil {
+						t.Error("OpenAI schema missing", payload)
+					}
+				} else {
+					config, _ := payload["output_config"].(map[string]any)
+					format, _ := config["format"].(map[string]any)
+					if format["type"] != "json_schema" || format["schema"] == nil {
+						t.Error("Anthropic schema missing", payload)
+					}
+				}
+				if _, present := payload["tools"]; present {
+					t.Error("review call exposed execution tools")
+				}
+				w.WriteHeader(400)
+				_, _ = w.Write([]byte(`{"error":{"message":"structured output unsupported"}}`))
+			}))
+			defer server.Close()
+			client := &httpClient{protocol: protocol, endpoint: server.URL, apiKey: "fixture"}
+			if _, err := client.Generate(context.Background(), modelruntime.Request{Model: "fixture", System: "review policy", Messages: []modelruntime.Message{{Role: "user", Content: "command data"}}, ResponseSchema: schema}); err == nil {
+				t.Fatal("provider rejection ignored")
+			}
+			if calls != 1 {
+				t.Fatal("structured review silently retried", calls)
+			}
+		})
+	}
+	for _, payload := range []map[string]any{openAIPayload(modelruntime.Request{}), anthropicPayload(modelruntime.Request{}, "")} {
+		if payload["response_format"] != nil || payload["output_config"] != nil {
+			t.Fatal("ordinary Agent request received a review schema")
+		}
+	}
+}
+
 func TestStreamRetainsAllToolCallsAndDetectsInterruptedEOF(t *testing.T) {
 	body := "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"a\",\"function\":{\"name\":\"read\",\"arguments\":\"{}\"}},{\"index\":1,\"id\":\"b\",\"function\":{\"name\":\"read\",\"arguments\":\"{}\"}}]}}]}\n\n"
 	client := &httpClient{protocol: "openai"}

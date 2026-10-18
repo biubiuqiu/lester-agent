@@ -10,13 +10,25 @@ import (
 	"github.com/google/uuid"
 )
 
-func (s *Service) startModelRequest(ctx context.Context, runID uuid.UUID, index int, purpose string, budget toolcontext.Budget) error {
+func (s *Service) startModelRequest(ctx context.Context, runID uuid.UUID, purpose string, budget toolcontext.Budget) (int, error) {
 	raw, err := json.Marshal(budget)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	_, err = s.db.Exec(ctx, `INSERT INTO model_request_usage(run_id,request_index,purpose,status,estimated_input_tokens,budget) VALUES($1,$2,$3,'started',$4,$5)`, runID, index, purpose, budget.EstimatedInput, raw)
-	return err
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx)
+	if _, err = tx.Exec(ctx, `SELECT id FROM runs WHERE id=$1 FOR UPDATE`, runID); err != nil {
+		return 0, err
+	}
+	var index int
+	err = tx.QueryRow(ctx, `INSERT INTO model_request_usage(run_id,request_index,purpose,status,estimated_input_tokens,budget) SELECT $1,COALESCE(MAX(request_index),0)+1,$2,'started',$3,$4 FROM model_request_usage WHERE run_id=$1 RETURNING request_index`, runID, purpose, budget.EstimatedInput, raw).Scan(&index)
+	if err != nil {
+		return 0, err
+	}
+	return index, tx.Commit(ctx)
 }
 func (s *Service) finishModelRequest(ctx context.Context, runID uuid.UUID, index int, usage *modelruntime.NormalizedUsage, requestErr error) error {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)

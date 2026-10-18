@@ -138,8 +138,8 @@ func (s *Store) ListDeployments(ctx context.Context, workspaceID uuid.UUID) ([]D
 			return nil, err
 		}
 		_ = json.Unmarshal(raw, &d.Capabilities)
-		// No token-counting endpoint or structured-response request is implemented.
-		// Old persisted declarations must not imply verified model support.
+		// Token counting and deployment-level structured-output support are not
+		// live verified. Old declarations must not imply verified model support.
 		d.Capabilities.TokenCounting = false
 		d.Capabilities.StructuredOutput = false
 		items = append(items, d)

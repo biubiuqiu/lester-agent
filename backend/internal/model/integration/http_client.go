@@ -264,6 +264,9 @@ func openAIPayload(request modelruntime.Request) map[string]any {
 	}
 	flushImages()
 	payload := map[string]any{"model": request.Model, "messages": messages, "stream": true, "stream_options": map[string]bool{"include_usage": true}}
+	if request.ResponseSchema != nil {
+		payload["response_format"] = map[string]any{"type": "json_schema", "json_schema": map[string]any{"name": request.ResponseSchema.Name, "strict": true, "schema": request.ResponseSchema.Schema}}
+	}
 	if request.MaxTokens > 0 {
 		payload["max_tokens"] = request.MaxTokens
 	}
@@ -300,6 +303,9 @@ func anthropicPayload(request modelruntime.Request, mode string) map[string]any 
 		messages = append(messages, map[string]any{"role": message.Role, "content": message.Content})
 	}
 	payload := map[string]any{"model": request.Model, "system": request.System, "messages": messages, "max_tokens": anthropicMaxTokens(request.MaxTokens), "stream": true}
+	if request.ResponseSchema != nil {
+		payload["output_config"] = map[string]any{"format": map[string]any{"type": "json_schema", "schema": request.ResponseSchema.Schema}}
+	}
 	if mode == "vertex" {
 		delete(payload, "model")
 		payload["anthropic_version"] = "vertex-2023-10-16"

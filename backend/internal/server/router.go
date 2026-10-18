@@ -163,6 +163,8 @@ func Router(deps Dependencies) http.Handler {
 			private.Get("/conversations/{id}/permissions/inputs/{inputID}", deps.Conversations.RunInput)
 			private.Post("/conversations/{id}/permissions/inputs/{inputID}/action", deps.Conversations.ChangeRunInput)
 			private.Get("/conversations/{id}/permissions", deps.Conversations.RunPermissions)
+			private.Get("/conversations/{id}/runs/{runID}/permissions", deps.Conversations.RunPermissionMode)
+			private.Put("/conversations/{id}/runs/{runID}/permissions", deps.Conversations.RunPermissionMode)
 			private.Get("/conversations/{id}/permissions/{permissionID}", deps.Conversations.RunPermissions)
 			private.Post("/conversations/{id}/permissions/{permissionID}/respond", deps.Conversations.RespondRunPermission)
 			private.Get("/conversations/{id}/interactions", deps.Conversations.RunInteractions)

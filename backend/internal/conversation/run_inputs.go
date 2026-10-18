@@ -151,7 +151,7 @@ func (s *Service) AcceptRunInput(ctx context.Context, workspaceID, userID, conve
 		return nil, err
 	}
 	if request.Kind == "adjust" {
-		if _, err = tx.Exec(ctx, `UPDATE run_permissions SET status='cancelled' WHERE run_id=$1 AND status='pending'`, request.RunID); err != nil {
+		if _, err = tx.Exec(ctx, `UPDATE run_permissions SET status='cancelled',review_token=NULL WHERE run_id=$1 AND status IN ('pending','reviewing')`, request.RunID); err != nil {
 			return nil, err
 		}
 		if _, err = tx.Exec(ctx, `UPDATE run_interactions SET status='cancelled',response=jsonb_build_object('superseded_by_input_id',$2::text),responded_at=now() WHERE run_id=$1 AND status='pending'`, request.RunID, request.ID); err != nil {

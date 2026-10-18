@@ -27,12 +27,20 @@ type ToolCall struct {
 }
 
 type Request struct {
-	Model       string
-	System      string
-	Messages    []Message
-	Tools       []Tool
-	MaxTokens   int
-	Temperature *float64
+	Model          string
+	System         string
+	Messages       []Message
+	Tools          []Tool
+	MaxTokens      int
+	Temperature    *float64
+	ResponseSchema *JSONSchema
+}
+
+// JSONSchema requests a provider-enforced structured response. Adapters must
+// preserve it; a provider rejection must never silently retry as plain text.
+type JSONSchema struct {
+	Name   string
+	Schema map[string]any
 }
 
 type Event struct {

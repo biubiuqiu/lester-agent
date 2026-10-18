@@ -1,0 +1,13 @@
+ALTER TABLE runs ADD COLUMN permission_revision bigint NOT NULL DEFAULT 0;
+ALTER TABLE run_permissions ADD COLUMN permission_revision bigint NOT NULL DEFAULT 0;
+ALTER TABLE run_permissions ADD COLUMN review_token uuid;
+ALTER TABLE run_permissions ADD COLUMN decision_source text NOT NULL DEFAULT 'user' CHECK(decision_source IN ('user','llm','mode'));
+ALTER TABLE run_permissions ADD COLUMN review_decision text CHECK(review_decision IN ('allow','deny','ask_user'));
+ALTER TABLE run_permissions ADD COLUMN review_reason text NOT NULL DEFAULT '';
+ALTER TABLE run_permissions ADD COLUMN reviewer_model_deployment_id uuid REFERENCES model_deployments(id) ON DELETE SET NULL;
+ALTER TABLE run_permissions DROP CONSTRAINT run_permissions_status_check;
+ALTER TABLE run_permissions ADD CONSTRAINT run_permissions_status_check CHECK(status IN ('reviewing','pending','approved','rejected','cancelled'));
+ALTER TABLE run_permissions DROP CONSTRAINT run_permissions_decision_check;
+ALTER TABLE run_permissions ADD CONSTRAINT run_permissions_decision_check CHECK(decision IN ('once','run','reject','full'));
+ALTER TABLE model_request_usage DROP CONSTRAINT model_request_usage_purpose_check;
+ALTER TABLE model_request_usage ADD CONSTRAINT model_request_usage_purpose_check CHECK(purpose IN ('execution','compaction','permission_review'));

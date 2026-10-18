@@ -18,6 +18,8 @@ export class WorkspaceApi {
   modelName = deployment.name;
   failCreate = false;
   failSend = false;
+  currentPermissionMode: "standard" | "auto" | "full" = "standard";
+  permissionRevision = 0;
   waitForCreate?: Promise<void>;
   waitForConversation?: Promise<void>;
   conversation: Conversation | null = null;
@@ -88,8 +90,13 @@ export class WorkspaceApi {
     this.emit(this.nextEventId++, "RUN_COMPLETED", {});
   }
 
-  permissionEvent(type: "PERMISSION_REQUESTED" | "PERMISSION_RESPONDED", payload: Record<string, unknown> = {}) {
+  permissionEvent(type: "PERMISSION_REQUESTED" | "PERMISSION_RESPONDED" | "PERMISSION_REVIEW_STARTED" | "PERMISSION_REVIEW_COMPLETED" | "PERMISSION_MODE_CHANGED", payload: Record<string, unknown> = {}) {
     this.emit(this.nextEventId++, type, payload);
+  }
+
+  changePermissionMode(mode: "standard" | "auto" | "full") {
+    this.currentPermissionMode = mode; this.permissionRevision++;
+    this.permissionEvent("PERMISSION_MODE_CHANGED", { permission_mode: mode, revision: this.permissionRevision });
   }
 
   planModeEvent() { this.emit(this.nextEventId++, "EXECUTION_MODE_CHANGED", { execution_mode: "plan", reason: "Fixture architectural change" }); }
@@ -172,6 +179,14 @@ export class WorkspaceApi {
       return item ? reply({ ...item, type: "skill", title: item.name }) : reply({ error: "引用对象已不可用，请移除后重新选择。" }, 404);
     }
     const prefix = `/api/v1/conversations/${conversationId}`;
+    if (path === `${prefix}/runs/fixture-run/permissions`) {
+      if (method === "PUT") {
+        const body = request.postDataJSON(); this.mutations.push({ path: rawPath, body });
+        if (body.revision !== this.permissionRevision) return reply({ error: "stale permission revision" }, 409);
+        this.changePermissionMode(body.permission_mode);
+      }
+      return reply({ run_id: "fixture-run", permission_mode: this.currentPermissionMode, revision: this.permissionRevision, status: this.conversation?.run_status || "running" });
+    }
     if (path === prefix && this.conversation) {
       if (method === "PATCH") {
         const body = request.postDataJSON();
@@ -188,6 +203,7 @@ export class WorkspaceApi {
       if (this.failSend) return reply({ error: "模拟首条消息发送失败" }, 503);
       if (!this.conversation) throw new Error("Message sent before creating a conversation");
       this.conversation.run_status = "running"; this.conversation.run_id = "fixture-run";
+      this.currentPermissionMode = body.permission_mode || "standard"; this.permissionRevision = 0;
       const references = (body.references || []) as { type: string; id: string }[];
       const contexts = this.contextEntries.filter(item => ((body.context_ids || []) as string[]).includes(item.id));
       const conversations = this.referenceConversations.filter(item => references.some(ref => ref.type === "conversation" && ref.id === item.id)).map(item => ({ id: item.id, title: item.title, project: "个人项目", max_seq: (this.referenceMessages[item.id] || []).length, updated_at: item.updated_at }));

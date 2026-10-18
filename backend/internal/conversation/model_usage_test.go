@@ -75,7 +75,7 @@ func TestConfiguredBudgetRejectsOversizedRequestBeforeProviderCall(t *testing.T)
 func TestCrashRecoveryClosesUnfinishedUsageWithoutInventingCounts(t *testing.T) {
 	f := newTranscriptFixture(t, false)
 	runID := f.startRun(t, "interrupted")
-	if err := f.service.startModelRequest(context.Background(), runID, 1, "execution", toolcontext.Budget{Source: "estimated", EstimatedInput: 123, PolicyWindow: 64000}); err != nil {
+	if _, err := f.service.startModelRequest(context.Background(), runID, "execution", toolcontext.Budget{Source: "estimated", EstimatedInput: 123, PolicyWindow: 64000}); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.service.recoverInterruptedRuns(context.Background(), f.conversationID); err != nil {

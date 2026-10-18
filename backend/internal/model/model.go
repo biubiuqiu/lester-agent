@@ -8,6 +8,7 @@ type Message = modelruntime.Message
 type Tool = modelruntime.Tool
 type ToolCall = modelruntime.ToolCall
 type ModelRequest = modelruntime.Request
+type JSONSchema = modelruntime.JSONSchema
 type ModelEvent = modelruntime.Event
 type ModelResponse = modelruntime.Response
 type ModelCapabilities = modelruntime.Capabilities

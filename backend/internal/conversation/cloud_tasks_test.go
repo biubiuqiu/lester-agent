@@ -41,7 +41,7 @@ func TestBackgroundRunMonitorRepairsOrphansButPreservesOtherReplica(t *testing.T
 	if _, err = f.service.db.Exec(ctx, `INSERT INTO run_permissions(workspace_id,conversation_id,run_id,tool_call_id,tool,request_digest,summary) VALUES($1,$2,$3,'unknown-write','write',repeat('a',64),'{}')`, f.workspaceID, orphan.conversationID, run); err != nil {
 		t.Fatal(err)
 	}
-	if err = f.service.startModelRequest(ctx, run, 1, "execution", toolcontext.Budget{EstimatedInput: 99}); err != nil {
+	if _, err = f.service.startModelRequest(ctx, run, "execution", toolcontext.Budget{EstimatedInput: 99}); err != nil {
 		t.Fatal(err)
 	}
 	stopping := taskConversation(t, f)
@@ -168,7 +168,7 @@ func TestRunUsageKeepsReportedAndEstimatedCountsSeparate(t *testing.T) {
 		nil,
 	}
 	for i, u := range samples {
-		if err := f.service.startModelRequest(ctx, run, i+1, "execution", toolcontext.Budget{EstimatedInput: 123}); err != nil {
+		if _, err := f.service.startModelRequest(ctx, run, "execution", toolcontext.Budget{EstimatedInput: 123}); err != nil {
 			t.Fatal(err)
 		}
 		if u != nil {

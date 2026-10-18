@@ -121,3 +121,4 @@
 @media(max-width:600px){.workspace-shell .permission-mode{min-width:32px;gap:3px}.permission-mode>span{display:none}}
 .queue-permission{display:block;margin-top:5px;color:var(--muted);font-size:10px}
 .permission-history code{display:inline-block;max-width:75%;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom;white-space:nowrap}
+.permission-review-reason{display:block;overflow-wrap:anywhere;line-height:1.5}.permission-history .permission-review-reason{margin-top:4px}.permission-reviewing{padding-block:10px}.permission-reviewing pre{max-height:64px;margin-bottom:0}

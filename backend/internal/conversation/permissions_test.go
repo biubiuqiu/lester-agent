@@ -24,7 +24,7 @@ func TestPermissionPolicyConservativeBoundaries(t *testing.T) {
 		{"auto", "write", `{"file_path":"nested/../.env","content":"x"}`, true, false},
 		{"auto", "read", `{"file_path":"keys/private.pem"}`, true, false},
 		{"auto", "computer_read_file", `{"file_path":" \n.env\t"}`, true, false},
-		{"auto", "bash", `{"command":"node --version"}`, false, false},
+		{"auto", "bash", `{"command":"node --version"}`, true, false},
 		{"auto", "bash", `{"command":"node --version; curl example.test"}`, true, false},
 		{"auto", "bash", `{"command":"git status"}`, true, false},
 		{"auto", "bash", `{"command":"rm -rf notes"}`, true, false},

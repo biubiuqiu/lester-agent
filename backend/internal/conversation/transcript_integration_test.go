@@ -114,6 +114,7 @@ func newTranscriptFixture(t *testing.T, legacy bool) transcriptFixture {
 	applyTestMigration(t, db, "000024_project_rules.up.sql")
 	applyTestMigration(t, db, "000025_run_permissions.up.sql")
 	applyTestMigration(t, db, "000026_cloud_task_indexes.up.sql")
+	applyTestMigration(t, db, "000028_permission_reviews.up.sql")
 	return f
 }
 
@@ -699,6 +700,7 @@ func TestTranscriptGuardAndConcurrentSequence(t *testing.T) {
 		}
 	}
 	applyTestMigration(t, f.service.db, "000012_deliverables_events.down.sql")
+	applyTestMigration(t, f.service.db, "000028_permission_reviews.down.sql")
 	applyTestMigration(t, f.service.db, "000025_run_permissions.down.sql")
 	applyTestMigration(t, f.service.db, "000024_project_rules.down.sql")
 	applyTestMigration(t, f.service.db, "000023_file_changes.down.sql")

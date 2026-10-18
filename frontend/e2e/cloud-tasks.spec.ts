@@ -4,7 +4,14 @@ import { translator } from "../src/lib/i18n";
 import { test as base, expect, type Page } from "@playwright/test";
 import { WorkspaceApi, conversationId, prompt } from "./workspace-api";
 const test=base.extend<{api:WorkspaceApi}>({api:async({context,page},runFixture)=>{const api=new WorkspaceApi(),errors:string[]=[];page.on("pageerror",e=>errors.push(e.message));await api.install(context);try{await runFixture(api);expect(api.unexpected).toEqual([]);expect(errors).toEqual([]);}finally{await context.close();await api.close();}}});
-async function start(page:Page,api:WorkspaceApi){await page.goto("/app");await page.getByLabel("邮箱",{exact:true}).fill("browser@example.test");await page.getByLabel("密码",{exact:true}).fill("fixture-password-123");await page.getByRole("button",{name:"登录",exact:true}).click();const input=page.getByRole("textbox",{name:"消息输入框",exact:true});await input.fill(prompt);await input.press("Enter");await expect(page).toHaveURL(`/app/c/${conversationId}`);await expect.poll(()=>api.streamCount).toBeGreaterThan(0);api.finish();await expect(page.getByRole("button",{name:"发送消息",exact:true})).toBeVisible();return input;}
+async function start(page:Page,api:WorkspaceApi){
+ await page.goto("/app");await page.getByLabel("邮箱",{exact:true}).fill("browser@example.test");await page.getByLabel("密码",{exact:true}).fill("fixture-password-123");await page.getByRole("button",{name:"登录",exact:true}).click();const input=page.getByRole("textbox",{name:"消息输入框",exact:true});await input.fill(prompt);await input.press("Enter");await expect(page).toHaveURL(`/app/c/${conversationId}`);await expect.poll(()=>api.streamCount).toBeGreaterThan(0);api.finish();await expect(page.getByRole("button",{name:"发送消息",exact:true})).toBeVisible();
+ // Completion and verified file inventory arrive independently. Settle and
+ // dismiss the generated preview before typing or opening another panel.
+ await expect(page.locator(".open-file-tabs [role=tab]")).toHaveCount(2);
+ await page.locator(".computer-panel .close-files-panel").click();
+ return input;
+}
 const now="2026-10-15T10:00:00Z";
 const task=(run_id:string,state:string,title:string)=>({run_id,conversation_id:run_id==="fixture-run"?conversationId:run_id==="another-run"?"33333333-3333-4333-8333-333333333333":"44444444-4444-4444-8444-444444444444",title,project:"个人项目",agent:"Lester",state,started_at:now,completed_at:state==="completed"?now:null,last_activity_at:now,background_commands:state==="completed"?1:0,unknown_commands:0,queued:state==="waiting_plan"?2:0,deliverables:state==="completed"?1:0});
 const tasks=[task("fixture-run","completed","已经交付的网页"),task("another-run","waiting_plan","等你审阅的复杂改造"),task("third-run","failed","需要检查的任务")];
@@ -42,6 +49,9 @@ test("cloud tasks stay translated and fit the viewport across supported language
   const t=translator(JSON.parse(readFileSync(join(process.cwd(),`src/lib/i18n/messages/${locale}.json`),"utf8")));
   await context.addCookies([{name:"lester_locale",value:locale,url:"http://127.0.0.1:13020"}]);await page.goto(`/app/c/${conversationId}`);
   await expect(page.getByRole("textbox",{name:t("消息输入框"),exact:true})).toBeVisible();
+  // Reload restores the verified file tabs and their selected preview.
+  await page.locator(".computer-panel .close-files-panel").click();
+  await expect(page.locator(".computer-panel")).toBeHidden();
   if(info.project.name==="mobile")await page.getByRole("button",{name:t("打开会话栏"),exact:true}).click();
   await page.getByRole("button",{name:t("云端任务"),exact:true}).click();const dialog=page.getByRole("dialog",{name:t("云端任务"),exact:true});
   await expect(dialog).toContainText(t("等待计划审阅"));await expect(dialog).toContainText("保留用户原文的任务");await expect(dialog.getByRole("button",{name:t("需处理"),exact:true})).toBeVisible();

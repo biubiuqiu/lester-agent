@@ -88,6 +88,7 @@ type Service struct {
 	executor          *runExecutor
 	installAgentSkill func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, string, string, string) error
 	agentObjects      blob.Store
+	reviewClient      func(context.Context, uuid.UUID, uuid.UUID) (model.ModelClient, model.Deployment, error)
 }
 
 type Computer struct {
