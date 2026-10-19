@@ -3,7 +3,7 @@ import { WorkspaceApi, conversationId, prompt } from "./workspace-api";
 test("add menu groups materials, preserves drafts and leaves model and round send on the right",async({page,context},info)=>{
  const api=new WorkspaceApi(),errors:string[]=[];page.on("pageerror",e=>errors.push(e.message));await api.install(context);
  try {
-  await page.goto("/app");await expect(page).toHaveTitle(/Lester/);await page.getByLabel("邮箱",{exact:true}).fill("browser@example.test");await page.getByLabel("密码",{exact:true}).fill("fixture-password-123");await page.getByRole("button",{name:"登录",exact:true}).click();
+  await page.goto("/app/new");await expect(page).toHaveTitle(/Lester/);await page.getByLabel("邮箱",{exact:true}).fill("browser@example.test");await page.getByLabel("密码",{exact:true}).fill("fixture-password-123");await page.getByRole("button",{name:"登录",exact:true}).click();
   const input=page.getByRole("textbox",{name:"消息输入框",exact:true}),add=page.getByRole("button",{name:"添加内容",exact:true});await input.fill("保留我的草稿");const before=api.mutations.length;
   await expect(page.getByRole("button",{name:"@ 添加引用",exact:true})).toHaveCount(0);await expect(page.getByRole("button",{name:"先规划，再执行",exact:true})).toHaveCount(0);
   await add.click();await expect(page.getByRole("button",{name:"添加附件",exact:true})).toBeVisible();await expect(page.getByRole("button",{name:"选择 Agent",exact:true})).toBeVisible();await page.screenshot({path:info.outputPath("add-menu.png")});

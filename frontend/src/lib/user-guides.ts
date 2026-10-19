@@ -5,11 +5,11 @@ export type Guide = { topic: GuideTopic; title: string; description: string; pat
 
 export const guides: Guide[] = [
   { topic: "welcome", title: "第一次使用 Lester", description: "从一个目标，到一份看得见的成果", steps: [
-    { title: "欢迎，把一个想法交给 Lester", body: "Lester 是你的 AI 工作区。描述目标、提供材料，让 Agent 帮你整理文档、分析数据或制作网页，再查看和继续修改成果。", visual: "journey", hint: "大约 1 分钟 · 可以随时退出，稍后继续" },
+    { title: "欢迎，把一个想法交给 Lester", body: "Lester 是持续陪伴你的个人助理。它记住重要的偏好和决定，帮你安排工作；具体执行交给独立的任务会话。", visual: "journey", hint: "大约 1 分钟 · 可以随时退出，稍后继续" },
     { title: "先选择一个模型", body: "模型负责理解任务与生成内容。可以使用管理员提供的共享模型，也可以在「模型」设置中连接自己的服务。没有模型时，先保存草稿，再去配置。", target: ".model-selector", hint: "配置已保存 ≠ 模型已验证。首次实际运行才会确认服务是否可调用。" },
-    { title: "告诉它：你想得到什么", body: "在输入框写下目标、受众和交付形式，例如「为我的咖啡店做一个介绍网页，保存为 index.html」。展开「试试一个任务」可选择示例，只会填写草稿；你明确发送后，才会创建新会话。", target: ".compose-box", hint: "Enter 发送 · Shift + Enter 换行" },
-    { title: "把需要的材料一起交给它", body: "点击加号上传文件或添加引用，也可以直接粘贴图片。在输入框输入 @，按需引用上下文、会话或 Skill。", target: ".compose-actions", hint: "只会把你主动引用的上下文提供给 Agent。" },
-    { title: "看执行进度，必要时调整方向", body: "发送后，可以查看回复和工具执行详情。运行时你仍可以准备下一条草稿；需要中断时点「停止」，再告诉它新的要求。", target: ".conversation-header", hint: "一个会话同时执行一个任务。" },
+    { title: "告诉它：你想得到什么", body: "在个人助理里可以一直接着聊，例如“继续昨天的介绍页”。Lester 会找到对应任务或创建独立会话；目标不明确时先和你确认。你也可以在项目里直接新建任务。", target: ".personal-composer, .compose-box", hint: "Enter 发送 · Shift + Enter 换行" },
+    { title: "把重要的事交给它记住", body: "直接说“记住这个”“更正偏好”或“忘记那条”。点“记忆”可查看来源、编辑、忘记和撤销；选择项目后才使用该项目的记忆。需要上传材料时，进入具体任务会话使用加号或 @。", target: ".personal-toolbar, .compose-actions", hint: "自动提炼有轻提示，可撤销，也可以关闭。" },
+    { title: "看执行进度，必要时调整方向", body: "主对话用任务卡显示项目和实时进展。任务运行时，继续要求默认排队；进入任务会话后可处理审批、补充要求或停止。个人助理不会替你批准操作。", target: ".conversation-header", hint: "审批和执行细节保留在对应任务会话。" },
     { title: "打开文件，看见真正的成果", body: "Agent 写入或编辑文件后，文件会在右侧自动打开，多份文件使用多个标签。HTML 默认显示网页预览，可以切换到源码；你也可以从成果卡片继续修改，展开详情下载文件。", target: ".open-deliverables-button", visual: "files", hint: "生成文件后才会出现文件预览。手机端关闭面板即可回到对话。" },
     { title: "其他功能，随用随学", body: "项目整理会话；Agent 保存专门的工作方式；上下文库保存常用背景。模型、Computer、Skill 和个人资料各有独立教学，点「新手引导」随时查看。", target: ".guide-launcher", hint: "现在可以开始自己的任务，也可以先看看某个功能的教学。" },
   ] },

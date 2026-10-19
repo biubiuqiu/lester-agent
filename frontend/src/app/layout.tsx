@@ -3,6 +3,7 @@ import { I18nProvider } from "@/components/i18n";
 import type { Metadata } from "next";
 import "./globals.css";
 import "./native-shell.css";
+import "./personal-assistant.css";
 import { NativeShellBridge } from "@/components/native-shell-bridge";
 import "./preview.css";
 import "./avatar-crop.css";

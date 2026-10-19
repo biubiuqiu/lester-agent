@@ -39,7 +39,7 @@ async function openRecent(page: Page, mobile: boolean) {
 }
 
 test("recent conversations sort across projects, search both names and bound the initial list", async ({ page, history }, info) => {
-  await page.goto("/app"); await expect(page).toHaveTitle(/Lester/);
+  await page.goto("/app/new"); await expect(page).toHaveTitle(/Lester/);
   const input = page.getByRole("textbox", { name: "消息输入框", exact: true }); await input.fill("还没发出的目标");
   const { trigger, dialog } = await openRecent(page, info.project.name === "mobile");
   const rows = dialog.locator(".recent-conversation-row"), search = dialog.getByRole("searchbox");
@@ -62,7 +62,7 @@ test("recent conversations sort across projects, search both names and bound the
 });
 
 test("opening an existing conversation keeps project and conversation drafts without starting a task", async ({ page, history }, info) => {
-  await page.goto("/app");
+  await page.goto("/app/new");
   const input = page.getByRole("textbox", { name: "消息输入框", exact: true }); await input.fill("新任务的未发送草稿");
   let panel = await openRecent(page, info.project.name === "mobile");
   await panel.dialog.getByRole("button", { name: /整理季度报告/ }).click();
@@ -72,12 +72,12 @@ test("opening an existing conversation keeps project and conversation drafts wit
   const current = panel.dialog.getByRole("button", { name: /整理季度报告/ });
   await expect(current).toHaveAttribute("aria-current", "page"); await expect(current).toContainText("Lester 官网");
   await current.click(); await expect(input).toHaveValue("这个会话的未发送反馈");
-  await page.goBack(); await expect(page).toHaveURL(/\/app$/); await expect(input).toHaveValue("新任务的未发送草稿");
+  await page.goBack(); await expect(page).toHaveURL(/\/app\/new$/); await expect(input).toHaveValue("新任务的未发送草稿");
   expect(history.api.mutations).toEqual([]);
 });
 
 test("project renames and conversation moves immediately update recent project labels", async ({ page, history }, info) => {
-  await page.goto("/app");
+  await page.goto("/app/new");
   const input = page.getByRole("textbox", { name: "消息输入框", exact: true }); await input.fill("项目操作时保留草稿");
   if (info.project.name === "mobile") await page.getByRole("button", { name: "打开会话栏", exact: true }).click();
   await page.getByRole("button", { name: "项目 Lester 官网 的操作", exact: true }).click();
@@ -96,7 +96,7 @@ test("project renames and conversation moves immediately update recent project l
 });
 
 test("existing workspace events update recent order and unread state without stealing search focus", async ({ page, history }, info) => {
-  await page.goto("/app");
+  await page.goto("/app/new");
   const input = page.getByRole("textbox", { name: "消息输入框", exact: true }); await input.fill("运行更新时保留草稿");
   await expect.poll(() => history.api.streamCount).toBe(1);
   const { dialog } = await openRecent(page, info.project.name === "mobile");
@@ -110,7 +110,7 @@ test("existing workspace events update recent order and unread state without ste
 
 test("empty recent history and an empty search remain distinct without creating conversations", async ({ page, history }, info) => {
   history.items.length = 0; history.api.conversation = null;
-  await page.goto("/app");
+  await page.goto("/app/new");
   const { dialog } = await openRecent(page, info.project.name === "mobile");
   await expect(dialog.getByRole("status")).toHaveText("还没有会话，发送一个目标开始吧。");
   await dialog.getByRole("searchbox").fill("我的项目");

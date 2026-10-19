@@ -2,7 +2,7 @@ import { test, expect, type Locator, type Page } from "@playwright/test";
 import { WorkspaceApi, conversationId, prompt } from "./workspace-api";
 
 async function login(page: Page) {
-  await page.goto("/app");
+  await page.goto("/app/new");
   await page.getByLabel("邮箱", { exact: true }).fill("browser@example.test");
   await page.getByLabel("密码", { exact: true }).fill("fixture-password-123");
   await page.getByRole("button", { name: "登录", exact: true }).click();

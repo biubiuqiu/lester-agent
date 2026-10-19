@@ -8,6 +8,9 @@ import { isInternalRuntimePath } from "./file-path-policy";
 
 // View layout remains tab-local; account-scoped drafts survive closing tabs/windows.
 export type ViewState = {
+  personalPending: string;
+  personalProject: string;
+  personalModel: string;
   recap: { enabled: boolean; seenAt: number; eventId: number; messageId: string };
   detailedProcess: boolean;
   contexts: ContextReference[];
@@ -32,19 +35,20 @@ export type ViewState = {
 };
 const prefix = "lester.view.v1.";
 const draftPrefix = "lester.draft.v1.";
-const draftFields = ["recap", "detailedProcess", "text", "contexts", "reference", "executionMode", "permissionMode", "agentSlug", "interactionDrafts", "sendNotice", "files", "missingFiles"] as const;
+const draftFields = ["personalPending", "personalProject", "personalModel", "recap", "detailedProcess", "text", "contexts", "reference", "executionMode", "permissionMode", "agentSlug", "interactionDrafts", "sendNotice", "files", "missingFiles"] as const;
 function stored(read: () => string | null) { try { return JSON.parse(read() || "null"); } catch { return null; } }
 const cache = new Map<string, ViewState>();
 const draftSnapshots = new Map<string, string | null>();
 let writeScope: string | null = "";
 export function resumeViewState(scope: string) { writeScope = scope; resumeProjectViews(scope); }
-const defaults = (): ViewState => ({ recap: { enabled: true, seenAt: 0, eventId: 0, messageId: "" }, detailedProcess: false, contexts: [], agentSlug: "lester", executionMode: "execute", permissionMode: "standard", interactionDrafts: {}, sendNotice: "", text: "", files: [], missingFiles: [], reference: null, tabs: [], closedTabs: [], unreadFiles: [], selected: null, treeOpen: true, directories: [""], modes: {}, positions: {}, thread: { top: 0, following: true } });
+const defaults = (): ViewState => ({ personalPending: "", personalProject: "", personalModel: "", recap: { enabled: true, seenAt: 0, eventId: 0, messageId: "" }, detailedProcess: false, contexts: [], agentSlug: "lester", executionMode: "execute", permissionMode: "standard", interactionDrafts: {}, sendNotice: "", text: "", files: [], missingFiles: [], reference: null, tabs: [], closedTabs: [], unreadFiles: [], selected: null, treeOpen: true, directories: [""], modes: {}, positions: {}, thread: { top: 0, following: true } });
 export const viewKey = (userId: string, workspaceId: string, conversationId: string) => `${userId}.${workspaceId}.${conversationId}`;
 
 function persistDraft(key: string, value: ViewState) {
   try {
     window.localStorage.setItem(draftPrefix + key, JSON.stringify({ version: 1,
       text: value.text.slice(0, 100_000), recap: value.recap, detailedProcess: value.detailedProcess, contexts: value.contexts, reference: value.reference,
+      personalPending: value.personalPending, personalProject: value.personalProject, personalModel: value.personalModel,
       executionMode: value.executionMode, permissionMode: value.permissionMode, agentSlug: value.agentSlug,
       interactionDrafts: value.interactionDrafts, sendNotice: value.sendNotice,
       attachmentNames: [...value.files.map(file => file.name), ...value.missingFiles],
@@ -66,6 +70,9 @@ export function readView(key: string): ViewState {
     const draft = stored(() => draftRaw);
     const saved = draft?.version === 1 ? { ...(session?.version === 1 ? session : {}), ...draft } : session;
     if (saved && saved.version === 1) {
+      value.personalPending = typeof saved.personalPending === "string" && /^[0-9a-f-]{36}$/i.test(saved.personalPending) ? saved.personalPending : "";
+      value.personalProject = typeof saved.personalProject === "string" ? saved.personalProject.slice(0, 100) : "";
+      value.personalModel = typeof saved.personalModel === "string" ? saved.personalModel.slice(0, 100) : "";
       if (saved.recap && typeof saved.recap === "object") value.recap = { enabled: saved.recap.enabled !== false, seenAt: Number.isSafeInteger(saved.recap.seenAt) && saved.recap.seenAt > 0 ? saved.recap.seenAt : 0, eventId: Number.isSafeInteger(saved.recap.eventId) && saved.recap.eventId >= 0 ? saved.recap.eventId : 0, messageId: typeof saved.recap.messageId === "string" ? saved.recap.messageId.slice(0, 100) : "" };
       value.detailedProcess = saved.detailedProcess === true;
       value.contexts = Array.isArray(saved.contexts) ? saved.contexts.filter((v: unknown) => v && typeof v === "object" && "id" in v && typeof v.id === "string" && "title" in v && typeof v.title === "string" && (!("type" in v) || v.type === "context" || v.type === "conversation" || v.type === "skill")).map((item: ContextReference) => ({ id: item.id, title: item.title, ...(item.type ? { type: item.type } : {}) })).slice(0, 8) : [];

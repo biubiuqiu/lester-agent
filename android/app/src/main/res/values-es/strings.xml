@@ -1,6 +1,6 @@
 <resources>
     <string name="back">"Atrás"</string>
-    <string name="new_task">"Nueva tarea"</string>
+    <string name="personal_assistant">"Asistente personal"</string>
     <string name="settings">"Ajustes"</string>
     <string name="retry">"Reintentar"</string>
     <string name="connect">"Conectar"</string>

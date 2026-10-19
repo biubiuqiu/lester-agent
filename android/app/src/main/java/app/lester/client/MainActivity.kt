@@ -118,7 +118,7 @@ class MainActivity : ComponentActivity() {
                             if (!wide && model.workspace != null) NativeIcon(R.drawable.ic_menu, R.string.recent) { scope.launch { drawer.open() } }
                             else if (model.canGoBack) NativeIcon(R.drawable.ic_back, R.string.back) { host?.back { moveTaskToBack(true) } }
                         }, actions = {
-                            if (model.workspace != null) NativeIcon(R.drawable.ic_add, R.string.new_task) { model.command?.invoke("home", null) }
+                            if (model.workspace != null) NativeIcon(R.drawable.ic_lester, R.string.personal_assistant) { model.command?.invoke("home", null) }
                             NativeIcon(R.drawable.ic_settings, R.string.settings) { settings = true }
                         }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface))
                         model.error?.let { message ->

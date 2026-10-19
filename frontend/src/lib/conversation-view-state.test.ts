@@ -106,3 +106,19 @@ test("reference and recap updates retain another tab's latest draft and local Fi
   assert.deepEqual(readView(key).missingFiles, ["remote.png"]);
   clearViewState();
 });
+
+test("personal pending receipts survive closure and logout rejects their late resurrection", () => {
+  clearViewState(); resumeViewState("personal-user.workspace.");
+  const key = "personal-user.workspace.personal", id = "12345678-1234-4234-8234-123456789abc";
+  updateView(key, { text: "a partially written personal message", personalPending: id, personalProject: "project", personalModel: "model" });
+  const durable = JSON.parse(values["lester.draft.v1." + key]);
+  assert.equal(durable.personalPending, id);
+  assert.equal(durable.personalProject, "project");
+  assert.equal(durable.personalModel, "model");
+  assert.equal(readView(key).personalPending, id);
+  clearViewState();
+  updateView(key, { personalPending: id, text: "late response" });
+  assert.equal(values["lester.draft.v1." + key], undefined);
+  resumeViewState("different-user.workspace.");
+  assert.equal(readView(key).personalPending, "");
+});

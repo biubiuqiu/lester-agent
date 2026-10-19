@@ -30,7 +30,7 @@ struct RootView: View {
                             if model.canGoBack { Button("Back", systemImage: "chevron.left") { model.back?() } }
                         }
                         ToolbarItemGroup(placement: .topBarTrailing) {
-                            if model.workspace != nil { GlassAction(title: "New task", symbol: "square.and.pencil") { model.command("home"); compactColumn = .detail } }
+                            if model.workspace != nil { GlassAction(title: "Personal assistant", symbol: "bubble.left.and.bubble.right") { model.command("home"); compactColumn = .detail } }
                             Button("Settings", systemImage: "slider.horizontal.3") { model.showSettings = true }
                         }
                     }
@@ -86,7 +86,7 @@ struct RootView: View {
     private var sidebar: some View {
         List {
             Section {
-                Button { model.command("home"); compactColumn = .detail } label: { Label("New task", systemImage: "square.and.pencil") }
+                Button { model.command("home"); compactColumn = .detail } label: { Label("Personal assistant", systemImage: "bubble.left.and.bubble.right") }
             }
             Section("Recent conversations") {
                 let items = model.workspace?.conversations.filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) || $0.projectName.localizedCaseInsensitiveContains(query) } ?? []

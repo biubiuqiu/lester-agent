@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-//go:embed base.txt platform_rules.txt agent_builder.txt permission_reviewer.txt personas/*.txt
+//go:embed base.txt platform_rules.txt agent_builder.txt permission_reviewer.txt personal_assistant.txt personas/*.txt
 var files embed.FS
 
 type Skill struct {
@@ -67,5 +67,10 @@ func AgentBuilder() (string, error) {
 
 func PermissionReviewer() (string, error) {
 	data, err := files.ReadFile("permission_reviewer.txt")
+	return string(data), err
+}
+
+func PersonalAssistant() (string, error) {
+	data, err := files.ReadFile("personal_assistant.txt")
 	return string(data), err
 }

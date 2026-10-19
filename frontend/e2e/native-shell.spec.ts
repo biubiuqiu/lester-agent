@@ -20,7 +20,7 @@ const test = base.extend<{ api: WorkspaceApi; nativeMessages: NativeMessage[] }>
   },
 });
 async function authenticate(page: Page) {
-  await page.goto("/login");
+  await page.goto("/login?returnTo=%2Fapp%2Fnew");
   await page.getByLabel("邮箱", { exact: true }).fill("browser@example.test");
   await page.getByLabel("密码", { exact: true }).fill("fixture-password-123");
   await page.getByRole("button", { name: "登录", exact: true }).click();
@@ -70,7 +70,7 @@ test("native phone and tablet keep task, results and drafts with desktop tools r
 
 test("a URL parameter does not enable native mode in an ordinary browser", async ({ page, api }) => {
   await authenticate(page);
-  await page.goto("/app?native=1");
+  await page.goto("/app/new?native=1");
   await expect(page.getByRole("textbox", { name: "消息输入框", exact: true })).toBeVisible();
   await expect(page.locator("html")).not.toHaveAttribute("data-lester-native", "ios");
   expect(api.mutations.filter(item => item.path.startsWith("/api/v1/conversations"))).toEqual([]);

@@ -32,7 +32,7 @@ test("project results preserve project and conversation drafts, preview real sou
   page.on("request", request => { if (new URL(request.url()).pathname.endsWith("/files")) fileReads.push(request.url()); });
   await context.route("**/api/v1/projects/fixture-project/deliverables?*", route => { const params = new URL(route.request().url()).searchParams; return route.fulfill({ json: { deliverables: [sample(0), sample(1)].filter(item => (!params.get("kind") || item.kind === params.get("kind")) && (!params.get("q") || item.title.includes(params.get("q")!))), next_cursor: "" } }); });
   try {
-    await page.goto("/app");
+    await page.goto("/app/new");
     let input = page.getByRole("textbox", { name: "消息输入框", exact: true }); await input.fill("保留项目中新任务的草稿");
     await openProject(page, info.project.name === "mobile");
     await expect(page.locator(".project-result-card")).toHaveCount(2); expect(fileReads).toHaveLength(0); expect(api.mutations).toEqual([]);
@@ -42,7 +42,7 @@ test("project results preserve project and conversation drafts, preview real sou
     await page.getByRole("combobox", { name: "成果类型", exact: true }).selectOption("markdown"); await expect(page.locator(".project-result-card")).toHaveCount(1); await expect(page.locator(".project-result-card h2")).toHaveText("项目说明 1");
     await page.getByRole("combobox", { name: "成果类型", exact: true }).selectOption(""); await expect(page.locator(".project-result-card")).toHaveCount(2);
     const projectSearch = page.getByRole("textbox", { name: "搜索项目成果", exact: true }); await projectSearch.fill("不存在的成果"); await expect(page.getByRole("heading", { name: "没有匹配的成果", exact: true })).toBeVisible(); await projectSearch.fill(""); await expect(page.locator(".project-result-card")).toHaveCount(2);
-    await page.getByRole("link", { name: "新任务", exact: true }).click(); await expect(input).toHaveValue("保留项目中新任务的草稿");
+    await page.locator(".project-workbench").getByRole("link", { name: "新任务", exact: true }).click(); await expect(input).toHaveValue("保留项目中新任务的草稿");
     await page.getByRole("link", { name: "打开项目 个人项目", exact: true }).click();
     await page.getByRole("button", { name: "预览项目成果 新版官网", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/app/c/${conversationId}\\?preview=index.html$`));
@@ -102,7 +102,7 @@ for (const locale of ["zh-CN", "en", "ja", "ko", "fr", "es"] as Locale[]) {
     try {
       if (info.project.name === "mobile") await page.setViewportSize({ width: 320, height: 740 });
       await page.goto("/app/p/fixture-project/overview"); await expect(page.getByRole("heading", { name: "个人项目", exact: true })).toBeVisible(); await expect(page.locator(".project-result-card")).toHaveCount(1);
-      await expect(page.getByRole("link", { name: t("新任务"), exact: true })).toBeVisible();
+      await expect(page.locator(".project-workbench").getByRole("link", { name: t("新任务"), exact: true })).toBeVisible();
       const resultTab = page.getByRole("tab", { name: t("成果"), exact: true }); await resultTab.focus(); await resultTab.press("ArrowRight"); await expect(page.getByRole("tab", { name: new RegExp(t("会话")) })).toHaveAttribute("aria-selected", "true");
       await page.keyboard.press("Home"); await expect(resultTab).toHaveAttribute("aria-selected", "true");
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

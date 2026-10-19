@@ -86,7 +86,7 @@ test("workspace bootstrap failures have a usable retry instead of a blank home",
   const api = await fixture(context); let fail = true;
   await context.route("**/api/v1/projects", route => route.fulfill(fail ? { status: 503, json: { error: "测试：项目服务暂时不可用" } } : { json: { projects: [{ id: "fixture-project", name: "个人项目", is_default: true, pinned: false, conversation_count: 1, created_at: "2026-10-17T09:00:00Z" }] } }));
   try {
-    await page.goto("/app"); await expect(page.locator(".workspace-error")).toContainText("测试：项目服务暂时不可用"); await expect(page.getByText("正在载入对话…", { exact: true })).toHaveCount(0);
+    await page.goto("/app/new"); await expect(page.locator(".workspace-error")).toContainText("测试：项目服务暂时不可用"); await expect(page.getByText("正在载入对话…", { exact: true })).toHaveCount(0);
     fail = false; await page.locator(".workspace-error").getByRole("button", { name: "重试", exact: true }).click(); await expect(page.getByRole("textbox", { name: "消息输入框", exact: true })).toBeVisible();
     expect(api.mutations).toEqual([]); expect(api.unexpected).toEqual([]);
   } finally { await api.close(); }

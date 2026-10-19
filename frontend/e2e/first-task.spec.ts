@@ -11,8 +11,8 @@ const test = base.extend<{ api: WorkspaceApi }>({
 });
 
 async function login(page: Page) {
-  await page.goto("/app");
-  await expect(page).toHaveURL(/\/login\?returnTo=%2Fapp$/);
+  await page.goto("/app/new");
+  await expect(page).toHaveURL(/\/login\?returnTo=%2Fapp%2Fnew$/);
   await page.getByLabel("邮箱", { exact: true }).fill("browser@example.test");
   await page.getByLabel("密码", { exact: true }).fill("fixture-password-123");
   await page.getByRole("button", { name: "登录", exact: true }).click();
@@ -24,7 +24,7 @@ test("login waits for hydration before accepting credentials", async ({ page, ap
   const scripts = new Promise<void>(resolve => { release = resolve; });
   await page.route("**/_next/static/**/*.js", async route => { await scripts; await route.continue(); });
   try {
-    await page.goto("/login", { waitUntil: "commit" });
+    await page.goto("/login?returnTo=%2Fapp%2Fnew", { waitUntil: "commit" });
     const email = page.getByLabel("邮箱", { exact: true });
     const password = page.getByLabel("密码", { exact: true });
     const submit = page.getByRole("button", { name: "登录", exact: true });
@@ -60,6 +60,8 @@ test("login, explicit first task, live file tabs and independent HTML preview", 
   await expect(page.locator(".login-card").getByRole("alert")).toHaveText("邮箱或密码不正确");
   await page.getByLabel("密码", { exact: true }).fill("fixture-password-123");
   await page.getByRole("button", { name: "登录", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "个人助理消息", exact: true })).toBeVisible();
+  await page.goto("/app/new");
   const composer = page.getByRole("textbox", { name: "消息输入框", exact: true });
   await expect(composer).toBeVisible();
   expect((await context.cookies()).find(cookie => cookie.name === "lester_access_token")?.httpOnly).toBe(true);

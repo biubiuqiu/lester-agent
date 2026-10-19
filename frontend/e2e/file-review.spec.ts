@@ -10,7 +10,7 @@ const test = base.extend<{ api: WorkspaceApi }>({ api: async ({ context, page },
   try { await runFixture(api); expect(api.unexpected).toEqual([]); expect(errors).toEqual([]); } finally { await api.close(); }
 } });
 async function start(page: Page, api: WorkspaceApi) {
-  await page.goto("/app");
+  await page.goto("/app/new");
   await page.getByLabel("邮箱", { exact: true }).fill("browser@example.test"); await page.getByLabel("密码", { exact: true }).fill("fixture-password-123"); await page.getByRole("button", { name: "登录", exact: true }).click();
   const input = page.getByRole("textbox", { name: "消息输入框", exact: true }); await input.fill(prompt); await input.press("Enter"); await expect(page).toHaveURL(`/app/c/${conversationId}`); await expect.poll(() => api.streamCount).toBeGreaterThan(0); return input;
 }

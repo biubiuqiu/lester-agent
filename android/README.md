@@ -2,7 +2,7 @@
 
 A Kotlin / Jetpack Compose client for your own Lester server. **Make it happen.**
 
-Supports **Android 8.0+ (API 26), phones and tablets**. Uses Material 3 navigation and the existing authenticated Web workspace. The server must have migrations **001–030** and matching API/Web; Android reuses the iOS handoff endpoints and adds no migration. A recent Android System WebView / Chrome with AndroidX WebMessageListener and document-start injection support is required. The App asks for an update instead of installing an unsafe legacy JavaScript interface.
+Supports **Android 8.0+ (API 26), phones and tablets**. Uses Material 3 navigation and the existing authenticated Web workspace. The server must have migrations **001–031** and matching API/Web; Android reuses the iOS handoff endpoints and adds no migration. A recent Android System WebView / Chrome with AndroidX WebMessageListener and document-start injection support is required. The App asks for an update instead of installing an unsafe legacy JavaScript interface.
 
 ## Build and install
 
@@ -51,4 +51,6 @@ Before distributing, verify on Android phones/tablets: browser return and refres
 
 ## 中文说明
 
-用 Android Studio 打开 `android/`，或配置 JDK 21、SDK 36 后运行上面的 Gradle Wrapper 命令。Debug APK 可直接安装测试，Release APK 需自己签名。连接已完成迁移 001–030 的 HTTPS Lester，邮箱、Google、GitHub 通过系统浏览器登录。支持 Android 8.0+ 手机和平板；前台完成短震可关闭，后台和锁屏推送暂缓。终端隐藏，保留聊天、成果、审批、提问、队列和定时任务。构建和 JVM/Web 检查不等于真机验收，发布前请验证登录返回、输入法、文件选择、旋转/分屏和实际震动。
+用 Android Studio 打开 `android/`，或配置 JDK 21、SDK 36 后运行上面的 Gradle Wrapper 命令。Debug APK 可直接安装测试，Release APK 需自己签名。连接已完成迁移 001–031 的 HTTPS Lester，邮箱、Google、GitHub 通过系统浏览器登录。支持 Android 8.0+ 手机和平板；前台完成短震可关闭，后台和锁屏推送暂缓。终端隐藏，保留聊天、成果、审批、提问、队列和定时任务。构建和 JVM/Web 检查不等于真机验收，发布前请验证登录返回、输入法、文件选择、旋转/分屏和实际震动。
+
+Home opens your enduring personal Lester dialogue and memory. Independent execution tasks remain reachable through projects and task cards. The assistant cannot execute commands, edit files or approve operations.

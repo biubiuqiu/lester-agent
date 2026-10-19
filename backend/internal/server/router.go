@@ -13,6 +13,7 @@ import (
 	"github.com/biubiuqiu/lester-agent/backend/internal/deliverable"
 	"github.com/biubiuqiu/lester-agent/backend/internal/httpapi"
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
+	"github.com/biubiuqiu/lester-agent/backend/internal/personal"
 	"github.com/biubiuqiu/lester-agent/backend/internal/project"
 	"github.com/biubiuqiu/lester-agent/backend/internal/reference"
 	"github.com/biubiuqiu/lester-agent/backend/internal/skill"
@@ -21,6 +22,7 @@ import (
 )
 
 type Dependencies struct {
+	Personal          *personal.Handler
 	Automations       *automation.Handler
 	References        *reference.Handler
 	Contexts          *contextlibrary.Handler
@@ -62,6 +64,15 @@ func Router(deps Dependencies) http.Handler {
 		api.With(deps.Auth.Middleware).Get("/auth/session", deps.Auth.SessionStatus)
 		api.Group(func(private chi.Router) {
 			private.Use(deps.Auth.Middleware)
+			if deps.Personal != nil {
+				private.Get("/personal", deps.Personal.State)
+				private.Post("/personal/messages", deps.Personal.Chat)
+				private.Get("/personal/messages/{id}", deps.Personal.Turn)
+				private.Get("/personal/tasks", deps.Personal.Tasks)
+				private.Patch("/personal/settings", deps.Personal.Settings)
+				private.Patch("/personal/memories/{id}", deps.Personal.EditMemory)
+				private.Post("/personal/changes/{id}/undo", deps.Personal.Undo)
+			}
 			if deps.Automations != nil {
 				private.Get("/automations", deps.Automations.List)
 				private.Get("/automations/{id}", deps.Automations.Get)

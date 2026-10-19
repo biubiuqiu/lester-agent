@@ -16,6 +16,17 @@ import (
 
 type clientTimezoneKey struct{}
 
+// WithClientTimezone preserves the same validated browser hint when a personal
+// assistant delegates into ordinary immediate/queued task acceptance.
+func WithClientTimezone(ctx context.Context, zone string) context.Context {
+	return withClientTimezone(ctx, zone)
+}
+
+func ClientTimezone(ctx context.Context) string {
+	zone, _ := ctx.Value(clientTimezoneKey{}).(string)
+	return zone
+}
+
 // Optional browser hint only. It is snapshotted with accepted input, never used
 // as permission, identity or an execution decision. Explicit tool config wins.
 func withClientTimezone(ctx context.Context, zone string) context.Context {
@@ -86,6 +97,9 @@ func prepareRunInput(ctx context.Context, tx pgx.Tx, workspaceID, userID, id uui
 	var rules project.Rules
 	if err = tx.QueryRow(ctx, `SELECT p.id,p.name,p.rules_content,p.rules_version FROM projects p JOIN conversations c ON c.project_id=p.id AND c.workspace_id=p.workspace_id WHERE c.id=$1 AND c.workspace_id=$2`, id, workspaceID).Scan(&rules.ProjectID, &rules.ProjectName, &rules.Content, &rules.Version); err != nil {
 		return "", nil, err
+	}
+	if expected, ok := ctx.Value(delegationProjectKey{}).(uuid.UUID); ok && expected != rules.ProjectID {
+		return "", nil, ErrDelegationProjectChanged
 	}
 	rules.Digest()
 	values := map[string]any{"attachments": attachments, "contexts": contexts, "conversations": conversations, "skills": selectedSkills, "project_rules": rules}

@@ -6,7 +6,7 @@ Requires iOS / iPadOS 18+, **Xcode 26+** and an HTTPS Lester deployment with mig
 
 ## Run on a Mac
 
-1. Upgrade your server using the root README. Preserve keys, accounts and volumes. If migrations 001–029 are already applied, back up PostgreSQL, stop API writes, apply `backend/migrations/000030_native_signin.up.sql` once, and rebuild API and Web together. Fresh Compose databases include it automatically; Helm upgrades apply SQL externally.
+1. Upgrade your server using the root README. Preserve keys, accounts and volumes. Back up PostgreSQL, stop API writes and active tasks, apply all missing migrations through `backend/migrations/000031_personal_assistant.up.sql`, and rebuild API and Web together. Fresh Compose databases include it automatically; Helm upgrades apply SQL externally.
 2. Open `ios/Lester.xcodeproj` in Xcode 26+. The shared scheme is **Lester**. The only package is the local `Packages/LesterCore`; no third-party native dependencies or project generator are needed.
 3. Select your signing Team and a unique bundle identifier in the app target. Choose an iPhone or iPad simulator, or a provisioned device, and Run. Enter the server’s HTTPS origin, such as `https://lester.example` (deployment at the domain root).
 4. Sign in in the system authentication browser using your configured email, Google or GitHub account. Confirm the displayed account with **Sign in to App** and return to Lester. OAuth callbacks remain the existing server-owned HTTPS URLs; there are no mobile provider secrets to embed.
@@ -46,6 +46,8 @@ The Foundation-only bridge/origin/completion tests also run on Linux with Swift 
 
 ## 简要说明
 
-用 Xcode 26+ 打开 `ios/Lester.xcodeproj`，选择签名 Team 和设备后运行，连接自己的 HTTPS Lester。服务端需补齐迁移 001–030 并一起更新 API/Web。支持 iOS/iPadOS 18+；iOS 26 使用系统 Liquid Glass，旧版回退原生样式。iPad 自适应侧栏显示最近会话和所属项目；App 内隐藏终端等桌面入口，保留聊天、成果、审批、队列与定时任务。
+用 Xcode 26+ 打开 `ios/Lester.xcodeproj`，选择签名 Team 和设备后运行，连接自己的 HTTPS Lester。服务端需补齐迁移 001–031 并一起更新 API/Web。支持 iOS/iPadOS 18+；iOS 26 使用系统 Liquid Glass，旧版回退原生样式。iPad 自适应侧栏显示最近会话和所属项目；App 内隐藏终端等桌面入口，保留聊天、成果、审批、队列与定时任务。
 
 首版只在工作区前台收到新任务完成时轻震一次，支持关闭和硬件检测；不支持的 iPad 不会震动。后台、锁屏 APNs 推送按本次范围暂缓。Linux 可验证核心逻辑和网页适配，原生构建、玻璃效果、登录返回和真机震动必须用 macOS/Xcode 与设备验收。这里提供源码工程，不代表已上架。
+
+Home opens your enduring personal Lester dialogue and memory. Independent execution tasks remain reachable through projects and task cards. The assistant cannot execute commands, edit files or approve operations.

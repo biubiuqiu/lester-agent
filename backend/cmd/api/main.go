@@ -24,6 +24,7 @@ import (
 	"github.com/biubiuqiu/lester-agent/backend/internal/eventlog"
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
 	"github.com/biubiuqiu/lester-agent/backend/internal/model/integration"
+	"github.com/biubiuqiu/lester-agent/backend/internal/personal"
 	"github.com/biubiuqiu/lester-agent/backend/internal/project"
 	"github.com/biubiuqiu/lester-agent/backend/internal/reference"
 	"github.com/biubiuqiu/lester-agent/backend/internal/sandbox"
@@ -111,6 +112,7 @@ func run() error {
 		return err
 	}
 	automationService := &automation.Service{DB: db, Runner: automation.ConversationRunner{Service: conversationService}}
+	personalHandler := &personal.Handler{Service: &personal.Service{DB: db, Models: modelStore, TasksService: conversationService}}
 	conversationService.SetSchedules(automationService)
 	authService := auth.New(db, redisClient, cfg.AccessTokenTTL, cfg.SessionCookieSecure)
 	var mailer auth.Mailer
@@ -124,7 +126,7 @@ func run() error {
 	if err = authService.Configure(auth.Options{WebOrigin: cfg.WebOrigin, RegistrationEnabled: cfg.RegistrationEnabled, Providers: auth.DefaultProviders(cfg.GoogleClientID, cfg.GoogleClientSecret, cfg.GitHubClientID, cfg.GitHubClientSecret), Mailer: mailer, Avatars: objectStore}); err != nil {
 		return err
 	}
-	handler := server.Router(server.Dependencies{Automations: &automation.Handler{Service: automationService}, References: &reference.Handler{Service: reference.Service{DB: db}}, Deliverables: &deliverable.Handler{Service: deliverableService}, Contexts: &contextlibrary.Handler{Service: &contextlibrary.Service{DB: db}}, Agents: &agent.Handler{Service: &agent.Service{DB: db, Objects: objectStore}}, AgentBuilder: &agent.BuilderHandler{DB: db, Models: modelStore}, Logger: logger, WebOrigin: cfg.WebOrigin, TrustedProxyCIDRs: cfg.TrustedProxyCIDRs, Auth: authService, Models: model.NewHandler(modelStore), Conversations: conversationHandler, Skills: skill.NewHandler(skillService, conversationService), Projects: &project.Handler{Service: &project.Service{DB: db}}, Artifacts: &artifact.Handler{Service: artifactService}})
+	handler := server.Router(server.Dependencies{Personal: personalHandler, Automations: &automation.Handler{Service: automationService}, References: &reference.Handler{Service: reference.Service{DB: db}}, Deliverables: &deliverable.Handler{Service: deliverableService}, Contexts: &contextlibrary.Handler{Service: &contextlibrary.Service{DB: db}}, Agents: &agent.Handler{Service: &agent.Service{DB: db, Objects: objectStore}}, AgentBuilder: &agent.BuilderHandler{DB: db, Models: modelStore}, Logger: logger, WebOrigin: cfg.WebOrigin, TrustedProxyCIDRs: cfg.TrustedProxyCIDRs, Auth: authService, Models: model.NewHandler(modelStore), Conversations: conversationHandler, Skills: skill.NewHandler(skillService, conversationService), Projects: &project.Handler{Service: &project.Service{DB: db}}, Artifacts: &artifact.Handler{Service: artifactService}})
 	server := &http.Server{Addr: cfg.HTTPAddr, Handler: handler, ReadHeaderTimeout: 10 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
 	dispatcher := &eventlog.Dispatcher{DB: db, Publish: func(ctx context.Context, channel string, data []byte) error {
 		return redisClient.Publish(ctx, channel, data).Err()

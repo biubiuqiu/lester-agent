@@ -46,7 +46,7 @@ test("manual switch persists through navigation and reload without losing a draf
   const api = new WorkspaceApi();
   await api.install(context);
   try {
-    await page.goto("/app");
+    await page.goto("/app/new");
     await page.getByLabel("邮箱", { exact: true }).fill("browser@example.test");
     await page.getByLabel("密码", { exact: true }).fill("fixture-password-123");
     await page.getByRole("button", { name: "登录", exact: true }).click();
@@ -89,7 +89,7 @@ test("English auth and guides stay translated while task content stays as author
   });
   await context.addCookies([{ name: "lester_locale", value: "en", url: "http://127.0.0.1:13020" }]);
   try {
-    await page.goto("/login");
+    await page.goto("/login?returnTo=%2Fapp%2Fnew");
     await page.getByLabel("Email", { exact: true }).fill("browser@example.test");
     await page.getByLabel("Password", { exact: true }).fill("wrong");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();

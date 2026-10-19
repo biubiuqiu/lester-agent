@@ -3,7 +3,7 @@ import { test as base, expect, type Page } from "@playwright/test";
 import { WorkspaceApi, conversationId, prompt } from "./workspace-api";
 const test = base.extend<{ api: WorkspaceApi }>({ api: async ({ context }, run) => { const api = new WorkspaceApi(); await api.install(context); try { await run(api); expect(api.unexpected).toEqual([]); } finally { await context.close(); await api.close(); } } });
 async function start(page: Page) {
- await page.goto("/app"); await page.getByLabel("邮箱",{exact:true}).fill("browser@example.test"); await page.getByLabel("密码",{exact:true}).fill("fixture-password-123"); await page.getByRole("button",{name:"登录",exact:true}).click();
+ await page.goto("/app/new"); await page.getByLabel("邮箱",{exact:true}).fill("browser@example.test"); await page.getByLabel("密码",{exact:true}).fill("fixture-password-123"); await page.getByRole("button",{name:"登录",exact:true}).click();
  const input=page.getByRole("textbox",{name:"消息输入框",exact:true});await input.fill(prompt);await input.press("Enter");await expect(page).toHaveURL(`/app/c/${conversationId}`);await expect(page.getByRole("button",{name:"更多会话选项",exact:true})).toBeVisible();return input;
 }
 test("recap commands and context inspection preserve drafts and never submit or approve",async({page,api},info)=>{
