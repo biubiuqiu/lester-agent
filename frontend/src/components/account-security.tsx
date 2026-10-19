@@ -2,14 +2,16 @@
 import { T, useT } from "@/components/i18n";
 
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Check, Link2, LockKeyhole } from "lucide-react";
 import { api, AuthIdentity, AuthOptions, UserProfile } from "@/lib/api";
+import { nativeShellSnapshot, nativeShellServerSnapshot, subscribeNativeShell } from "@/lib/native-shell";
 import { oauthErrors } from "@/lib/auth-ui";
 import { AuthProviderIcon } from "./auth-provider-icon";
 
 export function AccountSecurity({ profile, unsaved, onPasswordSet, onProviderAvatar }: { profile: UserProfile | null; unsaved: boolean; onPasswordSet: () => void; onProviderAvatar: (provider: "google" | "github") => Promise<void> }) {
   const t = useT();
+  const native = useSyncExternalStore(subscribeNativeShell, nativeShellSnapshot, nativeShellServerSnapshot);
 
   const [identities, setIdentities] = useState<AuthIdentity[]>([]);
   const [options, setOptions] = useState<AuthOptions | null>(null);
@@ -61,8 +63,9 @@ export function AccountSecurity({ profile, unsaved, onPasswordSet, onProviderAva
         return <div className="identity-row" key={provider}><div className="identity-info"><AuthProviderIcon provider={provider} /><div><strong>{provider === "google" ? "Google" : "GitHub"}</strong><small>{identity ? identity.email : configured ? t("尚未绑定") : t("此部署尚未配置")}</small></div></div><div className="identity-actions">{identity ? <>
           {identity.has_avatar && <button type="button" className="text-button" disabled={Boolean(action) || !profile} onClick={() => void run(`avatar-${provider}`, async () => { await onProviderAvatar(provider); setNotice("已使用第三方头像。"); })}><T>{"使用其头像"}</T></button>}
           <button type="button" className="secondary-button" disabled={Boolean(action) || !profile || lastMethod} title={lastMethod ? t("先设置密码或绑定另一种登录方式") : undefined} onClick={() => void run(`unlink-${provider}`, async () => { await api(`/api/v1/me/identities/${provider}`, { method: "DELETE" }); setIdentities(items => items.filter(item => item.provider !== provider)); setNotice("已解除绑定，其他设备的登录已退出。"); })}>{action === `unlink-${provider}` ? t("处理中…") : t("解除绑定")}</button>
-        </> : <button type="button" className="secondary-button" disabled={!configured || Boolean(action) || !profile || unsaved} onClick={() => void run(`link-${provider}`, async () => { const result = await api<{ url: string }>(`/api/v1/me/identities/${provider}/link`, { method: "POST" }); window.location.assign(result.url); })}>{action === `link-${provider}` ? t("前往授权…") : t("绑定账号")}</button>}</div></div>;
+        </> : <button type="button" className="secondary-button" disabled={native || !configured || Boolean(action) || !profile || unsaved} onClick={() => void run(`link-${provider}`, async () => { const result = await api<{ url: string }>(`/api/v1/me/identities/${provider}/link`, { method: "POST" }); window.location.assign(result.url); })}>{action === `link-${provider}` ? t("前往授权…") : t("绑定账号")}</button>}</div></div>;
       })}</div> : <p className="profile-help"><T>{"正在读取登录方式…"}</T></p>}
+      {native ? <p className="profile-help">{t("第三方账号绑定请在网页版完成；App 支持使用已绑定的登录方式。")}</p> : null}
       <p className="profile-help"><T>{"至少保留一种可用登录方式；解除绑定会退出其他设备。"}</T>{unsaved ? t("绑定会离开本页，请先保存资料更改。") : t("相同邮箱不会自动合并账户。")}</p>
     </section>
     <section className="settings-card profile-card">

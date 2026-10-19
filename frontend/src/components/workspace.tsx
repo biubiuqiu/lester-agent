@@ -1,5 +1,5 @@
 "use client";
-import { T, useT } from "@/components/i18n";
+import { T, useT, useI18n } from "@/components/i18n";
 
 
 import { ensureSession, redirectToLogin, SessionExpired } from "@/lib/auth-client";
@@ -25,6 +25,7 @@ import { Deliverables } from "./deliverables";
 import { WorkspaceSurface, useWorkspaceDialog } from "./workspace-layout";
 import { ConversationTimeline } from "./conversation-timeline";
 import { FileExplorer } from "./file-explorer";
+import { isNativeShell, NativeRunFeedback, nativeWorkspaceSnapshot, postNative, nativeShellSnapshot, nativeShellServerSnapshot, subscribeNativeShell } from "@/lib/native-shell";
 import { ComputerTerminal } from "./computer-terminal";
 import { AgentConfiguration } from "./agent-configuration";
 import { AgentActivityIndicator, RunFailureRecovery, RunNotice, RunNoticeToast, UnreadRunResult } from "./run-awareness";
@@ -138,7 +139,8 @@ function persistUnreadRunResults(workspaceId: string, value: Record<string, Unre
 }
 
 export function Workspace({ conversationId, projectId, initialAgentSlug, projectOverview = false }: { conversationId?: string; projectId?:string; initialAgentSlug?:string; projectOverview?: boolean }) {
-  const t = useT();
+  const { t, locale } = useI18n();
+  const nativeFeedback = useRef(new NativeRunFeedback());
 
   const router = useRouter();
   const [projects,setProjects] = useState<Project[]>([]);
@@ -180,6 +182,21 @@ export function Workspace({ conversationId, projectId, initialAgentSlug, project
   const panelWidthRef = useRef(panelWidth);
   const layoutHydrated = useSyncExternalStore(subscribeToHydration, getClientSnapshot, getServerSnapshot);
   const viewportWidth = useSyncExternalStore(subscribeToViewport, getViewportWidth, getServerWidth);
+
+  useEffect(() => {
+    if (!user || !isNativeShell()) return;
+    nativeFeedback.current.reset(`${user.user_id}:${user.workspace_id}`, conversations);
+    postNative("workspace", nativeWorkspaceSnapshot(user, projects, conversations, conversationId, locale));
+  }, [user, projects, conversations, conversationId, locale]);
+  useEffect(() => {
+    const refresh = () => {
+      setStreamAttempt(value => value + 1);
+      void refreshConversationRef.current?.(true);
+      setWorkspaceAttempt(value => value + 1);
+    };
+    window.addEventListener("lester:native-foreground", refresh);
+    return () => window.removeEventListener("lester:native-foreground", refresh);
+  }, []);
 
   useEffect(() => {
     panelWidthRef.current = panelWidth;
@@ -337,6 +354,10 @@ export function Workspace({ conversationId, projectId, initialAgentSlug, project
         }));
       }
       if (event.type.startsWith("RUN_") || event.type.startsWith("INTERACTION_") || event.type.startsWith("PERMISSION_")) setTaskRevision(value => Math.max(value, event.id));
+      if (event.type === "RUN_COMPLETED" && event.id > currentCursor && !document.hidden) {
+        const completion = nativeFeedback.current.complete(event.run_id, conversation, event.id);
+        if (completion) postNative("run_completed", completion);
+      }
       const nextStatus = eventRunStatus(event.type);
       if (nextStatus) {
         setConversations((previous) => previous.map((item) => item.id === conversation
@@ -720,7 +741,7 @@ function ComputerPanel({ conversationId, createdAgentId, agentRevision, skillRev
       <span className="sandbox-state" title={t("{0} · 用户级工作区 · {1}{2}", [providerLabel, t(computerStatusLabel[status]), state?.last_error ? `：${state.last_error}` : ""])} aria-label={t("工作区{0}", [t(computerStatusLabel[status])])}><i className={`computer-status ${status}`} /></span>
       {tab === "agent" && createdAgentId ? <button type="button" className="designer-expand-button" onClick={() => setExpanded(!expanded)} aria-label={expanded ? t("收起智能体配置") : t("放大智能体配置")} title={expanded ? t("收起配置") : t("放大编辑提示词")}>{expanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button> : null}
       <button type="button" className="close-files-panel" onClick={() => { setExpanded(false); setPanelOpen(false); }} aria-label={overlay ? t("返回对话") : t("关闭工作区面板")}>{overlay ? <ArrowLeft /> : <X />}<span><T>{"返回对话"}</T></span></button>
-    </header>{tab === "results" ? <Deliverables key={conversationId} panel /> : null}{tab === "files" ? <FileExplorer key={conversationId} conversationId={conversationId} /> : null}{tab === "terminal" ? <ComputerTerminal key={conversationId} conversationId={conversationId} /> : null}{tab === "skills" ? <ConversationSkills conversationId={conversationId} revision={skillRevision} /> : null}{tab === "agent" && createdAgentId ? <AgentConfiguration agentId={createdAgentId} revision={agentRevision} /> : null}</dialog>;
+    </header>{tab === "results" ? <Deliverables key={conversationId} panel /> : null}{tab === "files" ? <FileExplorer key={conversationId} conversationId={conversationId} /> : null}{tab === "terminal" && !nativeShellSnapshot() ? <ComputerTerminal key={conversationId} conversationId={conversationId} /> : null}{tab === "skills" ? <ConversationSkills conversationId={conversationId} revision={skillRevision} /> : null}{tab === "agent" && createdAgentId ? <AgentConfiguration agentId={createdAgentId} revision={agentRevision} /> : null}</dialog>;
 }
 
 function ConversationSkills({ conversationId, revision }: { conversationId: string; revision: number }) {
@@ -764,11 +785,13 @@ function WorkspaceTools({ createdAgentId }: { createdAgentId?: string }) {
     return () => document.removeEventListener("pointerdown", closeOutside);
   }, []);
   const active = panelTab !== "files" && panelTab !== "results";
+  const native = useSyncExternalStore(subscribeNativeShell, nativeShellSnapshot, nativeShellServerSnapshot);
   const label = panelTab === "terminal" ? t("终端") : panelTab === "skills" ? t("技能") : panelTab === "agent" ? t("智能体") : t("工具");
   const choose = (tab: "terminal" | "skills" | "agent") => {
     setPanelTab(tab);
     if (menu.current) menu.current.open = false;
   };
+  if (native) return null;
   return <details ref={menu} className={`workspace-tools ${active ? "active" : ""}`} onKeyDown={event => {
     if (event.key === "Escape" && event.currentTarget.open) {
       event.preventDefault(); event.stopPropagation(); event.currentTarget.open = false;

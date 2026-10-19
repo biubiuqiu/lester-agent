@@ -19,6 +19,8 @@ class ChangeSelectionTests(unittest.TestCase):
     def test_source_and_lockfile_scans(self):
         cases = [
             (["frontend/src/app/page.tsx"], {"web"}),
+            (["ios/Lester/RootView.swift"], {"ios"}),
+            (["ios/Packages/LesterCore/Package.swift"], {"ios"}),
             (["frontend/pnpm-lock.yaml"], {"web", "security_web"}),
             (["frontend/pnpm-workspace.yaml"], {"web", "security_web"}),
             (["backend/internal/auth/token.go"], {"go", "security_go"}),

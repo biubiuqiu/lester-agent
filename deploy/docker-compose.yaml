@@ -45,6 +45,7 @@ services:
       - ../backend/migrations/000027_automations.up.sql:/docker-entrypoint-initdb.d/027.sql:ro
       - ../backend/migrations/000028_permission_reviews.up.sql:/docker-entrypoint-initdb.d/028.sql:ro
       - ../backend/migrations/000029_conversational_schedules.up.sql:/docker-entrypoint-initdb.d/029.sql:ro
+      - ../backend/migrations/000030_native_signin.up.sql:/docker-entrypoint-initdb.d/030.sql:ro
     healthcheck:
       test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
       interval: 3s

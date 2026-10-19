@@ -1,0 +1,12 @@
+/* Injected only by the native host. A query parameter never enables app mode. */
+html[data-lester-native="ios"] .workspace-shell{grid-template-columns:minmax(0,1fr);width:100%;max-width:none}
+html[data-lester-native="ios"] .conversation-sidebar,
+html[data-lester-native="ios"] .sidebar-restore-button,
+html[data-lester-native="ios"] .conversation-header .mobile-menu,
+html[data-lester-native="ios"] .conversation-header .mobile-new{display:none!important}
+html[data-lester-native="ios"] .workspace-tools{display:none}
+html[data-lester-native="ios"] .conversation-main{min-width:0}
+html[data-lester-native="ios"] .conversation-header{padding-inline:16px}
+html[data-lester-native="ios"] .question-dock{min-height:0}
+html[data-lester-native="ios"] .compose-box textarea{font-size:16px}
+@media(min-width:1001px){html[data-lester-native="ios"] .workspace-shell.workspace-panel-open{grid-template-columns:minmax(0,1fr) minmax(340px,var(--computer-panel-width))}}

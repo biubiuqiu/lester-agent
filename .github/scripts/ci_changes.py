@@ -6,7 +6,7 @@ import re
 import subprocess
 from pathlib import Path
 
-JOBS = ("go", "web", "gateway", "helm", "sandbox_runtime", "security_go", "security_web", "workflows")
+JOBS = ("go", "web", "gateway", "helm", "sandbox_runtime", "security_go", "security_web", "workflows", "ios")
 
 
 def changed_paths(event_name, event, repo="."):
@@ -52,6 +52,8 @@ def select_jobs(event_name, paths):
                     or path.startswith(("backend/runtime/", "backend/cmd/lester-toolbox/", "backend/internal/toolboxfs/", "backend/internal/sandbox/"))
                     or path in ("backend/go.mod", "backend/go.sum", "backend/.dockerignore")):
                 jobs["sandbox_runtime"] = True
+        elif path.startswith("ios/"):
+            jobs["ios"] = True
         elif path.startswith("frontend/"):
             jobs["web"] = True
             if path in ("frontend/package.json", "frontend/pnpm-lock.yaml", "frontend/pnpm-workspace.yaml"):

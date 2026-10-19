@@ -23,6 +23,7 @@ jobs:
     outputs:
       go: ${{ steps.changes.outputs.go }}
       web: ${{ steps.changes.outputs.web }}
+      ios: ${{ steps.changes.outputs.ios }}
       gateway: ${{ steps.changes.outputs.gateway }}
       helm: ${{ steps.changes.outputs.helm }}
       sandbox_runtime: ${{ steps.changes.outputs.sandbox_runtime }}
@@ -186,6 +187,40 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  ios:
+    name: iPhone and iPad build
+    needs: changes
+    if: needs.changes.outputs.ios == 'true'
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Select installed Xcode 26 or later
+        shell: bash
+        run: |
+          python3 - <<'PYCODE'
+          import os, plistlib
+          from pathlib import Path
+          candidates = []
+          for app in Path("/Applications").glob("Xcode*.app"):
+              with (app / "Contents/Info.plist").open("rb") as stream:
+                  version = plistlib.load(stream)["CFBundleShortVersionString"]
+              numbers = tuple(int(part) for part in version.split(".") if part.isdigit())
+              if numbers and numbers[0] >= 26:
+                  candidates.append((numbers, app))
+          if not candidates:
+              raise SystemExit("This client requires an installed Xcode 26+ / iOS 26 SDK.")
+          developer = max(candidates, key=lambda entry: entry[0])[1] / "Contents/Developer"
+          with open(os.environ["GITHUB_ENV"], "a") as output:
+              output.write(f"DEVELOPER_DIR={developer}\n")
+          PYCODE
+      - name: Verify resources and native bridge tests
+        run: |
+          python3 ios/scripts/check-resources.py
+          swift test --package-path ios/Packages/LesterCore --jobs 2
+      - name: Build unsigned simulator and device clients
+        run: bash ios/scripts/check-build.sh
+
   helm:
     name: Helm configuration
     needs: changes
@@ -306,7 +341,7 @@ jobs:
 
   checks:
     name: CI result
-    needs: [changes, gateway, go, web, helm, sandbox-runtime, security-go, security-web]
+    needs: [changes, gateway, go, web, ios, helm, sandbox-runtime, security-go, security-web]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -325,7 +360,7 @@ jobs:
           if results["changes"]["result"] != "success":
               failed.append("check selection")
           selected = results["changes"].get("outputs", {})
-          for name in ("gateway", "go", "web", "helm", "sandbox-runtime", "security-go", "security-web"):
+          for name in ("gateway", "go", "web", "ios", "helm", "sandbox-runtime", "security-go", "security-web"):
               flag = selected.get(name.replace("-", "_"))
               if flag not in ("true", "false") or (flag == "true" and results[name]["result"] != "success"):
                   failed.append(name + " did not complete its selected check")
