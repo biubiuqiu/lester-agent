@@ -556,6 +556,12 @@ func (e *runExecutor) runTool(ctx context.Context, runID, conversationID uuid.UU
 		EnterPlan: func(toolCtx context.Context, reason string) (map[string]any, error) {
 			return s.enterRunPlanMode(toolCtx, conversationID, runID, call.ID, reason)
 		},
+		ListSchedules: func(toolCtx context.Context, id uuid.UUID) (map[string]any, error) {
+			if s.schedules == nil {
+				return nil, errors.New("schedule service unavailable")
+			}
+			return s.schedules.ListSchedules(toolCtx, conversationID, runID, id)
+		},
 		Interact: func(toolCtx context.Context, request agenttool.InteractionRequest) (map[string]any, error) {
 			return s.waitRunInteraction(toolCtx, conversationID, runID, call.ID, request)
 		},

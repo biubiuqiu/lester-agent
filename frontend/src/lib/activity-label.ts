@@ -9,7 +9,7 @@ export function activityLabel(state: "sending" | "running" | "stopping", latest?
   if (latest.type === "PERMISSION_REVIEW_COMPLETED") return t(latest.payload.decision === "allow" ? "AI 已允许，继续执行" : latest.payload.decision === "deny" ? "AI 已拒绝这次操作" : "需要你的确认");
   if (latest.type === "PERMISSION_MODE_CHANGED") return t("任务权限已更新");
   if (latest.type === "PERMISSION_RESPONDED") return t(latest.payload.status === "approved" ? "正在使用工具" : "工具执行失败，等待下一步");
-  if (latest.type === "INTERACTION_REQUESTED") return t(latest.payload.kind === "plan" ? "计划等待批准" : "等待你的回答");
+  if (latest.type === "INTERACTION_REQUESTED") return t(latest.payload.kind === "plan" ? "计划等待批准" : latest.payload.kind === "automation" ? "定时任务等待确认" : "等待你的回答");
   if (latest.type === "CONTEXT_COMPACTING") return t("正在整理历史上下文");
   if (latest.type === "CONTEXT_COMPACTED") return t("历史已整理，继续任务");
   if (latest.type === "CONTEXT_COMPACTION_FAILED") return t("保留原上下文，继续检查");

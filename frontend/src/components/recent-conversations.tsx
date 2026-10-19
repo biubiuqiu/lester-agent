@@ -13,7 +13,7 @@ type Task = { run_id: string; conversation_id: string; title: string; project: s
 type Feed = { tasks: Task[]; next_cursor: string; attention_count: number; observed_at: string };
 type Usage = { elapsed_seconds: number | null; requests: number; in_flight: number; actual_input_tokens: number; actual_input_requests: number; actual_output_tokens: number; actual_output_requests: number; estimated_input_tokens: number; estimated_input_requests: number; missing_output_requests: number; observed_at: string };
 const filters = { all: "全部任务", active: "进行中", attention: "需处理", finished: "已结束" };
-const states: Record<string, string> = { running: "正在工作", cancelling: "正在停止", waiting_permission: "等待操作确认", waiting_plan: "等待计划审阅", waiting_question: "等待你的回答", completed: "已完成", failed: "需要检查", cancelled: "已停止" };
+const states: Record<string, string> = { running: "正在工作", cancelling: "正在停止", waiting_permission: "等待操作确认", waiting_plan: "等待计划审阅", waiting_schedule: "定时任务等待确认", waiting_question: "等待你的回答", completed: "已完成", failed: "需要检查", cancelled: "已停止" };
 
 export function RecentConversations({ revision, onOpen, conversations, projects, currentId, unread }: { revision: number; onOpen: (id: string) => void; conversations: Conversation[]; projects: Project[]; currentId?: string; unread: Record<string, UnreadRunResult> }) {
   const t = useT(), { locale } = useI18n();

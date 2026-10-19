@@ -153,3 +153,83 @@ test("questions dock above the composer, keep multi-select notes across reload a
  expect(body).toEqual({request_digest:digest,answers:{format:{option_id:"html",text:""},features:{option_id:"",option_ids:["queue","files"],text:"保留额外要求\n不要丢掉我的文字"},note:{text:"先解释清楚，等待我的下一步指令。"}}});
  await expect(input).toHaveValue("回答问题期间保留的聊天草稿");await expect(page.getByText("Plan · 仅查看与规划",{exact:true})).toBeVisible();await expect(page.getByRole("button",{name:"批准并执行",exact:true})).toHaveCount(0);await expect(dock.locator(".question-card")).toHaveCount(0);
 });
+
+const schedulePreview = { id: "77777777-7777-4777-8777-777777777777", revision: 0, name: "产品评审清单", prompt: "生成包含目标、范围与验收标准的需求评审清单。", project_id: "product-project", project_name: "产品", model_deployment_id: "fixture-model", model_name: "测试模型", agent_slug: "lester", permission_mode: "standard", enabled: true, cron: "0 9 * * 1", timezone: "Asia/Shanghai", run_at: null, next_run_at: "2026-11-02T01:00:00Z" };
+const scheduleItem = { id: itemId, run_id: "fixture-run", kind: "automation", request_digest: digest, status: "pending", request: { kind: "automation", schedule: { action: "create" }, schedule_preview: schedulePreview } };
+
+test("schedule review uses the reviewed zone, preserves drafts and resolves a lost confirmation without replay", async ({ page, context, api }, info) => {
+  let posts = 0, reads = 0, sentZone = "";
+  page.on("request", request => { if (request.method() === "POST" && /\/messages$/.test(new URL(request.url()).pathname)) sentZone = request.headers()["x-lester-timezone"] || ""; });
+  const response = { request_digest: digest, decision: "approve" };
+  await context.route(`**${prefix}`, route => route.fulfill({ json: { interactions: [scheduleItem], execution_mode: "execute" } }));
+  await context.route(`**${prefix}/${itemId}/respond`, route => { posts++; expect(route.request().postDataJSON()).toEqual(response); return route.fulfill({ status: 503, json: { error: "lost receipt" } }); });
+  await context.route(`**${prefix}/${itemId}`, route => { reads++; return route.fulfill({ json: { ...scheduleItem, status: "approved", response } }); });
+  const input = await start(page, api);
+  const card = page.getByRole("article", { name: "定时任务等待确认", exact: true });
+  await expect(card).toBeVisible();
+  await expect(card.getByText("每周一 09:00", { exact: false })).toBeVisible();
+  await expect(card.getByText("Asia/Shanghai", { exact: true })).toBeVisible();
+  await expect(card.getByText("项目 · 产品", { exact: true })).toBeVisible();
+  await input.fill("安排后保留的追问");
+  await expect(input).toBeFocused();
+  await expect(page.getByRole("button", { name: "停止生成", exact: true })).toBeInViewport();
+  await expect(input).toBeInViewport();
+  await expect(page.locator("form form")).toHaveCount(0);
+  await page.screenshot({ path: info.outputPath("schedule-review.png") });
+  const bounds = await card.boundingBox(); expect(bounds).not.toBeNull(); expect(bounds!.x).toBeGreaterThanOrEqual(0); expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+  await card.getByText("任务内容与配置", { exact: true }).click();
+  await expect(card.getByText(schedulePreview.prompt, { exact: true })).toBeVisible();
+  await expect(card.getByText("默认权限", { exact: true })).toBeVisible();
+  await card.getByRole("button", { name: "启用定时任务", exact: true }).click();
+  await expect(page.locator(".schedule-receipts summary").first()).toHaveText("定时任务配置已应用 · 产品评审清单");
+  await expect(card).toHaveCount(0);
+  await page.waitForTimeout(5200); // exercise a stale pending read after confirmation
+  await expect(page.getByRole("button", { name: "启用定时任务", exact: true })).toHaveCount(0);
+  await expect(input).toHaveValue("安排后保留的追问");
+  await page.locator(".schedule-receipts > details > summary").click();
+  await expect(page.getByRole("link", { name: "管理定时任务", exact: true })).toHaveAttribute("href", "/app/settings/automations");
+  expect(posts).toBe(1); expect(reads).toBe(1);
+  expect(sentZone).toBe(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone));
+  await page.screenshot({ path: info.outputPath("schedule-applied.png") });
+});
+
+for (const [action,label] of [["update","确认修改"],["pause","暂停定时任务"],["resume","恢复定时任务"]] as const) {
+ test(`schedule ${action} keeps one compact, explicit confirmation`, async ({page,context,api},info)=>{
+  let posts=0;const item={...scheduleItem,request:{...scheduleItem.request,schedule:{action},schedule_preview:{...schedulePreview,revision:3,enabled:action!=="pause"}}};
+  await context.route(`**${prefix}`,route=>route.fulfill({json:{interactions:[item],execution_mode:"execute"}}));
+  await context.route(`**${prefix}/${itemId}/respond`,route=>{posts++;return route.fulfill({json:{...item,status:"approved",response:route.request().postDataJSON()}});});
+  const input=await start(page,api);await input.fill("不要丢这段草稿");
+  const card=page.getByRole("article",{name:"定时任务等待确认",exact:true});await expect(card.getByRole("button",{name:label,exact:true})).toBeVisible();
+  if(action==="pause")await expect(card.getByText("暂停会取消尚未开始的触发，已启动的任务继续执行。",{exact:true})).toBeVisible();
+  await page.screenshot({path:info.outputPath(`schedule-${action}.png`)});await card.getByRole("button",{name:label,exact:true}).click();
+  await expect(page.locator(".schedule-receipts > details > summary")).toHaveText("定时任务配置已应用 · 产品评审清单");await expect(input).toHaveValue("不要丢这段草稿");expect(posts).toBe(1);
+ });
+}
+
+test("expired schedule cannot imply success and can be declined without applying",async({page,context,api})=>{
+ const decisions:string[]=[];
+ await context.route(`**${prefix}`,route=>route.fulfill({json:{interactions:[scheduleItem],execution_mode:"execute"}}));
+ await context.route(`**${prefix}/${itemId}/respond`,route=>{const response=route.request().postDataJSON();decisions.push(response.decision);return response.decision==="approve"?route.fulfill({status:409,json:{error:"stale"}}):route.fulfill({json:{...scheduleItem,status:"rejected",response}});});
+ const input=await start(page,api);await input.fill("先保留草稿");const card=page.getByRole("article",{name:"定时任务等待确认",exact:true});await card.getByRole("button",{name:"启用定时任务",exact:true}).click();
+ await expect(card.getByRole("alert")).toContainText("配置已变化或时间已过期");await expect(page.getByText("定时任务配置已应用 · 产品评审清单",{exact:true})).toHaveCount(0);
+ await card.getByRole("button",{name:"暂不应用",exact:true}).click();await expect(page.locator(".schedule-receipts > details > summary")).toHaveText("未应用定时任务 · 产品评审清单");await expect(input).toHaveValue("先保留草稿");expect(decisions).toEqual(["approve","reject"]);
+});
+
+for(const [locale,label] of [["en","Enable schedule"],["ja","定期タスクを有効化"],["ko","예약 작업 활성화"],["fr","Activer la tâche"],["es","Activar tarea programada"]]){
+ test(`schedule card is readable in ${locale}`,async({page,context,api},info)=>{
+  await start(page,api);const mutations=api.mutations.length;
+  await context.addCookies([{name:"lester_locale",value:locale,url:"http://127.0.0.1:13020"}]);
+  await context.route(`**${prefix}`,route=>route.fulfill({json:{interactions:[scheduleItem],execution_mode:"execute"}}));
+  await page.goto(`/app/c/${conversationId}`);const card=page.locator(".schedule-card");await expect(card.getByRole("button",{name:label,exact:true})).toBeVisible();await expect(card.getByRole("heading",{name:schedulePreview.name,exact:true})).toBeVisible();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:info.outputPath(`schedule-${locale}.png`)});expect(api.mutations).toHaveLength(mutations);
+ });
+}
+
+test("schedule adjustment drafts survive reload and request changes without applying", async ({page,context,api})=>{
+ let responses=0;
+ await context.route(`**${prefix}`,route=>route.fulfill({json:{interactions:[scheduleItem],execution_mode:"execute"}}));
+ await context.route(`**${prefix}/${itemId}/respond`,route=>{responses++;expect(route.request().postDataJSON()).toEqual({request_digest:digest,decision:"request_changes",feedback:"改成每周二上午十点"});return route.fulfill({json:{...scheduleItem,status:"changes_requested",response:route.request().postDataJSON()}});});
+ const input=await start(page,api);await input.fill("原聊天草稿保留");let card=page.getByRole("article",{name:"定时任务等待确认",exact:true});await card.locator(".schedule-feedback > summary").click();await card.getByRole("textbox",{name:"调整意见",exact:true}).fill("改成每周二上午十点");
+ await page.reload();card=page.getByRole("article",{name:"定时任务等待确认",exact:true});await card.locator(".schedule-feedback > summary").click();await expect(card.getByRole("textbox",{name:"调整意见",exact:true})).toHaveValue("改成每周二上午十点");await expect(page.getByRole("textbox",{name:"消息输入框",exact:true})).toHaveValue("原聊天草稿保留");
+ await card.getByRole("button",{name:"提交调整",exact:true}).click();await expect(page.locator(".schedule-receipts > details > summary")).toHaveText("请调整定时任务 · 产品评审清单");expect(responses).toBe(1);
+});

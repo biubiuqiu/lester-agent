@@ -125,7 +125,7 @@ func (h *Handler) Send(w http.ResponseWriter, r *http.Request) {
 	if !httpapi.Decode(w, r, &req) {
 		return
 	}
-	runID, err := h.service.SendSubmission(r.Context(), p.WorkspaceID, p.UserID, id, req.SubmissionID, req.Content, req.AttachmentIDs, req.ContextIDs, req.References, req.ExecutionMode, req.PermissionMode)
+	runID, err := h.service.SendSubmission(withClientTimezone(r.Context(), r.Header.Get("X-Lester-Timezone")), p.WorkspaceID, p.UserID, id, req.SubmissionID, req.Content, req.AttachmentIDs, req.ContextIDs, req.References, req.ExecutionMode, req.PermissionMode)
 	if err != nil {
 		if errors.Is(err, ErrRunInProgress) || errors.Is(err, ErrSubmissionConflict) || errors.Is(err, ErrQueuedInputPriority) {
 			httpapi.Error(w, http.StatusConflict, err)

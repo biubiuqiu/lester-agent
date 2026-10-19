@@ -34,6 +34,7 @@ type Environment struct {
 	RecordTask       func(context.Context, *sandbox.CommandTaskSnapshot) error
 	TaskAccess       func(context.Context, uuid.UUID, sandbox.CommandTaskReadOptions, bool) (map[string]any, error)
 	EnterPlan        func(context.Context, string) (map[string]any, error)
+	ListSchedules    func(context.Context, uuid.UUID) (map[string]any, error)
 	Interact         func(context.Context, InteractionRequest) (map[string]any, error)
 	AuthorizeTool    func(context.Context, string, json.RawMessage) error
 	Emit             EventEmitter
@@ -67,6 +68,8 @@ func NewDefaultRegistry(db *pgxpool.Pool) *Registry {
 	registry.Register(AskUserQuestion{})
 	registry.Register(ProposePlan{})
 	registry.Register(EnterPlan{})
+	registry.Register(ListSchedules{})
+	registry.Register(ProposeSchedule{})
 	registry.RegisterHidden(ListFiles{}, "computer_list_files")
 	return registry
 }

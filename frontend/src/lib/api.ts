@@ -9,7 +9,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await authenticatedFetch(API + path, {
     ...init,
     credentials: "include",
-    headers: { "Content-Type": "application/json", ...init.headers },
+    headers: { "Content-Type": "application/json", ...(typeof window !== "undefined" && init.method === "POST" && /\/(messages|inputs)$/.test(path) ? { "X-Lester-Timezone": Intl.DateTimeFormat().resolvedOptions().timeZone } : {}), ...init.headers },
   });
   return parseResponse<T>(response);
 }

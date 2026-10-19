@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/biubiuqiu/lester-agent/backend/internal/contextlibrary"
 	"github.com/biubiuqiu/lester-agent/backend/internal/project"
@@ -12,6 +13,20 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
+
+type clientTimezoneKey struct{}
+
+// Optional browser hint only. It is snapshotted with accepted input, never used
+// as permission, identity or an execution decision. Explicit tool config wins.
+func withClientTimezone(ctx context.Context, zone string) context.Context {
+	if len(zone) > 100 || zone == "Local" || zone == "" {
+		return ctx
+	}
+	if _, err := time.LoadLocation(zone); err != nil {
+		return ctx
+	}
+	return context.WithValue(ctx, clientTimezoneKey{}, zone)
+}
 
 // Snapshot explicit inputs under the caller's conversation transaction. Both
 // immediate sends and accepted queued tasks use these same authority checks.
@@ -73,7 +88,11 @@ func prepareRunInput(ctx context.Context, tx pgx.Tx, workspaceID, userID, id uui
 		return "", nil, err
 	}
 	rules.Digest()
-	metadata, marshalErr := json.Marshal(map[string]any{"attachments": attachments, "contexts": contexts, "conversations": conversations, "skills": selectedSkills, "project_rules": rules})
+	values := map[string]any{"attachments": attachments, "contexts": contexts, "conversations": conversations, "skills": selectedSkills, "project_rules": rules}
+	if zone, ok := ctx.Value(clientTimezoneKey{}).(string); ok {
+		values["client_timezone"] = zone
+	}
+	metadata, marshalErr := json.Marshal(values)
 	if marshalErr != nil {
 		return "", nil, marshalErr
 	}

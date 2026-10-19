@@ -69,6 +69,7 @@ func (s *Service) CloudTasks(ctx context.Context, workspace uuid.UUID, filter, c
  CASE WHEN r.status='running' THEN CASE
  WHEN EXISTS(SELECT 1 FROM run_permissions a WHERE a.run_id=r.id AND a.status='pending') THEN 'waiting_permission'
  WHEN EXISTS(SELECT 1 FROM run_interactions a WHERE a.run_id=r.id AND a.status='pending' AND a.kind='plan') THEN 'waiting_plan'
+ WHEN EXISTS(SELECT 1 FROM run_interactions a WHERE a.run_id=r.id AND a.status='pending' AND a.kind='automation') THEN 'waiting_schedule'
  WHEN EXISTS(SELECT 1 FROM run_interactions a WHERE a.run_id=r.id AND a.status='pending') THEN 'waiting_question'
  ELSE 'running' END ELSE r.status END AS state,
  COALESCE((SELECT e.created_at FROM run_events e WHERE e.run_id=r.id ORDER BY e.created_at DESC LIMIT 1),r.created_at) AS last_activity,
@@ -79,10 +80,10 @@ func (s *Service) CloudTasks(ctx context.Context, workspace uuid.UUID, filter, c
  FROM latest r JOIN conversations c ON c.id=r.conversation_id JOIN projects p ON p.id=c.project_id
  ), selected AS (
  SELECT id AS run_id,conversation_id,title,project,agent,state,created_at AS started_at,completed_at,last_activity AS last_activity_at,queued,deliverables,background_commands,unknown_commands
- FROM facts WHERE (created_at,id)<($2,$3) AND ($4='all' OR $4='active' AND (state IN ('running','cancelling','waiting_permission','waiting_plan','waiting_question') OR background_commands>0) OR $4='attention' AND (state IN ('waiting_permission','waiting_plan','waiting_question','failed') OR unknown_commands>0) OR $4='finished' AND state IN ('completed','failed','cancelled') AND background_commands=0 AND unknown_commands=0)
+ FROM facts WHERE (created_at,id)<($2,$3) AND ($4='all' OR $4='active' AND (state IN ('running','cancelling','waiting_permission','waiting_plan','waiting_schedule','waiting_question') OR background_commands>0) OR $4='attention' AND (state IN ('waiting_permission','waiting_plan','waiting_schedule','waiting_question','failed') OR unknown_commands>0) OR $4='finished' AND state IN ('completed','failed','cancelled') AND background_commands=0 AND unknown_commands=0)
  ORDER BY created_at DESC,id DESC LIMIT $5
  ) SELECT COALESCE((SELECT jsonb_agg(selected ORDER BY started_at DESC,run_id DESC) FROM selected),'[]'::jsonb),
- (SELECT count(*) FROM facts WHERE state IN ('waiting_permission','waiting_plan','waiting_question','failed') OR unknown_commands>0)`, workspace, end.Created, end.ID, filter, limit+1).Scan(&raw, &result.Attention)
+ (SELECT count(*) FROM facts WHERE state IN ('waiting_permission','waiting_plan','waiting_schedule','waiting_question','failed') OR unknown_commands>0)`, workspace, end.Created, end.ID, filter, limit+1).Scan(&raw, &result.Attention)
 	if err != nil {
 		return result, err
 	}

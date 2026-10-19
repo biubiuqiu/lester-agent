@@ -20,11 +20,11 @@
 
 成果页汇总项目会话中已登记的 HTML/Markdown，包括未发布成果；可搜索名称、路径和来源会话，按类型筛选，每页加载 24 条。卡片保留来源和登记更新时间，登记不代表文件仍存在、已验收或任务成功。预览、继续修改会先检查源文件；继续修改回到原会话，引用文件并保留草稿，不会自动发送。仅按文件类型发现、尚未登记的文件仍在来源会话中查看。
 
-工作台地址为 `/app/p/{projectId}/overview`，原 `/app/p/{projectId}` 仍用于新任务。工作台只汇总元数据，不搬迁文件，不自动发布，不增加 SSE 或调用模型。复用现有数据库和索引，无需在已有 001–027 之外新增迁移；升级时同步重建 API 与 Web。
+工作台地址为 `/app/p/{projectId}/overview`，原 `/app/p/{projectId}` 仍用于新任务。工作台只汇总元数据，不搬迁文件，不自动发布，不增加 SSE 或调用模型。复用现有数据库和索引，无需在已有 001–029 之外新增迁移；升级时同步重建 API 与 Web。
 
 ## 定时任务与入站 Webhook
 
-从账户菜单的“自动任务”或云端任务面板的“管理自动任务”进入。选择项目、模型、Agent、任务内容和权限，支持单次、每天、每周及指定 IANA 时区的五段 Cron。新建默认不启用，勾选后才定时触发；重复任务跟随时区和夏令时，单次时间按浏览器本地时间保存。服务约每十秒检查一次持久化触发，每次执行创建独立会话。“立即运行”是明确的手动触发，即使日程暂停也可使用。
+从账户菜单的“自动任务”或任务状态面板的“管理自动任务”进入。选择项目、模型、Agent、任务内容和权限，支持单次、每天、每周及指定 IANA 时区的五段 Cron。新建默认不启用，勾选后才定时触发；重复任务跟随时区和夏令时，单次时间按浏览器本地时间保存。服务约每十秒检查一次持久化触发，每次执行创建独立会话。“立即运行”是明确的手动触发，即使日程暂停也可使用。
 
 前一次任务、待答请求或运行中/状态未确认的后台命令尚未结束时，定时触发会跳过并记录；Webhook 和手动事件按接收顺序等待。停机期间错过的周期合并为一次，不集中补跑全部历史。暂停或删除取消未开始的事件，已在派发的任务需在会话中停止。触发时保存任务配置快照，正常会话受理时保存项目规则和 Agent 资源；执行前复核账户、工作区与模型权限。默认权限可能等待确认，自动审批和完全访问需主动选择，范围仍限于已授权 Computer。
 
@@ -40,7 +40,11 @@ curl -X POST 'https://lester.example/api/v1/hooks/<automation-id>' \
 
 请求体为不超过 32 KiB 的 JSON 对象，只提供任务数据，不能更改权限、工作区、模型或引用。同一事件 ID、相同规范化数据返回原记录，数据变化则拒绝；重复投递不新增任务。服务端只存密钥哈希，创建或重置时展示一次，重置后旧密钥失效。Cookie 和 URL 参数不能认证 Webhook。每个账户最多 100 个定义，每个定义每分钟最多 30 个新手动/Webhook 事件及 20 个待触发事件；重复事件不占新额度。记录展示最近 20 次触发和真实会话入口，启动结果不明时只查原回执，不自动重跑。本次为入站接口，不包含外发回调和 GitHub 等应用的原生协议适配。
 
-已有 026 数据库需备份、停止 API 写入与活跃任务，执行一次 `backend/migrations/000027_automations.up.sql`，同步重建 API 与 Web。新 Compose 补齐 001–027 的初始化挂载，包括此前缺失的 016–026。不要删除数据卷。回滚 027 删除自动任务及触发记录，保留会话、文件与已发生的操作。调度器和执行器仍在 API 内，API 崩溃后不会自动续跑旧工具。[行为、API 与恢复说明](docs/automations-and-questions.md)。
+已有数据库需备份、停止 API 写入与活跃任务，按编号执行尚未应用的迁移至 `000029_conversational_schedules.up.sql`（含 027–029），同步重建 API 与 Web。新 Compose 初始化 001–029，包括此前缺失的 016–026。不要删除数据卷。回滚 027 删除自动任务及触发记录，保留会话、文件与已发生的操作。调度器和执行器仍在 API 内，API 崩溃后不会自动续跑旧工具。[行为、API 与恢复说明](docs/automations-and-questions.md)。
+
+也可以直接在会话中说：**“每周一上午九点，在产品项目生成一份评审清单。”** Lester 使用原生 `list_schedules` / `propose_schedule` 工具，在聊天框上方展示简洁的确认卡：时间、时区、项目、下次触发，以及可展开的任务、模型和权限配置。确认后才创建、修改、暂停或恢复任务，拒绝或要求调整均不生效。新任务沿用当前任务模型与 Agent，默认使用默认权限；修改保留原模型、Agent 和权限。浏览器发送时保存的时区仅供参考，用户明确指定的时区优先，信息不足时先询问。每次触发在独立会话中使用保存的任务内容，不继承原会话历史、文件、附件或 @ 引用。
+
+确认回执和配置在同一个数据库事务提交；旧版本或已过期的触发时间需要重新提出配置，响应丢失时只查询原回执，不自动重复发送。确认定时任务不批准 Plan，也不扩大工具权限。无需安装 Skill；Skill 可以复用工作方法，时间与持久化仍由服务端调度器负责。升级需先执行 **029**；存在定时任务交互记录时回滚会拒绝，归档回执也不会撤销已经应用的配置或任务。
 
 结构化问题固定在聊天框上方，支持 1–3 题、单选/多选、推荐标记、同时保留补充文字、键盘操作及多题提交前核对。推荐项不默认选中，回答草稿刷新后保留，提交不批准 Plan 或工具；已提交回答在会话回执中查看，停止键和原聊天草稿始终可用。
 
@@ -221,7 +225,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --buil
 
 ### 成果登记与可靠事件升级
 
-当前版本需要迁移 001–027；账号机制的 013 迁移见下方“账号、第三方登录与头像”。上面的 004–005 命令仅说明历史聊天升级，不足以升级到当前版本；请按编号补齐所有尚未执行的迁移。若数据库已完成 001–011，先备份、停止 API 写入，再执行一次 012，并继续补齐 013、014、015 后重建 API/Web：
+当前版本需要迁移 001–029；账号机制的 013 迁移见下方“账号、第三方登录与头像”。上面的 004–005 命令仅说明历史聊天升级，不足以升级到当前版本；请按编号补齐所有尚未执行的迁移。若数据库已完成 001–011，先备份、停止 API 写入，再执行一次 012，并继续补齐 013、014、015 后重建 API/Web：
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
@@ -230,7 +234,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T post
   < backend/migrations/000012_deliverables_events.up.sql
 ```
 
-全新 Compose 数据卷会按序执行 001–027；已有数据卷不会自动升级，勿删除数据卷。012 回滚会删除成果登记和待投递记录，保留原文件、消息、运行事件及已发布站点；回滚前停止新版 API，并配套恢复兼容的应用版本。Redis 长期不可用时待投递表会增长，需要监控数量和磁盘空间。
+全新 Compose 数据卷会按序执行 001–029；已有数据卷不会自动升级，勿删除数据卷。012 回滚会删除成果登记和待投递记录，保留原文件、消息、运行事件及已发布站点；回滚前停止新版 API，并配套恢复兼容的应用版本。Redis 长期不可用时待投递表会增长，需要监控数量和磁盘空间。
 
 ## 账号、第三方登录与头像
 
@@ -276,13 +280,13 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T post
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000015_rotating_tokens.up.sql
-for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions; do
+for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions 000022_run_inputs 000023_file_changes 000024_project_rules 000025_run_permissions 000026_cloud_task_indexes 000027_automations 000028_permission_reviews 000029_conversational_schedules; do
   docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "backend/migrations/${migration}.up.sql" || exit 1
 done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
 ```
 
-保留 `.env`、原密钥和数据卷。全新卷自动初始化 001–027，已有卷不会自动升级。PowerShell 用 `Get-Content -Raw` 管道传入 `exec -T postgres`。013 回滚会删除身份、令牌和头像引用，存在无密码账号时会拒绝回滚；降级前先安排密码恢复并配套兼容版本。工作区、项目和文件不迁移。实际 OAuth 授权与邮件投递需使用部署方真实配置验收。
+保留 `.env`、原密钥和数据卷。全新卷自动初始化 001–029，已有卷不会自动升级。PowerShell 用 `Get-Content -Raw` 管道传入 `exec -T postgres`。013 回滚会删除身份、令牌和头像引用，存在无密码账号时会拒绝回滚；降级前先安排密码恢复并配套兼容版本。工作区、项目和文件不迁移。实际 OAuth 授权与邮件投递需使用部署方真实配置验收。
 
 ## 逐步新手引导
 
@@ -300,7 +304,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T post
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000015_rotating_tokens.up.sql
-for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions; do
+for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions 000022_run_inputs 000023_file_changes 000024_project_rules 000025_run_permissions 000026_cloud_task_indexes 000027_automations 000028_permission_reviews 000029_conversational_schedules; do
   docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "backend/migrations/${migration}.up.sql" || exit 1
 done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
@@ -583,13 +587,13 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backend/migrations/000015_rotating_tokens.up.sql
-for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions; do
+for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions 000022_run_inputs 000023_file_changes 000024_project_rules 000025_run_permissions 000026_cloud_task_indexes 000027_automations 000028_permission_reviews 000029_conversational_schedules; do
   docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "backend/migrations/${migration}.up.sql" || exit 1
 done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
 ```
 
-015 会使旧登录失效，升级后需重新登录一次，账号、个人资料、项目与文件不受影响。保留原 `.env`、加密密钥与数据卷。全新 Compose 卷初始化 001–027；Helm 部署前手动执行 SQL。015 回滚也会撤销登录，需配套兼容的 API/Web。有效期为应用固定默认值，无需新增环境变量。
+015 会使旧登录失效，升级后需重新登录一次，账号、个人资料、项目与文件不受影响。保留原 `.env`、加密密钥与数据卷。全新 Compose 卷初始化 001–029；Helm 部署前手动执行 SQL。015 回滚也会撤销登录，需配套兼容的 API/Web。有效期为应用固定默认值，无需新增环境变量。
 
 
 ## 运行可靠性升级
@@ -608,7 +612,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --buil
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
-for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions; do
+for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions 000022_run_inputs 000023_file_changes 000024_project_rules 000025_run_permissions 000026_cloud_task_indexes 000027_automations 000028_permission_reviews 000029_conversational_schedules; do
   docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "backend/migrations/${migration}.up.sql" || exit 1
 done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web sandbox-service

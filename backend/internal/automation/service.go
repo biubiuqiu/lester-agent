@@ -110,6 +110,10 @@ func normalize(c Config) Config {
 	if c.Timezone == "" {
 		c.Timezone = "UTC"
 	}
+	if c.RunAt != nil {
+		instant := c.RunAt.UTC().Truncate(time.Microsecond)
+		c.RunAt = &instant
+	}
 	return c
 }
 func nextOccurrence(c Config, after time.Time) (*time.Time, error) {
@@ -151,19 +155,40 @@ func nextOccurrence(c Config, after time.Time) (*time.Time, error) {
 	}
 	return &next, nil
 }
-func (s *Service) validate(ctx context.Context, workspace uuid.UUID, c Config) (*time.Time, error) {
+
+type scheduleQuery interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
+func validateSchedule(ctx context.Context, q scheduleQuery, workspace uuid.UUID, c Config) (*time.Time, error) {
 	if len([]rune(c.Name)) < 1 || len([]rune(c.Name)) > 120 || len(c.Prompt) < 1 || len(c.Prompt) > 16000 || len(c.Cron) > 100 || len(c.Timezone) > 100 || (c.Permission != "standard" && c.Permission != "auto" && c.Permission != "full") {
 		return nil, ErrInvalid
 	}
 	var valid bool
-	if err := s.DB.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM projects WHERE workspace_id=$1 AND id=$2) AND EXISTS(SELECT 1 FROM model_deployments WHERE id=$3 AND enabled AND workspace_id IN ($1,$4))`, workspace, c.ProjectID, c.ModelID, model.SystemWorkspaceID).Scan(&valid); err != nil {
+	if err := q.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM projects WHERE workspace_id=$1 AND id=$2) AND EXISTS(SELECT 1 FROM model_deployments WHERE id=$3 AND enabled AND workspace_id IN ($1,$4))`, workspace, c.ProjectID, c.ModelID, model.SystemWorkspaceID).Scan(&valid); err != nil {
 		return nil, err
 	}
 	if !valid {
 		return nil, ErrInvalid
 	}
-	if _, err := (&agent.Service{DB: s.DB}).Resolve(ctx, workspace, c.Agent); err != nil {
-		return nil, ErrInvalid
+	builtin := false
+	for _, a := range agent.Builtins {
+		if a.Slug == c.Agent {
+			builtin = true
+			break
+		}
+	}
+	if !builtin {
+		id, err := uuid.Parse(strings.TrimPrefix(c.Agent, "custom-"))
+		if err != nil || !strings.HasPrefix(c.Agent, "custom-") {
+			return nil, ErrInvalid
+		}
+		if err = q.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agents WHERE workspace_id=$1 AND id=$2)`, workspace, id).Scan(&valid); err != nil {
+			return nil, err
+		}
+		if !valid {
+			return nil, ErrInvalid
+		}
 	}
 	return nextOccurrence(c, time.Now())
 }
@@ -180,19 +205,30 @@ func secretToken() (string, []byte, error) {
 // The client chooses a stable UUID for creation. A lost response can be read
 // without creating a second enabled schedule or exposing an old secret.
 func (s *Service) Save(ctx context.Context, workspace, user, id uuid.UUID, c Config, revision int64) (Definition, string, error) {
+	tx, err := s.DB.Begin(ctx)
+	if err != nil {
+		return Definition{}, "", err
+	}
+	defer tx.Rollback(ctx)
+	d, secret, err := s.saveTx(ctx, tx, workspace, user, id, c, revision)
+	if err != nil {
+		return Definition{}, "", err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return Definition{}, "", err
+	}
+	return d, secret, nil
+}
+
+func (s *Service) saveTx(ctx context.Context, tx pgx.Tx, workspace, user, id uuid.UUID, c Config, revision int64) (Definition, string, error) {
 	c = normalize(c)
-	next, err := s.validate(ctx, workspace, c)
+	next, err := validateSchedule(ctx, tx, workspace, c)
 	if err != nil {
 		return Definition{}, "", err
 	}
 	if id == uuid.Nil || revision < 0 {
 		return Definition{}, "", ErrInvalid
 	}
-	tx, err := s.DB.Begin(ctx)
-	if err != nil {
-		return Definition{}, "", err
-	}
-	defer tx.Rollback(ctx)
 	var actor uuid.UUID
 	if err = tx.QueryRow(ctx, `SELECT u.id FROM users u JOIN workspace_members wm ON wm.user_id=u.id WHERE u.id=$1 AND wm.workspace_id=$2 AND NOT u.disabled AND (NOT u.email_verification_required OR u.email_verified) FOR UPDATE OF u`, user, workspace).Scan(&actor); err != nil {
 		return Definition{}, "", ErrNotFound
@@ -242,9 +278,6 @@ func (s *Service) Save(ctx context.Context, workspace, user, id uuid.UUID, c Con
 	}
 	d, err := scanDefinition(tx.QueryRow(ctx, `SELECT `+columns+` FROM automations WHERE workspace_id=$1 AND id=$2`, workspace, id))
 	if err != nil {
-		return Definition{}, "", err
-	}
-	if err = tx.Commit(ctx); err != nil {
 		return Definition{}, "", err
 	}
 	return d, secret, nil

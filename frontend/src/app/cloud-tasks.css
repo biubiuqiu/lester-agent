@@ -21,7 +21,7 @@
 .cloud-task-card { padding:18px 0;border-top:1px solid #e7ebe7; }
 .cloud-task-heading { display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:11px;color:#65706a; }
 .cloud-task-state { font-size:12px;color:#52705b; }
-.cloud-task-state:is(.waiting_permission,.waiting_plan,.waiting_question,.failed) { color:#936b39; }
+.cloud-task-state:is(.waiting_permission,.waiting_plan,.waiting_schedule,.waiting_question,.failed) { color:#936b39; }
 .cloud-task-state:is(.cancelled,.cancelling) { color:#65706a; }
 .cloud-tasks-dialog .cloud-task-open { display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;border:0;background:transparent;padding:9px 0 4px;text-align:left;color:inherit; }
 .cloud-task-open strong { font-size:15px;font-weight:550;line-height:1.5;overflow-wrap:anywhere; }

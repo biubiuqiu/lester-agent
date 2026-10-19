@@ -111,6 +111,7 @@ func run() error {
 		return err
 	}
 	automationService := &automation.Service{DB: db, Runner: automation.ConversationRunner{Service: conversationService}}
+	conversationService.SetSchedules(automationService)
 	authService := auth.New(db, redisClient, cfg.AccessTokenTTL, cfg.SessionCookieSecure)
 	var mailer auth.Mailer
 	if cfg.SMTPHost != "" {

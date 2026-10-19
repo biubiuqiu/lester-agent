@@ -25,16 +25,28 @@ type UserQuestion struct {
 	MultiSelect bool             `json:"multi_select,omitempty"`
 }
 type InteractionRequest struct {
-	Kind      string         `json:"kind"`
-	Questions []UserQuestion `json:"questions,omitempty"`
-	Title     string         `json:"title,omitempty"`
-	Steps     []string       `json:"steps,omitempty"`
+	Kind            string           `json:"kind"`
+	Questions       []UserQuestion   `json:"questions,omitempty"`
+	Title           string           `json:"title,omitempty"`
+	Steps           []string         `json:"steps,omitempty"`
+	Schedule        *ScheduleRequest `json:"schedule,omitempty"`
+	SchedulePreview *SchedulePreview `json:"schedule_preview,omitempty"`
 }
 
 var interactionIDPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,39}$`)
 
 func (r InteractionRequest) Validate() error {
-	if r.Kind == "question" {
+	if r.Kind != "automation" && (r.Schedule != nil || r.SchedulePreview != nil) {
+		return errors.New("unexpected schedule data")
+	}
+	if r.Kind == "automation" {
+		if r.Schedule == nil || len(r.Questions) > 0 || len(r.Steps) > 0 || r.Title != "" {
+			return errors.New("schedule proposal requires only schedule arguments")
+		}
+		if err := r.Schedule.Validate(); err != nil {
+			return err
+		}
+	} else if r.Kind == "question" {
 		if len(r.Questions) < 1 || len(r.Questions) > 3 || r.Title != "" || len(r.Steps) > 0 {
 			return errors.New("questions require one to three question entries")
 		}
@@ -71,8 +83,12 @@ func (r InteractionRequest) Validate() error {
 	} else {
 		return errors.New("invalid interaction kind")
 	}
+	limit := 24000
+	if r.Kind == "automation" {
+		limit = 64000
+	}
 	raw, err := json.Marshal(r)
-	if err != nil || len(raw) > 24000 {
+	if err != nil || len(raw) > limit {
 		return errors.New("interaction exceeds its size limit")
 	}
 	return nil
@@ -122,7 +138,7 @@ func executeInteraction(ctx context.Context, env Environment, request Interactio
 
 func PlanReadOnlyTool(name string) bool {
 	switch name {
-	case "read", "list_files", "load_skill", "read_conversation", "read_tool_result", "task_output", "ask_user_question", "propose_plan":
+	case "read", "list_files", "load_skill", "read_conversation", "read_tool_result", "task_output", "ask_user_question", "propose_plan", "list_schedules":
 		return true
 	}
 	return false

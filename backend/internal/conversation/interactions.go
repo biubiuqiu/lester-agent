@@ -105,6 +105,9 @@ func interactionResponseStatus(request agenttool.InteractionRequest, response In
 		}
 		return "answered", nil
 	}
+	if request.Kind != "plan" && request.Kind != "automation" {
+		return "", errors.New("invalid interaction kind")
+	}
 	if len(response.Answers) > 0 || utf8.RuneCountInString(response.Feedback) > 6000 {
 		return "", errors.New("invalid plan response")
 	}
@@ -150,38 +153,78 @@ func (s *Service) createRunInteraction(ctx context.Context, conversationID, runI
 	if status != "running" {
 		return nil, ErrRunNotActive
 	}
+	if request.Kind == "automation" && mode != "execute" {
+		return nil, errors.New("Plan mode blocks schedule proposals")
+	}
 	if request.Kind == "plan" && mode != "plan" {
 		return nil, errors.New("normal execution is already authorized; do not request redundant Plan approval")
 	}
 	toolName := "ask_user_question"
 	if request.Kind == "plan" {
 		toolName = "propose_plan"
+	} else if request.Kind == "automation" {
+		toolName = "propose_schedule"
 	}
 	var recordedArgs []byte
 	if err = tx.QueryRow(ctx, `SELECT call->'arguments' FROM messages m CROSS JOIN LATERAL jsonb_array_elements(m.tool_calls) call WHERE m.conversation_id=$1 AND m.run_id=$2 AND m.role='assistant' AND call->>'id'=$3 AND call->>'name'=$4 ORDER BY m.seq DESC LIMIT 1`, conversationID, runID, callID, toolName).Scan(&recordedArgs); err != nil {
 		return nil, errors.New("interaction must originate from a durable tool call")
 	}
 	var recordedRequest agenttool.InteractionRequest
-	if json.Unmarshal(recordedArgs, &recordedRequest) != nil {
+	if request.Kind == "automation" {
+		var input agenttool.ScheduleRequest
+		if json.Unmarshal(recordedArgs, &input) != nil {
+			return nil, errors.New("invalid stored schedule arguments")
+		}
+		recordedRequest.Schedule = &input
+	} else if json.Unmarshal(recordedArgs, &recordedRequest) != nil {
 		return nil, errors.New("invalid stored interaction arguments")
 	}
 	recordedRequest.Kind = request.Kind
 	canonical, _ := json.Marshal(recordedRequest)
-	if string(canonical) != string(raw) {
+	if request.SchedulePreview != nil || string(canonical) != string(raw) {
 		return nil, errors.New("interaction parameters differ from the durable tool call")
 	}
-	var existing uuid.UUID
-	var oldDigest string
-	err = tx.QueryRow(ctx, `SELECT id,request_digest FROM run_interactions WHERE run_id=$1 AND tool_call_id=$2`, runID, callID).Scan(&existing, &oldDigest)
+	var existing RunInteraction
+	var stored []byte
+	err = tx.QueryRow(ctx, `SELECT id,request,request_digest,status,response,created_at FROM run_interactions WHERE run_id=$1 AND tool_call_id=$2`, runID, callID).Scan(&existing.ID, &stored, &existing.RequestDigest, &existing.Status, &existing.Response, &existing.CreatedAt)
 	if err == nil {
-		if oldDigest != item.RequestDigest {
+		if json.Unmarshal(stored, &existing.Request) != nil {
+			return nil, errors.New("invalid stored interaction")
+		}
+		original := existing.Request
+		original.SchedulePreview = nil
+		prior, _ := json.Marshal(original)
+		if string(prior) != string(raw) {
 			return nil, ErrInteractionConflict
 		}
-		item.ID = existing
-		return item, tx.Commit(ctx)
+		existing.RunID = runID
+		existing.Kind = request.Kind
+		return &existing, tx.Commit(ctx)
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err
+	}
+	if request.Kind == "automation" {
+		if s.schedules == nil {
+			return nil, errors.New("schedule service unavailable")
+		}
+		request.SchedulePreview, err = s.schedules.PrepareSchedule(ctx, tx, conversationID, runID, *request.Schedule)
+		if err != nil {
+			return nil, err
+		}
+		if request.SchedulePreview == nil {
+			return nil, errors.New("schedule preview unavailable")
+		}
+		if err = request.Validate(); err != nil {
+			return nil, err
+		}
+		raw, err = json.Marshal(request)
+		if err != nil {
+			return nil, err
+		}
+		digest = sha256.Sum256(raw)
+		item.Request = request
+		item.RequestDigest = hex.EncodeToString(digest[:])
 	}
 	if _, err = tx.Exec(ctx, `INSERT INTO run_interactions(id,workspace_id,conversation_id,run_id,tool_call_id,kind,request,request_digest) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, item.ID, workspaceID, conversationID, runID, callID, request.Kind, raw, item.RequestDigest); err != nil {
 		return nil, err
@@ -221,7 +264,14 @@ func (s *Service) waitRunInteraction(ctx context.Context, conversationID, runID 
 			return nil, ErrRunNotActive
 		}
 		if status != "pending" {
-			return map[string]any{"interaction_id": item.ID, "kind": item.Kind, "request_digest": item.RequestDigest, "status": status, "response": response, "question_answers_are_execution_approval": false}, nil
+			result := map[string]any{"interaction_id": item.ID, "kind": item.Kind, "request_digest": item.RequestDigest, "status": status, "response": response, "question_answers_are_execution_approval": false}
+			if item.Kind == "automation" && status == "approved" {
+				saved := *item.Request.SchedulePreview
+				saved.Revision++
+				result["applied_schedule"] = saved
+				result["instruction"] = "The exact reviewed schedule configuration was committed. This receipt does not grant Plan or tool permission and does not imply future task success. Manage it under Settings > Scheduled tasks."
+			}
+			return result, nil
 		}
 		select {
 		case <-ctx.Done():
@@ -282,6 +332,11 @@ func (s *Service) RespondRunInteraction(ctx context.Context, workspaceID, userID
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
+	// Preserve user -> conversation -> run -> interaction -> automation lock order.
+	var actor uuid.UUID
+	if err = tx.QueryRow(ctx, `SELECT u.id FROM users u JOIN workspace_members wm ON wm.user_id=u.id WHERE u.id=$1 AND wm.workspace_id=$2 AND NOT u.disabled FOR UPDATE OF u`, userID, workspaceID).Scan(&actor); err != nil {
+		return nil, ErrInteractionNotFound
+	}
 	var allowed bool
 	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM conversations c JOIN workspace_members wm ON wm.workspace_id=c.workspace_id WHERE c.id=$1 AND c.workspace_id=$2 AND wm.user_id=$3)`, conversationID, workspaceID, userID).Scan(&allowed); err != nil {
 		return nil, err
@@ -319,6 +374,15 @@ func (s *Service) RespondRunInteraction(ctx context.Context, workspaceID, userID
 		return nil, err
 	}
 	raw, _ := json.Marshal(response)
+	if item.Kind == "automation" {
+		var owner uuid.UUID
+		if err = tx.QueryRow(ctx, `SELECT submitted_by FROM runs WHERE id=$1`, runID).Scan(&owner); err != nil {
+			return nil, err
+		}
+		if owner != userID {
+			return nil, ErrInteractionNotFound
+		}
+	}
 	if item.Status != "pending" {
 		var prior InteractionResponse
 		if json.Unmarshal(item.Response, &prior) != nil {
@@ -330,10 +394,20 @@ func (s *Service) RespondRunInteraction(ctx context.Context, workspaceID, userID
 		}
 		return nil, ErrInteractionConflict
 	}
-	if runStatus != "running" || item.Kind == "plan" && mode != "plan" {
+	if runStatus != "running" || item.Kind == "plan" && mode != "plan" || item.Kind == "automation" && mode != "execute" && status == "approved" {
 		return nil, ErrInteractionConflict
 	}
-	if status == "approved" {
+	if item.Kind == "automation" {
+		if status == "approved" {
+			if s.schedules == nil {
+				return nil, errors.New("schedule service unavailable")
+			}
+			if err = s.schedules.ApplySchedule(ctx, tx, conversationID, runID, userID, item.Request.SchedulePreview); err != nil {
+				return nil, fmt.Errorf("%w: schedule changed, expired or unavailable; decline and propose a fresh configuration", ErrInteractionConflict)
+			}
+		}
+	}
+	if status == "approved" && item.Kind == "plan" {
 		if _, err = tx.Exec(ctx, `UPDATE runs SET execution_mode='execute',approved_plan_digest=$2 WHERE id=$1 AND status='running' AND execution_mode='plan'`, runID, item.RequestDigest); err != nil {
 			return nil, err
 		}

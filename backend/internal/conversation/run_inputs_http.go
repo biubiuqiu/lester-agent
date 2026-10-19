@@ -36,7 +36,7 @@ func (h *Handler) AcceptRunInput(w http.ResponseWriter, r *http.Request) {
 	if !httpapi.Decode(w, r, &request) {
 		return
 	}
-	item, err := h.service.AcceptRunInput(r.Context(), p.WorkspaceID, p.UserID, id, request)
+	item, err := h.service.AcceptRunInput(withClientTimezone(r.Context(), r.Header.Get("X-Lester-Timezone")), p.WorkspaceID, p.UserID, id, request)
 	if err != nil {
 		runInputHTTPError(w, err)
 		return

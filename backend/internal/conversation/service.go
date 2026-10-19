@@ -88,6 +88,7 @@ type Service struct {
 	executor          *runExecutor
 	installAgentSkill func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, string, string, string) error
 	agentObjects      blob.Store
+	schedules         agenttool.ScheduleService
 	reviewClient      func(context.Context, uuid.UUID, uuid.UUID) (model.ModelClient, model.Deployment, error)
 }
 
@@ -112,6 +113,8 @@ func New(db *pgxpool.Pool, models *model.Store, sandboxes *sandbox.Client, tools
 	service.executor = &runExecutor{service: service}
 	return service
 }
+
+func (s *Service) SetSchedules(service agenttool.ScheduleService) { s.schedules = service }
 
 func (s *Service) SetAgentSkillInstaller(fn func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, string, string, string) error) {
 	s.installAgentSkill = fn
