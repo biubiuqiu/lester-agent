@@ -332,7 +332,7 @@ For `sandbox.provider=docker`, Helm keeps `sandbox-service` at one replica and r
 - When changing user-visible capabilities or setup steps, update `README.md`.
 - When changing architecture boundaries, invariants, conventions, or validation commands, update this `AGENTS.md` in the same change.
 - Never commit real credentials, generated secrets, local `.env` files, build output, or dependency directories.
-- After completing and validating a requested code change in this repository, commit the task-scoped changes and push to the current branch's configured upstream without requiring another reminder, unless the user explicitly asks otherwise. Preserve unrelated work, never force-push, and report the commit ID and push result. If validation or pushing is blocked, explain the blocker rather than claiming completion.
+- Work directly on `main` by default, as requested by the repository owner. Do not create a separate branch, worktree or pull request unless explicitly requested. Before editing, synchronize `main` with `origin/main` while preserving unrelated work. After completing and validating a requested code change, commit the task-scoped changes and push `main` without requiring another reminder. Never force-push; report the commit ID and push result. If validation, synchronization or pushing is blocked, explain the blocker rather than claiming completion.
 
 ## Definition of done
 
