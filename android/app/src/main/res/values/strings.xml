@@ -1,0 +1,32 @@
+<resources>
+    <string name="back">"Back"</string>
+    <string name="new_task">"New task"</string>
+    <string name="settings">"Settings"</string>
+    <string name="retry">"Retry"</string>
+    <string name="connect">"Connect"</string>
+    <string name="sign_in">"Sign in"</string>
+    <string name="sign_in_description">"Your work, wherever you are."</string>
+    <string name="recent">"Recent conversations"</string>
+    <string name="empty_conversations">"No conversations yet"</string>
+    <string name="no_matches">"No matching conversations"</string>
+    <string name="search">"Search conversations or projects"</string>
+    <string name="account">"Account"</string>
+    <string name="schedules">"Scheduled tasks"</string>
+    <string name="haptics">"Haptic feedback"</string>
+    <string name="haptics_description">"A gentle response when a task finishes while the app is open. Available on supported hardware."</string>
+    <string name="change_server">"Change server"</string>
+    <string name="change_server_description">"Changing server clears this device’s sign-in and local drafts. Server tasks and files remain."</string>
+    <string name="invalid_server">"Use an HTTPS server address, such as https://lester.example."</string>
+    <string name="sign_in_failed">"Sign-in did not finish. Please try again."</string>
+    <string name="load_failed">"Could not load the workspace. Check your connection and retry."</string>
+    <string name="workspace_restart">"The workspace needs to reload. Your saved drafts will be restored."</string>
+    <string name="download_failed">"Download failed. Please try again."</string>
+    <string name="connect_description">"Connect to your own Lester deployment. Tasks keep running on your server."</string>
+    <string name="server_address">"Server address"</string>
+    <string name="cancel">"Cancel"</string>
+    <string name="save">"Save"</string>
+    <string name="save_file">"Save file"</string>
+    <string name="file_picker_failed">"Could not open the file picker. Please try again."</string>
+    <string name="browser_failed">"Could not open a browser. Install or enable a browser and retry."</string>
+    <string name="update_webview">"Update Android System WebView or Chrome, then reopen Lester."</string>
+</resources>

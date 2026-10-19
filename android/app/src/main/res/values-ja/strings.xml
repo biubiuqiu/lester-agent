@@ -1,0 +1,32 @@
+<resources>
+    <string name="back">"戻る"</string>
+    <string name="new_task">"新しいタスク"</string>
+    <string name="settings">"設定"</string>
+    <string name="retry">"再試行"</string>
+    <string name="connect">"接続"</string>
+    <string name="sign_in">"ログイン"</string>
+    <string name="sign_in_description">"どこにいても、仕事の続きを。"</string>
+    <string name="recent">"最近の会話"</string>
+    <string name="empty_conversations">"会話はまだありません"</string>
+    <string name="no_matches">"一致する会話はありません"</string>
+    <string name="search">"会話やプロジェクトを検索"</string>
+    <string name="account">"アカウント"</string>
+    <string name="schedules">"スケジュール済みタスク"</string>
+    <string name="haptics">"触覚フィードバック"</string>
+    <string name="haptics_description">"ワークスペースを開いている間にタスク完了を受信すると軽く振動します。対応機種のみ。"</string>
+    <string name="change_server">"サーバーを変更"</string>
+    <string name="change_server_description">"変更すると、この端末のログイン情報と下書きが消去されます。サーバー上のタスクやファイルは保持されます。"</string>
+    <string name="invalid_server">"https://lester.example のような HTTPS アドレスを入力してください。"</string>
+    <string name="sign_in_failed">"ログインが完了しませんでした。再試行してください。"</string>
+    <string name="load_failed">"ワークスペースを読み込めません。接続を確認して再試行してください。"</string>
+    <string name="workspace_restart">"ワークスペースの再読み込みが必要です。保存済みの下書きは復元されます。"</string>
+    <string name="download_failed">"ダウンロードに失敗しました。再試行してください。"</string>
+    <string name="connect_description">"自分の Lester サーバーに接続します。タスクはサーバー上で実行され続けます。"</string>
+    <string name="server_address">"サーバーアドレス"</string>
+    <string name="cancel">"キャンセル"</string>
+    <string name="save">"保存"</string>
+    <string name="save_file">"ファイルを保存"</string>
+    <string name="file_picker_failed">"ファイルを選択できません。再試行してください。"</string>
+    <string name="browser_failed">"ブラウザを開けません。ブラウザを有効にして再試行してください。"</string>
+    <string name="update_webview">"Android System WebView または Chrome を更新して Lester を開き直してください。"</string>
+</resources>

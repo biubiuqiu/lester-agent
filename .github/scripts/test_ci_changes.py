@@ -20,6 +20,8 @@ class ChangeSelectionTests(unittest.TestCase):
         cases = [
             (["frontend/src/app/page.tsx"], {"web"}),
             (["ios/Lester/RootView.swift"], {"ios"}),
+            (["android/app/src/main/java/app/lester/client/MainActivity.kt"], {"android"}),
+            (["android/gradle/wrapper/gradle-wrapper.properties"], {"android"}),
             (["ios/Packages/LesterCore/Package.swift"], {"ios"}),
             (["frontend/pnpm-lock.yaml"], {"web", "security_web"}),
             (["frontend/pnpm-workspace.yaml"], {"web", "security_web"}),

@@ -1,0 +1,1 @@
+<resources><style name="Theme.Lester" parent="android:style/Theme.Material.NoActionBar"><item name="android:windowLightStatusBar">false</item><item name="android:windowActionModeOverlay">true</item><item name="android:colorAccent">#AACFB1</item><item name="android:windowBackground">#111612</item></style></resources>

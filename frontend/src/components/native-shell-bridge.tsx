@@ -2,13 +2,13 @@
 
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { isNativeShell, nativeCommandPath, postNative } from "@/lib/native-shell";
+import { isNativeShell, nativePlatform, nativeCommandPath, postNative } from "@/lib/native-shell";
 
 export function NativeShellBridge() {
   const router = useRouter(), pathname = usePathname();
   useEffect(() => {
     if (!isNativeShell()) return;
-    document.documentElement.dataset.lesterNative = "ios";
+    document.documentElement.dataset.lesterNative = nativePlatform()!;
     const command = (event: Event) => {
       const detail = (event as CustomEvent).detail;
       if (detail?.action === "foreground") {

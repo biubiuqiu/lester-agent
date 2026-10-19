@@ -190,6 +190,7 @@ export function Workspace({ conversationId, projectId, initialAgentSlug, project
   }, [user, projects, conversations, conversationId, locale]);
   useEffect(() => {
     const refresh = () => {
+      nativeFeedback.current.foreground();
       setStreamAttempt(value => value + 1);
       void refreshConversationRef.current?.(true);
       setWorkspaceAttempt(value => value + 1);
@@ -355,7 +356,7 @@ export function Workspace({ conversationId, projectId, initialAgentSlug, project
       }
       if (event.type.startsWith("RUN_") || event.type.startsWith("INTERACTION_") || event.type.startsWith("PERMISSION_")) setTaskRevision(value => Math.max(value, event.id));
       if (event.type === "RUN_COMPLETED" && event.id > currentCursor && !document.hidden) {
-        const completion = nativeFeedback.current.complete(event.run_id, conversation, event.id);
+        const completion = nativeFeedback.current.complete(event.run_id, conversation, event.id, event.created_at);
         if (completion) postNative("run_completed", completion);
       }
       const nextStatus = eventRunStatus(event.type);

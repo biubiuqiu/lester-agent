@@ -7,14 +7,15 @@ const test = base.extend<{ api: WorkspaceApi; nativeMessages: NativeMessage[] }>
     const api = new WorkspaceApi(); await api.install(context);
     try { await run(api); expect(api.unexpected).toEqual([]); } finally { await api.close(); }
   },
-  nativeMessages: async ({ context }, run) => {
+  nativeMessages: async ({ context }, run, info) => {
     const messages: NativeMessage[] = [];
     await context.exposeBinding("captureNative", (_, message: NativeMessage) => messages.push(message));
-    await context.addInitScript(() => {
+    await context.addInitScript((platform: string) => {
       if (window.top !== window) return;
-      Object.defineProperty(window, "__LESTER_NATIVE__", { value: Object.freeze({ version: 1 }) });
-      Object.defineProperty(window, "webkit", { value: { messageHandlers: { lester: { postMessage: (value: unknown) => { void (window as unknown as { captureNative: (value: unknown) => Promise<void> }).captureNative(value); } } } } });
-    });
+      Object.defineProperty(window, "__LESTER_NATIVE__", { value: Object.freeze({ version: 1, platform }) });
+      if (platform === "android") Object.defineProperty(window, "LesterAndroid", { value: { postMessage: (value: string) => { void (window as unknown as { captureNative: (value: unknown) => Promise<void> }).captureNative(JSON.parse(value)); } } });
+      else Object.defineProperty(window, "webkit", { value: { messageHandlers: { lester: { postMessage: (value: unknown) => { void (window as unknown as { captureNative: (value: unknown) => Promise<void> }).captureNative(value); } } } } });
+    }, info.project.name === "mobile" ? "android" : "ios");
     await run(messages);
   },
 });
@@ -31,7 +32,7 @@ test("native phone and tablet keep task, results and drafts with desktop tools r
   await page.setViewportSize(info.project.name === "mobile" ? { width: 393, height: 852 } : { width: 1024, height: 768 });
   const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
   await authenticate(page);
-  await expect(page.locator("html")).toHaveAttribute("data-lester-native", "ios");
+  await expect(page.locator("html")).toHaveAttribute("data-lester-native", info.project.name === "mobile" ? "android" : "ios");
   await expect(page.locator(".conversation-sidebar")).toBeHidden();
   await expect(page.getByRole("button", { name: "打开会话栏", exact: true })).toBeHidden();
   const composer = page.getByRole("textbox", { name: "消息输入框", exact: true });

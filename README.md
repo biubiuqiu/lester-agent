@@ -22,6 +22,12 @@ The SwiftUI client in [`ios/`](ios/README.md) connects to your own HTTPS deploym
 
 Build and sign with **Xcode 26+**; no public App Store release is available yet. Background/lock-screen push is deferred. Existing servers must back up, stop API writes, apply **030** once after 001–029, then rebuild API and Web together. Fresh Compose includes 030; Helm applies SQL externally. Rollback removes pending App sign-in handoffs only. See the [setup, architecture and validation limits](ios/README.md).
 
+## Android phones and tablets
+
+The Kotlin/Jetpack Compose client in [`android/`](android/README.md) supports **Android 8.0+**, adaptive Material 3 navigation and optional foreground completion haptics. It reuses the Web workspace and iOS PKCE browser handoff, with chat, files/results, questions, approvals and queues; Terminal and desktop tool entries stay hidden. Uploads and downloads use system file pickers. No broad storage permission, FCM, background service or Google Play release is included.
+
+Build with **JDK 21, SDK 36 and the checked-in Gradle Wrapper**. Existing servers need migration **030** and matching API/Web; Android adds no additional SQL. The Debug APK is installable for testing, while the Release APK requires your own signing configuration. CI runs JVM tests, Android lint and Debug/Release builds for Android changes and retains APK artifacts. See [build, install and validation limits](android/README.md).
+
 ## Step-by-step user guides
 
 New accounts see a skippable seven-step introduction when they first enter `/app`. The **新手引导** entry in the workspace header/account menu and settings pages opens ten tutorials: first task, models, projects, files, Agents, context library, Computer, Skills, profile, and publishing. Feature pages show a dismissible first-use hint. Progress is stored per account and topic, so paused guides can resume on another device; completed guides can be replayed. Existing accounts are opted out of the automatic welcome during migration. Reading tutorials does not create tasks, call a model, install Skills, or publish files. Visiting model settings preserves the existing task draft.

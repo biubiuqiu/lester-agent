@@ -23,3 +23,13 @@ test("completion haptics require an observed active task and are once per accoun
   gate.reset("other:workspace", [conversation("running", "run-b")]);
   assert.equal(gate.complete("run-b", "conversation-a", 8)?.account, "other:workspace");
 });
+
+test("returning to the foreground cannot vibrate for a completion from the background replay", () => {
+  const gate = new NativeRunFeedback();
+  gate.reset("user:workspace", [conversation("running")]);
+  gate.foreground();
+  gate.reset("user:workspace", [conversation("running")]);
+  assert.equal(gate.complete("run-a", "conversation-a", 9, new Date(Date.now() - 60_000).toISOString()), null);
+  gate.reset("user:workspace", [conversation("running")]);
+  assert.equal(gate.complete("run-a", "conversation-a", 10, new Date().toISOString()), null);
+});

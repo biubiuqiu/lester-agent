@@ -1,0 +1,32 @@
+<resources>
+    <string name="back">"Retour"</string>
+    <string name="new_task">"Nouvelle tâche"</string>
+    <string name="settings">"Réglages"</string>
+    <string name="retry">"Réessayer"</string>
+    <string name="connect">"Se connecter"</string>
+    <string name="sign_in">"Se connecter"</string>
+    <string name="sign_in_description">"Votre travail, où que vous soyez."</string>
+    <string name="recent">"Conversations récentes"</string>
+    <string name="empty_conversations">"Aucune conversation"</string>
+    <string name="no_matches">"Aucune conversation trouvée"</string>
+    <string name="search">"Rechercher une conversation ou un projet"</string>
+    <string name="account">"Compte"</string>
+    <string name="schedules">"Tâches planifiées"</string>
+    <string name="haptics">"Retour haptique"</string>
+    <string name="haptics_description">"Une légère vibration à la réception d’une fin de tâche dans l’espace au premier plan, sur les appareils compatibles."</string>
+    <string name="change_server">"Changer de serveur"</string>
+    <string name="change_server_description">"Le changement efface la connexion et les brouillons de cet appareil. Les tâches et fichiers du serveur sont conservés."</string>
+    <string name="invalid_server">"Utilisez une adresse HTTPS, comme https://lester.example."</string>
+    <string name="sign_in_failed">"La connexion n’a pas abouti. Réessayez."</string>
+    <string name="load_failed">"Impossible de charger l’espace. Vérifiez la connexion et réessayez."</string>
+    <string name="workspace_restart">"L’espace doit être rechargé. Les brouillons enregistrés seront restaurés."</string>
+    <string name="download_failed">"Échec du téléchargement. Réessayez."</string>
+    <string name="connect_description">"Connectez votre serveur Lester. Les tâches continuent sur le serveur."</string>
+    <string name="server_address">"Adresse du serveur"</string>
+    <string name="cancel">"Annuler"</string>
+    <string name="save">"Enregistrer"</string>
+    <string name="save_file">"Enregistrer le fichier"</string>
+    <string name="file_picker_failed">"Impossible d’ouvrir le sélecteur de fichiers. Réessayez."</string>
+    <string name="browser_failed">"Impossible d’ouvrir le navigateur. Installez ou activez-en un et réessayez."</string>
+    <string name="update_webview">"Mettez à jour Android System WebView ou Chrome, puis rouvrez Lester."</string>
+</resources>

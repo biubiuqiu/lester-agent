@@ -24,6 +24,7 @@ jobs:
       go: ${{ steps.changes.outputs.go }}
       web: ${{ steps.changes.outputs.web }}
       ios: ${{ steps.changes.outputs.ios }}
+      android: ${{ steps.changes.outputs.android }}
       gateway: ${{ steps.changes.outputs.gateway }}
       helm: ${{ steps.changes.outputs.helm }}
       sandbox_runtime: ${{ steps.changes.outputs.sandbox_runtime }}
@@ -187,6 +188,50 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  android:
+    name: Android tests and APK builds
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+          cache-dependency-path: |
+            android/**/*.gradle.kts
+            android/**/gradle.lockfile
+            android/gradle/wrapper/gradle-wrapper.properties
+            android/gradle/verification-metadata.xml
+      - name: Install the pinned Android SDK
+        run: |
+          python3 - <<'PYCODE'
+          import os, subprocess
+          sdk = os.environ["ANDROID_HOME"]
+          manager = sdk + "/cmdline-tools/latest/bin/sdkmanager"
+          subprocess.run([manager, "--licenses"], input="y\n" * 100, text=True, check=True)
+          subprocess.run([manager, "platforms;android-36", "build-tools;36.0.0"], check=True)
+          PYCODE
+      - name: Check native localization and transport boundaries
+        run: python3 android/scripts/check-resources.py
+      - name: Run JVM tests, Android lint and Debug/Release builds
+        working-directory: android
+        run: ./gradlew --no-daemon :core:test :app:lint :app:assembleDebug :app:assembleRelease
+      - name: Retain APKs and validation evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: android-build
+          path: |
+            android/app/build/outputs/apk/
+            android/app/build/reports/lint-results*.html
+            android/core/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 7
+
   ios:
     name: iPhone and iPad build
     needs: changes
@@ -341,7 +386,7 @@ jobs:
 
   checks:
     name: CI result
-    needs: [changes, gateway, go, web, ios, helm, sandbox-runtime, security-go, security-web]
+    needs: [changes, gateway, go, web, ios, android, helm, sandbox-runtime, security-go, security-web]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -360,7 +405,7 @@ jobs:
           if results["changes"]["result"] != "success":
               failed.append("check selection")
           selected = results["changes"].get("outputs", {})
-          for name in ("gateway", "go", "web", "ios", "helm", "sandbox-runtime", "security-go", "security-web"):
+          for name in ("gateway", "go", "web", "ios", "android", "helm", "sandbox-runtime", "security-go", "security-web"):
               flag = selected.get(name.replace("-", "_"))
               if flag not in ("true", "false") or (flag == "true" and results[name]["result"] != "success"):
                   failed.append(name + " did not complete its selected check")

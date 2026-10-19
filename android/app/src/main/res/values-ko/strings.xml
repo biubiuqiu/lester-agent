@@ -1,0 +1,32 @@
+<resources>
+    <string name="back">"뒤로"</string>
+    <string name="new_task">"새 작업"</string>
+    <string name="settings">"설정"</string>
+    <string name="retry">"다시 시도"</string>
+    <string name="connect">"연결"</string>
+    <string name="sign_in">"로그인"</string>
+    <string name="sign_in_description">"어디서든 이어지는 작업."</string>
+    <string name="recent">"최근 대화"</string>
+    <string name="empty_conversations">"아직 대화가 없습니다"</string>
+    <string name="no_matches">"일치하는 대화가 없습니다"</string>
+    <string name="search">"대화 또는 프로젝트 검색"</string>
+    <string name="account">"계정"</string>
+    <string name="schedules">"예약 작업"</string>
+    <string name="haptics">"햅틱 피드백"</string>
+    <string name="haptics_description">"작업 공간이 전면에 있을 때 작업 완료를 받으면 가볍게 진동합니다. 지원 기기에서 사용 가능합니다."</string>
+    <string name="change_server">"서버 변경"</string>
+    <string name="change_server_description">"서버를 변경하면 이 기기의 로그인과 로컬 초안이 삭제됩니다. 서버 작업과 파일은 유지됩니다."</string>
+    <string name="invalid_server">"https://lester.example 같은 HTTPS 서버 주소를 입력하세요."</string>
+    <string name="sign_in_failed">"로그인이 완료되지 않았습니다. 다시 시도하세요."</string>
+    <string name="load_failed">"작업 공간을 불러올 수 없습니다. 연결을 확인하고 다시 시도하세요."</string>
+    <string name="workspace_restart">"작업 공간을 다시 불러와야 합니다. 저장된 초안은 복원됩니다."</string>
+    <string name="download_failed">"다운로드에 실패했습니다. 다시 시도하세요."</string>
+    <string name="connect_description">"직접 배포한 Lester에 연결하세요. 작업은 서버에서 계속 실행됩니다."</string>
+    <string name="server_address">"서버 주소"</string>
+    <string name="cancel">"취소"</string>
+    <string name="save">"저장"</string>
+    <string name="save_file">"파일 저장"</string>
+    <string name="file_picker_failed">"파일 선택기를 열 수 없습니다. 다시 시도하세요."</string>
+    <string name="browser_failed">"브라우저를 열 수 없습니다. 브라우저를 설치하거나 활성화하고 다시 시도하세요."</string>
+    <string name="update_webview">"Android System WebView 또는 Chrome을 업데이트한 후 Lester를 다시 여세요."</string>
+</resources>

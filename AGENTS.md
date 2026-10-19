@@ -61,6 +61,14 @@ Implementation phase labels are internal planning terms. Do not expose labels su
 - Accept native messages only from the configured origin's main app/login frame. Generated previews and subframes have no bridge authority. Native-to-Web commands navigate validated routes only, never mutate, approve or execute. Production requires HTTPS and normal TLS; localhost HTTP is Debug-only. Changing server clears this device's local drafts/cookies explicitly and preserves server data. Third-party linking uses Web, existing linked sign-in works in App.
 - Maintain six native localizations, public help and README. Run Core Swift tests, resource checks and production browser regressions. Native SDK builds require macOS/Xcode; do not call Linux syntax/Core tests an iOS build or claim simulator/device haptics/Liquid Glass were validated. CI builds unsigned simulator/device configurations on selected iOS changes, with no release upload.
 
+## Android client
+
+- `android/` is a Kotlin/Jetpack Compose thin client, min SDK 26 / target 36, using Material 3 and the same Web APIs, drafts, queues and single SSE as iOS. Phone drawers and tablet columns retain one WebView when resized so selected files are not lost. Keep native/UI copy complete in six languages; native chrome follows the received workspace locale.
+- Reuse migration 030 and the system-browser single-use PKCE handoff, with fixed `lester://auth/callback`, exact state validation, no redirects during exchange and HttpOnly cookies in WebView CookieManager. Pending verifiers may survive process death only encrypted with Android Keystore and bounded lifetime; no plaintext/token logging or backup. Changing server explicitly clears app-local Web data/drafts and pending handoffs, preserving server tasks/files.
+- Use AndroidX WebMessageListener with exact origin rules, main-frame/current-app-path checks and document-start injection; never use addJavascriptInterface or URL/user-agent toggles. Generated result frames have no native authority. Native commands navigate only. Require an updated WebView when safe bridge features are unavailable; do not fall back to an unscoped bridge. Keep Release HTTPS-only/system TLS, Debug HTTP limited to emulator/loopback.
+- Foreground haptics are optional, hardware checked, deduplicated and never delivered for historical/background replay. No FCM/background service/notification entitlement in this version. File chooser grants cover explicit selections only; exports use a system create-document picker. Chunked blob exports require a native-created, short-lived user-download receipt with ordered parts, exact final length and 50 MiB cap; no files/tokens in ordinary workspace messages. Temporary exports stay in app-private cache and are cleaned on cancellation/server changes.
+- Keep the Gradle Wrapper checksum, plugin/dependency versions, dependency locks and artifact verification metadata committed. Run `:core:test :app:lint :app:assembleDebug :app:assembleRelease` and resource checks. CI uses selected Ubuntu builds and preserves APKs/reports; no Play publishing or signing keys. Distinguish a successful APK compilation/JVM test from emulator/device WebView, browser return, keyboard, file-picker and physical vibration verification.
+
 ## File review and project rules
 
 - Agent write/edit tools record trusted before/after snapshots and a durable intent before mutation. Private capture reads never grant model-visible FileState access. Keep at most 512 KiB per text side and 64 MiB per conversation; unretained or unconfirmed operations must not fabricate diffs.
@@ -88,6 +96,7 @@ Never describe GitHub Actions CI as a Lester product capability.
 ```text
 frontend/                     Next.js frontend
 ios/                          SwiftUI iPhone/iPad shell and Foundation core
+android/                      Compose Android shell and JVM core
 backend/
   cmd/api/                    API executable
   cmd/artifact-host/          independent public static-site host

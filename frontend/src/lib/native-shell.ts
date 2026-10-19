@@ -2,21 +2,30 @@ import type { Conversation, Project, UserProfile } from "./api";
 
 declare global {
   interface Window {
-    __LESTER_NATIVE__?: { version: number };
+    __LESTER_NATIVE__?: { version: number; platform?: "ios" | "android" };
+    LesterAndroid?: { postMessage: (message: string) => void };
     webkit?: { messageHandlers?: { lester?: { postMessage: (message: unknown) => void } } };
   }
 }
 
-export function isNativeShell() {
-  return typeof window !== "undefined" && window.top === window && window.__LESTER_NATIVE__?.version === 1 && typeof window.webkit?.messageHandlers?.lester?.postMessage === "function";
+export function nativePlatform(): "ios" | "android" | null {
+  if (typeof window === "undefined" || window.top !== window || window.__LESTER_NATIVE__?.version !== 1) return null;
+  if (window.__LESTER_NATIVE__.platform === "android") return typeof window.LesterAndroid?.postMessage === "function" ? "android" : null;
+  return typeof window.webkit?.messageHandlers?.lester?.postMessage === "function" ? "ios" : null;
 }
+export const isNativeShell = () => nativePlatform() !== null;
 export const nativeShellSnapshot = () => isNativeShell();
 export const nativeShellServerSnapshot = () => false;
 export const subscribeNativeShell = () => () => {};
 
 export function postNative(type: string, payload: unknown) {
-  if (!isNativeShell()) return;
-  try { window.webkit!.messageHandlers!.lester!.postMessage({ version: 1, type, payload }); } catch { /* Native capabilities never block a task or draft. */ }
+  const platform = nativePlatform();
+  if (!platform) return;
+  const message = { version: 1, type, payload };
+  try {
+    if (platform === "android") window.LesterAndroid!.postMessage(JSON.stringify(message));
+    else window.webkit!.messageHandlers!.lester!.postMessage(message);
+  } catch { /* Native capabilities never block a task or draft. */ }
 }
 
 export function nativeWorkspaceSnapshot(user: UserProfile, projects: Project[], conversations: Conversation[], currentId: string | undefined, locale: string) {
@@ -50,9 +59,11 @@ export function nativeCommandPath(value: unknown): string | null {
 // authoritative running snapshots. Replays cannot
 // resurrect a completed run, and a new document starts with no haptic backlog.
 export class NativeRunFeedback {
+  private foregroundSince = Date.now();
   private account = "";
   private active = new Set<string>();
   private finished = new Set<string>();
+  foreground() { this.foregroundSince = Date.now(); this.active.clear(); }
   reset(account: string, conversations: Conversation[]) {
     if (this.account !== account) { this.account = account; this.active.clear(); this.finished.clear(); }
     for (const item of conversations) if (item.run_id) {
@@ -61,9 +72,10 @@ export class NativeRunFeedback {
     }
     this.finished = new Set([...this.finished].slice(-256));
   }
-  complete(run: string, conversation: string, event: number) {
+  complete(run: string, conversation: string, event: number, createdAt?: string) {
     if (!this.active.delete(run) || this.finished.has(run)) return null;
     this.finished.add(run); this.finished = new Set([...this.finished].slice(-256));
+    if (createdAt !== undefined && (!Number.isFinite(Date.parse(createdAt)) || Date.parse(createdAt) < this.foregroundSince)) return null;
     return { account: this.account, run_id: run, conversation_id: conversation, event_id: event };
   }
 }
