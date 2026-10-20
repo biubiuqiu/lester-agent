@@ -66,6 +66,74 @@ func TestOpenAIPayloadOmitsUnsetMaxTokens(t *testing.T) {
 	}
 }
 
+func TestToolFreeSchemaNegotiatesJSONModeOnlyOnExplicitRejection(t *testing.T) {
+	for _, scenario := range []struct {
+		name                   string
+		status                 int
+		body                   string
+		optIn, tools, fallback bool
+	}{
+		{"compatible provider", 400, `{"error":{"param":"response_format","message":"json_schema is not supported; use json_object"}}`, true, false, true},
+		{"explicit format without param", 422, `{"error":{"message":"This model does not support json_schema"}}`, true, false, true},
+		{"approval remains strict", 400, `{"error":{"param":"response_format","message":"json_schema is not supported"}}`, false, false, false},
+		{"tools never downgrade", 400, `{"error":{"param":"response_format","message":"json_schema is not supported"}}`, true, true, false},
+		{"invalid schema is not unsupported", 400, `{"error":{"param":"response_format","message":"invalid schema: required is missing"}}`, true, false, false},
+		{"unsupported schema keyword is not a format rejection", 400, `{"error":{"param":"response_format","message":"invalid schema: minLength is unsupported"}}`, true, false, false},
+		{"authentication", 401, `{"error":{"message":"json_schema is not supported"}}`, true, false, false},
+		{"server failure", 500, `{"error":{"message":"json_schema is not supported"}}`, true, false, false},
+		{"unrelated parameter", 400, `{"error":{"param":"temperature","message":"temperature not supported"}}`, true, false, false},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			calls := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				var payload map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+					t.Fatal(err)
+				}
+				format := payload["response_format"].(map[string]any)
+				if calls == 1 {
+					if format["type"] != "json_schema" {
+						t.Error("first request must use the schema")
+					}
+					w.WriteHeader(scenario.status)
+					_, _ = fmt.Fprint(w, scenario.body)
+					return
+				}
+				if calls > 2 || !scenario.fallback {
+					t.Error("unexpected negotiation")
+				}
+				if format["type"] != "json_object" || payload["tools"] != nil {
+					t.Error("fallback must be JSON and tool-free")
+				}
+				encoded, _ := json.Marshal(payload["messages"])
+				if !strings.Contains(string(encoded), `\"required\":[\"reply\"]`) {
+					t.Error("fallback lost independent validation schema")
+				}
+				w.Header().Set("Content-Type", "text/event-stream")
+				_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"{\\\"reply\\\":\\\"hello\\\"}\"}}]}\n\ndata: [DONE]\n\n")
+			}))
+			defer server.Close()
+			client, err := (OpenAICompatible{}).NewClient(ClientSpec{Endpoint: server.URL + "/v1", Credential: []byte("fixture")})
+			if err != nil {
+				t.Fatal(err)
+			}
+			request := modelruntime.Request{Model: "fixture", System: "Return JSON", Messages: []modelruntime.Message{{Role: "user", Content: "hello"}}, ResponseSchema: &modelruntime.JSONSchema{Name: "personal_assistant", Schema: map[string]any{"type": "object", "required": []string{"reply"}}, AllowJSONMode: scenario.optIn}}
+			if scenario.tools {
+				request.Tools = []modelruntime.Tool{{Name: "command", InputSchema: map[string]any{"type": "object"}}}
+			}
+			result, err := client.Generate(context.Background(), request)
+			if scenario.fallback {
+				if err != nil || result == nil || result.Content != `{"reply":"hello"}` || calls != 2 {
+					t.Fatalf("negotiation failed: result=%v err=%v calls=%d", result, err, calls)
+				}
+			} else if err == nil || calls != 1 {
+				t.Fatalf("must fail once: err=%v calls=%d", err, calls)
+			}
+		})
+	}
+}
+
 func TestStructuredReviewSchemaIsSentAndNeverSilentlyRetried(t *testing.T) {
 	schema := &modelruntime.JSONSchema{Name: "review", Schema: map[string]any{"type": "object", "additionalProperties": false, "required": []string{"decision"}, "properties": map[string]any{"decision": map[string]any{"type": "string", "enum": []string{"allow", "deny", "ask_user"}}}}}
 	for _, protocol := range []string{"openai", "anthropic"} {

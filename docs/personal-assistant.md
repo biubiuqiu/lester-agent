@@ -1,6 +1,6 @@
 # Personal Lester: memory and coordination
 
-The default `/app` entry is one persistent personal dialogue per user and workspace. There is no New chat action in this dialogue. `/app/new`, project task composers and existing `/app/c/{id}` conversations remain available for direct execution.
+The fixed **Lester** entry (bottom right on wide screens, in navigation on narrow screens) opens an independent, persistent assistant panel throughout authenticated `/app` routes, including settings. It is owned by the app layout: navigation and minimizing preserve its transcript, draft and in-flight request. Wide displays reserve space for a non-modal companion so the task composer stays usable; an open Computer pane retains its existing space. Constrained displays use a viewport-aware modal panel with native focus trapping, with a full sheet on phones. Opening a task from the sheet minimizes it. `/app` and `/app/new` are task composers; project composers and existing `/app/c/{id}` conversations retain execution. Model/project choices live in assistant settings, outside its composer.
 
 ```mermaid
 flowchart TD
@@ -11,7 +11,7 @@ flowchart TD
     Task -->|Live status and public reply| Lester
 ```
 
-Personal Lester has no Computer, file, command, browser, Skill, approval, Stop or current-run adjustment tools. It uses the existing selected model in a tool-free call with JSON Schema, independently validates the result, and offers only a fixed set of memory/coordination actions. A model that rejects structured output fails explicitly; there is no silent plain-text/action fallback. Concrete work uses the existing Agent runtime, queue, project rules and operation approvals.
+Personal Lester has no Computer, file, command, browser, Skill, approval, Stop or current-run adjustment tools. It uses the existing selected model in a tool-free call with JSON Schema, independently validates the result, and offers only a fixed set of memory/coordination actions. For tool-free personal calls only, an OpenAI-compatible provider explicitly rejecting `json_schema` with HTTP 400/422 can negotiate `json_object` once, with the full schema in the system instructions. The same strict server-side parser, evidence checks and action validation still apply. Authentication, rate limits, invalid schemas, malformed output and uncertain transport failures never negotiate or replay. Approval requests remain strict JSON Schema. There is no plain-text/action fallback. Concrete work uses the existing Agent runtime, queue, project rules and operation approvals.
 
 ## Memory behavior
 
@@ -57,7 +57,7 @@ All endpoints require the ordinary session and mutation-Origin checks:
 | `PATCH /api/v1/personal/memories/{id}` | `{revision, content, forget}` |
 | `POST /api/v1/personal/changes/{id}/undo` | Revision-checked, idempotent undo |
 
-Personal drafts and pending receipt IDs use the existing account-scoped browser draft store. Closing/reopening preserves text; logout clears it and blocks late writes. Native iOS/Android Home opens the same Web dialogue; there is no separate native memory/runtime.
+Personal drafts and pending receipt IDs use the existing account-scoped browser draft store. Closing/reopening preserves text; logout clears it and blocks late writes. Native iOS/Android Home opens the task composer; the same Web assistant launcher is available throughout the app. There is no separate native memory/runtime.
 
 ## Upgrade and validation
 

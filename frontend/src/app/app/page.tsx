@@ -1,3 +1,3 @@
 import {Workspace} from "@/components/workspace";
-export default async function AppHome({searchParams}:{searchParams:Promise<{agent?:string}>}){const {agent}=await searchParams;return <Workspace initialAgentSlug={agent} personal={!agent}/>}
+export default async function AppHome({searchParams}:{searchParams:Promise<{agent?:string}>}){const {agent}=await searchParams;return <Workspace initialAgentSlug={agent}/>}
 

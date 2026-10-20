@@ -8,7 +8,7 @@ Talk to one enduring Lester: it remembers your preferences and project decisions
 
 ## Your personal Lester
 
-`/app` is a continuous personal dialogue, without a new-chat step. Lester can remember preferences, selected-project decisions and work context, then create an independent task or continue an owned previous conversation. It has **no command, file, browser, Skill or approval tools**. Direct task creation remains at `/app/new` and within each project.
+The **Lester** button in the authenticated workspace (bottom right on wide screens, in navigation on narrow screens) opens a separate, persistent assistant panel. Its dialogue and draft stay with you across task, project and settings pages, even after minimizing. `/app` remains the new-task home. Lester can remember preferences, selected-project decisions and work context, then create an independent task or continue an owned previous conversation. It has **no command, file, browser, Skill or approval tools**. Direct task creation is available at `/app`, `/app/new` and within each project.
 
 - Memories are private to the current user/workspace, with optional project scope. Open **Memory** to search, inspect original user quotes, edit, forget or undo. Inferred memories show a quiet undo receipt; automatic inference can be disabled. Explicit “remember this” still works.
 - Current memories override older dialogue. Corrections/forgetting prevent old chat from being silently mined again. Forgetting does not delete original chat or change already accepted task snapshots.

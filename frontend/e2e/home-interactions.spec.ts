@@ -58,18 +58,21 @@ test("new-task entry, example disclosure and focus feedback preserve explicit su
     await expect(suggestions).toHaveCount(0);
     const disclosure = page.locator(".task-examples");
     const before = (await disclosure.boundingBox())!.height;
-    await disclosure.locator("summary").click();
-    const heights = await disclosure.evaluate(async element => {
+    // Observe before the click. Sampling after Playwright's action completes
+    // can miss the whole short transition on a busy browser worker.
+    const sampling = disclosure.evaluate(async element => {
       const points: number[] = [], start = performance.now();
       await new Promise<void>(resolve => {
         function frame() {
           points.push(element.getBoundingClientRect().height);
-          if (performance.now() - start >= 300) resolve(); else requestAnimationFrame(frame);
+          if (performance.now() - start >= 500) resolve(); else requestAnimationFrame(frame);
         }
         requestAnimationFrame(frame);
       });
       return { points, supported: CSS.supports("interpolate-size", "allow-keywords") };
     });
+    await disclosure.locator("summary").click();
+    const heights = await sampling;
     const expanded = (await disclosure.boundingBox())!.height;
     expect(expanded).toBeGreaterThan(before);
     if (heights.supported) expect(heights.points.some(height => height > before + 1 && height < expanded - 1)).toBe(true);

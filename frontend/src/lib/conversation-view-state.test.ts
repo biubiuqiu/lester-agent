@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { clearViewState, readView, updateView, viewKey, resumeViewState } from "./conversation-view-state";
+import { clearViewState, readView, updateView, viewKey, resumeViewState, viewStateEpoch } from "./conversation-view-state";
 
 const values: Record<string, string> = {};
 const storage = Object.defineProperties(values, {
@@ -66,6 +66,20 @@ test("logout clears persisted state and rejects late cleanup writes", () => {
   assert.equal(readView("u1.w1.c1").text, "");
   updateView("u2.w2.c1", { text: "new account" });
   assert.equal(readView("u2.w2.c1").text, "new account");
+});
+
+test("a resource response started before logout cannot reactivate the old account's drafts", () => {
+  resumeViewState("old.workspace.");
+  const requestEpoch = viewStateEpoch();
+  updateView("old.workspace.personal", { text: "private assistant draft" });
+  clearViewState();
+  assert.equal(resumeViewState("old.workspace.", requestEpoch), false);
+  updateView("old.workspace.personal", { text: "late reply" });
+  assert.equal(values["lester.draft.v1.old.workspace.personal"], undefined);
+  assert.equal(resumeViewState("new.workspace.", viewStateEpoch()), true);
+  assert.equal(resumeViewState("old.workspace.", requestEpoch), false);
+  updateView("new.workspace.personal", { text: "new assistant draft" });
+  assert.equal(readView("new.workspace.personal").text, "new assistant draft");
 });
 
 test("durable draft restores after session storage disappears, without restoring File bytes", () => {

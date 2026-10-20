@@ -172,7 +172,7 @@ func (s *Service) Chat(ctx context.Context, p auth.Principal, request Request) (
 	callCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 	for pass := 0; pass < 2; pass++ {
-		modelRequest := model.ModelRequest{Model: deployment.ModelID, System: system + "\n<reference_data>\n" + string(data) + "\n</reference_data>", Messages: messages, MaxTokens: 3000, ResponseSchema: &model.JSONSchema{Name: "personal_assistant", Schema: responseSchema()}}
+		modelRequest := model.ModelRequest{Model: deployment.ModelID, System: system + "\n<reference_data>\n" + string(data) + "\n</reference_data>", Messages: messages, MaxTokens: 3000, ResponseSchema: &model.JSONSchema{Name: "personal_assistant", Schema: responseSchema(), AllowJSONMode: true}}
 		window := deployment.ContextWindow
 		if window == 0 || window > 32000 {
 			window = 32000

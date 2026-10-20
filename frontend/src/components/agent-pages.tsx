@@ -1,4 +1,5 @@
 "use client";
+import { AssistantLauncherSlot } from "@/components/personal-assistant-dock";
 import { T, useT } from "@/components/i18n";
 
 import { GuideLauncher } from "./user-guide";
@@ -9,7 +10,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Bot, Plus, Trash2 } from "lucide-react";
 import { api, type Agent, type AgentFile } from "@/lib/api";
 
-function Header({ title }: { title: string }) { return <header className="agent-page-header"><Link href="/app"><ArrowLeft size={17} /><T>{"工作区"}</T></Link><span><Bot size={18} />{title}</span><GuideLauncher /></header>; }
+function Header({ title }: { title: string }) { return <header className="agent-page-header"><Link href="/app"><ArrowLeft size={17} /><T>{"工作区"}</T></Link><span><Bot size={18} />{title}</span><AssistantLauncherSlot /><GuideLauncher /></header>; }
 
 export function AgentCatalog() {
   const t = useT();

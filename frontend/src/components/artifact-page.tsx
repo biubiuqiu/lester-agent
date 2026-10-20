@@ -1,4 +1,5 @@
 "use client";
+import { AssistantLauncherSlot } from "@/components/personal-assistant-dock";
 import { T, useT } from "@/components/i18n";
 
 
@@ -46,7 +47,7 @@ export function ArtifactPage({ returnTo = "/app", initialProject = "" }: { retur
   return (
     <main className="artifacts-page-shell">
       <header className="artifacts-page-topbar">
-        <GuideLauncher />
+        <AssistantLauncherSlot /><GuideLauncher />
         <Link className="artifacts-page-brand" href={returnTo} aria-label={t("返回 Lester 工作区")}>
           <Brand />
         </Link>

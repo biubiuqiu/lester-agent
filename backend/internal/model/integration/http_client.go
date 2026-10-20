@@ -49,7 +49,18 @@ func (c *httpClient) Generate(ctx context.Context, request modelruntime.Request)
 }
 
 func (c *httpClient) Stream(ctx context.Context, request modelruntime.Request) (<-chan modelruntime.Event, error) {
+	return c.stream(ctx, request, false)
+}
+
+func (c *httpClient) stream(ctx context.Context, request modelruntime.Request, jsonMode bool) (<-chan modelruntime.Event, error) {
+	if jsonMode {
+		schema, _ := json.Marshal(request.ResponseSchema.Schema)
+		request.System += "\nReturn a JSON object matching this schema exactly, with every required field and no other fields:\n" + string(schema)
+	}
 	payload := openAIPayload(request)
+	if jsonMode {
+		payload["response_format"] = map[string]any{"type": "json_object"}
+	}
 	if c.protocol == "anthropic" {
 		payload = anthropicPayload(request, c.mode)
 	}
@@ -78,11 +89,39 @@ func (c *httpClient) Stream(ctx context.Context, request modelruntime.Request) (
 	if response.StatusCode >= 300 {
 		defer response.Body.Close()
 		data, _ := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+		if !jsonMode && c.protocol == "openai" && len(request.Tools) == 0 && request.ResponseSchema != nil && request.ResponseSchema.AllowJSONMode && unsupportedJSONSchema(response.StatusCode, data) {
+			// The provider explicitly rejected the request before generation. This
+			// is format negotiation, never replay of a generated action or a tool.
+			_ = response.Body.Close()
+			return c.stream(ctx, request, true)
+		}
 		return nil, providerResponseError(response.StatusCode, data)
 	}
 	events := make(chan modelruntime.Event, 16)
 	go c.readSSE(ctx, response.Body, events)
 	return events, nil
+}
+
+func unsupportedJSONSchema(status int, body []byte) bool {
+	if status != http.StatusBadRequest && status != http.StatusUnprocessableEntity {
+		return false
+	}
+	var envelope struct {
+		Error struct {
+			Message string `json:"message"`
+			Param   string `json:"param"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(body, &envelope) != nil {
+		return false
+	}
+	message := strings.ToLower(envelope.Error.Message)
+	if strings.Contains(message, "invalid schema") || strings.Contains(message, "invalid json schema") || strings.Contains(message, "invalid json_schema") || strings.Contains(message, "schema validation") {
+		return false
+	}
+	format := strings.Contains(message, "json_schema") || envelope.Error.Param == "response_format"
+	unsupported := strings.Contains(message, "not supported") || strings.Contains(message, "unsupported") || strings.Contains(message, "does not support") || strings.Contains(message, "supported values")
+	return format && unsupported
 }
 
 // Provider requests carry credentials and private conversation content. Never

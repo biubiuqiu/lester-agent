@@ -40,7 +40,12 @@ function stored(read: () => string | null) { try { return JSON.parse(read() || "
 const cache = new Map<string, ViewState>();
 const draftSnapshots = new Map<string, string | null>();
 let writeScope: string | null = "";
-export function resumeViewState(scope: string) { writeScope = scope; resumeProjectViews(scope); }
+let epoch = 0;
+export const viewStateEpoch = () => epoch;
+export function resumeViewState(scope: string, expectedEpoch = epoch) {
+  if (expectedEpoch !== epoch) return false;
+  writeScope = scope; resumeProjectViews(scope); return true;
+}
 const defaults = (): ViewState => ({ personalPending: "", personalProject: "", personalModel: "", recap: { enabled: true, seenAt: 0, eventId: 0, messageId: "" }, detailedProcess: false, contexts: [], agentSlug: "lester", executionMode: "execute", permissionMode: "standard", interactionDrafts: {}, sendNotice: "", text: "", files: [], missingFiles: [], reference: null, tabs: [], closedTabs: [], unreadFiles: [], selected: null, treeOpen: true, directories: [""], modes: {}, positions: {}, thread: { top: 0, following: true } });
 export const viewKey = (userId: string, workspaceId: string, conversationId: string) => `${userId}.${workspaceId}.${conversationId}`;
 
@@ -138,6 +143,7 @@ export function updateView(key: string, patch: Partial<ViewState>) {
 export function clearViewState() {
   // Unmount/pagehide callbacks after logout must not write the cleared draft back.
   writeScope = null;
+  epoch++;
   cache.clear();
   draftSnapshots.clear();
   clearProjectViews();

@@ -50,4 +50,4 @@ The Foundation-only bridge/origin/completion tests also run on Linux with Swift 
 
 首版只在工作区前台收到新任务完成时轻震一次，支持关闭和硬件检测；不支持的 iPad 不会震动。后台、锁屏 APNs 推送按本次范围暂缓。Linux 可验证核心逻辑和网页适配，原生构建、玻璃效果、登录返回和真机震动必须用 macOS/Xcode 与设备验收。这里提供源码工程，不代表已上架。
 
-Home opens your enduring personal Lester dialogue and memory. Independent execution tasks remain reachable through projects and task cards. The assistant cannot execute commands, edit files or approve operations.
+Home opens the task composer. The fixed Lester entry opens the independent personal assistant and memory panel, available across task/project/settings navigation. Independent execution tasks remain reachable through projects and task cards. The assistant cannot execute commands, edit files or approve operations.

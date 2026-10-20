@@ -41,6 +41,10 @@ type Request struct {
 type JSONSchema struct {
 	Name   string
 	Schema map[string]any
+	// Only tool-free consumers that independently validate every field may opt
+	// into JSON object mode after an explicit unsupported-json_schema rejection.
+	// Approval and ordinary execution requests leave this false.
+	AllowJSONMode bool
 }
 
 type Event struct {

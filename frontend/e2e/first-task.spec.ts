@@ -60,7 +60,8 @@ test("login, explicit first task, live file tabs and independent HTML preview", 
   await expect(page.locator(".login-card").getByRole("alert")).toHaveText("邮箱或密码不正确");
   await page.getByLabel("密码", { exact: true }).fill("fixture-password-123");
   await page.getByRole("button", { name: "登录", exact: true }).click();
-  await expect(page.getByRole("textbox", { name: "个人助理消息", exact: true })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "消息输入框", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "打开个人助理", exact: true })).toBeVisible();
   await page.goto("/app/new");
   const composer = page.getByRole("textbox", { name: "消息输入框", exact: true });
   await expect(composer).toBeVisible();

@@ -51,7 +51,7 @@ import { useComposerMotion } from "./composer-motion";
 import { ConversationOptions } from "./conversation-options";
 import { ConversationPresentation, ConversationRecords } from "./conversation-presentation";
 import { CommandTasks } from "./command-tasks";
-import { PersonalAssistant } from "./personal-assistant";
+import { AssistantLauncherSlot, usePersonalAssistantDock } from "./personal-assistant-dock";
 
 const agents = [
   { slug: "lester", name: "Lester", initial: "L", copy: "冷静、聪明、务实" },
@@ -139,7 +139,7 @@ function persistUnreadRunResults(workspaceId: string, value: Record<string, Unre
   window.localStorage.setItem(unreadRunResultsKey(workspaceId), JSON.stringify(bounded));
 }
 
-export function Workspace({ conversationId, projectId, initialAgentSlug, projectOverview = false, personal = false }: { conversationId?: string; projectId?:string; initialAgentSlug?:string; projectOverview?: boolean; personal?: boolean }) {
+export function Workspace({ conversationId, projectId, initialAgentSlug, projectOverview = false }: { conversationId?: string; projectId?:string; initialAgentSlug?:string; projectOverview?: boolean }) {
   const { t, locale } = useI18n();
   const nativeFeedback = useRef(new NativeRunFeedback());
 
@@ -179,6 +179,17 @@ export function Workspace({ conversationId, projectId, initialAgentSlug, project
   const modelSequence = useRef(0);
   const [streamAttempt, setStreamAttempt] = useState(0);
   const [taskRevision, setTaskRevision] = useState(0);
+  const assistantDock = usePersonalAssistantDock();
+  const publishAssistant = assistantDock?.publish;
+  const tasksChanged = assistantDock?.tasksChanged;
+  const delegatedRevision = assistantDock?.delegatedRevision ?? 0;
+  const seenDelegation = useRef(delegatedRevision);
+  useEffect(() => { if (user) publishAssistant?.({ user, projects, deployments }); }, [user, projects, deployments, publishAssistant]);
+  useEffect(() => {
+    if (seenDelegation.current === delegatedRevision) return;
+    seenDelegation.current = delegatedRevision;
+    setWorkspaceAttempt(value => value + 1);
+  }, [delegatedRevision]);
   const [streamError, setStreamError] = useState({ conversationId: "", message: "" });
   const panelWidthRef = useRef(panelWidth);
   const layoutHydrated = useSyncExternalStore(subscribeToHydration, getClientSnapshot, getServerSnapshot);
@@ -355,7 +366,7 @@ export function Workspace({ conversationId, projectId, initialAgentSlug, project
           [conversation]: mergeRunEvents(previous[conversation] ?? [], [event]),
         }));
       }
-      if (event.type.startsWith("RUN_") || event.type.startsWith("INTERACTION_") || event.type.startsWith("PERMISSION_")) setTaskRevision(value => Math.max(value, event.id));
+      if (event.type.startsWith("RUN_") || event.type.startsWith("INTERACTION_") || event.type.startsWith("PERMISSION_")) { setTaskRevision(value => Math.max(value, event.id)); tasksChanged?.(); }
       if (event.type === "RUN_COMPLETED" && event.id > currentCursor && !document.hidden) {
         const completion = nativeFeedback.current.complete(event.run_id, conversation, event.id, event.created_at);
         if (completion) postNative("run_completed", completion);
@@ -410,7 +421,7 @@ export function Workspace({ conversationId, projectId, initialAgentSlug, project
       setStreamError({ conversationId: "*", message: "实时连接暂时中断，浏览器正在自动重连" });
     };
     return () => { active = false; clearTimeout(reconnect); stream.close(); };
-  }, [user?.workspace_id, streamAttempt]);
+  }, [user?.workspace_id, streamAttempt, tasksChanged]);
 
   async function chooseModel(id: string) {
     if (!conversationId || modelMutations.current.has(conversationId)
@@ -561,14 +572,14 @@ export function Workspace({ conversationId, projectId, initialAgentSlug, project
 
 
 
-      <nav className="personal-sidebar-nav" aria-label={t("主要导航")}><Link href="/app" aria-current={personal ? "page" : undefined} onClick={() => setMobileMenu(false)}><span className="personal-nav-mark">L</span>{t("个人助理")}</Link><Link href={newConversationPath} onClick={() => setMobileMenu(false)}><Plus size={16} />{t("新任务")}</Link></nav>
+      <nav className="personal-sidebar-nav" aria-label={t("主要导航")}><Link href={newConversationPath} onClick={() => setMobileMenu(false)}><Plus size={16} />{t("新任务")}</Link></nav>
       <div className="conversation-list">{user ? <RecentConversations key={`${user.user_id}:${user.workspace_id}`} revision={taskRevision} onOpen={openConversation} conversations={conversations} projects={projects} currentId={conversationId} unread={unreadRunResults} /> : null}{loading ? <p className="muted-block"><T>{"正在载入…"}</T></p> : <ProjectRail projects={projects} conversations={visibleConversations} currentId={conversationId} selectedProject={selectedProject} unread={unreadRunResults} onOpen={openConversation} onNew={id=>{setMobileMenu(false);setConversationSearch("");router.push(`/app/p/${id}`);}} onProject={id=>{setMobileMenu(false);setConversationSearch("");router.push(`/app/p/${id}/overview`);}} projectPage={projectOverview} search={conversationSearch} onSearch={setConversationSearch} onProjects={setProjects} onConversation={updateOrganizedConversation}/>}</div>
       <div className="sidebar-footer"><UserMenu user={user} /></div>
     </aside>
-    <section className={`conversation-main ${displayedCurrent || personal ? "" : "empty-conversation"} ${personal ? "personal-home" : ""} ${projectOverview ? "project-overview-mode" : ""}`}>
-      <header className="conversation-header"><div className="conversation-header-leading"><button className="icon-button mobile-menu" onClick={() => setMobileMenu(true)} aria-label={t("打开会话栏")}><Menu /></button><button type="button" className="sidebar-restore-button" onClick={() => setConversationSidebar(false)} title={t("展开会话栏")} aria-label={t("展开会话栏")}><PanelLeftOpen /></button>{displayedCurrent ? <div className="agent-heading"><span className="agent-avatar">{agentName(displayedCurrent.agent_slug,displayedCurrent.agent_name,t)[0]}</span><span><strong title={displayedCurrent.title}>{displayedCurrent.title}</strong><small className={`run-state ${runState}`} title={`${agentName(displayedCurrent.agent_slug,displayedCurrent.agent_name,t)} · ${activeLabel}`}><span className="conversation-agent-name">{agentName(displayedCurrent.agent_slug,displayedCurrent.agent_name,t)}</span><span className="conversation-state-separator" aria-hidden="true"> · </span><span className="conversation-run-label">{activeLabel}</span></small></span></div> : <Brand />}</div>{displayedCurrent || projectOverview || personal ? null : <button className="new-button mobile-new" onClick={() => { setMobileMenu(false); router.push(newConversationPath); }}><Plus /><T>{"新会话"}</T></button>}<GuideLauncher /><Link className="workspace-artifacts-link" href={`/app/artifacts?returnTo=${encodeURIComponent(conversationId ? `/app/c/${conversationId}` : newConversationPath)}`} aria-label={t("打开已发布站点")} title={t("已发布站点")}><ArtifactIcon size={18}/><span><T>{"已发布站点"}</T></span></Link>{displayedCurrent?.created_agent_id ? <OpenAgentButton /> : null}{displayedCurrent ? <><OpenWorkspaceButton /><span className="mobile-results-entry"><OpenResultsButton compact /></span></> : null}{displayedCurrent ? <ConversationOptions key={displayedCurrent.id} leading={<><label className="field"><T>{"当前模型"}</T><select aria-label={t("切换模型")} disabled={modelLocked} title={modelHint} value={displayedCurrent.model_deployment_id || ""} autoFocus onChange={event => { void chooseModel(event.target.value); }}>{deployments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><small role="status">{modelHint}</small></>}><OpenFilesButton menu /><Link href={`/app/p/${displayedCurrent.project_id}/overview`}>{t("项目工作台")}</Link><GuideLauncher /><Link href={`/app/artifacts?returnTo=${encodeURIComponent(`/app/c/${displayedCurrent.id}`)}`}><T>{"管理已发布站点"}</T></Link></ConversationOptions> : null}</header>
+    <section className={`conversation-main ${displayedCurrent ? "" : "empty-conversation"} ${projectOverview ? "project-overview-mode" : ""}`}>
+      <header className="conversation-header"><div className="conversation-header-leading"><button className="icon-button mobile-menu" onClick={() => setMobileMenu(true)} aria-label={t("打开会话栏")}><Menu /></button><button type="button" className="sidebar-restore-button" onClick={() => setConversationSidebar(false)} title={t("展开会话栏")} aria-label={t("展开会话栏")}><PanelLeftOpen /></button>{displayedCurrent ? <div className="agent-heading"><span className="agent-avatar">{agentName(displayedCurrent.agent_slug,displayedCurrent.agent_name,t)[0]}</span><span><strong title={displayedCurrent.title}>{displayedCurrent.title}</strong><small className={`run-state ${runState}`} title={`${agentName(displayedCurrent.agent_slug,displayedCurrent.agent_name,t)} · ${activeLabel}`}><span className="conversation-agent-name">{agentName(displayedCurrent.agent_slug,displayedCurrent.agent_name,t)}</span><span className="conversation-state-separator" aria-hidden="true"> · </span><span className="conversation-run-label">{activeLabel}</span></small></span></div> : <Brand />}</div>{displayedCurrent || projectOverview ? null : <button className="new-button mobile-new" onClick={() => { setMobileMenu(false); router.push(newConversationPath); }}><Plus /><T>{"新会话"}</T></button>}<AssistantLauncherSlot /><GuideLauncher /><Link className="workspace-artifacts-link" href={`/app/artifacts?returnTo=${encodeURIComponent(conversationId ? `/app/c/${conversationId}` : newConversationPath)}`} aria-label={t("打开已发布站点")} title={t("已发布站点")}><ArtifactIcon size={18}/><span><T>{"已发布站点"}</T></span></Link>{displayedCurrent?.created_agent_id ? <OpenAgentButton /> : null}{displayedCurrent ? <><OpenWorkspaceButton /><span className="mobile-results-entry"><OpenResultsButton compact /></span></> : null}{displayedCurrent ? <ConversationOptions key={displayedCurrent.id} leading={<><label className="field"><T>{"当前模型"}</T><select aria-label={t("切换模型")} disabled={modelLocked} title={modelHint} value={displayedCurrent.model_deployment_id || ""} autoFocus onChange={event => { void chooseModel(event.target.value); }}>{deployments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><small role="status">{modelHint}</small></>}><OpenFilesButton menu /><Link href={`/app/p/${displayedCurrent.project_id}/overview`}>{t("项目工作台")}</Link><GuideLauncher /><Link href={`/app/artifacts?returnTo=${encodeURIComponent(`/app/c/${displayedCurrent.id}`)}`}><T>{"管理已发布站点"}</T></Link></ConversationOptions> : null}</header>
       {visibleError ? <div className="workspace-error" role="alert">{t(visibleError)}{bootstrapError || conversationError ? <button type="button" disabled={loading || conversationLoad.pending} onClick={() => { if (bootstrapError) { setLoading(true); setWorkspaceAttempt(value => value + 1); } if (conversationError && conversationId) { setConversationLoad({ id: conversationId, pending: true, error: "" }); setConversationAttempt(value => value + 1); } }}>{t("重试")}</button> : syncRetryConversation === conversationId ? <button type="button" onClick={() => { void refreshConversationRef.current?.(true); }}>{t("重新同步状态")}</button> : null}</div> : null}
-      {displayedCurrent ? <ConversationView key={displayedCurrent.id} conversation={displayedCurrent} messages={messages} events={eventsByConversation[displayedCurrent.id] ?? []} runState={runState} modelSaving={modelSaving} runId={runStatus.conversationId === conversationId ? runStatus.runId : undefined} onSend={sendMessage} onStop={stopRun} modelPicker={<label className="model-selector composer-model"><select aria-label={t("当前模型")} disabled={modelLocked} title={modelHint} value={displayedCurrent.model_deployment_id || ""} onChange={(event) => chooseModel(event.target.value)}>{deployments.length === 0 ? <option value=""><T>{"请先配置模型"}</T></option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown /></label>} /> : loading || conversationId && (conversationLoad.id !== conversationId || conversationLoad.pending) ? <div className="workspace-loading" role="status"><T>{"正在载入对话…"}</T></div> : conversationId || bootstrapError ? <div className="workspace-loading"><Link href="/app">{t("返回工作区")}</Link></div> : user && projectOverview ? (projects.find(item => item.id === projectId) ? <ProjectWorkbench key={projectId} project={projects.find(item => item.id === projectId)!} conversations={conversations} user={user} unread={unreadRunResults} onOpen={openConversation} /> : !visibleError ? <p className="project-missing" role="alert">{t("项目不存在或无法访问")}</p> : null) : user && personal ? <PersonalAssistant key={`${user.user_id}:${user.workspace_id}`} user={user} projects={projects} deployments={deployments} revision={taskRevision} onDelegated={() => setWorkspaceAttempt(value => value + 1)} /> : user ? <NewConversationComposer key={`${selectedProject}:${initialAgentSlug||"lester"}`} deployments={deployments} user={user} projectId={selectedProject} projectName={projects.find(p=>p.id===selectedProject)?.name} initialAgentSlug={initialAgentSlug} /> : null}
+      {displayedCurrent ? <ConversationView key={displayedCurrent.id} conversation={displayedCurrent} messages={messages} events={eventsByConversation[displayedCurrent.id] ?? []} runState={runState} modelSaving={modelSaving} runId={runStatus.conversationId === conversationId ? runStatus.runId : undefined} onSend={sendMessage} onStop={stopRun} modelPicker={<label className="model-selector composer-model"><select aria-label={t("当前模型")} disabled={modelLocked} title={modelHint} value={displayedCurrent.model_deployment_id || ""} onChange={(event) => chooseModel(event.target.value)}>{deployments.length === 0 ? <option value=""><T>{"请先配置模型"}</T></option> : null}{deployments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown /></label>} /> : loading || conversationId && (conversationLoad.id !== conversationId || conversationLoad.pending) ? <div className="workspace-loading" role="status"><T>{"正在载入对话…"}</T></div> : conversationId || bootstrapError ? <div className="workspace-loading"><Link href="/app">{t("返回工作区")}</Link></div> : user && projectOverview ? (projects.find(item => item.id === projectId) ? <ProjectWorkbench key={projectId} project={projects.find(item => item.id === projectId)!} conversations={conversations} user={user} unread={unreadRunResults} onOpen={openConversation} /> : !visibleError ? <p className="project-missing" role="alert">{t("项目不存在或无法访问")}</p> : null) : user ? <NewConversationComposer key={`${selectedProject}:${initialAgentSlug||"lester"}`} deployments={deployments} user={user} projectId={selectedProject} projectName={projects.find(p=>p.id===selectedProject)?.name} initialAgentSlug={initialAgentSlug} /> : null}
     </section>
     {displayedCurrent ? <ComputerPanel conversationId={displayedCurrent.id} createdAgentId={displayedCurrent.agent_slug === "agent-designer" ? displayedCurrent.created_agent_id : undefined} agentRevision={eventsByConversation[displayedCurrent.id]?.findLast(event => event.type === "AGENT_SAVED")?.id ?? 0} skillRevision={eventsByConversation[displayedCurrent.id]?.findLast(event => event.type === "SKILL_INSTALLED")?.id ?? 0} width={renderedPanelWidth} maxWidth={renderedPanelMaxWidth} resizing={Boolean(panelResize)} onResizeStart={(clientX) => setPanelResize({ startX: clientX, startWidth: renderedPanelWidth })} onWidthChange={updatePanelWidth} /> : null}
     {runNotice ? <RunNoticeToast notice={runNotice} onOpen={() => openConversation(runNotice.conversationId)} onDismiss={() => setRunNotice(null)} /> : null}
@@ -652,7 +663,14 @@ function ConversationView({ conversation, messages, events, runState, modelSavin
   }
 
   const [inputRevision, setInputRevision] = useState(0);
+  const focusedInputReceipt = useRef("");
   const [inputReceipt, setInputReceipt] = useState<{ conversationId: string; items: RunInput[] } | null>(null);
+  useEffect(() => {
+    const id = inputReceipt?.items.at(-1)?.id;
+    if (uploading || !id || focusedInputReceipt.current === id) return;
+    focusedInputReceipt.current = id;
+    if (document.activeElement === document.body || textInput.current?.closest(".composer")?.contains(document.activeElement)) textInput.current?.focus({ preventScroll: true });
+  }, [inputReceipt, uploading]);
   async function submitRunInput(kind: "adjust" | "next") {
     if (livePermission.busy || submitPending.current || uploading || modelSaving || runState !== "running" || !runId || (!text.trim() && files.length === 0) || kind === "adjust" && (files.length || contexts.length)) return;
     submitPending.current = true;
@@ -668,7 +686,6 @@ function ConversationView({ conversation, messages, events, runState, modelSavin
       if (draft.reference === reference) setReference(null);
       if (kind === "next") { if (JSON.stringify(draft.contexts) === JSON.stringify(contexts)) setContexts([]); setFiles(current => current.filter(file => !files.includes(file))); }
       jump();
-      requestAnimationFrame(() => textInput.current?.focus({ preventScroll: true }));
     } catch (reason) { setError(reason instanceof Error ? reason.message : "发送失败"); }
     finally { setInputRevision(value => value + 1); submitPending.current = false; setUploading(false); }
   }

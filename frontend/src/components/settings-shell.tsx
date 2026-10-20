@@ -1,4 +1,5 @@
 "use client";
+import { AssistantLauncherSlot } from "@/components/personal-assistant-dock";
 import { LanguageSelect } from "@/components/i18n";
 import { T, useT } from "@/components/i18n";
 
@@ -43,7 +44,7 @@ export function SettingsShell({ active, children, returnTo = "/app" }: { active:
         <button aria-current={active === "automations" ? "page" : undefined} className={active === "automations" ? "active" : ""} onClick={() => navigate("automations")}><Clock3 /><T>{"自动任务"}</T></button>
       </nav>
       <div className="settings-sidebar-utilities"><LanguageSelect />
-      <GuideLauncher />
+      <AssistantLauncherSlot /><GuideLauncher />
       <button className="back-button" aria-label={t("返回工作区")} title={t("返回工作区")} onClick={() => router.push(returnPath())}><ChevronLeft /><span><T>{"返回工作区"}</T></span></button></div>
     </aside>
     <section className="settings-main">{children}</section>

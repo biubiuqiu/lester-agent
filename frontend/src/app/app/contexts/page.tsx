@@ -1,4 +1,5 @@
 "use client";
+import { AssistantLauncherSlot } from "@/components/personal-assistant-dock";
 import { T, useT } from "@/components/i18n";
 
 import { GuideLauncher } from "@/components/user-guide";
@@ -67,7 +68,7 @@ export default function ContextLibrary() {
   const selected = editing && editing !== "new" ? editing : null;
   const visible = entries.filter((e) => `${e.title} ${e.description}`.toLowerCase().includes(query.trim().toLowerCase()));
   return <main className="context-library">
-    <header className="context-library-header"><Link href="/app" onClick={(e) => { if (busy || !canLeave()) e.preventDefault(); }}><ArrowLeft size={16} /><T>{"返回工作区"}</T></Link><span><BookOpen size={17} /><T>{"个人上下文库"}</T></span><GuideLauncher /></header>
+    <header className="context-library-header"><Link href="/app" onClick={(e) => { if (busy || !canLeave()) e.preventDefault(); }}><ArrowLeft size={16} /><T>{"返回工作区"}</T></Link><span><BookOpen size={17} /><T>{"个人上下文库"}</T></span><AssistantLauncherSlot /><GuideLauncher /></header>
     <section className="context-library-main">
       <div className="settings-heading"><div><p className="eyebrow">Context library</p><h1><T>{"把常用背景，留在手边"}</T></h1><p><T>{"维护术语、项目背景与写作要求。在聊天中输入 @，按需引用。"}</T></p></div><button className="primary-button" disabled={busy} onClick={() => { if (!canLeave()) return; setDirty(false); request.current++; setLoading(false); setEditing("new"); setConfirmDelete(false); setError(""); setNotice(""); }}><Plus size={16} /><T>{"新建词条"}</T></button></div>
       {error && <p className="settings-error" role="alert">{t(error)}</p>}{notice && <p className="success-banner" role="status">{t(notice)}</p>}

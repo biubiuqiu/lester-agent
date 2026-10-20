@@ -53,4 +53,4 @@ Before distributing, verify on Android phones/tablets: browser return and refres
 
 用 Android Studio 打开 `android/`，或配置 JDK 21、SDK 36 后运行上面的 Gradle Wrapper 命令。Debug APK 可直接安装测试，Release APK 需自己签名。连接已完成迁移 001–031 的 HTTPS Lester，邮箱、Google、GitHub 通过系统浏览器登录。支持 Android 8.0+ 手机和平板；前台完成短震可关闭，后台和锁屏推送暂缓。终端隐藏，保留聊天、成果、审批、提问、队列和定时任务。构建和 JVM/Web 检查不等于真机验收，发布前请验证登录返回、输入法、文件选择、旋转/分屏和实际震动。
 
-Home opens your enduring personal Lester dialogue and memory. Independent execution tasks remain reachable through projects and task cards. The assistant cannot execute commands, edit files or approve operations.
+Home opens the task composer. The fixed Lester entry opens the independent personal assistant and memory panel, available across task/project/settings navigation. Independent execution tasks remain reachable through projects and task cards. The assistant cannot execute commands, edit files or approve operations.

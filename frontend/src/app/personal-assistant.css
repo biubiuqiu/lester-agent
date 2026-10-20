@@ -1,18 +1,16 @@
 .personal-sidebar-nav { display: grid; gap: 2px; padding: 0 12px 10px; }
 .personal-sidebar-nav a { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 9px; color: var(--muted); font-size: 13px; text-decoration: none; }
 .personal-sidebar-nav a:hover,.personal-sidebar-nav a[aria-current] { background: var(--surface-hover, #e9ede8); color: var(--ink); }
-.personal-nav-mark { display: grid; width: 16px; height: 16px; place-items: center; font-weight: 650; }
-.personal-home .conversation-header { border-bottom-color: transparent; }
 .personal-assistant { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; width: 100%; }
-.personal-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 clamp(20px, 4vw, 48px) 12px; color: var(--muted); font-size: 12px; }
+.personal-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 14px 14px; color: var(--muted); font-size: 12px; }
 .personal-toolbar button { display: inline-flex; align-items: center; gap: 7px; border: 0; border-radius: 8px; padding: 7px 9px; background: transparent; color: inherit; }
 .personal-toolbar button:hover { background: #f1f3ef; color: var(--ink); }
 .personal-toolbar small { font-size: 10px; color: var(--faint); }
 .personal-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
-.personal-transcript { max-width: 768px; margin: 0 auto; padding: 16px 28px 24px; overflow-wrap: anywhere; }
-.personal-welcome { display: flex; min-height: min(380px, 40dvh); flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px 0; }
+.personal-transcript { max-width: 100%; margin: 0 auto; padding: 18px 20px 24px; overflow-wrap: anywhere; }
+.personal-welcome { display: flex; min-height: 260px; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px 0; }
 .personal-monogram { display: grid; width: 42px; height: 42px; place-items: center; margin-bottom: 20px; border-radius: 14px; background: #eff2ec; color: var(--dark); font-size: 22px; }
-.personal-welcome h1 { margin: 0; font-size: clamp(24px, 2.7vw, 32px); font-weight: 550; letter-spacing: -.035em; }
+.personal-welcome h2 { margin: 0; font-size: 24px; font-weight: 550; letter-spacing: -.035em; }
 .personal-welcome p { margin: 14px 0 0; color: var(--muted); font-size: 14px; line-height: 1.7; }
 .personal-turn { display: flow-root; margin-bottom: 36px; scroll-margin-top: 12px; }
 .personal-user { width: fit-content; max-width: 88%; margin: 0 0 24px auto; padding: 10px 16px; border-radius: 18px 18px 5px 18px; background: #f3f4f0; color: var(--ink); font-size: 14px; line-height: 1.75; white-space: pre-wrap; }
@@ -45,17 +43,12 @@
 .personal-recent strong { display: block; overflow: hidden; color: var(--ink); font-size: 13px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .personal-recent small { display: block; margin-top: 4px; font-size: 11px; }
 .personal-history { display: block; margin: 0 auto 24px; border: 0; border-radius: 8px; padding: 8px 12px; background: #f5f6f2; color: var(--muted); font-size: 12px; }
-.personal-composer-wrap { flex-shrink: 0; width: min(100%, 768px); margin: 0 auto; padding: 8px 24px max(18px, env(safe-area-inset-bottom)); }
+.personal-composer-wrap { flex-shrink: 0; width: min(100%, 768px); margin: 0 auto; padding: 8px 14px max(14px, env(safe-area-inset-bottom)); }
 .personal-composer { padding: 14px 14px 10px; border: 1px solid var(--line-strong); border-radius: 22px; background: #fff; box-shadow: 0 3px 16px #27332606; }
 .personal-composer:focus-within { border-color: #b6c1b0; box-shadow: 0 4px 20px #27332609; }
 .personal-composer textarea { display: block; width: 100%; min-height: 56px; max-height: 22dvh; resize: vertical; border: 0; outline: 0; padding: 2px; background: transparent; font-size: 14px; line-height: 1.7; }
 .personal-composer-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .personal-composer-spacer { flex: 1; }
-.personal-project { position: relative; min-width: 0; max-width: 40%; }
-.personal-project select { max-width: 100%; appearance: none; border: 0; border-radius: 7px; padding: 7px 22px 7px 8px; background: #f6f7f3; color: var(--muted); font-size: 11px; text-overflow: ellipsis; }
-.personal-project svg { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); pointer-events: none; }
-.personal-composer .composer-model { max-width: 46%; }
-.personal-composer .composer-model select { width: 100%; max-width: 200px; min-width: 0; }
 .personal-composer .send-button { flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; }
 .personal-composer .send-button svg { width: 18px; height: 18px; }
 .personal-error,.personal-pending,.personal-setup { margin: 0 2px 9px; color: #9d4334; font-size: 12px; line-height: 1.6; }
@@ -107,3 +100,75 @@
 
 .personal-task-card { flex-wrap: wrap; }
 .personal-task-card > [role=alert] { flex-basis: 100%; margin: 5px 0 0; }
+
+/* The companion is app-layout owned, separate from every task composer. */
+.personal-dock-launcher { position: fixed; z-index: 5; right: max(20px, env(safe-area-inset-right)); bottom: max(var(--personal-launcher-bottom, 20px), env(safe-area-inset-bottom)); display: inline-flex; align-items: center; gap: 9px; height: 44px; padding: 0 16px; border: 1px solid #d6ded2; border-radius: 24px; background: #f5f7f1; color: #314733; box-shadow: 0 4px 18px #22302412; cursor: pointer; transition: background .15s, box-shadow .15s; }
+.personal-dock-launcher:hover { background: #eaf0e4; box-shadow: 0 5px 22px #2230241a; }
+.personal-dock-launcher span { font-size: 13px; font-weight: 550; }
+.personal-dock-launcher i { width: 6px; height: 6px; border-radius: 50%; background: #527d4c; }
+.personal-dock-launcher:focus-visible { outline: 2px solid #7a9170; outline-offset: 3px; }
+.personal-dock { position: fixed; z-index: 10; inset: auto 20px 78px auto; width: 410px; height: min(720px, calc(100dvh - 102px)); max-width: calc(100vw - 32px); max-height: none; margin: 0; padding: 0; overflow: hidden; border: 1px solid #dfe5da; border-radius: 22px; background: #fff; color: var(--ink); box-shadow: 0 16px 70px #1d2b1d1c, 0 2px 8px #1d2b1d08; }
+.personal-dock[open] { display: flex; flex-direction: column; animation: personal-dock-in .18s ease-out; }
+.personal-dock::backdrop { background: #1924194d; }
+.personal-dock .personal-toolbar { flex-shrink: 0; border-bottom: 1px solid #edf0e9; gap: 10px; color: var(--muted); }
+.personal-identity { display: flex; align-items: center; gap: 10px; }
+.personal-identity-mark { display: grid; place-items: center; width: 32px; height: 32px; background: #eaf0e5; border-radius: 11px; font-size: 18px; color: #42613c; }
+.personal-identity strong { display: block; color: var(--ink); font-size: 14px; font-weight: 550; }
+.personal-identity small { display: block; margin-top: 3px; }
+.personal-header-actions { display: flex; align-items: center; gap: 2px; }
+.personal-header-actions > button { min-width: 32px; min-height: 32px; padding: 6px; }
+.personal-dock .personal-header-actions > button:first-child { font-size: 11px; }
+.personal-options { position: relative; }
+.personal-options > summary { display: flex; align-items: center; justify-content: center; min-width: 32px; min-height: 32px; border-radius: 8px; cursor: pointer; list-style: none; }
+.personal-options > summary::-webkit-details-marker { display: none; }
+.personal-options > summary:hover { background: #f1f3ef; }
+.personal-options > div { position: absolute; z-index: 2; right: 0; top: 38px; width: 250px; max-width: calc(100vw - 64px); display: grid; gap: 14px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: #fff; box-shadow: 0 8px 30px #22302418; }
+.personal-options label { display: grid; gap: 7px; font-size: 11px; }
+.personal-options select { width: 100%; min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: #fafbf8; font-size: 12px; text-overflow: ellipsis; }
+.personal-composer-hint { color: var(--muted); font-size: 11px; line-height: 1.5; }
+.personal-dock .personal-composer { padding: 11px 12px 9px; border-radius: 18px; }
+.personal-dock .personal-composer textarea { min-height: 46px; resize: none; }
+.personal-dock .personal-composer-actions { margin-top: 4px; }
+.personal-dock .personal-task-card { padding: 12px; gap: 8px; }
+.personal-dock .personal-task-icon { width: 25px; height: 25px; }
+.personal-dock .personal-task-card > a { max-width: none; font-size: 11px; white-space: nowrap; }
+.personal-dock-loading { padding: 16px; }
+.personal-dock-loading header { display: flex; justify-content: space-between; align-items: center; }
+.personal-dock-loading p { margin-top: 28px; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.personal-dock-loading p button { display: block; margin-top: 12px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: #f5f7f1; }
+@keyframes personal-dock-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 700px) {
+  .personal-dock-launcher { right: 14px; bottom: max(var(--personal-launcher-bottom, 20px), env(safe-area-inset-bottom)); height: 40px; padding: 0 12px; }
+  .personal-dock-launcher span { font-size: 12px; }
+  .personal-dock { top: calc(var(--personal-viewport-top, 0px) + 8px); right: 8px; bottom: auto; left: 8px; width: auto; max-width: none; height: calc(var(--personal-viewport-height, 100dvh) - 16px); border-radius: 20px; }
+  .personal-dock .personal-welcome { min-height: min(260px, 36dvh); padding: 20px 0; }
+  .personal-dock .personal-toolbar { padding: 12px; }
+  .personal-dock .personal-composer .send-button { width: 40px; height: 40px; }
+  .personal-dock .personal-transcript { padding: 14px 18px 20px; }
+}
+@media (prefers-reduced-motion: reduce) { .personal-dock[open] { animation: none; } .personal-dock-launcher { transition: none; } }
+
+.personal-launcher-slot,.personal-mobile-mark { display: none; }
+@media (max-width: 1000px) {
+  .personal-launcher-slot { display: inline-flex; align-items: center; flex-shrink: 0; }
+  .personal-launcher-slot .personal-dock-launcher { position: relative; inset: auto; width: 36px; height: 36px; min-height: 36px; padding: 0; justify-content: center; border-radius: 12px; box-shadow: none; }
+  .personal-launcher-slot .personal-dock-launcher > svg,.personal-launcher-slot .personal-dock-launcher > span:not(.personal-mobile-mark) { display: none; }
+  .personal-launcher-slot .personal-dock-launcher > .personal-mobile-mark { display: inline; font-size: 16px; font-weight: 600; }
+  .personal-launcher-slot .personal-dock-launcher i { position: absolute; top: 3px; right: 3px; }
+}
+
+@media (max-width: 1000px) {
+  .personal-launcher-slot .personal-dock-launcher.is-working > svg { display: block; }
+  .personal-launcher-slot .personal-dock-launcher.is-working > .personal-mobile-mark { display: none; }
+}
+
+.personal-launcher-slot:empty { display: none; }
+.personal-launcher-slot:not(:empty) { flex: 0 0 auto; }
+
+/* Existing application dialogs take precedence over the companion. */
+body:has(.dialog-backdrop) .personal-dock-launcher,body:has(.dialog-backdrop) .personal-dock:not(:modal) { visibility: hidden; }
+
+.personal-app-surface { width: 100%; height: 100%; min-width: 0; }
+@media (min-width: 1280px) {
+  .personal-app-surface.personal-companion-open:not(:has(.workspace-panel-open)) { width: calc(100% - 446px); }
+}

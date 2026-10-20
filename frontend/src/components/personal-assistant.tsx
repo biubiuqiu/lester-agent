@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { ArrowUp, ArrowUpRight, Brain, Check, ChevronDown, LoaderCircle, Pencil, Trash2, Undo2, X } from "lucide-react";
+import { ArrowUp, ArrowUpRight, Brain, Check, LoaderCircle, Pencil, Trash2, Undo2, X, SlidersHorizontal, Minus } from "lucide-react";
 import { api, ApiError, type Deployment, type Project, type UserProfile } from "@/lib/api";
 import { readView, updateView, viewKey } from "@/lib/conversation-view-state";
 import { mergePersonalTurns, readPersonal, type PersonalMemory, type PersonalState, type PersonalTask, type PersonalTurn } from "@/lib/personal";
@@ -10,7 +10,7 @@ import { randomId } from "@/lib/random-id";
 import { useI18n } from "./i18n";
 import { MessageContent } from "./message-content";
 
-export function PersonalAssistant({ user, projects, deployments, revision, onDelegated }: { user: UserProfile; projects: Project[]; deployments: Deployment[]; revision: number; onDelegated: () => void }) {
+export function PersonalAssistant({ user, projects, deployments, revision, active, onClose, onActivity, onDelegated }: { user: UserProfile; projects: Project[]; deployments: Deployment[]; revision: number; active: boolean; onClose: () => void; onActivity: (busy: boolean) => void; onDelegated: () => void }) {
   const { t, locale } = useI18n();
   const key = viewKey(user.user_id, user.workspace_id, "personal");
   const [text, setText] = useState(() => readView(key).text);
@@ -26,6 +26,14 @@ export function PersonalAssistant({ user, projects, deployments, revision, onDel
   const mounted = useRef(true), sending = useRef(false), scroll = useRef<HTMLDivElement>(null), follow = useRef(true), input = useRef<HTMLTextAreaElement>(null);
   const loadedRevision = useRef(revision);
   const readGeneration = useRef(0);
+  const activeRef = useRef(active);
+  useEffect(() => { onActivity(busy); }, [busy, onActivity]);
+  useEffect(() => {
+    activeRef.current = active;
+    if (!active) return;
+    input.current?.focus({ preventScroll: true });
+    if (follow.current && scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight;
+  }, [active]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const draft = (value: string) => { setText(value); updateView(key, { text: value }); };
   const refresh = useCallback(async (signal?: AbortSignal) => {
@@ -47,18 +55,19 @@ export function PersonalAssistant({ user, projects, deployments, revision, onDel
   }, [revision]);
   useEffect(() => { if (follow.current && scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight; }, [state?.turns, busy]);
   useEffect(() => {
-    const sync = (event: StorageEvent) => { if (event.key === `lester.draft.v1.${key}`) { setText(readView(key).text); setPending(readView(key).personalPending); } };
+    const sync = (event: StorageEvent) => { if (event.key === `lester.draft.v1.${key}`) { const saved = readView(key); setText(saved.text); setPending(saved.personalPending); setProject(saved.personalProject); setModel(saved.personalModel); } };
     window.addEventListener("storage", sync); return () => window.removeEventListener("storage", sync);
   }, [key]);
   useEffect(() => {
-    const reload = () => { if (document.visibilityState === "visible") void refresh().catch(() => { if (mounted.current) setError("任务进展同步失败，请检查状态"); }); };
+    const reload = () => { if (activeRef.current && document.visibilityState === "visible") void refresh().catch(() => { if (mounted.current) setError("任务进展同步失败，请检查状态"); }); };
     window.addEventListener("focus", reload); document.addEventListener("visibilitychange", reload);
     return () => { window.removeEventListener("focus", reload); document.removeEventListener("visibilitychange", reload); };
   }, [refresh]);
   const accept = (turn: PersonalTurn) => {
     if (!mounted.current) return;
+    readGeneration.current++;
     setState(previous => previous ? { ...previous, turns: mergePersonalTurns(previous.turns, [turn]) } : previous);
-    if (turn.status !== "pending") {
+    if (turn.status !== "pending" && readView(key).personalPending === turn.id) {
       updateView(key, { personalPending: "" }); setPending("");
       if (turn.status === "completed" && readView(key).text.trim() === turn.content.trim()) { updateView(key, { text: "" }); setText(""); }
     }
@@ -102,7 +111,7 @@ export function PersonalAssistant({ user, projects, deployments, revision, onDel
         catch (readError) { if (readError instanceof ApiError && readError.status === 404) { updateView(key, { personalPending: "" }); setPending(""); } }
         setError(reason instanceof Error ? reason.message : "个人助理暂时无法回复，本次未执行任务");
       }
-    } finally { sending.current = false; if (mounted.current) { setBusy(false); input.current?.focus({ preventScroll: true }); } }
+    } finally { sending.current = false; if (mounted.current) { setBusy(false); if (activeRef.current && (document.activeElement === document.body || input.current?.closest(".personal-assistant")?.contains(document.activeElement))) input.current?.focus({ preventScroll: true }); } }
   }
   async function older() {
     if (!state?.turns.length || historyBusy) return;
@@ -116,13 +125,17 @@ export function PersonalAssistant({ user, projects, deployments, revision, onDel
     setState(previous => previous ? { ...previous, turns: previous.turns.map(turn => ({ ...turn, changes: turn.changes.map(change => change.id === id ? { ...change, undone: true } : change) })) } : previous);
     await refresh();
   }
-  return <div className="personal-assistant">
-    <div className="personal-toolbar"><span>{t("个人助理")}</span><button type="button" onClick={() => setMemoryOpen(true)} disabled={!state} aria-label={t("管理记忆")}><Brain size={16} />{t("记忆")}{state?.memories.length ? <small>{state.memories.length}</small> : null}</button></div>
+  return <div className="personal-assistant" onClick={event => { if (event.target instanceof Element && event.target.closest('a[href^="/app/"]') && window.matchMedia("(max-width: 1279px)").matches) onClose(); }}>
+    <div className="personal-toolbar"><div className="personal-identity"><span className="personal-identity-mark" aria-hidden="true">L</span><span><strong>Lester</strong><small>{t("个人助理")}</small></span></div><div className="personal-header-actions"><button type="button" onClick={() => setMemoryOpen(true)} disabled={!state} aria-label={t("管理记忆")}><Brain size={16} />{t("记忆")}{state?.memories.length ? <small>{state.memories.length}</small> : null}</button>
+      <details className="personal-options" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) event.currentTarget.open = false; }} onKeyDown={event => { if (event.key === "Escape" && event.currentTarget.open) { event.stopPropagation(); event.preventDefault(); event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }}><summary aria-label={t("助理设置")} title={t("助理设置")}><SlidersHorizontal size={16} /></summary><div>
+        <label>{t("任务项目")}<select aria-label={t("对话项目范围")} value={selectedProject} onChange={event => { setProject(event.target.value); updateView(key, { personalProject: event.target.value }); }} disabled={busy}><option value="">{t("由 Lester 选择")}</option>{projects.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        <label>{t("个人助理模型")}<select aria-label={t("个人助理模型")} value={selectedModel} disabled={busy || !deployments.length} onChange={event => { setModel(event.target.value); updateView(key, { personalModel: event.target.value }); }}>{deployments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+      </div></details><button type="button" aria-label={t("收起个人助理")} title={t("收起个人助理")} onClick={onClose}><Minus size={17} /></button></div></div>
     <div className="personal-scroll" ref={scroll} onScroll={event => { const node = event.currentTarget; follow.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80; }}>
       <div className="personal-transcript" aria-busy={busy}>
         {state?.has_more ? <button type="button" className="personal-history" disabled={historyBusy} onClick={() => void older()}>{t(historyBusy ? "正在载入…" : "查看更早的对话")}</button> : null}
         {!state && !error ? <p role="status">{t("正在载入…")}</p> : null}
-        {state && !state.turns.length ? <div className="personal-welcome"><span className="personal-monogram" aria-hidden="true">L</span><h1>{t("随时接着聊。")}</h1><p>{t("我会记住重要的事，帮你安排接下来的工作。")}</p></div> : null}
+        {state && !state.turns.length ? <div className="personal-welcome"><span className="personal-monogram" aria-hidden="true">L</span><h2>{t("随时接着聊。")}</h2><p>{t("我会记住重要的事，帮你安排接下来的工作。")}</p></div> : null}
         {state?.turns.map(turn => <article className="personal-turn" id={`personal-${turn.id}`} key={turn.id}>
           <div className="personal-user">{turn.content}</div>
           {turn.reply ? <div className="personal-reply"><MessageContent content={turn.reply} /></div> : null}
@@ -141,7 +154,7 @@ export function PersonalAssistant({ user, projects, deployments, revision, onDel
       {!deployments.length ? <p className="personal-setup"><Link href="/app/settings/models?returnTo=%2Fapp">{t("配置第一个模型")}</Link></p> : null}
       <form className="personal-composer" onSubmit={submit}>
         <textarea ref={input} rows={2} maxLength={12000} aria-label={t("个人助理消息")} placeholder={t("聊聊你的想法，或告诉我需要安排什么…")} value={text} onChange={event => draft(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
-        <div className="personal-composer-actions"><label className="personal-project"><select aria-label={t("对话项目范围")} value={selectedProject} onChange={event => { setProject(event.target.value); updateView(key, { personalProject: event.target.value }); }} disabled={busy}><option value="">{t("个人")}</option>{projects.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown size={12} /></label><span className="personal-composer-spacer" /><label className="model-selector composer-model"><select aria-label={t("个人助理模型")} value={selectedModel} disabled={busy || !deployments.length} onChange={event => { setModel(event.target.value); updateView(key, { personalModel: event.target.value }); }}>{deployments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown /></label><button className="send-button" aria-label={t("发送给个人助理")} disabled={!text.trim() || busy || !!pending || !state || !deployments.length}>{busy ? <LoaderCircle className="personal-spinner" /> : <ArrowUp />}</button></div>
+        <div className="personal-composer-actions"><span className="personal-composer-hint">{t("记住重要的事，安排接下来的工作")}</span><span className="personal-composer-spacer" /><button className="send-button" aria-label={t("发送给个人助理")} disabled={!text.trim() || busy || !!pending || !state || !deployments.length}>{busy ? <LoaderCircle className="personal-spinner" /> : <ArrowUp />}</button></div>
       </form>
     </div>
     {memoryOpen && state ? <MemoryManager memories={state.memories} projects={projects} automatic={state.auto_memory} locale={locale} onClose={() => setMemoryOpen(false)} onRefresh={refresh} onAutomatic={async enabled => { await api("/api/v1/personal/settings", { method: "PATCH", body: JSON.stringify({ auto_memory: enabled }) }); setState(previous => previous ? { ...previous, auto_memory: enabled } : previous); }} /> : null}
