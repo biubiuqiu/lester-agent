@@ -9,6 +9,7 @@ import { Box, ChevronLeft, Clock3, Database, ServerCog, UserRound } from "lucide
 import { useRouter } from "next/navigation";
 import { Brand } from "./brand";
 import { GuideLauncher } from "./user-guide";
+import { workspaceReturnPath } from "@/lib/workspace-return";
 
 export function SettingsShell({ active, children, returnTo = "/app" }: { active: "profile" | "models" | "sandbox" | "skills" | "automations"; children: ReactNode; returnTo?: string }) {
   const router = useRouter();
@@ -27,7 +28,7 @@ export function SettingsShell({ active, children, returnTo = "/app" }: { active:
   }, [active, t]);
   const returnPath = () => {
     const requested = new URLSearchParams(window.location.search).get("returnTo") || returnTo;
-    return /^\/app(?:\/p\/[A-Za-z0-9_-]+)?$/.test(requested) ? requested : "/app";
+    return workspaceReturnPath(requested);
   };
   const navigate = (section: string) => {
     const back = returnPath();

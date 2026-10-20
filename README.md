@@ -16,6 +16,8 @@ The **Lester** button in the authenticated workspace (bottom right on wide scree
 - Task status comes from PostgreSQL and the existing workspace SSE. New delegated tasks use **standard permissions**. Continuations retain their model/Agent/project and use the existing queue while running. Personal dialogue cannot stop, insert into, approve or change a running task's permissions.
 - A missing response is checked against its original receipt. Interrupted turns/delegations are never automatically replayed. The memory system does not imply background/lock-screen push on native clients.
 
+Reopening the assistant refreshes saved dialogue and memories while retaining your unsent draft. Memory search explains empty results, and its editor remains scrollable on short screens. Account menus support arrow keys, Home/End and Escape; settings opened from a task or project return to that same place after switching sections.
+
 Existing deployments must back up, stop API writes/active tasks, apply `backend/migrations/000031_personal_assistant.up.sql` after all earlier migrations, and rebuild **API and Web together**. Fresh Compose mounts 001–031; Helm applies SQL externally. Rollback 031 removes personal dialogue, memories and delegation receipts, preserving task conversations, files and effects. See [the architecture and API guide](docs/personal-assistant.md), or open `/docs/usage#personal-assistant` on your deployment.
 
 ## Public website and help

@@ -80,6 +80,13 @@
 .personal-memory-dialog > .personal-error { padding: 0 22px; }
 .personal-memory-dialog footer { padding: 14px 22px; border-top: 1px solid var(--line); color: var(--faint); font-size: 11px; line-height: 1.6; }
 .personal-memory-empty { padding: 18px 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.personal-memory-dialog { overflow-wrap: anywhere; }
+@media (max-height: 560px) {
+  .personal-memory-dialog[open] { display: block; overflow: auto; overscroll-behavior: contain; }
+  .personal-memory-dialog > header { position: sticky; top: 0; z-index: 1; background: #fff; }
+  .personal-memory-search { width: calc(100% - 44px); }
+  .personal-memory-list { overflow: visible; }
+}
 .personal-assistant button:focus-visible,.personal-memory-dialog button:focus-visible,.personal-assistant a:focus-visible { outline: 2px solid #7a9170; outline-offset: 3px; }
 .personal-spinner { animation: personal-spin 1s linear infinite; }
 @keyframes personal-spin { to { transform: rotate(360deg); } }

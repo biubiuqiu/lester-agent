@@ -52,7 +52,7 @@ test("the independent dock preserves two drafts across tasks, settings and minim
   if (info.project.name === "mobile") { await expect(panel).not.toBeVisible(); await openAssistant(page); }
   else await expect(panel).toBeVisible();
   await expect(personalInput).toHaveValue("未发送的助理草稿");
-  expect(historyReads).toBe(1);
+  await expect.poll(() => historyReads).toBe(info.project.name === "mobile" ? 3 : 2);
   await page.keyboard.press("Escape");
   await expect(panel).not.toBeVisible();
   await expect(page.locator(".personal-dock-launcher")).toBeFocused();
@@ -71,6 +71,10 @@ test("the independent dock preserves two drafts across tasks, settings and minim
   await page.screenshot({ path: info.outputPath("02-dock-in-settings.png") });
   await panel.getByRole("button", { name: "收起个人助理", exact: true }).click();
   await page.getByRole("link", { name: "返回工作区", exact: true }).first().click();
+  await expect(page).toHaveURL(new RegExp(`/app/c/${conversationId}$`));
+  if (info.project.name === "mobile") await page.getByRole("button", { name: "打开会话栏", exact: true }).click();
+  await page.getByRole("link", { name: "新任务", exact: true }).click();
+  await expect(page).toHaveURL("/app/p/fixture-project");
   await expect(taskInput).toHaveValue("未发送的任务草稿");
   await openAssistant(page);
   await expect(personalInput).toHaveValue("未发送的助理草稿");

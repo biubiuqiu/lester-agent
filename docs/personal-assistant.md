@@ -57,7 +57,7 @@ All endpoints require the ordinary session and mutation-Origin checks:
 | `PATCH /api/v1/personal/memories/{id}` | `{revision, content, forget}` |
 | `POST /api/v1/personal/changes/{id}/undo` | Revision-checked, idempotent undo |
 
-Personal drafts and pending receipt IDs use the existing account-scoped browser draft store. Closing/reopening preserves text; logout clears it and blocks late writes. Native iOS/Android Home opens the task composer; the same Web assistant launcher is available throughout the app. There is no separate native memory/runtime.
+Personal drafts and pending receipt IDs use the existing account-scoped browser draft store. Closing/reopening preserves text and refreshes saved dialogue/memories through a read, including recovery after a failed initial read. Reopening never resends a message or delegation. Memory searches distinguish an empty result, and short viewports scroll the editor without squeezing it beneath the fixed controls. Logout clears drafts and blocks late writes. Native iOS/Android Home opens the task composer; the same Web assistant launcher is available throughout the app. There is no separate native memory/runtime.
 
 ## Upgrade and validation
 

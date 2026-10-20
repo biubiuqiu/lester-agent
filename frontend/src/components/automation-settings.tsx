@@ -22,12 +22,12 @@ export function AutomationSettings() {
   const controller = new AbortController(),epoch=mutationEpoch.current;
   Promise.all([automations.list(controller.signal), api<{projects:Project[]}>("/api/v1/projects",{signal:controller.signal}), api<{deployments:Deployment[]}>("/api/v1/model-deployments",{signal:controller.signal}), api<{agents:Agent[]}>("/api/v1/agents",{signal:controller.signal})])
    .then(([list,projectList,modelList,agentList])=>{if(!controller.signal.aborted){if(epoch===mutationEpoch.current)setItems(old=>mergeVersions(old,list.automations));setProjects(projectList.projects);setModels(modelList.deployments.filter(item=>item.enabled));setAgents(agentList.agents);setError("");}})
-   .catch(()=>{if(!controller.signal.aborted)setError(t("自动任务加载失败"));}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});
+   .catch(()=>{if(!controller.signal.aborted)setError("自动任务加载失败");}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});
   return()=>controller.abort();
  },[attempt,t]);
  useEffect(()=>{
   let pending=false;const controller=new AbortController();
-  const refresh=async()=>{if(document.hidden||pending)return;pending=true;const epoch=mutationEpoch.current;try{const list=await automations.list(controller.signal);if(!controller.signal.aborted&&epoch===mutationEpoch.current)setItems(old=>mergeVersions(old,list.automations));}catch{if(!controller.signal.aborted)setError(t("自动任务加载失败"));}finally{pending=false;}};
+  const refresh=async()=>{if(document.hidden||pending)return;pending=true;const epoch=mutationEpoch.current;try{const list=await automations.list(controller.signal);if(!controller.signal.aborted&&epoch===mutationEpoch.current)setItems(old=>mergeVersions(old,list.automations));}catch{if(!controller.signal.aborted)setError("自动任务加载失败");}finally{pending=false;}};
   const timer=setInterval(refresh,15000);document.addEventListener("visibilitychange",refresh);return()=>{controller.abort();clearInterval(timer);document.removeEventListener("visibilitychange",refresh);};
  },[t]);
  const update=(item:Automation)=>{mutationEpoch.current++;setItems(old=>old.some(value=>value.id===item.id&&value.revision>item.revision)?old:[item,...old.filter(value=>value.id!==item.id)]);};
@@ -36,17 +36,17 @@ export function AutomationSettings() {
   const delivery=receipts.current.get(item.id)||crypto.randomUUID();receipts.current.set(item.id,delivery);
   try{
    try{await automations.trigger(item.id,delivery);}catch(reason){if(reason instanceof ApiError&&reason.status<500&&reason.status!==408)throw reason;try{await automations.receipt(item.id,delivery);}catch{throw new Error("unconfirmed");}}
-   receipts.current.delete(item.id);setHistory(item.id);setHistoryRevision(value=>value+1);setNotice(t("已加入触发队列"));
-  }catch(reason){setError(reason instanceof ApiError&&reason.status<500?t(reason.message):t("触发结果未确认，请检查记录后再操作。"));}
+   receipts.current.delete(item.id);setHistory(item.id);setHistoryRevision(value=>value+1);setNotice("已加入触发队列");
+  }catch(reason){setError(reason instanceof ApiError&&reason.status<500?reason.message:"触发结果未确认，请检查记录后再操作。");}
   finally{mutation.current=false;setBusy(null);}
  };
- const toggle=async(item:Automation)=>{if(mutation.current)return;mutation.current=true;setBusy(item.id);setError("");try{const result=await automations.save(item.id,{...item,enabled:!item.enabled},item.revision);update(result.automation);}catch(reason){setError(t(reason instanceof ApiError?reason.message:"操作结果未确认，请刷新后检查。"));}finally{mutation.current=false;setBusy(null);}};
- const remove=async()=>{if(!removing||mutation.current)return;mutation.current=true;setBusy(removing.id);setError("");try{await automations.remove(removing);mutationEpoch.current++;setItems(old=>old.filter(item=>item.id!==removing.id));setRemoving(null);}catch(reason){setError(t(reason instanceof ApiError?reason.message:"操作结果未确认，请刷新后检查。"));}finally{mutation.current=false;setBusy(null);}};
+ const toggle=async(item:Automation)=>{if(mutation.current)return;mutation.current=true;setBusy(item.id);setError("");try{const result=await automations.save(item.id,{...item,enabled:!item.enabled},item.revision);update(result.automation);}catch(reason){setError(reason instanceof ApiError?reason.message:"操作结果未确认，请刷新后检查。");}finally{mutation.current=false;setBusy(null);}};
+ const remove=async()=>{if(!removing||mutation.current)return;mutation.current=true;setBusy(removing.id);setError("");try{await automations.remove(removing);mutationEpoch.current++;setItems(old=>old.filter(item=>item.id!==removing.id));setRemoving(null);}catch(reason){setError(reason instanceof ApiError?reason.message:"操作结果未确认，请刷新后检查。");}finally{mutation.current=false;setBusy(null);}};
  const stamp=(value:string,zone?:string)=>new Intl.DateTimeFormat(locale,{dateStyle:"medium",timeStyle:"short",...(zone?{timeZone:zone}:{})}).format(new Date(value));
  return <SettingsShell active="automations">
   <header className="settings-heading"><div><p className="eyebrow">Settings / Automations</p><h1>{t("自动任务")}</h1><p>{t("按时间或外部事件，让 Lester 开始工作。")}</p></div><button type="button" className="primary-button" disabled={loading||Boolean(busy)||Boolean(error)&&!projects.length} onClick={()=>setEditor("new")}><Plus size={16}/>{t("新建自动任务")}</button></header>
-  {error?<p className="settings-error" role="alert">{error} <button type="button" className="text-button" onClick={()=>{setLoading(true);setAttempt(value=>value+1);}}>{t("刷新")}</button></p>:null}
-  {notice?<p className="automation-notice" role="status">{notice}</p>:null}
+  {error?<p className="settings-error" role="alert">{t(error)} <button type="button" className="text-button" onClick={()=>{setLoading(true);setAttempt(value=>value+1);}}>{t("刷新")}</button></p>:null}
+  {notice?<p className="automation-notice" role="status">{t(notice)}</p>:null}
   {loading?<p role="status">{t("正在加载…")}</p>:null}
   {!loading&&!error&&!items.length?<section className="automation-empty"><Clock3 size={26}/><h2>{t("把下一次工作安排好")}</h2><p>{t("设置定时任务，或让外部系统通过 Webhook 触发。每次执行都会创建独立会话。")}</p></section>:null}
   <div className="automation-list">{items.map(item=><article key={item.id} className="automation-card">
@@ -80,9 +80,9 @@ function AutomationEditor({item,projects,models,agents,onSaved,onClose}:{item:Au
   try{const [hour,minute]=clock.split(":");const cron=cadence==="daily"?`${Number(minute)} ${Number(hour)} * * *`:cadence==="weekly"?`${Number(minute)} ${Number(hour)} * * ${weekday}`:config.cron;
    const payload={...config,cron:config.kind==="webhook"||cadence==="once"?"":cron,run_at:config.kind==="schedule"&&cadence==="once"?new Date(date).toISOString():null,timezone:cadence==="once"?zone:config.timezone};
    const result=await automations.save(id,payload,saved?.revision||0);setSaved(result.automation);onSaved(result.automation);if(result.secret){setSecret(result.secret);}else onClose();
-  }catch(reason){setError(t(reason instanceof ApiError?reason.message:"操作结果未确认，请刷新后检查。"));}finally{mutation.current=false;setPending(false);}
+  }catch(reason){setError(reason instanceof ApiError?reason.message:"操作结果未确认，请刷新后检查。");}finally{mutation.current=false;setPending(false);}
  };
- const rotate=async()=>{if(!saved||mutation.current)return;mutation.current=true;setPending(true);setError("");try{const result=await automations.rotate(saved);setSaved(result.automation);onSaved(result.automation);setSecret(result.secret);setConfirmRotate(false);}catch(reason){setError(t(reason instanceof ApiError?reason.message:"操作结果未确认，请刷新后检查。"));}finally{mutation.current=false;setPending(false);}};
+ const rotate=async()=>{if(!saved||mutation.current)return;mutation.current=true;setPending(true);setError("");try{const result=await automations.rotate(saved);setSaved(result.automation);onSaved(result.automation);setSecret(result.secret);setConfirmRotate(false);}catch(reason){setError(reason instanceof ApiError?reason.message:"操作结果未确认，请刷新后检查。");}finally{mutation.current=false;setPending(false);}};
  return <AutomationDialog title={t(item?"编辑自动任务":"新建自动任务")} onClose={()=>{if(!pending)onClose();}}>
   {secret&&saved?<><WebhookInstructions item={saved} secret={secret}/><div className="automation-actions"><button type="button" className="primary" onClick={onClose}>{t("完成")}</button></div></>:<form onSubmit={event=>void submit(event)}>
    <fieldset disabled={pending}>
@@ -104,17 +104,17 @@ function AutomationEditor({item,projects,models,agents,onSaved,onClose}:{item:Au
    {saved?.kind==="webhook"?<details className="automation-connection"><summary>{t("连接说明")}</summary><WebhookInstructions item={saved}/>{confirmRotate?<div><p>{t("重置后旧密钥立即失效，已接收的事件保留。")}</p><button type="button" disabled={pending} onClick={()=>void rotate()}>{t("确认重置密钥")}</button><button type="button" disabled={pending} onClick={()=>setConfirmRotate(false)}>{t("取消")}</button></div>:<button type="button" disabled={pending} onClick={()=>setConfirmRotate(true)}>{t("重置密钥")}</button>}</details>:null}
    <div className="automation-actions"><button type="button" disabled={pending} onClick={onClose}>{t("取消")}</button><button type="submit" className="primary" disabled={pending||!models.length}>{t(pending?"正在保存…":"保存")}</button></div>
   </form>}
-  {error?<p role="alert" className="settings-error">{error}</p>:null}
+  {error?<p role="alert" className="settings-error">{t(error)}</p>:null}
  </AutomationDialog>;
 }
 
 function WebhookInstructions({item,secret}:{item:Automation;secret?:string}){
  const t=useT();const [notice,setNotice]=useState("");const base=API||window.location.origin;const endpoint=`${base}/api/v1/hooks/${item.id}`;
- const copy=async(value:string)=>{try{await navigator.clipboard.writeText(value);setNotice(t("已复制"));}catch{setNotice(t("复制失败，请手动复制。"));}};
+ const copy=async(value:string)=>{try{await navigator.clipboard.writeText(value);setNotice("已复制");}catch{setNotice("复制失败，请手动复制。");}};
  const example=`curl -X POST '${endpoint}' \\\n  -H "Authorization: Bearer $LESTER_WEBHOOK_SECRET" \\\n  -H 'X-Lester-Event-ID: issue-123-created' \\\n  -H 'Content-Type: application/json' \\\n  -d '{"issue":123}'`;
  return <section className="automation-webhook"><h3>{t("Webhook 接收地址")}</h3><code>{endpoint}</code><button type="button" onClick={()=>void copy(endpoint)}><Copy size={14}/>{t("复制地址")}</button>
   {secret?<><p>{t("密钥仅本次显示，请保存到发送方的密钥配置中。")}</p><code className="automation-secret">{secret}</code><button type="button" onClick={()=>void copy(secret)}>{t("复制密钥")}</button></>:null}
-  <p>{t("发送 JSON 对象，并提供 Bearer 密钥和唯一事件 ID。同一事件 ID 重发不会启动第二次任务。")}</p><pre>{example}</pre><button type="button" onClick={()=>void copy(example)}>{t("复制示例")}</button>{notice?<p role="status">{notice}</p>:null}
+  <p>{t("发送 JSON 对象，并提供 Bearer 密钥和唯一事件 ID。同一事件 ID 重发不会启动第二次任务。")}</p><pre>{example}</pre><button type="button" onClick={()=>void copy(example)}>{t("复制示例")}</button>{notice?<p role="status">{t(notice)}</p>:null}
  </section>;
 }
 

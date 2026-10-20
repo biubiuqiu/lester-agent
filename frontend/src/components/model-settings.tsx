@@ -8,6 +8,7 @@ import { ArrowRight, Check, Plus, Server, ShieldCheck, Cpu } from "lucide-react"
 import { ModelEditor } from "@/components/model-editor";
 import { ModelDeploymentControls } from "@/components/model-deployment-controls";
 import { api, Deployment } from "@/lib/api";
+import { workspaceReturnPath } from "@/lib/workspace-return";
 
 export type Connection = {
   id: string;
@@ -32,7 +33,7 @@ const providers = [
 export function ModelSettings({ admin = false, requestedReturn = "/app" }: { admin?: boolean; requestedReturn?: string }) {
   const t = useT();
 
-  const returnTo = /^\/app(?:\/p\/[A-Za-z0-9_-]+)?$/.test(requestedReturn) ? requestedReturn : "/app";
+  const returnTo = workspaceReturnPath(requestedReturn);
   const [step, setStep] = useState<"connection" | "model" | "list">("connection");
   const [selectedConnectionID, setSelectedConnectionID] = useState("");
   const base = admin ? "/api/v1/admin" : "/api/v1";
@@ -209,7 +210,7 @@ export function ModelSettings({ admin = false, requestedReturn = "/app" }: { adm
       {message && (
         <p className="success-banner" role="status">
           <Check />
-          {message}
+          {t(message)}
         </p>
       )}
       {error ? <div className="settings-error" role="alert">{t(error)}<button type="button" className="text-button" disabled={busy !== ""} onClick={async () => { setError(""); try { await load(); } catch { setError("配置刷新失败，请稍后重试。"); } }}><T>{"刷新配置"}</T></button></div> : null}
