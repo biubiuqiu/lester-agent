@@ -42,6 +42,12 @@ config:
     smtpUsername: ""
     smtpFrom: ""
     smtpTLSMode: starttls
+  appConnectors:
+    githubClientID: ""
+    gmailClientID: ""
+    xClientID: ""
+    feishuClientID: ""
+    slackClientID: ""
   objectStore:
     endpoint: s3.example.com
     bucket: lester-skills
@@ -63,6 +69,12 @@ secrets:
   googleOAuthClientSecret: ""
   githubOAuthClientSecret: ""
   smtpPassword: ""
+  # Optional app connectors; existingSecret needs CONNECTOR_<PROVIDER>_CLIENT_SECRET.
+  connectorGithubClientSecret: ""
+  connectorGmailClientSecret: ""
+  connectorXClientSecret: ""
+  connectorFeishuClientSecret: ""
+  connectorSlackClientSecret: ""
   # Required when sandbox.provider=acs. It must match the API key configured
   # on ack-sandbox-manager.
   acsSandboxAPIKey: ""

@@ -86,7 +86,7 @@ func needsPermission(mode, name string, args json.RawMessage) (bool, bool) {
 		return true, false
 	}
 	switch name {
-	case "read", "list_files", "load_skill", "read_conversation", "tool_result", "task_output", "ask_user_question", "propose_plan", "enter_plan_mode", "list_schedules", "propose_schedule":
+	case "read", "list_files", "load_skill", "read_conversation", "tool_result", "task_output", "ask_user_question", "propose_plan", "enter_plan_mode", "list_schedules", "propose_schedule", "list_app_connections", "read_app":
 		return false, false
 	case "write", "edit":
 		return mode != "auto", true

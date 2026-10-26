@@ -8,6 +8,7 @@ import (
 	"github.com/biubiuqiu/lester-agent/backend/internal/artifact"
 	"github.com/biubiuqiu/lester-agent/backend/internal/auth"
 	"github.com/biubiuqiu/lester-agent/backend/internal/automation"
+	"github.com/biubiuqiu/lester-agent/backend/internal/connector"
 	"github.com/biubiuqiu/lester-agent/backend/internal/contextlibrary"
 	"github.com/biubiuqiu/lester-agent/backend/internal/conversation"
 	"github.com/biubiuqiu/lester-agent/backend/internal/deliverable"
@@ -22,6 +23,7 @@ import (
 )
 
 type Dependencies struct {
+	AppConnections    *connector.Handler
 	Personal          *personal.Handler
 	Automations       *automation.Handler
 	References        *reference.Handler
@@ -45,6 +47,9 @@ func Router(deps Dependencies) http.Handler {
 	router.Use(middleware.RequestID, httpapi.ClientIP(deps.TrustedProxyCIDRs), httpapi.Recover(deps.Logger), httpapi.AccessLog(deps.Logger), httpapi.CORS(deps.WebOrigin), auth.MutationOrigin(deps.WebOrigin))
 	router.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { httpapi.JSON(w, 200, map[string]bool{"ok": true}) })
 	router.Route("/api/v1", func(api chi.Router) {
+		if deps.AppConnections != nil {
+			api.Get("/connectors/{provider}/callback", deps.AppConnections.Callback)
+		}
 		if deps.Automations != nil {
 			api.Post("/hooks/{id}", deps.Automations.Webhook)
 		}
@@ -64,6 +69,11 @@ func Router(deps Dependencies) http.Handler {
 		api.With(deps.Auth.Middleware).Get("/auth/session", deps.Auth.SessionStatus)
 		api.Group(func(private chi.Router) {
 			private.Use(deps.Auth.Middleware)
+			if deps.AppConnections != nil {
+				private.Get("/connectors", deps.AppConnections.List)
+				private.Post("/connectors/{provider}/connect", deps.AppConnections.Connect)
+				private.Delete("/connectors/{provider}", deps.AppConnections.Disconnect)
+			}
 			if deps.Personal != nil {
 				private.Get("/personal", deps.Personal.State)
 				private.Post("/personal/messages", deps.Personal.Chat)

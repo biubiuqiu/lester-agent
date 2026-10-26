@@ -4,7 +4,7 @@ import { T, useT } from "@/components/i18n";
 
 
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, Bot, Boxes, Clock3, Cpu, House, LogOut, MonitorCog, MoreHorizontal, ShieldCheck, UserRound } from "lucide-react";
+import { BookOpen, Bot, Boxes, Clock3, Cpu, House, LogOut, MonitorCog, MoreHorizontal, ShieldCheck, UserRound, Link2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { api, UserProfile } from "@/lib/api";
 import { UserAvatar } from "./user-avatar";
@@ -18,6 +18,7 @@ const menuItems = [
   { label: "自动任务", path: "/app/settings/automations", icon: Clock3 },
   { label: "个人资料", path: "/app/settings/profile", icon: UserRound },
   { label: "模型", path: "/app/settings/models", icon: Cpu },
+  { label: "应用连接", path: "/app/settings/connectors", icon: Link2 },
   { label: "Computer", path: "/app/settings/sandbox", icon: MonitorCog },
   { label: "Skill 广场", path: "/app/settings/skills", icon: Boxes },
   { label: "项目官网", path: "/", icon: House },

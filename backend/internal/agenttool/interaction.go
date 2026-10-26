@@ -138,7 +138,7 @@ func executeInteraction(ctx context.Context, env Environment, request Interactio
 
 func PlanReadOnlyTool(name string) bool {
 	switch name {
-	case "read", "list_files", "load_skill", "read_conversation", "read_tool_result", "task_output", "ask_user_question", "propose_plan", "list_schedules":
+	case "read", "list_files", "load_skill", "read_conversation", "read_tool_result", "task_output", "ask_user_question", "propose_plan", "list_schedules", "list_app_connections", "read_app":
 		return true
 	}
 	return false

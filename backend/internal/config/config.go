@@ -21,6 +21,7 @@ type Config struct {
 	RegistrationEnabled                                                    bool
 	TrustedProxyCIDRs                                                      []string
 	GoogleClientID, GoogleClientSecret, GitHubClientID, GitHubClientSecret string
+	AppConnectorClients                                                    map[string][2]string
 	SMTPHost, SMTPUsername, SMTPPassword, SMTPFrom, SMTPTLSMode            string
 	SMTPPort                                                               int
 }
@@ -64,6 +65,11 @@ func Load() (Config, error) {
 	c.GoogleClientSecret = os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET")
 	c.GitHubClientID = strings.TrimSpace(os.Getenv("GITHUB_OAUTH_CLIENT_ID"))
 	c.GitHubClientSecret = os.Getenv("GITHUB_OAUTH_CLIENT_SECRET")
+	c.AppConnectorClients = map[string][2]string{}
+	for _, name := range []string{"github", "gmail", "x", "feishu", "slack"} {
+		prefix := "CONNECTOR_" + strings.ToUpper(name)
+		c.AppConnectorClients[name] = [2]string{strings.TrimSpace(os.Getenv(prefix + "_CLIENT_ID")), os.Getenv(prefix + "_CLIENT_SECRET")}
+	}
 	if (c.GoogleClientID == "") != (c.GoogleClientSecret == "") {
 		return Config{}, fmt.Errorf("GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET must both be set")
 	}

@@ -547,6 +547,7 @@ func (e *runExecutor) runTool(ctx context.Context, runID, conversationID uuid.UU
 		RunID: runID, ConversationID: conversationID,
 		SandboxID: computer.SandboxID, WorkDir: computer.WorkDir,
 		Sandboxes: s.sandboxes,
+		Apps:      s.appConnections,
 		AuthorizeTool: func(toolCtx context.Context, name string, args json.RawMessage) error {
 			if err := s.authorizeRunTool(toolCtx, conversationID, runID, name, args); err != nil {
 				return err

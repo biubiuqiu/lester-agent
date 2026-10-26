@@ -52,7 +52,9 @@ Open [http://localhost:13000](http://localhost:13000), enter the workspace, regi
 
 [Full setup, PowerShell and alternate ports](docs/getting-started.md). Saving model configuration does not verify provider access; the first task confirms the actual call.
 
-**Existing installations:** preserve `.env`, encryption keys and volumes. Back up and apply every missing migration through **031** before running the matching services. Follow the [upgrade checklist](docs/deployment.md#upgrading-an-existing-installation); do not overwrite an existing configuration or delete volumes.
+**Existing installations:** preserve `.env`, encryption keys and volumes. Back up and apply every missing migration through **032** before running the matching services. Follow the [upgrade checklist](docs/deployment.md#upgrading-an-existing-installation); do not overwrite an existing configuration or delete volumes.
+
+Connect GitHub, Gmail, X, Feishu and Slack for [read-only task research](docs/app-connections.md).
 
 ## Documentation
 

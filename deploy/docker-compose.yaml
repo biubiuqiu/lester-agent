@@ -47,6 +47,7 @@ services:
       - ../backend/migrations/000029_conversational_schedules.up.sql:/docker-entrypoint-initdb.d/029.sql:ro
       - ../backend/migrations/000030_native_signin.up.sql:/docker-entrypoint-initdb.d/030.sql:ro
       - ../backend/migrations/000031_personal_assistant.up.sql:/docker-entrypoint-initdb.d/031.sql:ro
+      - ../backend/migrations/000032_app_connections.up.sql:/docker-entrypoint-initdb.d/032.sql:ro
     healthcheck:
       test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
       interval: 3s
@@ -104,6 +105,16 @@ services:
       GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
       GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
       GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
+      CONNECTOR_GITHUB_CLIENT_ID: ${CONNECTOR_GITHUB_CLIENT_ID:-}
+      CONNECTOR_GITHUB_CLIENT_SECRET: ${CONNECTOR_GITHUB_CLIENT_SECRET:-}
+      CONNECTOR_GMAIL_CLIENT_ID: ${CONNECTOR_GMAIL_CLIENT_ID:-}
+      CONNECTOR_GMAIL_CLIENT_SECRET: ${CONNECTOR_GMAIL_CLIENT_SECRET:-}
+      CONNECTOR_X_CLIENT_ID: ${CONNECTOR_X_CLIENT_ID:-}
+      CONNECTOR_X_CLIENT_SECRET: ${CONNECTOR_X_CLIENT_SECRET:-}
+      CONNECTOR_FEISHU_CLIENT_ID: ${CONNECTOR_FEISHU_CLIENT_ID:-}
+      CONNECTOR_FEISHU_CLIENT_SECRET: ${CONNECTOR_FEISHU_CLIENT_SECRET:-}
+      CONNECTOR_SLACK_CLIENT_ID: ${CONNECTOR_SLACK_CLIENT_ID:-}
+      CONNECTOR_SLACK_CLIENT_SECRET: ${CONNECTOR_SLACK_CLIENT_SECRET:-}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USERNAME: ${SMTP_USERNAME:-}

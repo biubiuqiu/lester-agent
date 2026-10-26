@@ -1,4 +1,5 @@
 import { PersonalAssistantDock } from "@/components/personal-assistant-dock";
+import "../app-connections.css";
 import { GuideProvider } from "@/components/user-guide";
 
 import { AuthSessionKeeper } from "@/components/auth-session-keeper";

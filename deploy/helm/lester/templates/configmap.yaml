@@ -10,6 +10,11 @@ data:
   SESSION_COOKIE_SECURE: {{ .Values.config.sessionCookieSecure | quote }}
   AUTH_TRUSTED_PROXY_CIDRS: {{ .Values.config.auth.trustedProxyCIDRs | quote }}
   AUTH_REGISTRATION_ENABLED: {{ .Values.config.auth.registrationEnabled | quote }}
+  CONNECTOR_GITHUB_CLIENT_ID: {{ .Values.config.appConnectors.githubClientID | quote }}
+  CONNECTOR_GMAIL_CLIENT_ID: {{ .Values.config.appConnectors.gmailClientID | quote }}
+  CONNECTOR_X_CLIENT_ID: {{ .Values.config.appConnectors.xClientID | quote }}
+  CONNECTOR_FEISHU_CLIENT_ID: {{ .Values.config.appConnectors.feishuClientID | quote }}
+  CONNECTOR_SLACK_CLIENT_ID: {{ .Values.config.appConnectors.slackClientID | quote }}
   GOOGLE_OAUTH_CLIENT_ID: {{ .Values.config.auth.googleClientID | quote }}
   GITHUB_OAUTH_CLIENT_ID: {{ .Values.config.auth.githubClientID | quote }}
   SMTP_HOST: {{ .Values.config.auth.smtpHost | quote }}

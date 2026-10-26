@@ -61,7 +61,7 @@ Personal drafts and pending receipt IDs use the existing account-scoped browser 
 
 ## Upgrade and validation
 
-Back up and stop API writes/active tasks, apply every missing migration through `000031_personal_assistant.up.sql`, then rebuild API and Web together. Fresh Compose mounts 001–031. Helm operators apply SQL externally. Do not delete volumes or replace encryption keys. Rollback 031 deletes personal dialogue, memories and delegation records, preserving task conversations, files and external effects.
+Back up and stop API writes/active tasks, apply every missing migration through `000031_personal_assistant.up.sql`, then rebuild API and Web together. Fresh Compose mounts 001–032. Helm operators apply SQL externally. Do not delete volumes or replace encryption keys. Rollback 031 deletes personal dialogue, memories and delegation records, preserving task conversations, files and external effects.
 
 PostgreSQL tests cover provenance, corrections, undo, deletion barriers, capacity, user/project isolation, revocation, abandoned owners, idempotency, real task/queue acceptance and rollback. Tests use a two-connection pool to catch nested acceptance starvation. Production-browser fixtures cover desktop/mobile dialogue, drafts, lost responses, memory management, task cards, short screens and six-language help. Fixture output is not a live provider or native-device validation.
 

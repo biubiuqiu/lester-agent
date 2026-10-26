@@ -5,13 +5,13 @@ import { T, useT } from "@/components/i18n";
 
 
 import { ReactNode, useEffect, useRef } from "react";
-import { Box, ChevronLeft, Clock3, Database, ServerCog, UserRound } from "lucide-react";
+import { Box, ChevronLeft, Clock3, Database, ServerCog, UserRound, Link2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Brand } from "./brand";
 import { GuideLauncher } from "./user-guide";
 import { workspaceReturnPath } from "@/lib/workspace-return";
 
-export function SettingsShell({ active, children, returnTo = "/app" }: { active: "profile" | "models" | "sandbox" | "skills" | "automations"; children: ReactNode; returnTo?: string }) {
+export function SettingsShell({ active, children, returnTo = "/app" }: { active: "profile" | "models" | "sandbox" | "skills" | "automations" | "connectors"; children: ReactNode; returnTo?: string }) {
   const router = useRouter();
   const t = useT();
   const navigation = useRef<HTMLElement>(null);
@@ -40,6 +40,7 @@ export function SettingsShell({ active, children, returnTo = "/app" }: { active:
       <nav ref={navigation}>
         <button aria-current={active === "profile" ? "page" : undefined} className={active === "profile" ? "active" : ""} onClick={() => navigate("profile")}><UserRound /><T>{"个人资料"}</T></button>
         <button aria-current={active === "models" ? "page" : undefined} className={active === "models" ? "active" : ""} onClick={() => navigate("models")}><Database /><T>{"模型"}</T></button>
+        <button aria-current={active === "connectors" ? "page" : undefined} className={active === "connectors" ? "active" : ""} onClick={() => navigate("connectors")}><Link2 /><T>{"应用连接"}</T></button>
         <button aria-current={active === "sandbox" ? "page" : undefined} className={active === "sandbox" ? "active" : ""} onClick={() => navigate("sandbox")}><ServerCog />Computer</button>
         <button aria-current={active === "skills" ? "page" : undefined} className={active === "skills" ? "active" : ""} onClick={() => navigate("skills")}><Box /><T>{"Skill 广场"}</T></button>
         <button aria-current={active === "automations" ? "page" : undefined} className={active === "automations" ? "active" : ""} onClick={() => navigate("automations")}><Clock3 /><T>{"自动任务"}</T></button>

@@ -58,21 +58,25 @@ test("new-task entry, example disclosure and focus feedback preserve explicit su
     await expect(suggestions).toHaveCount(0);
     const disclosure = page.locator(".task-examples");
     const before = (await disclosure.boundingBox())!.height;
-    // Observe before the click. Sampling after Playwright's action completes
-    // can miss the whole short transition on a busy browser worker.
-    const sampling = disclosure.evaluate(async element => {
-      const points: number[] = [], start = performance.now();
-      await new Promise<void>(resolve => {
-        function frame() {
-          points.push(element.getBoundingClientRect().height);
-          if (performance.now() - start >= 500) resolve(); else requestAnimationFrame(frame);
-        }
-        requestAnimationFrame(frame);
+    // Start at the actual pointer event: Playwright may wait for the entrance
+    // animation to stabilize before clicking, longer than the sampling window.
+    // Still use a real click and require an observed intermediate height.
+    await disclosure.evaluate(element => {
+      const target = element as HTMLElement & { transitionSamples?: Promise<{ points: number[]; supported: boolean }> };
+      target.transitionSamples = new Promise(resolve => {
+        element.querySelector("summary")!.addEventListener("pointerdown", () => {
+          const points: number[] = [], start = performance.now();
+          function frame() {
+            points.push(element.getBoundingClientRect().height);
+            if (performance.now() - start >= 500) resolve({ points, supported: CSS.supports("interpolate-size", "allow-keywords") });
+            else requestAnimationFrame(frame);
+          }
+          requestAnimationFrame(frame);
+        }, { once: true });
       });
-      return { points, supported: CSS.supports("interpolate-size", "allow-keywords") };
     });
     await disclosure.locator("summary").click();
-    const heights = await sampling;
+    const heights = await disclosure.evaluate(element => (element as HTMLElement & { transitionSamples: Promise<{ points: number[]; supported: boolean }> }).transitionSamples);
     const expanded = (await disclosure.boundingBox())!.height;
     expect(expanded).toBeGreaterThan(before);
     if (heights.supported) expect(heights.points.some(height => height > before + 1 && height < expanded - 1)).toBe(true);

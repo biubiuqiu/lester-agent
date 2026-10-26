@@ -67,6 +67,11 @@ func cookieDigest(r *http.Request, name string) []byte {
 	return sum[:]
 }
 
+// AccessCredentialHash lets other server-owned OAuth callbacks bind to the
+// existing access credential without duplicating its encoding/hash contract.
+// It is not the stable session-family hash and never exposes a raw credential.
+func AccessCredentialHash(r *http.Request) []byte { return cookieDigest(r, accessCookieName) }
+
 func (s *Service) setCookie(w http.ResponseWriter, session sessionRecord) {
 	w.Header().Set("Cache-Control", "no-store")
 	for _, cookie := range []*http.Cookie{

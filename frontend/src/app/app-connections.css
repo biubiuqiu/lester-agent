@@ -1,0 +1,30 @@
+.app-connections-page { max-width: 980px; }
+.app-connections-intro { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: -8px 0 26px; }
+.app-readonly,.app-connections-intro a { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; text-decoration: none; }
+.app-readonly { padding: 6px 9px; border-radius: 7px; background: #edf3e9; color: #4a6744; }
+.app-connections-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px; }
+.app-connection-card { min-width: 0; padding: 23px; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
+.app-connection-card > header { display: flex; align-items: center; gap: 13px; }
+.app-connector-logo { display: grid; place-items: center; flex-shrink: 0; width: 43px; height: 43px; border: 1px solid var(--line); border-radius: 13px; }
+.app-connector-logo svg { width: 25px; height: 25px; }
+.app-connection-card h2 { margin: 0 0 5px; font-size: 15px; font-weight: 650; }
+.app-connection-state { color: var(--muted); font-size: 11px; }
+.app-connection-state.connected { color: #4a7048; }
+.app-connection-description { min-height: 42px; margin: 19px 0 15px; color: var(--muted); font-size: 13px; line-height: 1.75; }
+.app-connection-account { overflow: hidden; margin: 0 0 16px; color: var(--ink); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.app-connection-card > footer { display: flex; align-items: center; gap: 18px; min-height: 38px; }
+.app-connection-card .secondary-button { min-height: 35px; font-size: 12px; }
+.app-connection-card button:disabled { opacity: .45; cursor: not-allowed; }
+.app-connection-scopes { margin-top: 16px; color: var(--muted); font-size: 11px; }
+.app-connection-scopes summary { width: fit-content; cursor: pointer; }
+.app-connection-scopes p { margin: 10px 0 0; overflow-wrap: anywhere; line-height: 1.8; }
+.app-connections-hint { margin: 22px 0; color: var(--muted); font-size: 12px; line-height: 1.8; }
+.app-connection-notice { display: flex; align-items: center; gap: 7px; padding: 12px 0; color: #4a7048; font-size: 13px; }
+.app-connections-loading { display: flex; align-items: center; gap: 9px; padding: 30px 0; color: var(--muted); }
+.app-disconnect-dialog { position: fixed; inset: 0; width: min(460px,calc(100vw - 28px)); max-height: calc(100dvh - 28px); margin: auto; padding: 24px; overflow: auto; border: 1px solid var(--line); border-radius: 18px; color: var(--ink); background: #fff; box-shadow: 0 20px 80px #16241c2b; }
+.app-disconnect-dialog::backdrop { background: #17241c4d; backdrop-filter: blur(3px); }
+.app-disconnect-dialog header,.app-disconnect-dialog footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.app-disconnect-dialog h2 { margin: 0; font-size: 18px; }
+.app-disconnect-dialog > p { line-height: 1.8; }
+.app-disconnect-dialog footer { justify-content: flex-end; margin-top: 25px; }
+@media(max-width:700px) { .app-connections-grid { grid-template-columns: minmax(0,1fr); gap: 14px; } .app-connection-card { padding: 20px; } .app-connections-intro { gap: 10px; } }

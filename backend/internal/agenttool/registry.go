@@ -28,6 +28,7 @@ type Environment struct {
 	SandboxID, WorkDir    string
 	Sandboxes             Sandbox
 	Files                 *FileState
+	Apps                  AppConnections
 	// RecordTask persists trusted launch identity before starting a command and
 	// its actual ownership handle afterward. Never expose that handle to models.
 	RecordFileChange func(context.Context, *FileChange) error
@@ -70,6 +71,8 @@ func NewDefaultRegistry(db *pgxpool.Pool) *Registry {
 	registry.Register(EnterPlan{})
 	registry.Register(ListSchedules{})
 	registry.Register(ProposeSchedule{})
+	registry.Register(ListAppConnections{})
+	registry.Register(ReadApp{})
 	registry.RegisterHidden(ListFiles{}, "computer_list_files")
 	return registry
 }

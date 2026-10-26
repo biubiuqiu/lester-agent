@@ -12,6 +12,7 @@ Start with installation, then choose a chapter for the work you want to do. Comm
 | [User guide](usage.md) | Personal assistant, task controls, permissions, schedules and recaps. |
 | [Projects, files and publishing](projects-and-files.md) | Project workspaces, deliverables, previews and published sites. |
 | [Agents, context and Skills](agents-and-context.md) | Custom Agents, @ references, Skill packages and attachments. |
+| [App connections](app-connections.md) | OAuth setup, read-only app tools and privacy. |
 | [Architecture and Computers](architecture.md) | Services, sandboxes, storage, events and model context. |
 | [Deployment and upgrades](deployment.md) | Upgrade checklist, gateway, Docker/ACS and Kubernetes/Helm. |
 | [Accounts, administration and security](accounts-and-security.md) | Registration, OAuth, tokens, avatars, admin access and security. |

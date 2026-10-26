@@ -89,6 +89,7 @@ type Service struct {
 	installAgentSkill func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, string, string, string) error
 	agentObjects      blob.Store
 	schedules         agenttool.ScheduleService
+	appConnections    agenttool.AppConnections
 	reviewClient      func(context.Context, uuid.UUID, uuid.UUID) (model.ModelClient, model.Deployment, error)
 }
 
@@ -114,7 +115,8 @@ func New(db *pgxpool.Pool, models *model.Store, sandboxes *sandbox.Client, tools
 	return service
 }
 
-func (s *Service) SetSchedules(service agenttool.ScheduleService) { s.schedules = service }
+func (s *Service) SetSchedules(service agenttool.ScheduleService)     { s.schedules = service }
+func (s *Service) SetAppConnections(service agenttool.AppConnections) { s.appConnections = service }
 
 func (s *Service) SetAgentSkillInstaller(fn func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, string, string, string) error) {
 	s.installAgentSkill = fn
