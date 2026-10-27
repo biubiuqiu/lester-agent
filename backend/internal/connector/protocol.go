@@ -77,7 +77,12 @@ func (s *Service) request(ctx context.Context, method, target, access string, bo
 	switch response.StatusCode {
 	case 401:
 		return nil, ErrReauthorize
-	case 402, 403:
+	case 403:
+		if limitedByHeaders(response.Header) {
+			return nil, ErrRateLimit
+		}
+		return nil, ErrPermission
+	case 402:
 		return nil, ErrPermission
 	case 429:
 		return nil, ErrRateLimit
@@ -126,6 +131,24 @@ func (s *Service) request(ctx context.Context, method, target, access string, bo
 	}
 	return value, nil
 }
+
+func limitedByHeaders(headers http.Header) bool {
+	for _, key := range []string{"X-RateLimit-Remaining", "RateLimit-Remaining"} {
+		if strings.TrimSpace(headers.Get(key)) == "0" {
+			return true
+		}
+	}
+	if retry := strings.TrimSpace(headers.Get("Retry-After")); retry != "" {
+		if _, err := strconv.ParseUint(retry, 10, 64); err == nil {
+			return true
+		}
+		if _, err := http.ParseTime(retry); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Service) get(ctx context.Context, p Provider, access, path string, values url.Values) (map[string]any, error) {
 	u := strings.TrimRight(p.APIURL, "/") + path
 	if len(values) > 0 {

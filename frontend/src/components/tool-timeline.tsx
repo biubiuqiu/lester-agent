@@ -102,7 +102,7 @@ function ToolActivityRow({ activity }: { activity: ToolActivity }) {
       {details.length > 0 && <div className="tool-activity-details">
         {details.map((detail, index) => detail.kind === "output"
           ? <pre key={`${activity.id}-${index}`}>{detail.value}</pre>
-          : <code key={`${activity.id}-${index}`}>{detail.value}</code>)}
+          : detail.kind === "note" ? <span key={`${activity.id}-${index}`}>{detail.value}</span> : <code key={`${activity.id}-${index}`}>{detail.value}</code>)}
       </div>}
     </details>
   );
@@ -221,7 +221,8 @@ function activityLabel(activity: ToolActivity, t: ReturnType<typeof useT>) {
     if (ended && ended.payload.exit_code_known !== false && typeof ended.payload.exit_code === "number") return t("命令结束 · 退出码 {0}", [String(ended.payload.exit_code)]);
   }
   const verb = activity.status === "running" ? "正在：{0}" : activity.status === "failed" ? "未能：{0}" : activity.status === "cancelled" ? "已停止：{0}" : "已完成：{0}";
-  const action = ({
+  let action = ({
+    list_app_connections: "查看应用连接",
     enter_plan_mode: "进入规划",
     propose_plan: "提交计划",
     ask_user_question: "澄清需求",
@@ -236,6 +237,11 @@ function activityLabel(activity: ToolActivity, t: ReturnType<typeof useT>) {
     computer_read_file: "读取文件",
     computer_write_file: "编辑文件",
   } as Record<string, string>)[activity.tool] ?? "调用工具";
+  if (activity.tool === "read_app") {
+    const started = activity.events.find(event => event.type === "TOOL_STARTED");
+    const args = commandResult(started?.payload.arguments);
+    action = args?.action === "search" ? "搜索应用" : "读取应用";
+  }
   return t(verb, [t(action)]);
 }
 
@@ -250,7 +256,7 @@ function activityIcon(activity: ToolActivity) {
 }
 
 function activityDetails(activity: ToolActivity, t: ReturnType<typeof useT>) {
-  const details: Array<{ kind: "code" | "output"; value: string }> = [];
+  const details: Array<{ kind: "code" | "output" | "note"; value: string }> = [];
   const started = activity.events.find((event) => event.type === "TOOL_STARTED");
   const command = activity.events.find((event) => event.type === "COMMAND_STARTED");
   const outputs = activity.events.filter((event) => event.type === "COMMAND_OUTPUT");
@@ -273,8 +279,8 @@ function activityDetails(activity: ToolActivity, t: ReturnType<typeof useT>) {
     const value = [output.payload.stdout, output.payload.stderr].filter(Boolean).join("\n").trim();
     if (value) details.push({ kind: "output", value });
   }
-  if (result?.stdout_truncated || result?.stderr_truncated || result?.preview_truncated || result?.truncated) details.push({ kind: "output", value: t("命令输出已截断。") });
-  if (failed?.payload.error) details.push({ kind: "output", value: String(failed.payload.error) });
+  if (result?.stdout_truncated || result?.stderr_truncated || result?.preview_truncated || result?.truncated) details.push({ kind: activity.tool === "read_app" ? "note" : "output", value: t(activity.tool === "read_app" ? "仅返回了部分资料。" : "命令输出已截断。") });
+  if (failed?.payload.error) details.push({ kind: "output", value: t(String(failed.payload.error)) });
   return details;
 }
 

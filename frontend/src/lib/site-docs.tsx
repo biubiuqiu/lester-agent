@@ -296,7 +296,7 @@ export const siteDocs: SiteDoc[] = [
       </> },
       { id: "capabilities", title: "现在支持记忆或定时任务吗？", content: <>
         <p><T>{"当前支持个人工作区、模型与工具调用、持久 Computer、Skills、自定义 Agent、成果预览及明确发布。上下文库需要手动选择条目。"}</T></p>
-        <p><T>{"当前支持个人助理记忆、定时任务和通用入站 Webhook。个人助理负责记忆与任务调度，具体工作在独立任务会话中执行。外部应用原生连接器及独立 Worker 尚未实现。任务 Agent 可在 Computer 中使用已安装的 Playwright 执行浏览器自动化，没有专用浏览器界面。执行器仍在 API 内，中断后不会自动重放工具。"}</T></p>
+        <p><T>{"当前支持个人助理记忆、定时任务、通用入站 Webhook，以及 GitHub、Gmail、X、飞书和 Slack 的只读应用连接。个人助理负责记忆与安排工作，应用搜索和读取由独立任务 Agent 通过工具执行。任务 Agent 也可在 Computer 中使用已安装的 Playwright，没有专用浏览器界面。执行器仍在 API 内，尚无独立 Worker；中断后不会自动重放工具。"}</T></p>
       </> },
       { id: "report", title: "如何反馈问题或参与开发？", content: <>
         <p><T>{"前往"}</T><a href={`${repositoryURL}/issues`} target="_blank" rel="noopener noreferrer">GitHub Issues</a><T>{"，附上版本或提交号、复现步骤、预期行为和实际结果。日志请移除凭证及个人敏感内容。"}</T></p>

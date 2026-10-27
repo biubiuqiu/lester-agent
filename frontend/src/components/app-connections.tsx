@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { BookOpen, Check, ExternalLink, LoaderCircle, RefreshCw, X } from "lucide-react";
 import Link from "next/link";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { appAuthorizationURL, appProviders, parseAppConnections, type AppConnection, type AppProvider } from "@/lib/app-connections";
 import { nativeShellSnapshot, nativeShellServerSnapshot, subscribeNativeShell } from "@/lib/native-shell";
 import { workspaceReturnPath } from "@/lib/workspace-return";
@@ -30,47 +30,74 @@ const callbackErrors: Record<string, string> = {
 export function AppConnections() {
   const t = useT(), native = useSyncExternalStore(subscribeNativeShell, nativeShellSnapshot, nativeShellServerSnapshot);
   const [connections, setConnections] = useState<AppConnection[] | null>(null), [loading, setLoading] = useState(true);
-  const [error, setError] = useState(""), [notice, setNotice] = useState<{ kind: "connected" | "disconnected"; provider: AppProvider } | null>(null);
-  const [busy, setBusy] = useState<AppProvider | "">(""), [selected, setSelected] = useState<AppConnection | null>(null), [dialogError, setDialogError] = useState("");
+  const [error, setError] = useState(""), [loadError, setLoadError] = useState(""), [notice, setNotice] = useState<{ kind: "connected" | "disconnected"; provider: AppProvider } | null>(null);
+  const [busy, setBusy] = useState<AppProvider | "">(""), [selected, setSelected] = useState<AppConnection | null>(null), [dialogError, setDialogError] = useState(""), [invalidRevisions, setInvalidRevisions] = useState<Partial<Record<AppProvider, number>>>({});
   const mounted = useRef(true), generation = useRef(0), pending = useRef(false), dialog = useRef<HTMLDialogElement>(null), trigger = useRef<HTMLElement | null>(null);
+  const cards = useRef<Partial<Record<AppProvider, HTMLElement>>>({});
   const initialResult = useRef<{ connected: string; error: string } | null>(null);
-  const load = useCallback(async (signal?: AbortSignal) => {
+  const resultCaptured = useRef(false);
+  const currentSelection = selected ? connections?.find(item => item.provider === selected.provider) : null;
+  const selectionChanged = !!selected && (!currentSelection || currentSelection.revision !== selected.revision || currentSelection.status !== selected.status || currentSelection.account_name !== selected.account_name);
+  const needsReview = selectionChanged || !!selected && invalidRevisions[selected.provider] === selected.revision;
+  const visibleError = loadError || error;
+  const visibleDialogError = needsReview ? "应用连接已更新，请关闭此窗口并重新查看，再确认断开。" : dialogError;
+  const load = useCallback(async (signal?: AbortSignal, reportError = true) => {
     const epoch = ++generation.current;
-    const result = await api<{ connections: AppConnection[] }>("/api/v1/connectors", { signal });
-    const items = parseAppConnections(result.connections);
-    if (mounted.current && !signal?.aborted && epoch === generation.current) { setConnections(items); setLoading(false); }
-    return items;
+    const isCurrent = () => mounted.current && !signal?.aborted && epoch === generation.current;
+    try {
+      const result = await api<{ connections: AppConnection[] }>("/api/v1/connectors", { signal });
+      const items = parseAppConnections(result.connections);
+      if (!isCurrent()) return null;
+      setConnections(items); setLoading(false); setLoadError("");
+      // Keep the callback receipt until the first current, successful read.
+      // Earlier failures and superseded responses cannot consume or confirm it.
+      const outcome = initialResult.current;
+      initialResult.current = null;
+      if (outcome?.error) setError(callbackErrors[outcome.error] || callbackErrors.provider_error);
+      else if (outcome?.connected && items.some(item => item.provider === outcome.connected && item.status === "connected")) setNotice({ kind: "connected", provider: outcome.connected as AppProvider });
+      return items;
+    } catch (reason) {
+      if (!isCurrent()) return null;
+      setLoading(false);
+      if (reportError) setLoadError(reason instanceof Error ? reason.message : "应用连接状态读取失败，请重试。");
+      throw reason;
+    }
   }, []);
   useEffect(() => {
     mounted.current = true;
-    const url = new URL(window.location.href);
-    initialResult.current ??= { connected: url.searchParams.get("connected") || "", error: url.searchParams.get("connection_error") || "" };
-    url.searchParams.delete("connected"); url.searchParams.delete("connection_error");
-    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    if (!resultCaptured.current) {
+      const url = new URL(window.location.href);
+      initialResult.current = { connected: url.searchParams.get("connected") || "", error: url.searchParams.get("connection_error") || "" };
+      resultCaptured.current = true;
+      url.searchParams.delete("connected"); url.searchParams.delete("connection_error");
+      window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    }
     const controller = new AbortController();
-    void load(controller.signal).then(items => {
-      if (controller.signal.aborted) return;
-      const outcome = initialResult.current;
-      if (outcome?.error) setError(callbackErrors[outcome.error] || callbackErrors.provider_error);
-      else if (outcome?.connected && items.some(item => item.provider === outcome.connected && item.status === "connected")) setNotice({ kind: "connected", provider: outcome.connected as AppProvider });
-    }).catch(reason => { if (!controller.signal.aborted) { setError(reason instanceof Error ? reason.message : "应用连接状态读取失败，请重试。"); setLoading(false); } });
+    void Promise.resolve().then(() => controller.signal.aborted ? null : load(controller.signal)).catch(() => { /* Current read errors are rendered by load. */ });
     return () => { mounted.current = false; controller.abort(); };
   }, [load]);
   useEffect(() => {
-    const refresh = () => { if (!document.hidden && !pending.current) void load().then(() => { if (mounted.current) setError(previous => previous === "应用连接状态读取失败，请重试。" ? "" : previous); }).catch(() => { if (mounted.current) setError("应用连接状态读取失败，请重试。"); }); };
+    const refresh = () => { if (!document.hidden && !pending.current) void load().catch(() => { /* Keep the latest read error visible. */ }); };
     window.addEventListener("focus", refresh); document.addEventListener("visibilitychange", refresh);
     return () => { window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
   }, [load]);
   useEffect(() => {
     if (!selected) return;
-    const element = dialog.current; element?.showModal();
-    return () => { element?.close(); trigger.current?.focus({ preventScroll: true }); };
+    const element = dialog.current, cardMap = cards.current; element?.showModal();
+    return () => {
+      element?.close();
+      const origin = trigger.current;
+      const card = cardMap[selected.provider];
+      // A successful disconnect removes its trigger. Keep keyboard users on
+      // the same app; native shells may need the card when Connect is disabled.
+      const target = origin?.isConnected && !origin.hasAttribute("disabled") ? origin : card?.querySelector<HTMLButtonElement>("button:not(:disabled)") || card;
+      target?.focus({ preventScroll: true });
+    };
   }, [selected]);
   async function refresh() {
     if (pending.current) return;
-    setLoading(true); setError("");
-    try { await load(); } catch (reason) { if (mounted.current) setError(reason instanceof Error ? reason.message : "应用连接状态读取失败，请重试。"); }
-    finally { if (mounted.current) setLoading(false); }
+    setLoading(true); setError(""); setLoadError("");
+    try { await load(); } catch { /* Current read errors are rendered by load. */ }
   }
   async function connect(item: AppConnection) {
     if (pending.current || native || !item.configured) return;
@@ -82,44 +109,46 @@ export function AppConnections() {
       if (!target) throw new Error("应用返回的授权地址无效，请联系管理员。");
       window.location.assign(target);
     } catch (reason) {
-      if (mounted.current) { setError(reason instanceof Error ? reason.message : "连接未开始，请刷新状态后重试。"); try { await load(); } catch { /* Retain the original error and never replay an OAuth start. */ } }
+      if (mounted.current) { setError(reason instanceof Error ? reason.message : "连接未开始，请刷新状态后重试。"); try { await load(undefined, false); } catch { /* Retain the original error and never replay an OAuth start. */ } }
     } finally { pending.current = false; if (mounted.current) setBusy(""); }
   }
   function close() { if (!pending.current) { setSelected(null); setDialogError(""); } }
   async function disconnect() {
-    if (!selected || pending.current) return;
+    if (!selected || pending.current || needsReview) return;
     const item = selected;
     pending.current = true; setBusy(item.provider); setDialogError("");
     const accepted = () => {
       generation.current++;
       setConnections(previous => previous?.map(old => old.provider === item.provider && old.revision <= item.revision + 1 ? { ...old, status: "disconnected", account_name: "", scopes: [], revision: item.revision + 1 } : old) ?? null);
-      setSelected(null); setNotice({ kind: "disconnected", provider: item.provider }); setError("");
+      setSelected(null); setNotice({ kind: "disconnected", provider: item.provider }); setError(""); setLoadError("");
     };
     try {
       await api(`/api/v1/connectors/${item.provider}`, { method: "DELETE", body: JSON.stringify({ revision: item.revision }), signal: AbortSignal.timeout(20000) });
       if (mounted.current) accepted();
     } catch (reason) {
       if (!mounted.current) return;
-      try { const items = await load(); if (items.find(current => current.provider === item.provider)?.status === "disconnected") { accepted(); return; } } catch { /* Read-only receipt recovery; do not DELETE again. */ }
+      const conflict = reason instanceof ApiError && reason.status === 409;
+      if (conflict) setInvalidRevisions(previous => ({ ...previous, [item.provider]: item.revision }));
+      try { const items = await load(undefined, false); if (items?.find(current => current.provider === item.provider)?.status === "disconnected") { accepted(); return; } } catch { if (conflict) setLoadError("应用连接状态读取失败，请重试。"); /* Read-only receipt recovery; do not DELETE again. */ }
       if (mounted.current) setDialogError(reason instanceof Error ? reason.message : "断开结果待确认，请刷新状态后检查。");
     } finally { pending.current = false; if (mounted.current) setBusy(""); }
   }
   return <div className="app-connections-page">
     <header className="settings-heading"><div><h1>{t("应用连接")}</h1><p>{t("连接你工作的地方，让任务按需读取资料。")}</p></div><button type="button" className="icon-button" aria-label={t("刷新连接状态")} title={t("刷新连接状态")} disabled={loading || !!busy} onClick={() => void refresh()}><RefreshCw size={17} /></button></header>
     <div className="app-connections-intro"><span className="app-readonly"><Check size={13} />{t("仅搜索和读取")}</span><Link href="/docs/usage#app-connections" target="_blank" rel="noopener noreferrer"><BookOpen size={14} />{t("连接帮助")}</Link></div>
-    {error ? <p className="settings-error" role="alert">{t(error)} <button type="button" className="text-button" disabled={loading || !!busy} onClick={() => void refresh()}>{t("刷新状态")}</button></p> : null}
+    {visibleError ? <p className="settings-error" role="alert">{t(visibleError)} <button type="button" className="text-button" disabled={loading || !!busy} onClick={() => void refresh()}>{t("刷新状态")}</button></p> : null}
     {notice ? <p className="app-connection-notice" role="status"><Check size={15} />{t(notice.kind === "connected" ? "{0} 已连接" : "已断开 {0}", [t(names[notice.provider])])}</p> : null}
     {native ? <p className="app-connections-hint">{t("请在浏览器版中授权应用，完成后 App 会同步连接。")}</p> : null}
     {loading && !connections ? <p className="app-connections-loading" role="status"><LoaderCircle size={17} />{t("正在读取应用连接…")}</p> : connections ? <div className="app-connections-grid" aria-busy={loading}>
       {appProviders.map(provider => {
         const item = connections.find(value => value.provider === provider);
         if (!item) return null;
-        const linked = item.status !== "disconnected", ready = item.configured && item.status === "connected";
-        return <article className="app-connection-card" key={provider}>
+        const linked = item.status !== "disconnected", ready = item.configured && item.status === "connected", invalid = invalidRevisions[provider] === item.revision;
+        return <article className="app-connection-card" key={provider} tabIndex={-1} ref={element => { if (element) cards.current[provider] = element; else delete cards.current[provider]; }}>
           <header><span className="app-connector-logo"><AppConnectorIcon provider={provider} /></span><div><h2>{t(names[provider])}</h2><span className={`app-connection-state${ready ? " connected" : ""}`}>{t(!item.configured ? "管理员配置后即可连接" : ready ? "已连接" : item.status === "reauthorization_required" ? "需要重新授权" : "未连接")}</span></div></header>
           <p className="app-connection-description">{t(descriptions[provider])}</p>
           {linked && item.account_name ? <p className="app-connection-account" title={item.account_name}>{item.account_name}</p> : null}
-          <footer><button type="button" className={ready ? "text-button" : "secondary-button"} disabled={!!busy || !item.configured || native} onClick={() => void connect(item)}>{busy === provider ? <LoaderCircle size={14} className="spin" /> : <ExternalLink size={14} />}{t(busy === provider ? "正在处理…" : linked ? "重新连接" : "连接")}</button>{linked ? <button type="button" className="text-button" disabled={!!busy} onClick={event => { trigger.current = event.currentTarget; setDialogError(""); setSelected(item); }}>{t("断开")}</button> : null}</footer>
+          <footer><button type="button" className={ready ? "text-button" : "secondary-button"} disabled={!!busy || invalid || !item.configured || native} onClick={() => void connect(item)}>{busy === provider ? <LoaderCircle size={14} className="spin" /> : <ExternalLink size={14} />}{t(busy === provider ? "正在处理…" : linked ? "重新连接" : "连接")}</button>{linked ? <button type="button" className="text-button" disabled={!!busy || invalid} onClick={event => { trigger.current = event.currentTarget; setDialogError(""); setSelected(item); }}>{t("断开")}</button> : null}</footer>
           {linked && item.scopes.length ? <details className="app-connection-scopes"><summary>{t("查看授权范围")}</summary><p>{item.scopes.join(" · ")}</p></details> : null}
         </article>;
       })}
@@ -127,9 +156,10 @@ export function AppConnections() {
     <p className="app-connections-hint">{t("每个应用连接一个账号。授权独立于 Lester 登录；不会自动导入资料或发送内容。")}</p>
     {selected ? <dialog ref={dialog} className="app-disconnect-dialog" aria-labelledby="app-disconnect-title" onCancel={event => { event.preventDefault(); close(); }}>
       <header><h2 id="app-disconnect-title">{t("断开 {0}？", [t(names[selected.provider])])}</h2><button type="button" className="icon-button" aria-label={t("关闭")} disabled={!!busy} onClick={close}><X size={17} /></button></header>
+      {selected.account_name ? <p className="app-connection-account" title={selected.account_name}>{selected.account_name}</p> : null}
       <p>{t("Lester 将删除保存的授权凭证并停止新的读取，不会删除应用中的内容。")}</p><p className="app-connections-hint">{t("如需撤销服务商端的应用授权，请到该应用的授权设置中操作。")}</p>
-      {dialogError ? <p className="settings-error" role="alert">{t(dialogError)}</p> : null}
-      <footer><button type="button" className="secondary-button" disabled={!!busy} onClick={close}>{t("取消")}</button><button type="button" className="primary-button" disabled={!!busy} onClick={() => void disconnect()}>{t(busy ? "正在处理…" : "确认断开")}</button></footer>
+      {visibleDialogError ? <p className="settings-error" role="alert">{t(visibleDialogError)}</p> : null}
+      <footer><button type="button" className="secondary-button" disabled={!!busy} onClick={close}>{t(needsReview ? "关闭并查看" : "取消")}</button><button type="button" className="primary-button" disabled={!!busy || needsReview} onClick={() => void disconnect()}>{t(busy ? "正在处理…" : "确认断开")}</button></footer>
     </dialog> : null}
   </div>;
 }
