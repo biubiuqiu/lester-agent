@@ -55,6 +55,8 @@ spec:
               value: {{ .Values.sandbox.provider | quote }}
             - name: SANDBOX_IMAGE
               value: {{ .Values.sandbox.image | quote }}
+            - name: SANDBOX_DOCKER_NETWORK
+              value: {{ .Values.sandbox.dockerNetwork | quote }}
             - name: SANDBOX_SERVICE_TOKEN
               valueFrom:
                 secretKeyRef:

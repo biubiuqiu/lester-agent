@@ -20,8 +20,9 @@ test("cards have logos, honest availability and keyboard-friendly scope disclosu
   await expect(page.locator(".app-connector-logo svg")).toHaveCount(5);
   await expect(cards.nth(1).getByRole("button", { name: "连接", exact: true })).toBeDisabled();
   await expect(cards.nth(2)).toContainText("需要重新授权");
-  await expect(cards.first().locator("details")).not.toHaveAttribute("open", "");
-  await cards.first().locator("summary").focus(); await page.keyboard.press("Enter");
+  const scopes = cards.first().locator(".app-connection-scopes");
+  await expect(scopes).not.toHaveAttribute("open", "");
+  await scopes.locator("summary").focus(); await page.keyboard.press("Enter");
   await expect(cards.first().getByText("contents:read · issues:read")).toBeVisible();
   await expect(page.getByRole("link", { name: "连接帮助" })).toHaveAttribute("href", "/docs/usage#app-connections");
   await page.screenshot({ path: info.outputPath("connections.png"), fullPage: true });
@@ -231,6 +232,6 @@ for (const locale of ["zh-CN", "en", "ja", "ko", "fr", "es"]) {
     if (locale !== "zh-CN" && locale !== "ja") await expect(page.locator("#app-connections")).not.toContainText("管理员需");
     await context.clearCookies({ name: "lester_access_token" });
     await page.goto("/docs/troubleshooting#capabilities");
-    await expect(page.locator('section[aria-labelledby="capabilities"]')).toContainText(dictionary['当前支持个人助理记忆、定时任务、通用入站 Webhook，以及 GitHub、Gmail、X、飞书和 Slack 的只读应用连接。个人助理负责记忆与安排工作，应用搜索和读取由独立任务 Agent 通过工具执行。任务 Agent 也可在 Computer 中使用已安装的 Playwright，没有专用浏览器界面。执行器仍在 API 内，尚无独立 Worker；中断后不会自动重放工具。']);
+    await expect(page.locator('section[aria-labelledby="capabilities"]')).toContainText(dictionary['当前支持个人助理记忆、定时任务、通用入站 Webhook 和五种应用连接。应用默认用于搜索和读取；GitHub 可另外授权代码任务，在沙箱中修改、测试并推送分支或创建 PR。个人助理负责记忆与安排，具体工作由独立任务 Agent 执行。任务 Agent 也可使用 Computer 中已安装的 Playwright，没有专用浏览器界面。执行器仍在 API 内，尚无独立 Worker；中断后不会自动重放工具。']);
   });
 }

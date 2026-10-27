@@ -41,6 +41,7 @@ func (h *ServiceHandler) Router() http.Handler {
 		private.Post("/v1/sandboxes/{id}/resume", h.action(h.provider.Resume))
 		private.Delete("/v1/sandboxes/{id}", h.action(h.provider.Destroy))
 		private.Post("/v1/sandboxes/{id}/exec", h.exec)
+		private.Post("/v1/sandboxes/{id}/github-transfer", h.githubTransfer)
 		private.Post("/v1/sandboxes/{id}/command-tasks", h.taskEndpoint("start"))
 		private.Post("/v1/sandboxes/{id}/command-tasks/inspect", h.taskEndpoint("inspect"))
 		private.Post("/v1/sandboxes/{id}/command-tasks/stop", h.taskEndpoint("stop"))

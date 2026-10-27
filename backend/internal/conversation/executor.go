@@ -544,10 +544,11 @@ func (e *runExecutor) runTool(ctx context.Context, runID, conversationID uuid.UU
 	s := e.service
 	_, _ = s.db.Exec(ctx, `UPDATE sandboxes SET last_active_at=now() WHERE provider_ref=$1`, computer.SandboxID)
 	environment := agenttool.Environment{
-		RunID: runID, ConversationID: conversationID,
+		RunID: runID, ConversationID: conversationID, CallID: call.ID,
 		SandboxID: computer.SandboxID, WorkDir: computer.WorkDir,
 		Sandboxes: s.sandboxes,
 		Apps:      s.appConnections,
+		GitHub:    s.githubWorkflow,
 		AuthorizeTool: func(toolCtx context.Context, name string, args json.RawMessage) error {
 			if err := s.authorizeRunTool(toolCtx, conversationID, runID, name, args); err != nil {
 				return err

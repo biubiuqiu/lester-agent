@@ -223,6 +223,10 @@ function activityLabel(activity: ToolActivity, t: ReturnType<typeof useT>) {
   const verb = activity.status === "running" ? "正在：{0}" : activity.status === "failed" ? "未能：{0}" : activity.status === "cancelled" ? "已停止：{0}" : "已完成：{0}";
   let action = ({
     list_app_connections: "查看应用连接",
+    list_github_repositories: "查看 GitHub 仓库",
+    github_checkout: "拉取 GitHub 仓库",
+    github_prepare_publish: "准备 GitHub 发布",
+    github_publish: "推送 GitHub",
     enter_plan_mode: "进入规划",
     propose_plan: "提交计划",
     ask_user_question: "澄清需求",
@@ -289,6 +293,8 @@ function formatArguments(tool: string, value: unknown, t: ReturnType<typeof useT
   try {
     const parsed = JSON.parse(value) as Record<string, unknown>;
     if (tool === "bash" || tool === "computer_exec") return String(parsed.command ?? "");
+    if (tool === "github_publish") return [parsed.repository, parsed.branch, parsed.summary].filter(value => typeof value === "string" && value).join(" · ");
+    if (tool === "github_checkout") return [parsed.repository, parsed.ref, parsed.directory].filter(value => typeof value === "string" && value).join(" · ");
     const filePath = String(parsed.file_path ?? parsed.path ?? "");
     if (tool === "edit") return `${filePath}${t(parsed.replace_all ? " · 替换全部匹配" : " · 精确替换")}`;
     if (tool === "load_skill") return String(parsed.name ?? "");

@@ -38,14 +38,14 @@ func (s *Service) List(ctx context.Context, a Actor) ([]Connection, error) {
 	if err = authorize(ctx, tx, a); err != nil {
 		return nil, err
 	}
-	rows, err := tx.Query(ctx, `SELECT provider,status,account_name,scopes,revision,updated_at FROM app_connections WHERE workspace_id=$1 AND user_id=$2`, a.WorkspaceID, a.UserID)
+	rows, err := tx.Query(ctx, `SELECT provider,status,account_name,scopes,revision,updated_at,github_code_enabled FROM app_connections WHERE workspace_id=$1 AND user_id=$2`, a.WorkspaceID, a.UserID)
 	if err != nil {
 		return nil, err
 	}
 	saved := map[string]Connection{}
 	for rows.Next() {
 		var c Connection
-		if err = rows.Scan(&c.Provider, &c.Status, &c.AccountName, &c.Scopes, &c.Revision, &c.UpdatedAt); err != nil {
+		if err = rows.Scan(&c.Provider, &c.Status, &c.AccountName, &c.Scopes, &c.Revision, &c.UpdatedAt, &c.GitHubCodeEnabled); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -62,6 +62,9 @@ func (s *Service) List(ctx context.Context, a Actor) ([]Connection, error) {
 			c = Connection{Provider: name, Status: "disconnected", Scopes: []string{}}
 		}
 		_, c.Configured = s.providers[name]
+		if name != "github" || c.Status == "disconnected" {
+			c.GitHubCodeEnabled = false
+		}
 		result = append(result, c)
 	}
 	if err = tx.Commit(ctx); err != nil {
@@ -97,7 +100,7 @@ func (s *Service) Disconnect(ctx context.Context, a Actor, provider string, revi
 	if err != nil || current != revision {
 		return ErrConflict
 	}
-	_, err = tx.Exec(ctx, `UPDATE app_connections SET status='disconnected',refresh_pending=false,account_id='',account_name='',scopes='{}',token_ciphertext=NULL,token_nonce=NULL,expires_at=NULL,generation=generation+1,revision=revision+1,updated_at=now() WHERE id=$1`, id)
+	_, err = tx.Exec(ctx, `UPDATE app_connections SET status='disconnected',github_code_enabled=false,refresh_pending=false,account_id='',account_name='',scopes='{}',token_ciphertext=NULL,token_nonce=NULL,expires_at=NULL,generation=generation+1,revision=revision+1,updated_at=now() WHERE id=$1`, id)
 	if err == nil {
 		_, err = tx.Exec(ctx, `DELETE FROM app_connection_oauth_flows WHERE connection_id=$1`, id)
 	}
@@ -124,7 +127,7 @@ func (s *Service) ListForTask(ctx context.Context, conversation, run uuid.UUID) 
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"connections": items, "read_only": true, "instruction": "Only this accepted task actor's connections are available. Missing authorization must be completed by the user in Settings > App connections. Never request credentials or use a Computer to access saved tokens."}, nil
+	return map[string]any{"connections": items, "read_only": true, "instruction": "Only this accepted task actor's connections are available. Missing authorization must be completed by the user in Settings > App connections. Never request credentials or use a Computer to access saved tokens. This is read-only metadata: github_code_enabled records user consent for the separate GitHub coding tools, subject to actual repository permissions; read_app remains read-only."}, nil
 }
 func (s *Service) ReadForTask(ctx context.Context, conversation, run uuid.UUID, request ReadRequest) (*ReadResult, error) {
 	a, err := s.runActor(ctx, conversation, run)

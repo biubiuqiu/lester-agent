@@ -147,7 +147,7 @@ func (f *fixture) request(method, path, body string, cookies ...*http.Cookie) *h
 	f.router.ServeHTTP(w, r)
 	return w
 }
-func (f *fixture) start(t *testing.T, provider string) (*url.URL, *http.Cookie) {
+func (f *fixture) start(t *testing.T, provider string, codeAccess ...bool) (*url.URL, *http.Cookie) {
 	t.Helper()
 	connections, err := f.s.List(context.Background(), f.actor)
 	if err != nil {
@@ -159,7 +159,11 @@ func (f *fixture) start(t *testing.T, provider string) (*url.URL, *http.Cookie) 
 			revision = c.Revision
 		}
 	}
-	w := f.request("POST", "/api/v1/connectors/"+provider+"/connect", fmt.Sprintf(`{"revision":%d,"return_to":"/app/p/project-1/overview"}`, revision))
+	body := fmt.Sprintf(`{"revision":%d,"return_to":"/app/p/project-1/overview"}`, revision)
+	if len(codeAccess) > 0 {
+		body = fmt.Sprintf(`{"revision":%d,"return_to":"/app/p/project-1/overview","github_code":%t}`, revision, codeAccess[0])
+	}
+	w := f.request("POST", "/api/v1/connectors/"+provider+"/connect", body)
 	if w.Code != 200 {
 		t.Fatalf("start: %d %s", w.Code, w.Body.String())
 	}

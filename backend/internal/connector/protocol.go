@@ -51,6 +51,15 @@ func hasScope(values []string, want string) bool {
 // This never follows Location, logs response bodies, or returns OAuth responses
 // to callers. Resource adapters return only selected, normalized public fields.
 func (s *Service) request(ctx context.Context, method, target, access string, body io.Reader, contentType string, basic *Provider) (any, error) {
+	return s.requestWithResponseLimit(ctx, method, target, access, body, contentType, basic, maxResponseBytes)
+}
+
+// responseLimit is server-owned. Ordinary OAuth/read adapters retain the 2 MiB
+// bound; only the validated code-task blob endpoint opts into its larger bound.
+func (s *Service) requestWithResponseLimit(ctx context.Context, method, target, access string, body io.Reader, contentType string, basic *Provider, responseLimit int) (any, error) {
+	if responseLimit <= 0 || responseLimit > maxGitHubBlobResponseBytes {
+		return nil, ErrArguments
+	}
 	req, err := http.NewRequestWithContext(ctx, method, target, body)
 	if err != nil {
 		return nil, ErrProvider
@@ -76,25 +85,25 @@ func (s *Service) request(ctx context.Context, method, target, access string, bo
 	defer response.Body.Close()
 	switch response.StatusCode {
 	case 401:
-		return nil, ErrReauthorize
+		return nil, githubStatusError(response.StatusCode, ErrReauthorize)
 	case 403:
 		if limitedByHeaders(response.Header) {
-			return nil, ErrRateLimit
+			return nil, githubStatusError(response.StatusCode, ErrRateLimit)
 		}
-		return nil, ErrPermission
+		return nil, githubStatusError(response.StatusCode, ErrPermission)
 	case 402:
-		return nil, ErrPermission
+		return nil, githubStatusError(response.StatusCode, ErrPermission)
 	case 429:
-		return nil, ErrRateLimit
+		return nil, githubStatusError(response.StatusCode, ErrRateLimit)
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return nil, ErrProvider
+		return nil, githubStatusError(response.StatusCode, ErrProvider)
 	}
-	raw, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
+	raw, err := io.ReadAll(io.LimitReader(response.Body, int64(responseLimit)+1))
 	if err != nil {
 		return nil, ErrProvider
 	}
-	if len(raw) > maxResponseBytes {
+	if len(raw) > responseLimit {
 		return nil, ErrResponse
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))

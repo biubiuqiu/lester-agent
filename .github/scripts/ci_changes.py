@@ -49,7 +49,7 @@ def select_jobs(event_name, paths):
         if path.startswith("backend/"):
             jobs.update(go=True, security_go=True)
             if (path == "backend/Dockerfile.sandbox-runtime"
-                    or path.startswith(("backend/runtime/", "backend/cmd/lester-toolbox/", "backend/internal/toolboxfs/", "backend/internal/sandbox/"))
+                    or path.startswith(("backend/runtime/", "backend/cmd/lester-toolbox/", "backend/internal/toolboxfs/", "backend/internal/commandtask/", "backend/internal/githubsandbox/", "backend/internal/sandbox/"))
                     or path in ("backend/go.mod", "backend/go.sum", "backend/.dockerignore")):
                 jobs["sandbox_runtime"] = True
         elif path.startswith("android/"):

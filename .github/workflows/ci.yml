@@ -351,8 +351,11 @@ jobs:
         env:
           LESTER_TEST_RUNTIME_IMAGE: lester-sandbox-runtime:local
           LESTER_TEST_DOCKER_IMAGE: lester-sandbox-runtime:local
+          LESTER_TEST_GITHUB_TOOLBOX: ${{ runner.temp }}/lester-github-toolbox
         shell: bash
-        run: go test -count=1 -timeout=5m -json ./internal/sandbox ./internal/agenttool ./internal/commandtask | tee "$RUNNER_TEMP/sandbox-tests.jsonl"
+        run: |
+          CGO_ENABLED=0 go build -o "$LESTER_TEST_GITHUB_TOOLBOX" ./cmd/lester-toolbox
+          go test -count=1 -timeout=5m -json ./internal/sandbox ./internal/agenttool ./internal/commandtask ./internal/githubsandbox | tee "$RUNNER_TEMP/sandbox-tests.jsonl"
       - name: Report failing Docker integration tests in annotations
         if: failure()
         run: |

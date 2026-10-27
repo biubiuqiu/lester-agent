@@ -105,6 +105,8 @@ sandbox:
   image: lester-sandbox-runtime:local
   # Used only by the Docker provider. Pin the service to a dedicated worker.
   dockerSocketPath: /var/run/docker.sock
+  # Administrator-managed egress for new Docker Computers; none is isolated.
+  dockerNetwork: none
   nodeSelector: {}
   tolerations: []
   affinity: {}

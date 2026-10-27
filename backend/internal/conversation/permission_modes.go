@@ -42,7 +42,7 @@ func setRunPermissionModeTx(ctx context.Context, tx pgx.Tx, conversation, run, a
 		value := "full"
 		decision = &value
 	}
-	_, err := tx.Exec(ctx, `UPDATE run_permissions SET status=CASE WHEN $6='auto' AND tool IN ('write','edit') AND allow_run THEN 'approved' WHEN $6='auto' AND tool='bash' THEN 'reviewing' ELSE $2 END,decision=CASE WHEN $6='auto' AND tool IN ('write','edit') AND allow_run THEN 'once' ELSE $3 END,decision_source='mode',responded_by=$4,permission_revision=$5,review_token=NULL,review_decision=NULL,review_reason='',reviewer_model_deployment_id=NULL WHERE run_id=$1 AND (status IN ('pending','reviewing') OR status='approved' AND consumed_at IS NULL)`, run, status, decision, actor, revision, mode)
+	_, err := tx.Exec(ctx, `UPDATE run_permissions SET status=CASE WHEN tool='github_publish' THEN 'pending' WHEN $6='auto' AND tool IN ('write','edit') AND allow_run THEN 'approved' WHEN $6='auto' AND tool='bash' THEN 'reviewing' ELSE $2 END,decision=CASE WHEN tool='github_publish' THEN NULL WHEN $6='auto' AND tool IN ('write','edit') AND allow_run THEN 'once' ELSE $3 END,decision_source='mode',responded_by=$4,permission_revision=$5,review_token=NULL,review_decision=NULL,review_reason='',reviewer_model_deployment_id=NULL WHERE run_id=$1 AND (status IN ('pending','reviewing') OR status='approved' AND consumed_at IS NULL)`, run, status, decision, actor, revision, mode)
 	return err
 }
 
@@ -63,10 +63,11 @@ func (s *Service) consumePermission(ctx context.Context, conversation, run, id u
 	if status != "running" {
 		return false, ErrRunNotActive
 	}
-	var tool, permissionStatus, recordedDigest string
+	var tool, permissionStatus, recordedDigest, decisionSource string
+	var decision *string
 	var permissionRevision int64
 	var consumed bool
-	if err = tx.QueryRow(ctx, `SELECT tool,status,request_digest,permission_revision,consumed_at IS NOT NULL FROM run_permissions WHERE id=$1 AND run_id=$2 FOR UPDATE`, id, run).Scan(&tool, &permissionStatus, &recordedDigest, &permissionRevision, &consumed); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT tool,status,request_digest,permission_revision,consumed_at IS NOT NULL,decision_source,decision FROM run_permissions WHERE id=$1 AND run_id=$2 FOR UPDATE`, id, run).Scan(&tool, &permissionStatus, &recordedDigest, &permissionRevision, &consumed, &decisionSource, &decision); err != nil {
 		return false, err
 	}
 	if recordedDigest != digest || permissionRevision != revision {
@@ -74,6 +75,9 @@ func (s *Service) consumePermission(ctx context.Context, conversation, run, id u
 	}
 	if permissionStatus != "approved" {
 		return false, tx.Commit(ctx)
+	}
+	if tool == "github_publish" && (decisionSource != "user" || decision == nil || *decision != "once") {
+		return false, ErrInteractionConflict
 	}
 	if consumed {
 		return false, errors.New("permission was already consumed; do not replay this operation")

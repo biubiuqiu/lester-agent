@@ -99,12 +99,12 @@ export function AppConnections() {
     setLoading(true); setError(""); setLoadError("");
     try { await load(); } catch { /* Current read errors are rendered by load. */ }
   }
-  async function connect(item: AppConnection) {
+  async function connect(item: AppConnection, githubCode = false) {
     if (pending.current || native || !item.configured) return;
     pending.current = true; setBusy(item.provider); setError(""); setNotice(null);
     try {
       const back = workspaceReturnPath(new URLSearchParams(window.location.search).get("returnTo"));
-      const response = await api<{ url: string }>(`/api/v1/connectors/${item.provider}/connect`, { method: "POST", body: JSON.stringify({ revision: item.revision, return_to: back }), signal: AbortSignal.timeout(20000) });
+      const response = await api<{ url: string }>(`/api/v1/connectors/${item.provider}/connect`, { method: "POST", body: JSON.stringify({ revision: item.revision, return_to: back, ...(item.provider === "github" && (githubCode || item.github_code_enabled) ? { github_code: true } : {}) }), signal: AbortSignal.timeout(20000) });
       const target = appAuthorizationURL(item.provider, response.url, window.location.origin);
       if (!target) throw new Error("应用返回的授权地址无效，请联系管理员。");
       window.location.assign(target);
@@ -119,7 +119,7 @@ export function AppConnections() {
     pending.current = true; setBusy(item.provider); setDialogError("");
     const accepted = () => {
       generation.current++;
-      setConnections(previous => previous?.map(old => old.provider === item.provider && old.revision <= item.revision + 1 ? { ...old, status: "disconnected", account_name: "", scopes: [], revision: item.revision + 1 } : old) ?? null);
+      setConnections(previous => previous?.map(old => old.provider === item.provider && old.revision <= item.revision + 1 ? { ...old, status: "disconnected", account_name: "", scopes: [], github_code_enabled: false, revision: item.revision + 1 } : old) ?? null);
       setSelected(null); setNotice({ kind: "disconnected", provider: item.provider }); setError(""); setLoadError("");
     };
     try {
@@ -134,8 +134,8 @@ export function AppConnections() {
     } finally { pending.current = false; if (mounted.current) setBusy(""); }
   }
   return <div className="app-connections-page">
-    <header className="settings-heading"><div><h1>{t("应用连接")}</h1><p>{t("连接你工作的地方，让任务按需读取资料。")}</p></div><button type="button" className="icon-button" aria-label={t("刷新连接状态")} title={t("刷新连接状态")} disabled={loading || !!busy} onClick={() => void refresh()}><RefreshCw size={17} /></button></header>
-    <div className="app-connections-intro"><span className="app-readonly"><Check size={13} />{t("仅搜索和读取")}</span><Link href="/docs/usage#app-connections" target="_blank" rel="noopener noreferrer"><BookOpen size={14} />{t("连接帮助")}</Link></div>
+    <header className="settings-heading"><div><h1>{t("应用连接")}</h1><p>{t("连接工作应用，按授权读取资料或开展 GitHub 代码任务。")}</p></div><button type="button" className="icon-button" aria-label={t("刷新连接状态")} title={t("刷新连接状态")} disabled={loading || !!busy} onClick={() => void refresh()}><RefreshCw size={17} /></button></header>
+    <div className="app-connections-intro"><span className="app-readonly"><Check size={13} />{t("资料读取")}</span><Link href="/docs/usage#app-connections" target="_blank" rel="noopener noreferrer"><BookOpen size={14} />{t("连接帮助")}</Link></div>
     {visibleError ? <p className="settings-error" role="alert">{t(visibleError)} <button type="button" className="text-button" disabled={loading || !!busy} onClick={() => void refresh()}>{t("刷新状态")}</button></p> : null}
     {notice ? <p className="app-connection-notice" role="status"><Check size={15} />{t(notice.kind === "connected" ? "{0} 已连接" : "已断开 {0}", [t(names[notice.provider])])}</p> : null}
     {native ? <p className="app-connections-hint">{t("请在浏览器版中授权应用，完成后 App 会同步连接。")}</p> : null}
@@ -149,11 +149,17 @@ export function AppConnections() {
           <p className="app-connection-description">{t(descriptions[provider])}</p>
           {linked && item.account_name ? <p className="app-connection-account" title={item.account_name}>{item.account_name}</p> : null}
           <footer><button type="button" className={ready ? "text-button" : "secondary-button"} disabled={!!busy || invalid || !item.configured || native} onClick={() => void connect(item)}>{busy === provider ? <LoaderCircle size={14} className="spin" /> : <ExternalLink size={14} />}{t(busy === provider ? "正在处理…" : linked ? "重新连接" : "连接")}</button>{linked ? <button type="button" className="text-button" disabled={!!busy || invalid} onClick={event => { trigger.current = event.currentTarget; setDialogError(""); setSelected(item); }}>{t("断开")}</button> : null}</footer>
+          {provider === "github" ? <details className="app-github-code">
+            <summary>{t("代码任务")}{ready && item.github_code_enabled ? <span><Check size={12} />{t("已开启")}</span> : null}</summary>
+            <p>{t("在已授权仓库中修改代码、运行测试并推送分支或创建 PR。")}</p>
+            <p>{t("代码任务需要 GitHub App 的仓库内容和 PR 读写权限；实际可用范围以安装授权和仓库权限为准。")}</p>
+            <div><button type="button" className="secondary-button" disabled={!!busy || invalid || !item.configured || native} onClick={() => void connect(item, true)}>{t(item.github_code_enabled ? "重新授权代码任务" : "授权代码任务")}</button><Link href="/docs/usage#github-code" target="_blank" rel="noopener noreferrer">{t("使用帮助")}</Link></div>
+          </details> : null}
           {linked && item.scopes.length ? <details className="app-connection-scopes"><summary>{t("查看授权范围")}</summary><p>{item.scopes.join(" · ")}</p></details> : null}
         </article>;
       })}
     </div> : null}
-    <p className="app-connections-hint">{t("每个应用连接一个账号。授权独立于 Lester 登录；不会自动导入资料或发送内容。")}</p>
+    <p className="app-connections-hint">{t("应用授权独立于 Lester 登录。GitHub 可单独开启代码任务；其他应用仅搜索和读取，不会发送内容。")}</p>
     {selected ? <dialog ref={dialog} className="app-disconnect-dialog" aria-labelledby="app-disconnect-title" onCancel={event => { event.preventDefault(); close(); }}>
       <header><h2 id="app-disconnect-title">{t("断开 {0}？", [t(names[selected.provider])])}</h2><button type="button" className="icon-button" aria-label={t("关闭")} disabled={!!busy} onClick={close}><X size={17} /></button></header>
       {selected.account_name ? <p className="app-connection-account" title={selected.account_name}>{selected.account_name}</p> : null}

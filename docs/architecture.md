@@ -58,6 +58,12 @@ This diagram shows the Docker Compose entry point. Kubernetes uses Ingress to ro
 - **Administration:** `/admin` uses role-protected API routes to manage accounts and shared models. Personal workspaces stay isolated, and provider credentials are encrypted at rest.
 - **Public artifacts:** Artifact Host reads published snapshots and their manifests. It never serves live Computer files or receives model credentials or sandbox tokens.
 
+### Connected apps and GitHub code
+
+`internal/connector` owns encrypted, per-user app grants and fixed-host API adapters. Task tools resolve the accepted run submitter; the personal assistant only delegates. Ordinary app search/read never grants a Computer access token or write authority.
+
+For separately authorized [GitHub code tasks](github-code-tasks.md), `internal/githubwork` coordinates pinned source reads, encrypted publication proposals and durable external-write receipts. Sandbox Service imports/exports files through the narrow native `GitHubTransfer` protocol; `internal/githubsandbox` validates the archive/selected paths and creates a credential-free local Git baseline. Docker and ACS directly invoke the fixed Toolbox without user login scripts. Ordinary editing/testing stays in the existing file/command tools. Publication passes the existing once-only user approval boundary and uses an expected-head GitHub commit; unknown receipts are reconciled without replaying writes. No new worker or generic connector command channel is added.
+
 ### Artifact publishing flow
 
 Single-file HTML and multi-file sites use the same publishing service. Local images, videos, stylesheets, and scripts must be bundled from the conversation directory; missing dependencies or paths outside that boundary reject the deployment.
@@ -130,7 +136,7 @@ Recreating a Docker container does not deliberately delete the user's volume. AC
 | Setting | Default or limit |
 | --- | --- |
 | Docker sandbox image | `lester-sandbox-runtime:local` (built by Compose) |
-| Docker network | Disabled |
+| Docker network | `none` by default; administrator-selected network for new Computers only |
 | Docker resources | 2 CPUs, 4 GB RAM, 256 PIDs, `no-new-privileges` |
 | File operations | 25 MiB |
 | Vision image read | 8 MiB per image |
@@ -207,7 +213,7 @@ Fresh installs apply 004–005 automatically. Migration 004 preserves old chat o
 
 ### Deliverable registration and reliable events upgrade
 
-The current version requires migrations 001–032. Migration 013 is described in [Accounts and sign-in](accounts-and-security.md#accounts-and-sign-in). The historical 004–005 commands above are insufficient for a full upgrade; apply every missing migration in numeric order. For a database already on 001–011, back it up, stop API writes, apply 012 once, then apply every remaining migration through 032 before rebuilding API/Web; see [the upgrade checklist](deployment.md#upgrading-an-existing-installation):
+The current version requires migrations 001–033. Migration 013 is described in [Accounts and sign-in](accounts-and-security.md#accounts-and-sign-in). The historical 004–005 commands above are insufficient for a full upgrade; apply every missing migration in numeric order. For a database already on 001–011, back it up, stop API writes, apply 012 once, then apply every remaining migration through 033 before rebuilding API/Web; see [the upgrade checklist](deployment.md#upgrading-an-existing-installation):
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
@@ -216,7 +222,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T post
   < backend/migrations/000012_deliverables_events.up.sql
 ```
 
-New Compose volumes initialize migrations 001–032; existing volumes never upgrade automatically. Do not delete volumes. Rolling back 012 drops registered metadata and pending delivery intents while preserving Computer files, messages, run events, and published artifacts. Stop the updated API before rollback and restore a compatible application version. Monitor pending outbox count and disk space during prolonged Redis outages.
+New Compose volumes initialize migrations 001–033; existing volumes never upgrade automatically. Do not delete volumes. Rolling back 012 drops registered metadata and pending delivery intents while preserving Computer files, messages, run events, and published artifacts. Stop the updated API before rollback and restore a compatible application version. Monitor pending outbox count and disk space during prolonged Redis outages.
 
 ---
 

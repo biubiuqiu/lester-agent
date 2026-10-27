@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	pathpkg "path"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,6 +28,7 @@ const (
 
 type DockerProvider struct {
 	Image             string
+	Network           string
 	ToolboxSourcePath string
 	toolboxMu         sync.Mutex
 	toolboxInstalled  map[string]bool
@@ -36,7 +38,22 @@ func NewDockerProvider(image string) *DockerProvider {
 	if image == "" {
 		image = defaultRuntimeImage
 	}
-	return &DockerProvider{Image: image, ToolboxSourcePath: defaultToolboxSourcePath, toolboxInstalled: map[string]bool{}}
+	return &DockerProvider{Image: image, Network: "none", ToolboxSourcePath: defaultToolboxSourcePath, toolboxInstalled: map[string]bool{}}
+}
+
+// Network is an administrator-selected Docker network, never a task/model input.
+// Isolation remains the default. Host and container namespace sharing are refused.
+var dockerNetworkName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
+
+func dockerNetwork(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "none", nil
+	}
+	if !dockerNetworkName.MatchString(value) || strings.EqualFold(value, "host") {
+		return "", errors.New("SANDBOX_DOCKER_NETWORK must be none, bridge or a named Docker network; host/container networking is not supported")
+	}
+	return value, nil
 }
 
 func (p *DockerProvider) Name() string { return "docker" }
@@ -54,6 +71,10 @@ func volumeName(id string) (string, error) {
 }
 
 func (p *DockerProvider) Create(ctx context.Context, opts CreateOptions) (*Sandbox, error) {
+	network, err := dockerNetwork(p.Network)
+	if err != nil {
+		return nil, err
+	}
 	name, err := containerName(opts.ID)
 	if err != nil {
 		return nil, err
@@ -75,7 +96,7 @@ func (p *DockerProvider) Create(ctx context.Context, opts CreateOptions) (*Sandb
 		return nil, fmt.Errorf("create docker workspace volume: %w: %s", createErr, output)
 	}
 	if _, inspectErr := p.Inspect(ctx, opts.ID); errors.Is(inspectErr, ErrSandboxNotFound) {
-		cmd := exec.CommandContext(ctx, "docker", "create", "--init", "--name", name, "--network", "none", "--cpus", cpus, "--memory", memory, "--pids-limit", "256", "--security-opt", "no-new-privileges", "-v", volume+":/workspace", "-w", "/workspace", image, "sleep", "infinity")
+		cmd := exec.CommandContext(ctx, "docker", "create", "--init", "--name", name, "--network", network, "--cpus", cpus, "--memory", memory, "--pids-limit", "256", "--security-opt", "no-new-privileges", "-v", volume+":/workspace", "-w", "/workspace", image, "sleep", "infinity")
 		if output, createErr := cmd.CombinedOutput(); createErr != nil {
 			return nil, fmt.Errorf("create docker sandbox: %w: %s", createErr, output)
 		}

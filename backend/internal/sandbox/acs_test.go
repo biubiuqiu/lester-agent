@@ -131,6 +131,20 @@ func (b *fakeACSBackend) Connect(_ context.Context, id string, _ int32) (*acsCon
 func (b *fakeACSBackend) Pause(context.Context, string) error { return nil }
 func (b *fakeACSBackend) Kill(context.Context, string) error  { return nil }
 
+func (r *fakeACSRuntime) RunToolbox(ctx context.Context, args []string, out, errOut func(string)) (*acsCommandResult, error) {
+	if len(args) == 1 && args[0] == "version" {
+		return r.Run(ctx, shellQuote(toolboxContainerPath)+" version", "/workspace", out, errOut)
+	}
+	if len(args) == 3 && args[0] == "prepare-input" {
+		return r.Run(ctx, shellQuote(toolboxContainerPath)+" prepare-input --name "+shellQuote(args[2]), "/workspace", out, errOut)
+	}
+	quoted := []string{shellQuote(toolboxContainerPath)}
+	for _, value := range args {
+		quoted = append(quoted, shellQuote(value))
+	}
+	return r.Run(ctx, strings.Join(quoted, " "), "/workspace", out, errOut)
+}
+
 type fakeACSRuntime struct {
 	data          []byte
 	readPath      string

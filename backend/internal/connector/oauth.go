@@ -73,13 +73,14 @@ func (h *Handler) Connect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Revision int64  `json:"revision"`
-		ReturnTo string `json:"return_to"`
+		Revision   int64  `json:"revision"`
+		ReturnTo   string `json:"return_to"`
+		GitHubCode bool   `json:"github_code"`
 	}
 	if !decode(w, r, &input) {
 		return
 	}
-	u, browser, err := h.Service.begin(r.Context(), a, chi.URLParam(r, "provider"), input.Revision, input.ReturnTo)
+	u, browser, err := h.Service.begin(r.Context(), a, chi.URLParam(r, "provider"), input.Revision, input.ReturnTo, input.GitHubCode)
 	if err != nil {
 		failure(w, err)
 		return
@@ -121,7 +122,11 @@ func safeReturn(value string) string {
 func (s *Service) callbackURL(provider string) string {
 	return s.options.WebOrigin + "/api/v1/connectors/" + provider + "/callback"
 }
-func (s *Service) begin(ctx context.Context, a Actor, name string, revision int64, back string) (string, string, error) {
+func (s *Service) begin(ctx context.Context, a Actor, name string, revision int64, back string, codeAccess ...bool) (string, string, error) {
+	githubCode := len(codeAccess) > 0 && codeAccess[0]
+	if githubCode && name != "github" {
+		return "", "", ErrArguments
+	}
 	p, ok := s.providers[name]
 	if !ok {
 		return "", "", ErrUnavailable
@@ -175,7 +180,7 @@ func (s *Service) begin(ctx context.Context, a Actor, name string, revision int6
 		_, err = tx.Exec(ctx, `DELETE FROM app_connection_oauth_flows WHERE connection_id=$1`, id)
 	}
 	if err == nil {
-		_, err = tx.Exec(ctx, `INSERT INTO app_connection_oauth_flows(state_hash,browser_hash,connection_id,session_hash,generation,return_to,verifier_ciphertext,verifier_nonce,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,now()+interval '10 minutes')`, digest(state), digest(browser), id, a.SessionHash, generation+1, safeReturn(back), encrypted, nonce)
+		_, err = tx.Exec(ctx, `INSERT INTO app_connection_oauth_flows(state_hash,browser_hash,connection_id,session_hash,generation,return_to,verifier_ciphertext,verifier_nonce,github_code_enabled,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,now()+interval '10 minutes')`, digest(state), digest(browser), id, a.SessionHash, generation+1, safeReturn(back), encrypted, nonce, githubCode)
 	}
 	if err != nil {
 		return "", "", err
@@ -240,9 +245,10 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	var id uuid.UUID
 	var a Actor
 	var generation int64
+	var githubCode bool
 	var back string
 	var ciphertext, nonce, hash []byte
-	err = s.DB.QueryRow(ctx, `SELECT c.id,c.workspace_id,c.user_id,f.session_hash,f.generation,f.return_to,f.verifier_ciphertext,f.verifier_nonce,f.browser_hash FROM app_connection_oauth_flows f JOIN app_connections c ON c.id=f.connection_id WHERE f.state_hash=$1 AND c.provider=$2 AND f.expires_at>now()`, digest(state), name).Scan(&id, &a.WorkspaceID, &a.UserID, &a.SessionHash, &generation, &back, &ciphertext, &nonce, &hash)
+	err = s.DB.QueryRow(ctx, `SELECT c.id,c.workspace_id,c.user_id,f.session_hash,f.generation,f.return_to,f.verifier_ciphertext,f.verifier_nonce,f.browser_hash,f.github_code_enabled FROM app_connection_oauth_flows f JOIN app_connections c ON c.id=f.connection_id WHERE f.state_hash=$1 AND c.provider=$2 AND f.expires_at>now()`, digest(state), name).Scan(&id, &a.WorkspaceID, &a.UserID, &a.SessionHash, &generation, &back, &ciphertext, &nonce, &hash, &githubCode)
 	if err != nil || subtle.ConstantTimeCompare(hash, digest(cookie.Value)) != 1 {
 		s.redirect(w, r, name, "invalid_state", "/app")
 		return
@@ -280,7 +286,7 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 		s.redirect(w, r, name, "provider_error", back)
 		return
 	}
-	err = s.saveGrant(ctx, r, a, id, name, generation, t, identity)
+	err = s.saveGrant(ctx, r, a, id, name, generation, t, identity, githubCode)
 	if err != nil {
 		s.redirect(w, r, name, "state_changed", back)
 		return
@@ -321,7 +327,8 @@ func (s *Service) consumeFlow(ctx context.Context, r *http.Request, a Actor, id 
 	}
 	return tx.Commit(ctx)
 }
-func (s *Service) saveGrant(ctx context.Context, r *http.Request, a Actor, id uuid.UUID, name string, generation int64, t token, identity identity) error {
+func (s *Service) saveGrant(ctx context.Context, r *http.Request, a Actor, id uuid.UUID, name string, generation int64, t token, identity identity, codeAccess ...bool) error {
+	githubCode := name == "github" && len(codeAccess) > 0 && codeAccess[0]
 	ciphertext, nonce, err := s.seal(t, connectionAAD(id, a, name))
 	if err != nil {
 		return err
@@ -337,7 +344,7 @@ func (s *Service) saveGrant(ctx context.Context, r *http.Request, a Actor, id uu
 	if err = currentBrowser(ctx, tx, r, a); err != nil {
 		return err
 	}
-	result, err := tx.Exec(ctx, `UPDATE app_connections SET status='connected',refresh_pending=false,account_id=$4,account_name=$5,token_ciphertext=$6,token_nonce=$7,scopes=$8,expires_at=$9,revision=revision+1,updated_at=now() WHERE id=$1 AND workspace_id=$2 AND user_id=$3 AND generation=$10`, id, a.WorkspaceID, a.UserID, identity.ID, identity.Name, ciphertext, nonce, t.Scopes, expires(t), generation)
+	result, err := tx.Exec(ctx, `UPDATE app_connections SET status='connected',refresh_pending=false,account_id=$4,account_name=$5,token_ciphertext=$6,token_nonce=$7,scopes=$8,expires_at=$9,github_code_enabled=$11,revision=revision+1,updated_at=now() WHERE id=$1 AND workspace_id=$2 AND user_id=$3 AND generation=$10`, id, a.WorkspaceID, a.UserID, identity.ID, identity.Name, ciphertext, nonce, t.Scopes, expires(t), generation, githubCode)
 	if err != nil || result.RowsAffected() != 1 {
 		return ErrConflict
 	}

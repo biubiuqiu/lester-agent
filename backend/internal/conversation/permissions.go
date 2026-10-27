@@ -61,6 +61,9 @@ func permissionDigest(name string, args json.RawMessage) (string, error) {
 // reviewer can allow, deny or defer to the user; other modes use user consent.
 func needsPermission(mode, name string, args json.RawMessage) (bool, bool) {
 	name = permissionTool(name)
+	if name == "github_publish" {
+		return true, false
+	}
 	if mode == "full" {
 		return false, false
 	}
@@ -86,10 +89,10 @@ func needsPermission(mode, name string, args json.RawMessage) (bool, bool) {
 		return true, false
 	}
 	switch name {
-	case "read", "list_files", "load_skill", "read_conversation", "tool_result", "task_output", "ask_user_question", "propose_plan", "enter_plan_mode", "list_schedules", "propose_schedule", "list_app_connections", "read_app":
+	case "read", "list_files", "load_skill", "read_conversation", "tool_result", "task_output", "ask_user_question", "propose_plan", "enter_plan_mode", "list_schedules", "propose_schedule", "list_app_connections", "read_app", "list_github_repositories", "github_prepare_publish":
 		return false, false
-	case "write", "edit":
-		return mode != "auto", true
+	case "write", "edit", "github_checkout":
+		return mode != "auto", name != "github_checkout"
 	case "bash":
 		return true, false
 	default:
@@ -117,7 +120,7 @@ func permissionSummary(name string, args json.RawMessage) json.RawMessage {
 	var input map[string]json.RawMessage
 	_ = json.Unmarshal(args, &input)
 	summary := map[string]any{"tool": name}
-	for _, key := range []string{"file_path", "path", "command", "task_id", "description"} {
+	for _, key := range []string{"file_path", "path", "command", "task_id", "description", "repository", "ref", "directory", "branch", "summary", "proposal_id", "digest"} {
 		if value, ok := input[key]; ok {
 			var text string
 			if json.Unmarshal(value, &text) == nil {
@@ -336,6 +339,18 @@ func (s *Service) respondPermission(ctx context.Context, workspaceID, userID, co
 	item := &RunPermission{ID: id, RunID: runID}
 	if err = tx.QueryRow(ctx, `SELECT tool,request_digest,summary,allow_run,status,decision,decision_source,review_decision,review_reason,reviewer_model_deployment_id,permission_revision FROM run_permissions WHERE id=$1 FOR UPDATE`, id).Scan(&item.Tool, &item.RequestDigest, &item.Summary, &item.AllowRun, &item.Status, &item.Decision, &item.DecisionSource, &item.ReviewDecision, &item.ReviewReason, &item.ReviewerModelID, &item.Revision); err != nil {
 		return nil, err
+	}
+	if item.Tool == "github_publish" {
+		var own bool
+		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM runs r JOIN users u ON u.id=r.submitted_by JOIN workspace_members wm ON wm.workspace_id=$3 AND wm.user_id=u.id WHERE r.id=$1 AND r.submitted_by=$2 AND NOT u.disabled AND (NOT u.email_verification_required OR u.email_verified))`, runID, userID, workspaceID).Scan(&own); err != nil {
+			return nil, err
+		}
+		if !own {
+			return nil, ErrInteractionNotFound
+		}
+		if decision != "once" && decision != "reject" {
+			return nil, ErrInteractionConflict
+		}
 	}
 	if digest != item.RequestDigest || decision == "run" && !item.AllowRun {
 		return nil, ErrInteractionConflict

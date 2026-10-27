@@ -11,8 +11,16 @@ import (
 type providerBuilder func() (Provider, error)
 
 var providerBuilders = map[string]providerBuilder{
-	"docker": func() (Provider, error) { return NewDockerProvider(os.Getenv("SANDBOX_IMAGE")), nil },
-	"acs":    newACSProviderFromEnv,
+	"docker": func() (Provider, error) {
+		network, err := dockerNetwork(os.Getenv("SANDBOX_DOCKER_NETWORK"))
+		if err != nil {
+			return nil, err
+		}
+		provider := NewDockerProvider(os.Getenv("SANDBOX_IMAGE"))
+		provider.Network = network
+		return provider, nil
+	},
+	"acs": newACSProviderFromEnv,
 }
 
 // NewProviderFromEnv is the deployment composition root. Adding a cloud

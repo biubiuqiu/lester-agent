@@ -125,3 +125,11 @@
 .schedule-config,.schedule-feedback{margin-top:10px;font-size:11px;color:var(--muted)}.schedule-config summary,.schedule-feedback summary{cursor:pointer;padding:4px 0}.schedule-config>p{white-space:pre-wrap;max-height:180px;overflow:auto;color:var(--ink);padding:7px 0}.schedule-config dl{display:grid;grid-template-columns:auto 1fr;gap:7px 16px;margin:10px 0}.schedule-config dd{margin:0;color:var(--ink);min-width:0;overflow-wrap:anywhere}.schedule-note{font-size:10px;color:var(--muted)}.schedule-feedback textarea{margin-top:6px}
 .schedule-card>.interaction-actions{flex:none;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin:0;padding:11px 18px;border-top:1px solid var(--line);background:#fbfcf9}.schedule-card button{border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:#fff;color:var(--ink);font:inherit;font-size:11px;cursor:pointer;min-height:34px}.schedule-card button.primary{background:var(--dark);color:#fff;border-color:var(--dark)}.schedule-card button:disabled{opacity:.5;cursor:default}.schedule-card button:focus-visible{outline:2px solid #69866c;outline-offset:2px}.schedule-card>p[role=alert]{padding:0 18px 10px;font-size:11px;line-height:1.6}.schedule-receipts{max-width:780px;margin:10px auto}.schedule-receipts .interaction-receipt{border:0;padding:7px 0}.schedule-receipts a{display:inline-block;margin-top:8px;font-size:11px;color:var(--dark)}
 @media(max-width:600px){.question-dock>.schedule-card{margin:6px 10px 0}.schedule-card-body{padding:12px 13px 8px;max-height:32dvh}.schedule-card>.interaction-actions{padding:9px 13px}.schedule-card button{min-height:38px}.schedule-feedback textarea{font-size:16px}.schedule-receipts{margin:8px 20px}}
+
+.github-publish-target { display: grid; gap: 5px; margin: 12px 0 8px; font-size: 12px; }
+.github-publish-target > div { display: grid; grid-template-columns: 50px minmax(0,1fr); gap: 9px; }
+.github-publish-target dt { color: var(--muted); }
+.github-publish-target dd { margin: 0; overflow-wrap: anywhere; }
+.github-publish-details { margin: 8px 0; color: var(--muted); font-size: 11px; }
+.github-publish-details summary { width: fit-content; cursor: pointer; }
+.github-publish-details code { display: block; overflow-wrap: anywhere; margin-top: 7px; }

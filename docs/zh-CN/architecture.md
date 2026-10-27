@@ -30,6 +30,12 @@ flowchart TD
 
 Web、API 和 Sandbox Service 分别构建和运行在独立容器中。Sandbox Service 通过统一 Provider 接口负责 Computer 生命周期、命令、文件和交互式终端；上层只保存不透明的 `provider_ref`，不感知 Docker 容器名或 ACS Sandbox ID。Docker 模式由 Sandbox Service 独占挂载 Docker Socket，并把静态 Go 二进制 `lester-toolbox` 安装到 Computer；ACS 模式使用 OpenKruise 官方 Go E2B SDK，不挂载 Docker Socket。私有接口要求 API 使用内部 Bearer Token，只有健康检查无需认证。Skill 安装包由 API 通过对象存储接口访问，当前 Compose 使用兼容 S3 API 的 MinIO。
 
+### 应用连接与 GitHub 代码任务
+
+`internal/connector` 管理按用户加密保存的应用授权和固定服务商 API。任务工具使用本次已接受任务的提交者身份；个人助理仅委派任务。普通应用搜索、读取不会把访问令牌或写权限交给 Computer。
+
+另行授权的 [GitHub 代码任务](github-code-tasks.md)由 `internal/githubwork` 协调固定版本源码、加密发布快照和持久外部写入回执。Sandbox Service 通过专用原生 `GitHubTransfer` 协议导入、导出文件；`internal/githubsandbox` 检查归档与所选路径，建立无凭证的本地 Git 基线。Docker 与 ACS 都直接执行固定 Toolbox，不运行用户登录脚本。编辑和测试仍走现有文件、命令工具；发布走现有单次用户审批与 expected-head GitHub 提交，未知回执只核对、不重放写入。不增加独立 Worker 或通用连接器命令通道。
+
 ## 服务与端口
 
 | 服务 | 本地端口 → 容器端口 | 用途 |
@@ -82,6 +88,8 @@ User
 默认 Docker Sandbox 使用 Compose 自动构建的 `lester-sandbox-runtime:local`。镜像预装 Node.js 22（npm / pnpm）、Python 3.12（pip / venv）、Go 1.26.9、Git、Bash 补全、ripgrep、curl / wget、jq、SQLite、SSH 客户端、编辑器、压缩工具、FFmpeg 和 C/C++ 编译工具。Node.js 与 Python 的 Playwright **1.63.0** 共用预下载的 Chromium 与系统依赖，包含中日韩字体和 Emoji 字体；在会话目录中可直接导入 Playwright，Node 的 ESM 和 CommonJS 都可用，也可运行 `playwright test`。
 
 运行 `make sandbox-check` 可构建镜像，并在非 root 的 `sandbox` 用户、禁用网络、2 CPU / 4 GB / 256 PID / `no-new-privileges` 条件下实际验证 Go/C 编译、Python 虚拟环境与两种语言的 Chromium 截图。CI 还检查命名卷写入、Toolbox 安装、保留文件的容器重建和交互式终端。预装工具不会开启外网；项目的新依赖、其他版本的 Playwright 及外部网站访问仍需要相应依赖和部署网络配置。
+
+Docker 默认使用 `none` 网络。管理员可用 `SANDBOX_DOCKER_NETWORK` 为新 Computer 指定已有的专用网络或 `bridge`，并另行配置出网策略；它本身不提供域名白名单、防火墙或代理。拒绝 host 和容器网络命名空间，不自动替换已有 Computer。ACS 仍使用其模板与租户网络策略。
 
 已有 `deploy/.env` 如果沿用旧默认 `SANDBOX_IMAGE=python:3.12-slim`，请改为 `SANDBOX_IMAGE=lester-sandbox-runtime:local` 后重建 Compose 服务；有意使用的自定义镜像仍可保留。重建镜像不会替换已有 Computer，也不会删除工作区。现有 Computer 的升级需由管理员保留卷并安排迁移，新镜像使用 UID/GID 1000，旧 root 所有的目录可能需要迁移文件权限。ACS 需推送新镜像并更新模板；Helm 的 Docker 模式需在专用节点加载镜像，或将 `sandbox.image` 指向已推送的仓库镜像。
 
@@ -144,7 +152,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --buil
 
 ### 成果登记与可靠事件升级
 
-当前版本需要迁移 001–032；账号机制的 013 迁移见下方“账号、第三方登录与头像”。上面的 004–005 命令仅说明历史聊天升级，不足以升级到当前版本；请按编号补齐所有尚未执行的迁移。若数据库已完成 001–011，先备份、停止 API 写入，再执行一次 012，并继续补齐 013、014、015 后重建 API/Web：
+当前版本需要迁移 001–033；账号机制的 013 迁移见下方“账号、第三方登录与头像”。上面的 004–005 命令仅说明历史聊天升级，不足以升级到当前版本；请按编号补齐所有尚未执行的迁移。若数据库已完成 001–011，先备份、停止 API 写入，再执行一次 012，并继续补齐 013、014、015 后重建 API/Web：
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
@@ -153,7 +161,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T post
   < backend/migrations/000012_deliverables_events.up.sql
 ```
 
-全新 Compose 数据卷会按序执行 001–032；已有数据卷不会自动升级，勿删除数据卷。012 回滚会删除成果登记和待投递记录，保留原文件、消息、运行事件及已发布站点；回滚前停止新版 API，并配套恢复兼容的应用版本。Redis 长期不可用时待投递表会增长，需要监控数量和磁盘空间。
+全新 Compose 数据卷会按序执行 001–033；已有数据卷不会自动升级，勿删除数据卷。012 回滚会删除成果登记和待投递记录，保留原文件、消息、运行事件及已发布站点；回滚前停止新版 API，并配套恢复兼容的应用版本。Redis 长期不可用时待投递表会增长，需要监控数量和磁盘空间。
 
 ---
 

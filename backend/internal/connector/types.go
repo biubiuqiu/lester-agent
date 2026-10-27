@@ -1,4 +1,4 @@
-// Package connector owns private, read-only work-app grants. Sign-in identities
+// Package connector owns private work-app grants. Sign-in identities
 // and Personal Lester never use these credentials. Nothing is put in Computers.
 package connector
 
@@ -35,13 +35,14 @@ type Actor struct {
 	SessionHash         []byte
 }
 type Connection struct {
-	Provider    string     `json:"provider"`
-	Configured  bool       `json:"configured"`
-	Status      string     `json:"status"`
-	AccountName string     `json:"account_name"`
-	Scopes      []string   `json:"scopes"`
-	Revision    int64      `json:"revision"`
-	UpdatedAt   *time.Time `json:"updated_at,omitempty"`
+	Provider          string     `json:"provider"`
+	Configured        bool       `json:"configured"`
+	Status            string     `json:"status"`
+	AccountName       string     `json:"account_name"`
+	Scopes            []string   `json:"scopes"`
+	Revision          int64      `json:"revision"`
+	UpdatedAt         *time.Time `json:"updated_at,omitempty"`
+	GitHubCodeEnabled bool       `json:"github_code_enabled"`
 }
 type ReadRequest struct {
 	Provider string `json:"provider"`

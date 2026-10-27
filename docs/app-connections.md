@@ -4,11 +4,11 @@
 
 Connect GitHub, Gmail, X, Feishu and Slack from **Settings → App connections** or the account menu. Connect opens the provider’s authorization page in the same browser tab and returns to Lester. The original task/project return link and account-scoped drafts are preserved. Each user has one account per provider in each workspace; another workspace member cannot use that grant.
 
-Connections authorize task Agents to **search and read**. They do not send mail/messages, post, mark mail as read, download attachments, follow source links or automatically import a mailbox. The independent personal assistant remains memory/delegation-only. Connecting a work app neither signs in to Lester nor links a Lester sign-in identity.
+Connections normally authorize task Agents to **search and read**. They do not send mail/messages, post, mark mail as read, download attachments, follow source links or automatically import a mailbox. The independent personal assistant remains memory/delegation-only. Connecting a work app neither signs in to Lester nor links a Lester sign-in identity.
 
 ## Deployment
 
-Apply every missing migration through `backend/migrations/000032_app_connections.up.sql` in numeric order after a backup and stopping API writes/active tasks. Rebuild API and Web together. Fresh Compose initialization mounts 001–032; existing volumes require explicit migration. Preserve the existing `MASTER_KEY_BASE64` and volumes. Migration 032 rollback removes app grants and pending OAuth flows only, not accounts, sessions, task files or completed external effects.
+Apply every missing migration through `backend/migrations/000033_github_code_workflows.up.sql` in numeric order after a backup and stopping API writes/active tasks. Rebuild API, Web and Sandbox Service together. Fresh Compose initialization mounts 001–033; existing volumes require explicit migration. Preserve the existing `MASTER_KEY_BASE64` and volumes. Migration 032 introduces app grants; migration 033 adds the separate opt-in code workflow. Roll back in reverse order after checking the [code-workflow rollback guards](github-code-tasks.md#upgrade-and-verification). Rollback does not remove accounts, sessions, task files or completed external effects.
 
 Create provider applications with the following optional credential pairs. Only API receives the secrets; never put them in `NEXT_PUBLIC_*`, a Skill or a Computer. These variables are independent of `GOOGLE_OAUTH_*` / `GITHUB_OAUTH_*` used for Lester sign-in.
 
@@ -68,3 +68,5 @@ Expired credentials refresh serially per connection. A successful token rotation
 Run backend checks with `LESTER_TEST_DATABASE_URL` pointed at a disposable PostgreSQL database. Connector tests apply all migrations and cover five provider protocols, read-only GETs, encrypted storage, user/run isolation, OAuth expiry/replay/denial, stale callbacks after disconnect/logout/disable/new flow, refresh concurrency/uncertainty, origin checks and rollback. Frontend unit/browser fixtures cover authorization URL validation, connection states, canceled authorization, disconnect receipt recovery, six languages, responsive/keyboard behavior and native-browser guidance. A scripted-model integration test also runs the actual task executor through list → search → read in ordinary and read-only Plan modes, checking matching tool receipts, preserved source text, no execution approvals and no Computer API requests. These fixtures do not verify real OAuth app registration, provider review or API subscriptions.
 
 Refresh attempts record durable intent before contacting the provider. A crash or cancellation after token consumption requires reconnecting instead of replaying the previous refresh token. A per-connection PostgreSQL advisory guard serializes readers across API replicas.
+
+GitHub can separately opt into [code tasks](github-code-tasks.md), including review-gated branch/PR publication. Other app connections remain read-only.

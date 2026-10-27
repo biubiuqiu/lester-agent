@@ -48,6 +48,7 @@ services:
       - ../backend/migrations/000030_native_signin.up.sql:/docker-entrypoint-initdb.d/030.sql:ro
       - ../backend/migrations/000031_personal_assistant.up.sql:/docker-entrypoint-initdb.d/031.sql:ro
       - ../backend/migrations/000032_app_connections.up.sql:/docker-entrypoint-initdb.d/032.sql:ro
+      - ../backend/migrations/000033_github_code_workflows.up.sql:/docker-entrypoint-initdb.d/033.sql:ro
     healthcheck:
       test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
       interval: 3s
@@ -81,6 +82,7 @@ services:
       HTTP_ADDR: :8090
       SANDBOX_PROVIDER: docker
       SANDBOX_IMAGE: ${SANDBOX_IMAGE:-lester-sandbox-runtime:local}
+      SANDBOX_DOCKER_NETWORK: ${SANDBOX_DOCKER_NETWORK:-none}
       SANDBOX_SERVICE_TOKEN: ${SANDBOX_SERVICE_TOKEN:?SANDBOX_SERVICE_TOKEN must be set in deploy/.env}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

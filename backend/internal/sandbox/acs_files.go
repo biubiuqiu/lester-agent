@@ -34,9 +34,9 @@ func (p *ACSProvider) WriteFileVersioned(ctx context.Context, providerRef, workD
 	return &result, nil
 }
 
-// The same native helper owns file semantics on Docker and ACS. The shell only
-// launches its versioned protocol; file parsing, paging, locking and atomic
-// replacement do not become ad-hoc command snippets.
+// The same native helper owns file semantics on Docker and ACS. Direct native
+// process arguments avoid user login scripts; parsing, paging, locking and
+// atomic replacement stay in the versioned protocol.
 func (p *ACSProvider) runFileToolbox(ctx context.Context, providerRef, workDir, filePath, operation string, input []byte, extra ...string) ([]byte, error) {
 	root, target, err := scopedPath(workDir, filePath)
 	if err != nil {
@@ -46,11 +46,11 @@ func (p *ACSProvider) runFileToolbox(ctx context.Context, providerRef, workDir, 
 	if err != nil {
 		return nil, err
 	}
-	version, err := runtimeClient.Run(ctx, shellQuote(toolboxContainerPath)+" version", "/workspace", nil, nil)
+	version, err := runACSToolbox(ctx, runtimeClient, []string{"version"}, nil, nil)
 	if err != nil || version == nil || version.ExitCode != 0 || strings.TrimSpace(version.Stdout) != "2" {
 		return nil, errors.New("Computer file operations require lester-toolbox protocol 2; rebuild the ACS runtime template before modifying files")
 	}
-	arguments := []string{toolboxContainerPath, operation, "--root", root, "--path", target}
+	arguments := []string{operation, "--root", root, "--path", target}
 	if input != nil {
 		if len(input) > (acsMaxFileBytes*4/3)+(1<<20) {
 			return nil, errors.New("file-operation request exceeds the size limit")
@@ -67,7 +67,7 @@ func (p *ACSProvider) runFileToolbox(ctx context.Context, providerRef, workDir, 
 				_ = remover.Remove(cleanup, staged)
 			}()
 		}
-		prepared, prepareErr := runtimeClient.Run(ctx, shellQuote(toolboxContainerPath)+" prepare-input --name "+shellQuote(strings.TrimPrefix(staged, "/tmp/")), "/workspace", nil, nil)
+		prepared, prepareErr := runACSToolbox(ctx, runtimeClient, []string{"prepare-input", "--name", strings.TrimPrefix(staged, "/tmp/")}, nil, nil)
 		if prepareErr != nil || prepared == nil || prepared.ExitCode != 0 || strings.TrimSpace(prepared.Stdout) != staged {
 			return nil, errors.New("could not prepare a private native file request")
 		}
@@ -77,12 +77,8 @@ func (p *ACSProvider) runFileToolbox(ctx context.Context, providerRef, workDir, 
 		arguments = append(arguments, "--input-file", staged)
 	}
 	arguments = append(arguments, extra...)
-	quoted := make([]string, len(arguments))
-	for index, value := range arguments {
-		quoted[index] = shellQuote(value)
-	}
 	stdout, stderr := newBoundedCapture(commandCaptureLimit), newBoundedCapture(commandCaptureLimit)
-	result, runErr := runtimeClient.Run(ctx, strings.Join(quoted, " "), "/workspace", func(value string) { _, _ = stdout.Write([]byte(value)) }, func(value string) { _, _ = stderr.Write([]byte(value)) })
+	result, runErr := runACSToolbox(ctx, runtimeClient, arguments, func(value string) { _, _ = stdout.Write([]byte(value)) }, func(value string) { _, _ = stderr.Write([]byte(value)) })
 	if result == nil {
 		return nil, fmt.Errorf("native file helper did not return a result: %w", runErr)
 	}

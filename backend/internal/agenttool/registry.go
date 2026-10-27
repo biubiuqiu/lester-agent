@@ -25,10 +25,12 @@ type Sandbox interface {
 
 type Environment struct {
 	RunID, ConversationID uuid.UUID
+	CallID                string
 	SandboxID, WorkDir    string
 	Sandboxes             Sandbox
 	Files                 *FileState
 	Apps                  AppConnections
+	GitHub                GitHubWorkflow
 	// RecordTask persists trusted launch identity before starting a command and
 	// its actual ownership handle afterward. Never expose that handle to models.
 	RecordFileChange func(context.Context, *FileChange) error
@@ -44,6 +46,12 @@ type Environment struct {
 type Handler interface {
 	Definition() model.Tool
 	Execute(context.Context, Environment, json.RawMessage) (any, error)
+}
+
+// ArgumentValidator checks server-bound proposal metadata before any permission prompt.
+// Implementations validate only; they must not rewrite the durable model call.
+type ArgumentValidator interface {
+	ValidateArguments(context.Context, Environment, json.RawMessage) error
 }
 
 type Registry struct {
@@ -73,6 +81,10 @@ func NewDefaultRegistry(db *pgxpool.Pool) *Registry {
 	registry.Register(ProposeSchedule{})
 	registry.Register(ListAppConnections{})
 	registry.Register(ReadApp{})
+	registry.Register(ListGitHubRepositories{})
+	registry.Register(GitHubCheckout{})
+	registry.Register(GitHubPreparePublish{})
+	registry.Register(GitHubPublish{})
 	registry.RegisterHidden(ListFiles{}, "computer_list_files")
 	return registry
 }
@@ -116,6 +128,11 @@ func (r *Registry) Execute(ctx context.Context, name string, arguments json.RawM
 	}
 	if environment.Sandboxes == nil {
 		return nil, errors.New("agent tool environment is incomplete")
+	}
+	if validator, ok := handler.(ArgumentValidator); ok {
+		if err := validator.ValidateArguments(ctx, environment, arguments); err != nil {
+			return nil, err
+		}
 	}
 	if environment.AuthorizeTool != nil {
 		if err := environment.AuthorizeTool(ctx, handler.Definition().Name, arguments); err != nil {

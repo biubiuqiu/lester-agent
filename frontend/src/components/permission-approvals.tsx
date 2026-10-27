@@ -12,7 +12,7 @@ type Permission = {
   review_decision?: "allow" | "deny" | "ask_user"; review_reason?: string;
   allow_run: boolean; summary: Record<string, string | number>;
 };
-const operation = (item: Permission) => String(item.summary.command || item.summary.file_path || item.summary.path || item.summary.task_id || item.tool);
+const operation = (item: Permission) => item.tool === "github_publish" ? [item.summary.repository, item.summary.branch, item.summary.summary].filter(Boolean).join(" · ") : item.tool === "github_checkout" ? [item.summary.repository, item.summary.ref, item.summary.directory].filter(Boolean).join(" · ") : String(item.summary.command || item.summary.file_path || item.summary.path || item.summary.task_id || item.tool);
 const unresolved = (item: Permission) => item.status === "pending" || item.status === "reviewing";
 
 export function PermissionApprovals({ conversationId, runId, active, revision }: { conversationId: string; runId?: string; active: boolean; revision: number }) {
@@ -66,13 +66,17 @@ export function PermissionApprovals({ conversationId, runId, active, revision }:
     {error ? <p role="alert">{error}<button type="button" onClick={() => refresh.current()}>{t("检查状态")}</button></p> : null}
     {reviewing.map(item => <article className="permission-card permission-reviewing" key={item.id} role="status"><header><LoaderCircle size={16} /><strong>{t("AI 正在审批命令")}</strong></header><pre>{operation(item)}</pre></article>)}
     {waiting.map(item => <article className="permission-card" key={item.id}>
-      <header><ShieldCheck size={16} /><strong>{t(item.tool === "bash" ? "执行命令" : item.tool === "write" || item.tool === "edit" ? "修改文件" : item.tool === "read" ? "读取敏感文件" : "需要你的确认")}</strong></header>
-      <pre>{operation(item)}</pre>
+      <header><ShieldCheck size={16} /><strong>{t(item.tool === "github_publish" ? "推送 GitHub" : item.tool === "github_checkout" ? "拉取 GitHub 仓库" : item.tool === "bash" ? "执行命令" : item.tool === "write" || item.tool === "edit" ? "修改文件" : item.tool === "read" ? "读取敏感文件" : "需要你的确认")}</strong></header>
+      {item.tool === "github_publish" ? <>
+        <dl className="github-publish-target"><div><dt>{t("仓库")}</dt><dd>{String(item.summary.repository || "—")}</dd></div><div><dt>{t("分支")}</dt><dd>{String(item.summary.branch || "—")}</dd></div></dl>
+        {item.summary.summary ? <pre>{String(item.summary.summary)}</pre> : null}
+        <details className="github-publish-details"><summary>{t("发布详情")}</summary><code>{String(item.summary.proposal_id || "")}<br />{String(item.summary.digest || "")}</code></details>
+      </> : <pre>{operation(item)}</pre>}
       {item.review_reason ? <p className="permission-review-reason">{t(item.review_reason)}</p> : null}
       {typeof item.summary.content_bytes === "number" ? <small>{t("将写入 {0} 字节", [item.summary.content_bytes])}</small> : null}
-      <p>{t("审批仅适用于当前任务和这次操作，不会扩大 Computer 范围。")}</p>
+      <p>{t(item.tool === "github_publish" ? "此操作将发布已预览的变更，并可能创建 PR；请确认仓库和分支。" : "审批仅适用于当前任务和这次操作，不会扩大 Computer 范围。")}</p>
       <div><button type="button" disabled={pending} onClick={() => void respond(item, "once")}>{t("允许一次")}</button>
-        {item.allow_run ? <button type="button" disabled={pending} onClick={() => void respond(item, "run")}>{t("本次任务允许此类操作")}</button> : null}
+        {item.allow_run && item.tool !== "github_publish" ? <button type="button" disabled={pending} onClick={() => void respond(item, "run")}>{t("本次任务允许此类操作")}</button> : null}
         {item.tool === "bash" ? <button type="button" disabled={pending} onClick={() => void respond(item, "full")}>{t("本次任务完全访问")}</button> : null}
         <button type="button" disabled={pending} onClick={() => void respond(item, "reject")}>{t("拒绝")}</button></div>
     </article>)}

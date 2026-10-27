@@ -23,6 +23,7 @@ import (
 	"github.com/biubiuqiu/lester-agent/backend/internal/database"
 	"github.com/biubiuqiu/lester-agent/backend/internal/deliverable"
 	"github.com/biubiuqiu/lester-agent/backend/internal/eventlog"
+	"github.com/biubiuqiu/lester-agent/backend/internal/githubwork"
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
 	"github.com/biubiuqiu/lester-agent/backend/internal/model/integration"
 	"github.com/biubiuqiu/lester-agent/backend/internal/personal"
@@ -79,6 +80,11 @@ func run() error {
 		return err
 	}
 	conversationService.SetAppConnections(appConnections)
+	githubWorkflow, err := githubwork.New(db, appConnections, cfg.MasterKey)
+	if err != nil {
+		return err
+	}
+	conversationService.SetGitHubWorkflow(githubWorkflow)
 	conversationHandler := conversation.NewHandler(conversationService, db, redisClient, sandboxClient, cfg.SandboxURL, cfg.SandboxToken, cfg.WebOrigin)
 	objectStore, err := blob.NewMinIO(cfg.ObjectStoreEndpoint, cfg.ObjectStoreAccessKey, cfg.ObjectStoreSecretKey, cfg.ObjectStoreBucket, cfg.ObjectStoreUseSSL)
 	if err != nil {

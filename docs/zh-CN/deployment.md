@@ -8,7 +8,7 @@
 
 1. 备份 PostgreSQL、对象存储和 Computer 数据，保留 `.env`、加密密钥与持久化数据卷。
 2. 停止活跃任务和 API 写入，确认已经应用的迁移编号。
-3. 按编号依次执行**尚未应用的全部迁移，直到 032**，每个迁移只执行一次。新数据库初始化不会自动升级旧数据卷；其他章节按功能提供的 SQL 示例只是历史步骤，不能代替完整升级。
+3. 按编号依次执行**尚未应用的全部迁移，直到 033**，每个迁移只执行一次。新数据库初始化不会自动升级旧数据卷；其他章节按功能提供的 SQL 示例只是历史步骤，不能代替完整升级。
 4. 同步构建和部署匹配版本的 API、Web 与 Sandbox Service，不能通过删除数据卷升级。
 
 全新安装请看[快速开始](getting-started.md)；事务执行 SQL 的方法见[账号升级](accounts-and-security.md#账号第三方登录与头像)和[上下文升级](architecture.md#已有部署升级)。完成全部缺失迁移后再重启最新服务。
@@ -140,7 +140,7 @@ ACS 模式不挂载 Docker Socket，Sandbox Service 可以多副本运行。Char
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
-for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions 000022_run_inputs 000023_file_changes 000024_project_rules 000025_run_permissions 000026_cloud_task_indexes 000027_automations 000028_permission_reviews 000029_conversational_schedules 000030_native_signin 000031_personal_assistant 000032_app_connections; do
+for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions 000022_run_inputs 000023_file_changes 000024_project_rules 000025_run_permissions 000026_cloud_task_indexes 000027_automations 000028_permission_reviews 000029_conversational_schedules 000030_native_signin 000031_personal_assistant 000032_app_connections 000033_github_code_workflows; do
   docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "backend/migrations/${migration}.up.sql" || exit 1
 done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web sandbox-service

@@ -11,6 +11,7 @@ RUN --mount=type=secret,id=proxy_ca \
 COPY cmd/lester-toolbox ./cmd/lester-toolbox
 COPY internal/toolboxfs ./internal/toolboxfs
 COPY internal/commandtask ./internal/commandtask
+COPY internal/githubsandbox ./internal/githubsandbox
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/lester-toolbox ./cmd/lester-toolbox
 
 FROM python:3.12-slim-bookworm

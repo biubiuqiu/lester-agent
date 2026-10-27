@@ -47,6 +47,21 @@ func (r *helperACSRuntime) Run(_ context.Context, command, _ string, _, _ func(s
 	return &acsCommandResult{Stdout: output.String()}, nil
 }
 
+func (r *helperACSRuntime) RunToolbox(_ context.Context, args []string, _, _ func(string)) (*acsCommandResult, error) {
+	arguments := append([]string{}, args...)
+	for index := 0; index < len(arguments)-1; index++ {
+		if arguments[index] == "--root" || arguments[index] == "--path" {
+			arguments[index+1] = filepath.Join(r.root, strings.TrimPrefix(arguments[index+1], "/"))
+			index++
+		}
+	}
+	var output bytes.Buffer
+	if err := toolboxfs.Run(arguments, strings.NewReader(""), &output); err != nil {
+		return &acsCommandResult{ExitCode: 1, Stderr: err.Error()}, nil
+	}
+	return &acsCommandResult{Stdout: output.String()}, nil
+}
+
 func (r *helperACSRuntime) Write(_ context.Context, target string, data []byte) error {
 	if !strings.HasPrefix(target, "/tmp/.lester-input-") {
 		return fmt.Errorf("unexpected unsafe native write to %s", target)

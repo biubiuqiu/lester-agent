@@ -72,6 +72,13 @@ func TestEncryptedGrantAndMigrationRollbackBoundaries(t *testing.T) {
 	if f.s.open(encrypted, nonce, "app-connection:another-row", &saved) == nil {
 		t.Fatal("accepted swapped grant")
 	}
+	later, err := os.ReadFile("../../migrations/000033_github_code_workflows.down.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.s.DB.Exec(context.Background(), string(later)); err != nil {
+		t.Fatal(err)
+	}
 	sql, err := os.ReadFile("../../migrations/000032_app_connections.down.sql")
 	if err != nil {
 		t.Fatal(err)

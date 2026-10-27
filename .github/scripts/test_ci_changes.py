@@ -31,6 +31,8 @@ class ChangeSelectionTests(unittest.TestCase):
             (["backend/Dockerfile.sandbox-runtime"], {"go", "security_go", "sandbox_runtime"}),
             (["backend/runtime/package-lock.json"], {"go", "security_go", "sandbox_runtime"}),
             (["backend/internal/toolboxfs/fs.go"], {"go", "security_go", "sandbox_runtime"}),
+            (["backend/internal/commandtask/cli.go"], {"go", "security_go", "sandbox_runtime"}),
+            (["backend/internal/githubsandbox/githubsandbox.go"], {"go", "security_go", "sandbox_runtime"}),
             (["backend/internal/sandbox/docker.go"], {"go", "security_go", "sandbox_runtime"}),
             (["backend/go.mod"], {"go", "security_go", "sandbox_runtime"}),
             (["deploy/gateway/nginx.conf"], {"gateway"}),
