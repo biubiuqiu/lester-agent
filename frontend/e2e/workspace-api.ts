@@ -137,6 +137,7 @@ export class WorkspaceApi {
     }
     if (!request.headers().cookie?.includes("lester_access_token=browser-test-access")) return reply({ code: "access_required", error: "需要登录" }, 401);
     if (path === "/api/v1/auth/session") return reply({ access_expires_at: new Date(Date.now() + 7200000).toISOString(), refresh_expires_at: new Date(Date.now() + 2592000000).toISOString() });
+    if (path === "/api/v1/speech/capabilities" && method === "GET") return reply({ enabled: false, provider: "openai", revision: 0, max_audio_bytes: 10485760, max_duration_seconds: 120 });
     if (path === "/api/v1/personal" && method === "GET") return reply({ turns: [], has_more: false, memories: [], tasks: [], auto_memory: true });
     if (path === "/api/v1/personal/tasks" && method === "GET") return reply({ tasks: [] });
     if (path === "/api/v1/tasks") return reply({ tasks: [], next_cursor: "", attention_count: 0, observed_at: new Date().toISOString() });

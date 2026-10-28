@@ -84,7 +84,7 @@ CI 在推送 `main`、提交 PR 和手动运行时触发。同一事件下的分
 | 沙盒运行镜像 | 运行时、Toolbox、Provider 改动 | 构建、依赖审计、离线非 root 浏览器与编译检查、持久卷和终端集成测试 |
 | 前端依赖安全 | 包清单、锁文件、pnpm 配置改动及每周 | pnpm audit 检查生产依赖的 high/critical 漏洞 |
 
-浏览器回归使用生产 standalone 构建和固定 REST/SSE 服务，不调用真实模型、OAuth 或邮件服务。构建后，在 `frontend/` 运行 `pnpm exec playwright install chromium`，再运行 `pnpm test:e2e`。桌面和手机 Chromium 覆盖登录错误、明确发送首个任务、草稿保留、发送失败、实时多文件标签和隔离 HTML 预览；也检查六语言官网与全部帮助章节、禁用 JavaScript 时的翻译、新手教学，以及切换语言后的草稿和附件保留。失败不自动重试，CI 保留失败截图与 trace 七天。
+浏览器回归使用生产 standalone 构建和固定 REST/SSE 服务，不调用真实模型、语音服务、OAuth 或邮件服务。构建后，在 `frontend/` 运行 `pnpm exec playwright install chromium`，再运行 `pnpm test:e2e`。桌面和手机 Chromium 覆盖登录错误、明确发送首个任务、草稿保留、发送失败、实时多文件标签和隔离 HTML 预览；也检查六语言官网与全部帮助章节、禁用 JavaScript 时的翻译、新手教学，以及切换语言后的草稿和附件保留。失败不自动重试，CI 保留失败截图与 trace 七天。语音用例通过可控媒体与服务商模拟数据，覆盖后台配置、取消录音、草稿与队列保留、原请求回执恢复。CI 使用两个浏览器 worker，Web 任务预算为 25 分钟，可用 `pnpm test:e2e --workers=2` 复现。
 
 安全扫描使用独立任务名，发现漏洞或扫描出错仍会失败，不会忽略错误。每周一 03:23 UTC（北京时间 11:23）即使没有代码改动也扫描依赖；Actions 的 **Run workflow** 可手动执行全套。固定 Ubuntu 24.04、Node 22，从 `backend/go.mod` 与 `frontend/package.json` 读取 Go/pnpm 版本。集成测试使用临时 PostgreSQL，不访问生产数据或真实模型服务凭据。CI 不会部署应用。
 

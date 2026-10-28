@@ -64,6 +64,12 @@ This diagram shows the Docker Compose entry point. Kubernetes uses Ingress to ro
 
 For separately authorized [GitHub code tasks](github-code-tasks.md), `internal/githubwork` coordinates pinned source reads, encrypted publication proposals and durable external-write receipts. Sandbox Service imports/exports files through the narrow native `GitHubTransfer` protocol; `internal/githubsandbox` validates the archive/selected paths and creates a credential-free local Git baseline. Docker and ACS directly invoke the fixed Toolbox without user login scripts. Ordinary editing/testing stays in the existing file/command tools. Publication passes the existing once-only user approval boundary and uses an expected-head GitHub commit; unknown receipts are reconciled without replaying writes. No new worker or generic connector command channel is added.
 
+### Speech input
+
+`internal/speech` is a separate input service inside API. An administrator enables one OpenAI-compatible transcription service or ElevenLabs Scribe and stores its encrypted credential. The authenticated Web/native recorder sends a bounded audio upload directly to this API; audio never enters a Computer, Skill or Agent tool. The returned text joins the latest scoped draft and requires the ordinary explicit send.
+
+Stable request receipts precede the single provider call. Recovery reads the original receipt without retranscribing; text access expires after five minutes, and later transcription requests clear expired text and prune request IDs after 24 hours. Raw audio is not persisted by Lester; provider retention remains independent. Microphone access is restricted to the trusted app page, with explicit native permission handling and denied access for previews and published artifacts. See [configuration and limits](speech-input.md).
+
 ### Artifact publishing flow
 
 Single-file HTML and multi-file sites use the same publishing service. Local images, videos, stylesheets, and scripts must be bundled from the conversation directory; missing dependencies or paths outside that boundary reject the deployment.
@@ -213,7 +219,7 @@ Fresh installs apply 004–005 automatically. Migration 004 preserves old chat o
 
 ### Deliverable registration and reliable events upgrade
 
-The current version requires migrations 001–033. Migration 013 is described in [Accounts and sign-in](accounts-and-security.md#accounts-and-sign-in). The historical 004–005 commands above are insufficient for a full upgrade; apply every missing migration in numeric order. For a database already on 001–011, back it up, stop API writes, apply 012 once, then apply every remaining migration through 033 before rebuilding API/Web; see [the upgrade checklist](deployment.md#upgrading-an-existing-installation):
+The current version requires migrations 001–034. Migration 013 is described in [Accounts and sign-in](accounts-and-security.md#accounts-and-sign-in). The historical 004–005 commands above are insufficient for a full upgrade; apply every missing migration in numeric order. For a database already on 001–011, back it up, stop API writes, apply 012 once, then apply every remaining migration through 034 before rebuilding API/Web; see [the upgrade checklist](deployment.md#upgrading-an-existing-installation):
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
@@ -222,7 +228,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T post
   < backend/migrations/000012_deliverables_events.up.sql
 ```
 
-New Compose volumes initialize migrations 001–033; existing volumes never upgrade automatically. Do not delete volumes. Rolling back 012 drops registered metadata and pending delivery intents while preserving Computer files, messages, run events, and published artifacts. Stop the updated API before rollback and restore a compatible application version. Monitor pending outbox count and disk space during prolonged Redis outages.
+New Compose volumes initialize migrations 001–034; existing volumes never upgrade automatically. Do not delete volumes. Rolling back 012 drops registered metadata and pending delivery intents while preserving Computer files, messages, run events, and published artifacts. Stop the updated API before rollback and restore a compatible application version. Monitor pending outbox count and disk space during prolonged Redis outages.
 
 ---
 

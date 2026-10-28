@@ -18,11 +18,13 @@ import (
 	"github.com/biubiuqiu/lester-agent/backend/internal/project"
 	"github.com/biubiuqiu/lester-agent/backend/internal/reference"
 	"github.com/biubiuqiu/lester-agent/backend/internal/skill"
+	"github.com/biubiuqiu/lester-agent/backend/internal/speech"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
 
 type Dependencies struct {
+	Speech            *speech.Handler
 	AppConnections    *connector.Handler
 	Personal          *personal.Handler
 	Automations       *automation.Handler
@@ -44,7 +46,7 @@ type Dependencies struct {
 
 func Router(deps Dependencies) http.Handler {
 	router := chi.NewRouter()
-	router.Use(middleware.RequestID, httpapi.ClientIP(deps.TrustedProxyCIDRs), httpapi.Recover(deps.Logger), httpapi.AccessLog(deps.Logger), httpapi.CORS(deps.WebOrigin), auth.MutationOrigin(deps.WebOrigin))
+	router.Use(httpapi.DenyMicrophone, middleware.RequestID, httpapi.ClientIP(deps.TrustedProxyCIDRs), httpapi.Recover(deps.Logger), httpapi.AccessLog(deps.Logger), httpapi.CORS(deps.WebOrigin), auth.MutationOrigin(deps.WebOrigin))
 	router.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { httpapi.JSON(w, 200, map[string]bool{"ok": true}) })
 	router.Route("/api/v1", func(api chi.Router) {
 		if deps.AppConnections != nil {
@@ -69,6 +71,11 @@ func Router(deps Dependencies) http.Handler {
 		api.With(deps.Auth.Middleware).Get("/auth/session", deps.Auth.SessionStatus)
 		api.Group(func(private chi.Router) {
 			private.Use(deps.Auth.Middleware)
+			if deps.Speech != nil {
+				private.Get("/speech/capabilities", deps.Speech.Capabilities)
+				private.Post("/speech/transcriptions", deps.Speech.Transcribe)
+				private.Get("/speech/transcriptions/{id}", deps.Speech.Receipt)
+			}
 			if deps.AppConnections != nil {
 				private.Get("/connectors", deps.AppConnections.List)
 				private.Post("/connectors/{provider}/connect", deps.AppConnections.Connect)
@@ -110,6 +117,10 @@ func Router(deps Dependencies) http.Handler {
 			}
 			private.Route("/admin", func(admin chi.Router) {
 				admin.Use(auth.RequireAdmin)
+				if deps.Speech != nil {
+					admin.Get("/speech", deps.Speech.Config)
+					admin.Patch("/speech", deps.Speech.Save)
+				}
 				admin.Get("/users", deps.Auth.ListUsers)
 				admin.Post("/users", deps.Auth.AddUser)
 				admin.Patch("/users/{id}", deps.Auth.UpdateUser)

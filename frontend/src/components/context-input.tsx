@@ -6,6 +6,7 @@ import { AtSign, Plus, Paperclip, FileText, MessageSquare, Puzzle, X } from "luc
 import { useT } from "./i18n";
 import { FloatingPopover } from "./floating-popover";
 import { useComposerSize } from "./use-composer-size";
+import { SpeechComposer } from "./speech-input";
 import type { ContextReference, MentionItem, ReferenceType } from "@/lib/api";
 import { inspectMention, parseMentionQuery, referenceKey, referenceType, searchMentions, type MentionPreview } from "@/lib/mentions";
 import { readView, updateView } from "@/lib/conversation-view-state";
@@ -18,7 +19,7 @@ export function useContextReferences(key: string) {
 
 type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "onChange" | "value"> & {
   value: string; onText: (text: string) => void; references: ContextReference[]; onReferences: (items: ContextReference[]) => void;
-  inputRef?: RefObject<HTMLTextAreaElement | null>; tools?: ReactNode; menuTools?: ReactNode; onUpload?: () => void; conversationId?: string;
+  inputRef?: RefObject<HTMLTextAreaElement | null>; tools?: ReactNode; menuTools?: ReactNode; onUpload?: () => void; conversationId?: string; draftKey: string;
 };
 const kinds = ["all", "context", "conversation", "skill"] as const;
 const kindLabels = { all: "全部", context: "上下文", conversation: "会话", skill: "Skill" };
@@ -27,7 +28,7 @@ function ReferenceIcon({ kind }: { kind: ReferenceType }) {
   return <Icon size={13} aria-hidden="true" />;
 }
 
-export function ContextInput({ value, onText, references, onReferences, inputRef, onKeyDown, tools, menuTools, onUpload, conversationId, ...props }: Props) {
+export function ContextInput({ value, onText, references, onReferences, inputRef, onKeyDown, tools, menuTools, onUpload, conversationId, draftKey, ...props }: Props) {
   const t = useT();
   const listId = useId();
   const addAnchor = useRef<HTMLButtonElement>(null);
@@ -143,7 +144,7 @@ export function ContextInput({ value, onText, references, onReferences, inputRef
       }
       onKeyDown?.(event);
     }} />
-    <div className="compose-actions"><button ref={addAnchor} type="button" className="composer-add" aria-label={t("添加内容")} title={t("添加内容")} aria-expanded={addOpen} disabled={props.disabled} onClick={() => setAddOpen(value => !value)}><Plus size={20} /></button>
+    <SpeechComposer draftKey={draftKey} inputRef={input} onText={onText} disabled={props.disabled} maxLength={props.maxLength} leading={<><button ref={addAnchor} type="button" className="composer-add" aria-label={t("添加内容")} title={t("添加内容")} aria-expanded={addOpen} disabled={props.disabled} onClick={() => setAddOpen(value => !value)}><Plus size={20} /></button>
       {addOpen ? <FloatingPopover anchor={addAnchor} width={260} className="composer-add-menu" aria-label={t("添加内容")} onClose={reason => { setAddOpen(false); if (reason === "escape") addAnchor.current?.focus(); }}>
         {onUpload ? <button type="button" autoFocus onClick={() => { setAddOpen(false); onUpload(); }}><Paperclip size={17} />{t("添加附件")}</button> : null}
         <button type="button" aria-label={t("@ 添加引用")} onClick={() => {
@@ -151,6 +152,6 @@ export function ContextInput({ value, onText, references, onReferences, inputRef
           setQuery(""); setIndex(0); setSelectionError(""); input.current?.focus();
         }}><AtSign size={17} />{t("@ 添加引用")}</button>
         {menuTools}
-      </FloatingPopover> : null}{tools}</div>
+      </FloatingPopover> : null}</>}>{tools}</SpeechComposer>
   </div>;
 }

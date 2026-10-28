@@ -62,7 +62,7 @@ done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
 ```
 
-保留 `.env`、原密钥和数据卷。全新卷自动初始化 001–033，已有卷不会自动升级。PowerShell 用 `Get-Content -Raw` 管道传入 `exec -T postgres`。013 回滚会删除身份、令牌和头像引用，存在无密码账号时会拒绝回滚；降级前先安排密码恢复并配套兼容版本。工作区、项目和文件不迁移。实际 OAuth 授权与邮件投递需使用部署方真实配置验收。
+保留 `.env`、原密钥和数据卷。全新卷自动初始化 001–034，已有卷不会自动升级。PowerShell 用 `Get-Content -Raw` 管道传入 `exec -T postgres`。013 回滚会删除身份、令牌和头像引用，存在无密码账号时会拒绝回滚；降级前先安排密码恢复并配套兼容版本。工作区、项目和文件不迁移。实际 OAuth 授权与邮件投递需使用部署方真实配置验收。
 
 ## 双令牌登录、头像裁剪与独立 HTML 预览
 
@@ -83,7 +83,7 @@ done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web
 ```
 
-015 会使旧登录失效，升级后需重新登录一次，账号、个人资料、项目与文件不受影响。保留原 `.env`、加密密钥与数据卷。全新 Compose 卷初始化 001–033；Helm 部署前手动执行 SQL。015 回滚也会撤销登录，需配套兼容的 API/Web。有效期为应用固定默认值，无需新增环境变量。
+015 会使旧登录失效，升级后需重新登录一次，账号、个人资料、项目与文件不受影响。保留原 `.env`、加密密钥与数据卷。全新 Compose 卷初始化 001–034；Helm 部署前手动执行 SQL。015 回滚也会撤销登录，需配套兼容的 API/Web。有效期为应用固定默认值，无需新增环境变量。
 
 ## 安全提示
 

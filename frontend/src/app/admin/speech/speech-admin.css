@@ -1,0 +1,29 @@
+.speech-admin { max-width: 780px; }
+.speech-admin .settings-error .text-button, .speech-admin .success-banner { display: flex; align-items: center; gap: 7px; }
+.speech-admin .settings-error .text-button { margin-top: 8px; }
+.speech-admin-form { margin-top: 28px; border: 1px solid #e0e4dc; border-radius: 14px; background: #fff; overflow: hidden; }
+.speech-admin-form fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.speech-admin-enable { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 24px; border-bottom: 1px solid #edf0e8; cursor: pointer; }
+.speech-admin-enable strong { display: block; font-size: 14px; font-weight: 550; }
+.speech-admin-enable small { display: block; max-width: 520px; margin-top: 7px; color: #788075; font-size: 12px; line-height: 1.7; }
+.speech-admin-enable input { width: 17px; height: 17px; flex-shrink: 0; accent-color: #426044; }
+.speech-admin-fields { display: flex; flex-direction: column; gap: 18px; padding: 24px; }
+.speech-admin-fields .field { min-width: 0; }
+.speech-admin-fields .field input, .speech-admin-fields .field select { width: 100%; min-width: 0; }
+.speech-admin-fields .admin-help { margin-top: -9px; }
+.speech-admin-key-notice { margin: -8px 0 0; color: #8b6a39; font-size: 12px; line-height: 1.7; }
+.speech-admin-clear { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 12px; color: #788075; }
+.speech-admin-clear .text-button { padding: 0; font-size: 12px; }
+.speech-admin-advanced { padding-top: 4px; }
+.speech-admin-advanced summary { color: #66725f; font-size: 12px; cursor: pointer; }
+.speech-admin-advanced .field { margin-top: 18px; }
+.speech-admin-advanced .admin-help { margin-top: 10px; }
+.speech-admin-form footer { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 18px 24px; border-top: 1px solid #edf0e8; }
+.speech-admin-form footer .admin-help { display: flex; align-items: flex-start; gap: 6px; }
+.speech-admin-form footer .admin-help svg { margin-top: 3px; flex-shrink: 0; }
+.speech-admin-form footer .primary-button { flex-shrink: 0; }
+@media(max-width: 540px) {
+  .speech-admin-enable, .speech-admin-fields { padding: 20px 16px; }
+  .speech-admin-form footer { padding: 16px; flex-wrap: wrap; }
+  .speech-admin-form footer .primary-button { margin-left: auto; }
+}

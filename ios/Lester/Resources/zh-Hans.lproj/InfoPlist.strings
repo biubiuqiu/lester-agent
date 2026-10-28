@@ -1,2 +1,3 @@
 "NSCameraUsageDescription" = "拍照作为 Lester 任务的附件。";
 "NSPhotoLibraryUsageDescription" = "选择照片作为 Lester 任务的附件。";
+"NSMicrophoneUsageDescription" = "录制语音，并通过服务器配置的语音服务转成可编辑的草稿。";

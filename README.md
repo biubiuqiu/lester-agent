@@ -52,11 +52,13 @@ Open [http://localhost:13000](http://localhost:13000), enter the workspace, regi
 
 [Full setup, PowerShell and alternate ports](docs/getting-started.md). Saving model configuration does not verify provider access; the first task confirms the actual call.
 
-**Existing installations:** preserve `.env`, encryption keys and volumes. Back up and apply every missing migration through **033** before running the matching services. Follow the [upgrade checklist](docs/deployment.md#upgrading-an-existing-installation); do not overwrite an existing configuration or delete volumes.
+**Existing installations:** preserve `.env`, encryption keys and volumes. Back up and apply every missing migration through **034** before running the matching services. Follow the [upgrade checklist](docs/deployment.md#upgrading-an-existing-installation); do not overwrite an existing configuration or delete volumes.
 
 Connect GitHub, Gmail, X, Feishu and Slack for [read-only task research](docs/app-connections.md).
 
 Authorize a repository for [GitHub code tasks](docs/github-code-tasks.md): edit, test and review a branch/PR from the Computer.
+
+Administrators can enable [voice input](docs/speech-input.md) with OpenAI-compatible or ElevenLabs transcription; recognized text stays editable before sending.
 
 ## Documentation
 

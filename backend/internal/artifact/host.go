@@ -24,6 +24,7 @@ type Host struct {
 }
 
 func (h *Host) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Permissions-Policy", "microphone=()")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.Header().Set("Cache-Control", "no-store")

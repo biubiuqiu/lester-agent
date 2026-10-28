@@ -1,5 +1,6 @@
 package app.lester.client
 
+import android.Manifest
 import android.content.Intent
 import android.os.Bundle
 import android.webkit.WebChromeClient
@@ -41,6 +42,10 @@ import java.util.Locale
 class MainActivity : ComponentActivity() {
     private val model: SessionModel by viewModels()
     private var host: WorkspaceHost? = null
+    private var microphoneReply: ((Boolean) -> Unit)? = null
+    private val microphone = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        val reply = microphoneReply; microphoneReply = null; reply?.invoke(granted)
+    }
     private val picker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         host?.receiveFiles(WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data))
     }
@@ -82,7 +87,15 @@ class MainActivity : ComponentActivity() {
     }
     override fun onStart() { super.onStart(); host?.active(true); model.active(true) }
     override fun onStop() { model.active(false); host?.active(false); super.onStop() }
-    override fun onDestroy() { host?.close(); host = null; super.onDestroy() }
+    override fun onDestroy() { host?.close(); host = null; microphoneReply?.invoke(false); microphoneReply = null; super.onDestroy() }
+    private fun requestMicrophone(reply: (Boolean) -> Unit) {
+        // A cancelled old WebView request must not lend its OS result to a new
+        // WebView. Keep its callback until the original dialog has settled.
+        if (microphoneReply != null) { reply(false); return }
+        microphoneReply = reply
+        try { microphone.launch(Manifest.permission.RECORD_AUDIO) }
+        catch (_: Exception) { microphoneReply = null; reply(false) }
+    }
     private fun signIn() {
         model.signIn { url ->
             try { CustomTabsIntent.Builder().setShowTitle(false).setShareState(CustomTabsIntent.SHARE_STATE_OFF).build().launchUrl(this, url.toUri()) }
@@ -107,7 +120,7 @@ class MainActivity : ComponentActivity() {
                 val webContent = remember(configured, model.webRevision) { movableContentOf {
                     AndroidView(factory = {
                         host?.close()
-                        WorkspaceHost(this@MainActivity, model, configured) { picker.launch(it) }.also { host = it }.web
+                        WorkspaceHost(this@MainActivity, model, configured, { picker.launch(it) }, ::requestMicrophone).also { host = it }.web
                     }, modifier = Modifier.fillMaxSize(), onReset = null, onRelease = { view ->
                         if (host?.web === view) { host?.close(); host = null }
                     })

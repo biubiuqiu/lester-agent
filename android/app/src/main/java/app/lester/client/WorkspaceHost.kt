@@ -3,13 +3,16 @@ package app.lester.client
 import androidx.core.net.toUri
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
 import android.webkit.CookieManager
+import android.webkit.PermissionRequest
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.URLUtil
 import android.webkit.ValueCallback
@@ -23,6 +26,7 @@ import android.webkit.WebViewClient
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import app.lester.core.DownloadReceipt
+import app.lester.core.MicrophonePermissionGate
 import app.lester.core.ServerAddress
 import app.lester.core.parseObject
 import java.io.File
@@ -42,6 +46,7 @@ import org.json.JSONObject
 internal class WorkspaceHost(
     private val activity: Activity, private val model: SessionModel, val server: ServerAddress,
     private val chooseFiles: (Intent) -> Unit,
+    private val requestMicrophone: ((Boolean) -> Unit) -> Unit,
 ) {
     val web = WebView(activity)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -51,6 +56,9 @@ internal class WorkspaceHost(
     private var broken = false
     private var transfer: Job? = null
     private var chunked: ChunkedDownload? = null
+    private val microphoneGate = MicrophonePermissionGate(server)
+    private var microphoneRequest: PermissionRequest? = null
+    private var lastMainPage: String? = null
     private data class ChunkedDownload(val receipt: DownloadReceipt, val file: File, val name: String, val mime: String, val created: Long)
 
     init {
@@ -72,16 +80,39 @@ internal class WorkspaceHost(
                 if (request.hasGesture() && request.url.scheme == "https") external(url)
                 return true
             }
-            override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) { if (current()) model.loading = true }
+            override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) { cancelMicrophone(); if (current()) model.loading = true }
+            override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
+                if (lastMainPage != url) { cancelMicrophone(); lastMainPage = url }
+            }
             override fun onPageFinished(view: WebView, url: String) { if (current()) { model.loading = false; model.canGoBack = web.canGoBack() } }
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) { if (request.isForMainFrame && current()) { model.loading = false; model.error = R.string.load_failed } }
             override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                cancelMicrophone()
                 broken = true; model.loading = false; model.error = R.string.workspace_restart
                 (web.parent as? android.view.ViewGroup)?.removeView(web); web.destroy()
                 return true
             }
         }
         web.webChromeClient = object : WebChromeClient() {
+            override fun onPermissionRequest(request: PermissionRequest) {
+                cancelMicrophonePermission()
+                val audioOnly = request.resources.contentEquals(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
+                val ticket = microphoneGate.begin(request.origin.toString(), web.url.orEmpty(), model.workspace?.account.orEmpty(), current() && model.foregroundActive, audioOnly)
+                if (ticket == null) { request.deny(); return }
+                microphoneRequest = request
+                val complete: (Boolean) -> Unit = complete@{ granted ->
+                    if (microphoneRequest !== request) return@complete
+                    microphoneRequest = null
+                    val allowed = microphoneGate.consume(ticket, web.url.orEmpty(), model.workspace?.account.orEmpty(), current() && model.foregroundActive,
+                        granted && activity.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+                    if (allowed) request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) else request.deny()
+                }
+                if (activity.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) complete(true)
+                else requestMicrophone(complete)
+            }
+            override fun onPermissionRequestCanceled(request: PermissionRequest) {
+                if (microphoneRequest === request) { microphoneRequest = null; microphoneGate.cancel() }
+            }
             override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean {
                 fileChooser?.onReceiveValue(null); fileChooser = callback
                 if (!server.acceptsBridge(web.url.orEmpty())) { receiveFiles(null); return true }
@@ -92,6 +123,7 @@ internal class WorkspaceHost(
         web.setDownloadListener { url, _, disposition, mime, length -> download(url, disposition, mime ?: "application/octet-stream", length) }
         model.command = { action, id ->
             if (current() && server.acceptsBridge(web.url.orEmpty())) {
+                if (action in listOf("home", "conversation", "settings", "tasks")) cancelMicrophone()
                 val data = JSONObject().put("action", action).apply { if (id != null) put("id", id) }
                 web.evaluateJavascript("window.dispatchEvent(new CustomEvent('lester:native-command',{detail:JSON.parse(${JSONObject.quote(data.toString())})}));", null)
             }
@@ -104,11 +136,13 @@ internal class WorkspaceHost(
                         val envelope = parseObject(message.data.orEmpty())
                         require(envelope.getInt("version") == 1)
                         val type = envelope.getString("type"); val payload = envelope.getJSONObject("payload")
+                        if (type == "signed_out" || type == "workspace" && payload.optString("user_id") + ":" + payload.optString("workspace_id") != model.workspace?.account) cancelMicrophone()
                         if (type.startsWith("download_")) receiveDownload(type, payload) else { model.receive(type, payload); model.canGoBack = web.canGoBack() }
                     }.onFailure { if (chunked != null) { cancelDownload(); model.error = R.string.download_failed } }
                 }
             }
             if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+                WebViewCompat.addDocumentStartJavaScript(web, mediaCaptureScript, setOf(server.origin))
                 WebViewCompat.addDocumentStartJavaScript(web, """
                     if(window.top===window){
                       Object.defineProperty(window,'__LESTER_NATIVE__',{value:Object.freeze({version:1,platform:'android'}),writable:false});
@@ -123,7 +157,15 @@ internal class WorkspaceHost(
     private fun unsupported() { model.loading = false; model.error = R.string.update_webview; model.reload = { model.loading = false; model.error = R.string.update_webview } }
     private fun current() = !closed && model.server == server
     fun receiveFiles(uris: Array<Uri>?) { fileChooser?.onReceiveValue(uris); fileChooser = null }
-    fun active(value: Boolean) { if (value) web.onResume() else { web.onPause(); cancelDownload() } }
+    fun active(value: Boolean) { if (value) web.onResume() else { cancelMicrophone(); web.onPause(); cancelDownload() } }
+    private fun cancelMicrophonePermission() {
+        microphoneGate.cancel()
+        microphoneRequest?.deny(); microphoneRequest = null
+    }
+    private fun cancelMicrophone() {
+        cancelMicrophonePermission()
+        if (!broken && !closed) web.evaluateJavascript("window.dispatchEvent(new Event('lester:native-media-stop'));", null)
+    }
     fun back(exit: () -> Unit) {
         if (broken) { exit(); return }
         // Respect an open Web dialog before navigating away from its draft.
@@ -196,7 +238,7 @@ internal class WorkspaceHost(
         if (!broken && !closed) web.evaluateJavascript("window.__lesterDownloadToken=null;", null)
     }
     fun close() {
-        cancelDownload(); closed = true; scope.cancel(); receiveFiles(null)
+        cancelMicrophone(); cancelDownload(); closed = true; scope.cancel(); receiveFiles(null)
         if (!broken) { web.stopLoading(); web.webChromeClient = null; web.destroy() }
     }
     companion object {

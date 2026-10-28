@@ -1,2 +1,3 @@
 "NSCameraUsageDescription" = "Adjunta una foto a tu tarea de Lester.";
 "NSPhotoLibraryUsageDescription" = "Elige una foto para tu tarea de Lester.";
+"NSMicrophoneUsageDescription" = "Graba tu voz para convertirla en un borrador editable mediante el servicio de voz configurado en tu servidor.";

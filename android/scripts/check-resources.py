@@ -12,7 +12,8 @@ for path in (root/'app/src/main/java').rglob('*.kt'):
     for key in re.findall(r'R\.string\.(\w+)',path.read_text()): assert key in base, f'{path}: missing {key}'
 ns='{http://schemas.android.com/apk/res/android}'
 manifest=E.parse(root/'app/src/main/AndroidManifest.xml').getroot()
-assert {p.attrib[ns+'name'] for p in manifest.findall('uses-permission')}=={'android.permission.INTERNET','android.permission.VIBRATE'}
+assert {p.attrib[ns+'name'] for p in manifest.findall('uses-permission')}=={'android.permission.INTERNET','android.permission.VIBRATE','android.permission.RECORD_AUDIO'}
+assert any(f.attrib.get(ns+'name')=='android.hardware.microphone' and f.attrib.get(ns+'required')=='false' for f in manifest.findall('uses-feature'))
 application=manifest.find('application');assert application.attrib[ns+'allowBackup']=='false'
 release=E.parse(res/'xml/network_security_config.xml').getroot()
 assert release.find('base-config').attrib['cleartextTrafficPermitted']=='false'

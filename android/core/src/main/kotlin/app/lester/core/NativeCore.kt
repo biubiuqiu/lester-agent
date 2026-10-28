@@ -34,6 +34,12 @@ data class ServerAddress private constructor(val origin: String, val development
         val path = URI(value).path
         path == "/app" || path.startsWith("/app/") || path == "/login"
     }.getOrDefault(false)
+    fun allowsMicrophone(requestOrigin: String, currentPage: String): Boolean = sameOrigin(requestOrigin) && sameOrigin(currentPage) && runCatching {
+        val source = URI(requestOrigin)
+        val path = URI(currentPage).path
+        source.rawPath in listOf(null, "", "/") && source.rawQuery == null && source.rawFragment == null &&
+            (path == "/app" || path.startsWith("/app/"))
+    }.getOrDefault(false)
     fun allowsNavigation(value: String): Boolean = sameOrigin(value) && runCatching {
         val path = URI(value).path
         path == "/" || path == "/login" || path == "/app" || path.startsWith("/app/") || path == "/docs" || path.startsWith("/docs/") || path.startsWith("/preview/")
@@ -69,6 +75,26 @@ data class ServerAddress private constructor(val origin: String, val development
             fields.first { it.first == "code" }.second.also { require(credential.matches(it)) }
         }.getOrNull()
     }
+}
+
+// Runtime permission dialogs outlive navigation, account changes and activity
+// transitions. Only the original pending request may consume a user response.
+class MicrophonePermissionGate(private val server: ServerAddress) {
+    private data class Pending(val id: Long, val origin: String, val page: String, val account: String)
+    private var generation = 0L
+    private var pending: Pending? = null
+    fun begin(origin: String, page: String, account: String, foreground: Boolean, audioOnly: Boolean): Long? {
+        cancel()
+        if (!foreground || !audioOnly || account.isEmpty() || !server.allowsMicrophone(origin, page)) return null
+        return generation.also { pending = Pending(it, origin, page, account) }
+    }
+    fun consume(id: Long, page: String, account: String, foreground: Boolean, granted: Boolean): Boolean {
+        val request = pending ?: return false
+        if (request.id != id) return false
+        pending = null
+        return granted && foreground && page == request.page && account == request.account && server.allowsMicrophone(request.origin, page)
+    }
+    fun cancel() { generation++; pending = null }
 }
 
 data class NativeConversation(val id: String, val title: String, val projectName: String, val runId: String?, val runStatus: String)

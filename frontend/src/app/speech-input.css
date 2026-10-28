@@ -1,0 +1,30 @@
+.speech-microphone { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 34px; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; color: var(--muted); background: transparent; cursor: pointer; }
+.speech-microphone:hover:not(:disabled) { color: var(--ink); background: #edf2e9; }
+.speech-microphone.is-recording { color: #a33f36; background: #fbefeb; }
+.speech-microphone:disabled { opacity: .4; cursor: default; }
+.speech-microphone:focus-visible,.speech-feedback button:focus-visible { outline: 2px solid #69866c; outline-offset: 2px; }
+.speech-feedback { margin: 8px 0 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: #f8faf5; color: var(--muted); overflow-wrap: anywhere; font-size: 12px; line-height: 1.6; }
+.speech-feedback.speech-error { background: #fff9f6; }
+.speech-status-row { display: flex; align-items: center; gap: 8px; }
+.speech-status-row > svg { flex: none; }
+.speech-status-row > [role] { min-width: 0; }
+.speech-status-actions { display: flex; flex: none; align-items: center; gap: 6px; margin-left: auto; }
+.speech-status-actions button,.speech-overflow button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 5px 8px; border: 0; border-radius: 7px; color: inherit; background: transparent; font: inherit; font-size: 11px; cursor: pointer; }
+.speech-status-actions button:hover,.speech-overflow button:hover { background: #edf1e8; }
+.speech-status-actions .speech-dismiss { padding: 5px; min-width: 30px; }
+.speech-privacy { margin: 5px 0 0; color: var(--faint); font-size: 11px; }
+.speech-elapsed { flex: none; font-variant-numeric: tabular-nums; }
+.speech-recording-dot { flex: 0 0 7px; width: 7px; height: 7px; border-radius: 50%; background: #b65344; }
+.speech-spinner { animation: speech-spin 1s linear infinite; }
+.speech-overflow textarea { display: block; width: 100%; max-height: 150px; margin-top: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink); background: #fff; font: inherit; resize: vertical; }
+.speech-overflow p { margin: 2px 0 0; }
+.personal-composer .speech-feedback { margin-top: 8px; }
+@keyframes speech-spin { to { transform: rotate(360deg); } }
+@media (max-width: 600px) {
+  .speech-feedback { padding: 8px; }
+  .speech-status-row { flex-wrap: wrap; gap: 6px; }
+  .speech-status-row > [role] { flex: 1 1 70px; }
+  .speech-status-actions { max-width: 100%; }
+  .speech-status-actions button { max-width: 160px; white-space: normal; text-align: start; }
+}
+@media (prefers-reduced-motion: reduce) { .speech-spinner { animation: none; } }

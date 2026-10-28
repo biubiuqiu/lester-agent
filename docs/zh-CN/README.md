@@ -14,6 +14,7 @@
 | [Agent、上下文与 Skill](agents-and-context.md) | 自定义 Agent、@ 引用、Skill 与附件机制。 |
 | [应用连接](app-connections.md) | 五个平台 OAuth 配置、只读工具与隐私边界。 |
 | [GitHub 代码任务](github-code-tasks.md) | 授权仓库、源码导入、沙箱测试、发布预览与 PR。 |
+| [语音输入](speech-input.md) | 配置语音转写服务，将录音加入可编辑草稿。 |
 | [架构与 Computer](architecture.md) | 服务边界、沙箱、存储、事件与模型上下文。 |
 | [部署与升级](deployment.md) | 升级检查、统一网关、Docker/ACS 与 Kubernetes/Helm。 |
 | [账号、管理与安全](accounts-and-security.md) | 注册、单点登录、令牌、头像、管理员与安全配置。 |

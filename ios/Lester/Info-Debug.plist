@@ -53,6 +53,8 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Record your voice for transcription into an editable draft using your server’s configured speech service.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Attach a photo to your task.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

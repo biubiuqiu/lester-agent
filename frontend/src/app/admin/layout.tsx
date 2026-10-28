@@ -5,11 +5,12 @@ import { T, useT } from "@/components/i18n";
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, Cpu, ShieldCheck, Users } from "lucide-react";
+import { ArrowLeft, Cpu, Mic, ShieldCheck, Users } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { api, type UserProfile } from "@/lib/api";
 
 import { AuthSessionKeeper } from "@/components/auth-session-keeper";
+import "./admin-navigation.css";
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const t = useT();
@@ -32,6 +33,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       <nav aria-label={t("后台导航")}>
         <Link href="/admin/users" className={path === "/admin/users" ? "active" : ""} aria-current={path === "/admin/users" ? "page" : undefined}><Users /><T>{"人员管理"}</T></Link>
         <Link href="/admin/models" className={path === "/admin/models" ? "active" : ""} aria-current={path === "/admin/models" ? "page" : undefined}><Cpu /><T>{"共享模型"}</T></Link>
+        <Link href="/admin/speech" className={path === "/admin/speech" ? "active" : ""} aria-current={path === "/admin/speech" ? "page" : undefined}><Mic /><T>{"语音输入"}</T></Link>
       </nav>
       <Link className="back-button" href="/app"><ArrowLeft size={16} /><T>{"返回工作区"}</T></Link>
       {user && <small className="admin-identity">{user.display_name}<br /><T>{"系统管理员"}</T></small>}

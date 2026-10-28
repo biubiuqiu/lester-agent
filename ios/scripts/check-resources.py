@@ -16,11 +16,13 @@ for locale in locales:
     assert all(v.strip() for v in values.values()), f'{locale}: empty translations'
     if keys is None: keys = set(values)
     assert set(values) == keys, f'{locale}: missing native translations'
-    assert (resources / f'{locale}.lproj/InfoPlist.strings').exists()
+    purpose = (resources / f'{locale}.lproj/InfoPlist.strings').read_text()
+    assert re.search(r'^"NSMicrophoneUsageDescription" = ".+";', purpose, re.M), f'{locale}: missing microphone purpose'
 for name in ('Info.plist', 'Info-Debug.plist'):
     with (root / 'Lester' / name).open('rb') as stream: info = plistlib.load(stream)
     assert info['CFBundleURLTypes'][0]['CFBundleURLSchemes'] == ['lester']
     assert 'NSAllowsArbitraryLoads' not in repr(info)
+    assert info.get('NSMicrophoneUsageDescription', '').strip()
     assert len(info['UISupportedInterfaceOrientations~ipad']) == 4
     if name == 'Info.plist': assert 'NSAppTransportSecurity' not in info
 with (resources / 'PrivacyInfo.xcprivacy').open('rb') as stream:

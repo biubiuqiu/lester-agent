@@ -40,6 +40,15 @@ func CORS(origin string) func(http.Handler) http.Handler {
 		})
 	}
 }
+
+// API documents, including private generated previews, never request microphone
+// access. The authenticated Web application sets its own narrow page policy.
+func DenyMicrophone(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Permissions-Policy", "microphone=()")
+		next.ServeHTTP(w, r)
+	})
+}
 func Recover(log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

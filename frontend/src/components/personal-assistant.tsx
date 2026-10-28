@@ -9,6 +9,7 @@ import { mergePersonalTurns, readPersonal, type PersonalMemory, type PersonalSta
 import { randomId } from "@/lib/random-id";
 import { useI18n } from "./i18n";
 import { MessageContent } from "./message-content";
+import { SpeechComposer } from "./speech-input";
 
 export function PersonalAssistant({ user, projects, deployments, revision, active, onClose, onActivity, onDelegated }: { user: UserProfile; projects: Project[]; deployments: Deployment[]; revision: number; active: boolean; onClose: () => void; onActivity: (busy: boolean) => void; onDelegated: () => void }) {
   const { t, locale } = useI18n();
@@ -155,7 +156,7 @@ export function PersonalAssistant({ user, projects, deployments, revision, activ
       {!deployments.length ? <p className="personal-setup"><Link href="/app/settings/models?returnTo=%2Fapp">{t("配置第一个模型")}</Link></p> : null}
       <form className="personal-composer" onSubmit={submit}>
         <textarea ref={input} rows={2} maxLength={12000} aria-label={t("个人助理消息")} placeholder={t("聊聊你的想法，或告诉我需要安排什么…")} value={text} onChange={event => draft(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
-        <div className="personal-composer-actions"><span className="personal-composer-hint">{t("记住重要的事，安排接下来的工作")}</span><span className="personal-composer-spacer" /><button className="send-button" aria-label={t("发送给个人助理")} disabled={!text.trim() || busy || !!pending || !state || !deployments.length}>{busy ? <LoaderCircle className="personal-spinner" /> : <ArrowUp />}</button></div>
+        <SpeechComposer draftKey={key} inputRef={input} onText={draft} active={active} maxLength={12000} className="personal-composer-actions"><span className="personal-composer-hint">{t("记住重要的事，安排接下来的工作")}</span><span className="personal-composer-spacer" /><button className="send-button" aria-label={t("发送给个人助理")} disabled={!text.trim() || busy || !!pending || !state || !deployments.length}>{busy ? <LoaderCircle className="personal-spinner" /> : <ArrowUp />}</button></SpeechComposer>
       </form>
     </div>
     {memoryOpen && state ? <MemoryManager memories={state.memories} projects={projects} automatic={state.auto_memory} locale={locale} onClose={() => setMemoryOpen(false)} onRefresh={refresh} onAutomatic={async enabled => { await api("/api/v1/personal/settings", { method: "PATCH", body: JSON.stringify({ auto_memory: enabled }) }); setState(previous => previous ? { ...previous, auto_memory: enabled } : previous); }} /> : null}

@@ -28,6 +28,10 @@ public struct ServerAddress: Hashable, Sendable {
         guard mainFrame, sameOrigin(url), url.query == nil || !url.path.hasPrefix("/api/") else { return false }
         return url.path == "/app" || url.path.hasPrefix("/app/") || url.path == "/login"
     }
+    public func allowsMicrophone(from source: URL, current: URL, mainFrame: Bool) -> Bool {
+        guard mainFrame, sameOrigin(source), sameOrigin(current) else { return false }
+        return [source, current].allSatisfy { $0.path == "/app" || $0.path.hasPrefix("/app/") }
+    }
     public func allowsNavigation(_ url: URL) -> Bool {
         guard sameOrigin(url) else { return false }
         let path = url.path

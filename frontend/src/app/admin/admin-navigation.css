@@ -1,0 +1,5 @@
+@media(max-width: 720px) {
+  .admin-sidebar nav { flex-wrap: wrap; }
+  .admin-sidebar nav a { min-width: 0; max-width: 100%; white-space: normal; }
+  .admin-sidebar nav a svg { flex-shrink: 0; }
+}

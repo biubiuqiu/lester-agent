@@ -2,11 +2,11 @@
 
 A SwiftUI client for your own Lester server. **Make it happen.**
 
-Requires iOS / iPadOS 18+, **Xcode 26+** and an HTTPS Lester deployment with migration **030** and matching API/Web. This is source code to build and sign; there is no public App Store download yet.
+Requires iOS / iPadOS 18+, **Xcode 26+** and an HTTPS Lester deployment with migrations **001–034** and matching API/Web. This is source code to build and sign; there is no public App Store download yet.
 
 ## Run on a Mac
 
-1. Upgrade your server using the root README. Preserve keys, accounts and volumes. Back up PostgreSQL, stop API writes and active tasks, apply all missing migrations through `backend/migrations/000031_personal_assistant.up.sql`, and rebuild API and Web together. Fresh Compose databases include it automatically; Helm upgrades apply SQL externally.
+1. Upgrade your server using the root README. Preserve keys, accounts and volumes. Back up PostgreSQL, stop API writes and active tasks, apply all missing migrations through `backend/migrations/000034_speech_input.up.sql`, and rebuild API and Web together. Fresh Compose databases include it automatically; Helm upgrades apply SQL externally.
 2. Open `ios/Lester.xcodeproj` in Xcode 26+. The shared scheme is **Lester**. The only package is the local `Packages/LesterCore`; no third-party native dependencies or project generator are needed.
 3. Select your signing Team and a unique bundle identifier in the app target. Choose an iPhone or iPad simulator, or a provisioned device, and Run. Enter the server’s HTTPS origin, such as `https://lester.example` (deployment at the domain root).
 4. Sign in in the system authentication browser using your configured email, Google or GitHub account. Confirm the displayed account with **Sign in to App** and return to Lester. OAuth callbacks remain the existing server-owned HTTPS URLs; there are no mobile provider secrets to embed.
@@ -22,6 +22,7 @@ Release enforces HTTPS with normal system certificate validation. Debug supports
 - Switching away does not stop server tasks. Returning refreshes existing workspace/conversation state and reconnects the single existing Web SSE stream. **No APNs, background execution entitlement, lock-screen notifications, Live Activities or background completion guarantees are included in this version.**
 - Local drafts and cookies use the persistent WKWebsiteDataStore. Change server explicitly clears this device’s Web data and drafts, preserving server files/tasks. Server logout uses the existing session revocation behavior.
 - User-triggered downloads from the trusted workspace use WebKit downloads and the iOS share sheet; announced file size must be known and at most 50 MiB. Concurrent downloads are bounded; cancelled/failed transfers are discarded. Generated preview frames cannot initiate native actions.
+- Optional voice input uses the shared Web recorder and the configured server transcription service. iOS/WebKit prompts for microphone access only from the main trusted `/app` frame; camera, generated previews, login pages and other origins cannot request this audio permission. Backgrounding, navigation and removing the WebView stop capture. Text remains an editable draft until explicitly sent. No native speech-recognition service, speech permission or background audio entitlement is added.
 - Native and Web UI support Chinese, English, Japanese, Korean, French and Spanish. Native chrome follows the current Web locale once workspace metadata arrives, otherwise the device locale.
 
 ## Authentication and bridge boundaries
@@ -42,12 +43,14 @@ bash ios/scripts/check-build.sh
 
 The build script builds unsigned Release simulator + device targets and the localhost-only Debug simulator configuration. CI selects the iOS job for `ios/**` changes, manual full runs or CI configuration changes; weekly dependency scans do not start macOS builds. The existing stable **CI result** includes the selected native job. These unsigned builds do not upload or sign an App Store/TestFlight release.
 
-The Foundation-only bridge/origin/completion tests also run on Linux with Swift 6.2.1. Frontend production Playwright fixtures cover phone/tablet layout, explicit login handoff errors, draft recovery, one completion event and normal browser behavior. They do **not** validate UIKit/WebKit behavior, real OAuth/SMTP, hardware haptics or Liquid Glass rendering. Use Xcode and real devices to verify system-browser return, cookie renewal, camera/file selection, keyboard/safe areas, HTML isolation, download sharing and background/foreground behavior before distributing. App Store/TestFlight requires your Apple Developer signing/provisioning and a deployment-specific privacy disclosure; the bundled privacy manifest declares the App’s UserDefaults access, not every possible self-hosted server’s data policy.
+The Foundation-only bridge/origin/completion tests also run on Linux with Swift 6.2.1. Frontend production Playwright fixtures cover phone/tablet layout, explicit login handoff errors, draft recovery, one completion event and normal browser behavior. They do **not** validate UIKit/WebKit behavior, real OAuth/SMTP, hardware haptics or Liquid Glass rendering. Use Xcode and real devices to verify microphone grant/deny/revoke, recording cancellation and audio format support, system-browser return, cookie renewal, camera/file selection, keyboard/safe areas, HTML isolation, download sharing and background/foreground behavior before distributing. App Store/TestFlight requires your Apple Developer signing/provisioning and a deployment-specific privacy disclosure; the bundled privacy manifest declares the App’s UserDefaults access, not every possible self-hosted server’s data policy.
 
 ## 简要说明
 
-用 Xcode 26+ 打开 `ios/Lester.xcodeproj`，选择签名 Team 和设备后运行，连接自己的 HTTPS Lester。服务端需补齐迁移 001–031 并一起更新 API/Web。支持 iOS/iPadOS 18+；iOS 26 使用系统 Liquid Glass，旧版回退原生样式。iPad 自适应侧栏显示最近会话和所属项目；App 内隐藏终端等桌面入口，保留聊天、成果、审批、队列与定时任务。
+用 Xcode 26+ 打开 `ios/Lester.xcodeproj`，选择签名 Team 和设备后运行，连接自己的 HTTPS Lester。服务端需补齐迁移 001–034 并一起更新 API/Web。支持 iOS/iPadOS 18+；iOS 26 使用系统 Liquid Glass，旧版回退原生样式。iPad 自适应侧栏显示最近会话和所属项目；App 内隐藏终端等桌面入口，保留聊天、成果、审批、队列与定时任务。
 
 首版只在工作区前台收到新任务完成时轻震一次，支持关闭和硬件检测；不支持的 iPad 不会震动。后台、锁屏 APNs 推送按本次范围暂缓。Linux 可验证核心逻辑和网页适配，原生构建、玻璃效果、登录返回和真机震动必须用 macOS/Xcode 与设备验收。这里提供源码工程，不代表已上架。
 
 Home opens the task composer. The fixed Lester entry opens the independent personal assistant and memory panel, available across task/project/settings navigation. Independent execution tasks remain reachable through projects and task cards. The assistant cannot execute commands, edit files or approve operations.
+
+语音输入复用网页版录音与后台配置的转写服务；管理员启用后，主工作区会请求麦克风权限，转写文字进入草稿，仍需用户明确发送。语音权限说明有六种语言；预览子页面没有录音权限，也不增加后台录音。麦克风弹窗、Safari/WebKit 录音格式与真机录音仍需设备验收。

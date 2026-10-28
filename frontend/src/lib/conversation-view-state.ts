@@ -151,6 +151,9 @@ export function clearViewState() {
   clearMessageSubmissions();
   clearRunInputs();
   if (typeof window === "undefined") return;
+  // Release microphone capture immediately on logout/security revocation,
+  // including while the old route is waiting for a network response.
+  if (typeof window.dispatchEvent === "function") window.dispatchEvent(new Event("lester:session-cleared"));
   try { for (const key of Object.keys(window.sessionStorage)) if (key.startsWith(prefix)) window.sessionStorage.removeItem(key); } catch { /* best effort */ }
   try { for (const key of Object.keys(window.localStorage)) if (key.startsWith(draftPrefix)) window.localStorage.removeItem(key); } catch { /* best effort */ }
 }

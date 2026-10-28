@@ -1,2 +1,3 @@
 "NSCameraUsageDescription" = "写真を Lester タスクに添付します。";
 "NSPhotoLibraryUsageDescription" = "写真を選んで Lester タスクに添付します。";
+"NSMicrophoneUsageDescription" = "音声を録音し、サーバーに設定された音声サービスで編集可能な下書きに変換します。";

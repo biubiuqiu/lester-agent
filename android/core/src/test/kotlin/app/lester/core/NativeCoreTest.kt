@@ -30,6 +30,29 @@ class NativeCoreTest {
         for (url in listOf("lester://auth:443/callback?code=$code&state=$state", "lester://auth/callback?code=$code&state=wrong", "lester://auth/callback?code=$code&state=$state&state=$state", "lester://auth/callback?code=$code&state=$state#secret", "https://auth/callback?code=$code&state=$state")) assertNull(ServerAddress.callbackCode(url, state))
         assertTrue(ServerAddress.parse("https://lester.example").loginUrl(code, state).contains("returnTo=%2Fapp%2Fnative-auth"))
     }
+    @Test fun microphoneIsLimitedToTheConfiguredWorkspaceAndOriginalPermissionRequest() {
+        val server = ServerAddress.parse("https://lester.example")
+        val page = server.url("/app/c/123")
+        assertTrue(server.allowsMicrophone(server.origin, page))
+        assertTrue(server.allowsMicrophone(server.origin + "/", page))
+        for (origin in listOf("null", "https://evil.example", "https://lester.example:444", "https://user@lester.example", "https://lester.example/app", "https://lester.example?token=x")) assertFalse(server.allowsMicrophone(origin, page))
+        for (path in listOf("/login", "/preview/123", "/docs", "/api/v1/me", "/app-evil", "/")) assertFalse(server.allowsMicrophone(server.origin, server.url(path)))
+        val gate = MicrophonePermissionGate(server)
+        assertNull(gate.begin(server.origin, page, "user", foreground = false, audioOnly = true))
+        assertNull(gate.begin(server.origin, page, "user", foreground = true, audioOnly = false))
+        assertNull(gate.begin(server.origin, page, "", foreground = true, audioOnly = true))
+        fun begin() = gate.begin(server.origin, page, "user", foreground = true, audioOnly = true)!!
+        var ticket = begin()
+        assertFalse(gate.consume(ticket, page, "user", foreground = true, granted = false))
+        ticket = begin(); assertFalse(gate.consume(ticket, server.url("/app/c/other"), "user", foreground = true, granted = true))
+        ticket = begin(); assertFalse(gate.consume(ticket, page, "other-user", foreground = true, granted = true))
+        ticket = begin(); assertFalse(gate.consume(ticket, page, "user", foreground = false, granted = true))
+        ticket = begin(); gate.cancel(); assertFalse(gate.consume(ticket, page, "user", foreground = true, granted = true))
+        val old = begin(); ticket = begin()
+        assertFalse(gate.consume(old, page, "user", foreground = true, granted = true))
+        assertTrue(gate.consume(ticket, page, "user", foreground = true, granted = true))
+        assertFalse(gate.consume(ticket, page, "user", foreground = true, granted = true))
+    }
     private val run = "33333333-3333-4333-8333-333333333333"
     private val conversation = "44444444-4444-4444-8444-444444444444"
     private val account = "11111111-1111-4111-8111-111111111111:22222222-2222-4222-8222-222222222222"

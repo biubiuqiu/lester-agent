@@ -34,7 +34,7 @@ struct WorkspaceWebView: UIViewRepresentable {
     }
     func updateUIView(_ web: WKWebView, context: Context) {}
     static func dismantleUIView(_ web: WKWebView, coordinator: Coordinator) {
-        coordinator.cancelDownloads()
+        coordinator.invalidate()
         web.stopLoading(); web.configuration.userContentController.removeScriptMessageHandler(forName: "lester")
         web.navigationDelegate = nil; web.uiDelegate = nil
     }
@@ -44,13 +44,39 @@ struct WorkspaceWebView: UIViewRepresentable {
         weak var webView: WKWebView?
         private var downloads: [ObjectIdentifier: URL] = [:]
         private var transfers: [ObjectIdentifier: WKDownload] = [:]
-        init(model: AppModel, server: ServerAddress) { self.model = model; self.server = server }
+        private var alive = true
+        init(model: AppModel, server: ServerAddress) {
+            self.model = model; self.server = server
+            super.init()
+            NotificationCenter.default.addObserver(self, selector: #selector(stopMicrophone), name: UIApplication.didEnterBackgroundNotification, object: nil)
+        }
+        @objc private func stopMicrophone() { webView?.setMicrophoneCaptureState(.none, completionHandler: nil) }
+        func invalidate() {
+            alive = false; stopMicrophone(); cancelDownloads()
+            NotificationCenter.default.removeObserver(self)
+        }
+        func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin, initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType, decisionHandler: @escaping (WKPermissionDecision) -> Void) {
+            var requestedOrigin = URLComponents()
+            requestedOrigin.scheme = origin.protocol; requestedOrigin.host = origin.host
+            if origin.port > 0 { requestedOrigin.port = origin.port }
+            guard alive, model.server == server, self.webView === webView,
+                  model.workspace != nil, model.foreground, UIApplication.shared.applicationState == .active,
+                  type == .microphone, let source = frame.request.url, let current = webView.url,
+                  let originURL = requestedOrigin.url, server.sameOrigin(originURL),
+                  server.allowsMicrophone(from: source, current: current, mainFrame: frame.isMainFrame)
+            else { decisionHandler(.deny); return }
+            // WebKit and iOS request the user's microphone permission. Never
+            // silently grant media capture based on a bridge message.
+            decisionHandler(.prompt)
+        }
+        func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) { stopMicrophone() }
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             guard model.server == server, message.webView === webView, message.frameInfo.isMainFrame, let source = message.frameInfo.request.url,
                   server.acceptsBridge(from: source, mainFrame: true), webView?.url.map({ server.acceptsBridge(from: $0, mainFrame: true) }) == true,
                   let body = message.body as? [String: Any], body["version"] as? Int == 1,
                   let type = body["type"] as? String, let payload = body["payload"] as? [String: Any]
             else { return }
+            if type == "signed_out" || type == "workspace" && "\(payload["user_id"] as? String ?? ""):\(payload["workspace_id"] as? String ?? "")" != model.workspace?.account { stopMicrophone() }
             model.receive(type: type, payload: payload)
         }
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {

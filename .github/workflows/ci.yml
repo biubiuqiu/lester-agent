@@ -153,7 +153,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: frontend
@@ -177,8 +177,8 @@ jobs:
         run: pnpm build
       - name: Install browser for regression tests
         run: pnpm exec playwright install --with-deps chromium
-      - name: Test login, first task and file previews
-        run: pnpm test:e2e
+      - name: Test workspace and speech input flows
+        run: pnpm test:e2e --workers=2
       - name: Upload browser failure evidence
         if: failure()
         uses: actions/upload-artifact@v6

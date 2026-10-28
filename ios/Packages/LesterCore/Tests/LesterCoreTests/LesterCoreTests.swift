@@ -39,6 +39,20 @@ final class LesterCoreTests: XCTestCase {
             XCTAssertNil(ServerAddress.callbackCode(URL(string: input)!, state: state))
         }
     }
+    func testMicrophoneIsLimitedToTheCurrentMainWorkspaceFrame() throws {
+        let server = try ServerAddress("https://lester.example")
+        let app = server.url("/app/c/123")
+        XCTAssertTrue(server.allowsMicrophone(from: app, current: app, mainFrame: true))
+        XCTAssertFalse(server.allowsMicrophone(from: app, current: app, mainFrame: false))
+        for path in ["/preview/123", "/login", "/docs", "/api/v1/me", "/app-evil", "/"] {
+            let other = server.url(path)
+            XCTAssertFalse(server.allowsMicrophone(from: other, current: app, mainFrame: true))
+            XCTAssertFalse(server.allowsMicrophone(from: app, current: other, mainFrame: true))
+        }
+        for url in ["https://evil.example/app", "https://lester.example:444/app", "https://user@lester.example/app", "about:blank", "blob:https://lester.example/id"] {
+            XCTAssertFalse(server.allowsMicrophone(from: URL(string: url)!, current: app, mainFrame: true))
+        }
+    }
     private let account = "11111111-1111-4111-8111-111111111111:22222222-2222-4222-8222-222222222222"
     private let run = "33333333-3333-4333-8333-333333333333"
     private let conversation = "44444444-4444-4444-8444-444444444444"
