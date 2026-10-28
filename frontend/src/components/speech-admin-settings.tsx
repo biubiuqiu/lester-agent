@@ -1,24 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Check, Mic, RefreshCw } from "lucide-react";
 import { ApiError, api } from "@/lib/api";
 import { useT } from "./i18n";
+import { serviceForSpeechConfig, speechService, speechServices, type SpeechProvider } from "@/lib/speech-providers";
 
-type Provider = "openai" | "elevenlabs";
 type SpeechSettings = {
   enabled: boolean;
-  provider: Provider;
+  provider: SpeechProvider;
   endpoint: string;
   model_id: string;
   has_credential: boolean;
   revision: number;
 };
 type SpeechDraft = Pick<SpeechSettings, "enabled" | "provider" | "endpoint" | "model_id">;
-const defaults = {
-  openai: { endpoint: "https://api.openai.com/v1", model_id: "gpt-4o-transcribe" },
-  elevenlabs: { endpoint: "https://api.elevenlabs.io/v1", model_id: "scribe_v2" },
-};
 
 function sameOrigin(left: string, right: string) {
   try { return new URL(left).origin === new URL(right).origin; }
@@ -30,6 +26,7 @@ function draftOf(settings: SpeechSettings): SpeechDraft {
 
 export function SpeechAdminSettings() {
   const t = useT();
+  const modelsId = useId();
   const [settings, setSettings] = useState<SpeechSettings | null>(null);
   const [draft, setDraft] = useState<SpeechDraft | null>(null);
   const [credential, setCredential] = useState("");
@@ -73,10 +70,13 @@ export function SpeechAdminSettings() {
   const savedCredentialApplies = !!settings?.has_credential && !!draft && settings.provider === draft.provider && sameOrigin(settings.endpoint, draft.endpoint) && !clearCredential;
   const credentialScopeChanged = !!settings?.has_credential && !!draft && (settings.provider !== draft.provider || !sameOrigin(settings.endpoint, draft.endpoint));
   const dirty = !!settings && !!draft && (JSON.stringify(draftOf(settings)) !== JSON.stringify(draft) || credential.length > 0 || clearCredential);
+  const service = draft ? serviceForSpeechConfig(draft) : speechServices[0];
 
-  function changeProvider(provider: Provider) {
+  function changeProvider(id: string) {
     if (!draft || pending.current) return;
-    setDraft({ ...draft, provider, ...defaults[provider] });
+    const service = speechService(id);
+    if (!service) return;
+    setDraft({ ...draft, provider: service.provider, endpoint: service.endpoint, model_id: service.model });
     setCredential(""); setClearCredential(false); setNotice("");
   }
   function changeEndpoint(endpoint: string) {
@@ -126,13 +126,15 @@ export function SpeechAdminSettings() {
       <fieldset disabled={loading || saving}>
         <label className="speech-admin-enable"><span><strong>{t("启用语音输入")}</strong><small>{t("用户录音转写为可编辑草稿，确认发送后才开始任务。")}</small></span><input type="checkbox" checked={draft.enabled} onChange={event => { setDraft({ ...draft, enabled: event.target.checked }); setNotice(""); }} /></label>
         <div className="speech-admin-fields">
-          <label className="field">{t("转写服务")}<select aria-label={t("转写服务")} value={draft.provider} onChange={event => changeProvider(event.target.value as Provider)}><option value="openai">{t("OpenAI 兼容接口")}</option><option value="elevenlabs">{t("ElevenLabs Scribe")}</option></select></label>
-          <label className="field">{t("转写模型")}<input name="speech-model" value={draft.model_id} required={draft.enabled} maxLength={200} placeholder={defaults[draft.provider].model_id} autoComplete="off" spellCheck={false} onChange={event => { setDraft({ ...draft, model_id: event.target.value }); setNotice(""); }} /></label>
+          <label className="field">{t("转写服务")}<select aria-label={t("转写服务")} value={service.id} onChange={event => changeProvider(event.target.value)}>{speechServices.map(item => <option key={item.id} value={item.id}>{t(item.label)}</option>)}</select></label>
+          <p className="admin-help">{t("模型和语言范围以服务商支持为准。")}</p>
+          <label className="field">{t("转写模型")}<input name="speech-model" value={draft.model_id} required={draft.enabled} maxLength={200} placeholder={service.model} list={modelsId} autoComplete="off" spellCheck={false} onChange={event => { setDraft({ ...draft, model_id: event.target.value }); setNotice(""); }} /></label>
+          <datalist id={modelsId}>{service.models.map(model => <option key={model} value={model} />)}</datalist>
           <label className="field">{t("API 密钥")}<input name="speech-credential" type="password" value={credential} autoComplete="new-password" spellCheck={false} maxLength={8192} disabled={loading || saving || clearCredential} placeholder={t(savedCredentialApplies ? "已保存密钥，留空保留" : "输入服务商 API 密钥")} onChange={event => { setCredential(event.target.value); setNotice(""); }} /></label>
           <p className="admin-help">{t("密钥仅加密保存在服务端，不会返回浏览器。")}</p>
           {credentialScopeChanged ? <p className="speech-admin-key-notice" role="status">{t("切换服务商或接口域名后，需要重新填写密钥。")}</p> : null}
           {settings.has_credential ? <div className="speech-admin-clear">{clearCredential ? <><span>{t("已选择清除密钥，保存后生效。")}</span><button className="text-button" type="button" onClick={() => setClearCredential(false)}>{t("撤销清除")}</button></> : <button className="text-button" type="button" onClick={() => { setClearCredential(true); setCredential(""); setDraft({ ...draft, enabled: false }); setNotice(""); }}>{t("清除已保存的密钥")}</button>}</div> : null}
-          <details className="speech-admin-advanced"><summary>{t("高级设置")}</summary><label className="field">{t("接口基础地址")}<input type="url" value={draft.endpoint} required={draft.enabled} maxLength={2048} autoComplete="off" spellCheck={false} readOnly={draft.provider === "elevenlabs"} onChange={event => changeEndpoint(event.target.value)} /></label><p className="admin-help">{t(draft.provider === "elevenlabs" ? "ElevenLabs 使用官方接口地址。" : "填写 API 基础地址，不包含 /audio/transcriptions。")}</p></details>
+          <details className="speech-admin-advanced"><summary>{t("高级设置")}</summary><label className="field">{t("接口基础地址")}<input type="url" value={draft.endpoint} required={draft.enabled} maxLength={2048} autoComplete="off" spellCheck={false} readOnly={draft.provider !== "openai"} onChange={event => changeEndpoint(event.target.value)} /></label><p className="admin-help">{t(draft.provider !== "openai" ? "使用服务商官方转写接口。" : "填写 API 基础地址，不包含 /audio/transcriptions。")}</p></details>
         </div>
         <footer><span className="admin-help"><Mic size={14} />{t("自动识别录音语言；语音模型独立于聊天模型。")}</span><button className="primary-button" type="submit" disabled={!dirty || conflict || loading || saving}>{t(saving ? "保存中…" : "保存")}</button></footer>
       </fieldset>

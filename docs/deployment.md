@@ -8,7 +8,7 @@ Upgrade checklist, gateway, Docker/ACS and Kubernetes/Helm.
 
 1. Back up PostgreSQL, object storage and Computer data; preserve `.env`, the encryption key and persistent volumes.
 2. Stop active tasks and API writes. Confirm which migrations have already been applied.
-3. Apply **every missing migration through 034**, once and in numeric order. Fresh-database initialization does not upgrade existing volumes. The feature-specific SQL examples in other chapters are partial historical steps, not a complete upgrade.
+3. Apply **every missing migration through 035**, once and in numeric order. Fresh-database initialization does not upgrade existing volumes. The feature-specific SQL examples in other chapters are partial historical steps, not a complete upgrade.
 4. Rebuild and deploy matching API, Web and Sandbox Service versions. Never delete volumes to upgrade.
 
 Start a new installation with [Getting started](getting-started.md). Use the [account migration notes](accounts-and-security.md#avatars-and-account-upgrade) and [storage migration notes](architecture.md#upgrading-an-existing-database) for the transactional SQL procedure; complete all remaining migrations before restarting the latest services.
@@ -141,7 +141,7 @@ Existing databases on 001–015 must apply 016–024 once in order, before start
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
-for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions 000022_run_inputs 000023_file_changes 000024_project_rules 000025_run_permissions 000026_cloud_task_indexes 000027_automations 000028_permission_reviews 000029_conversational_schedules 000030_native_signin 000031_personal_assistant 000032_app_connections 000033_github_code_workflows 000034_speech_input; do
+for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions 000022_run_inputs 000023_file_changes 000024_project_rules 000025_run_permissions 000026_cloud_task_indexes 000027_automations 000028_permission_reviews 000029_conversational_schedules 000030_native_signin 000031_personal_assistant 000032_app_connections 000033_github_code_workflows 000034_speech_input 000035_speech_providers; do
   docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "backend/migrations/${migration}.up.sql" || exit 1
 done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web sandbox-service

@@ -8,7 +8,7 @@ Connections normally authorize task Agents to **search and read**. They do not s
 
 ## Deployment
 
-Apply every missing migration through `backend/migrations/000034_speech_input.up.sql` in numeric order after a backup and stopping API writes/active tasks. Rebuild API, Web and Sandbox Service together. Fresh Compose initialization mounts 001–034; existing volumes require explicit migration. Preserve the existing `MASTER_KEY_BASE64` and volumes. Migration 032 introduces app grants; migration 033 adds the separate opt-in code workflow. Roll back in reverse order after checking the [code-workflow rollback guards](github-code-tasks.md#upgrade-and-verification). Rollback does not remove accounts, sessions, task files or completed external effects.
+Apply every missing migration through `backend/migrations/000034_speech_input.up.sql` in numeric order after a backup and stopping API writes/active tasks. Rebuild API, Web and Sandbox Service together. Fresh Compose initialization mounts 001–035; existing volumes require explicit migration. Preserve the existing `MASTER_KEY_BASE64` and volumes. Migration 032 introduces app grants; migration 033 adds the separate opt-in code workflow. Roll back in reverse order after checking the [code-workflow rollback guards](github-code-tasks.md#upgrade-and-verification). Rollback does not remove accounts, sessions, task files or completed external effects.
 
 Create provider applications with the following optional credential pairs. Only API receives the secrets; never put them in `NEXT_PUBLIC_*`, a Skill or a Computer. These variables are independent of `GOOGLE_OAUTH_*` / `GITHUB_OAUTH_*` used for Lester sign-in.
 

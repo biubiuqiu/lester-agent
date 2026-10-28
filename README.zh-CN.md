@@ -52,13 +52,13 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --buil
 
 [完整安装、PowerShell 与端口调整](docs/zh-CN/getting-started.md)。保存模型配置不代表已经验证服务商访问，实际调用由任务确认。
 
-**已有部署：** 保留 `.env`、加密密钥和数据卷，备份后按编号执行尚未应用的全部迁移至 **034**，再启动匹配版本的服务。请先看[升级检查](docs/zh-CN/deployment.md#已有部署升级检查)，不要覆盖配置或删除数据卷。
+**已有部署：** 保留 `.env`、加密密钥和数据卷，备份后按编号执行尚未应用的全部迁移至 **035**，再启动匹配版本的服务。请先看[升级检查](docs/zh-CN/deployment.md#已有部署升级检查)，不要覆盖配置或删除数据卷。
 
 连接 GitHub、Gmail、X、飞书和 Slack，让任务[按需搜索和读取资料](docs/zh-CN/app-connections.md)。
 
 授权仓库后，可在 [GitHub 代码任务](docs/zh-CN/github-code-tasks.md)中编辑、测试并确认发布分支或 PR。
 
-管理员可配置 OpenAI 兼容或 ElevenLabs 转写服务，开启[语音输入](docs/zh-CN/speech-input.md)，识别文字确认后再发送。
+管理员可配置 OpenAI、Groq、Together AI、ElevenLabs、Deepgram、Mistral 或兼容转写接口，开启[语音输入](docs/zh-CN/speech-input.md)，识别文字确认后再发送。
 
 ## 文档目录
 

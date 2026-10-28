@@ -4,12 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"io"
-	"mime/multipart"
 	"net/http"
-	"net/textproto"
-	"net/url"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -92,63 +88,11 @@ func providerCall(ctx context.Context, configured *http.Client, cfg Config, cred
 	if credential == "" || strings.ContainsAny(credential, "\r\n\x00") {
 		return "", ErrProviderAuth
 	}
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	model := cfg.ModelID
-	target := strings.TrimRight(cfg.Endpoint, "/")
-	switch cfg.Provider {
-	case "openai":
-		if model == "" {
-			model = "gpt-4o-transcribe"
-		}
-		_ = writer.WriteField("model", model)
-		_ = writer.WriteField("response_format", "json")
-		if upload.Language != "" {
-			_ = writer.WriteField("language", upload.Language)
-		}
-		target += "/audio/transcriptions"
-	case "elevenlabs":
-		if model == "" {
-			model = "scribe_v2"
-		}
-		_ = writer.WriteField("model_id", model)
-		_ = writer.WriteField("tag_audio_events", "false")
-		_ = writer.WriteField("diarize", "false")
-		_ = writer.WriteField("webhook", "false")
-		if upload.Language != "" {
-			_ = writer.WriteField("language_code", upload.Language)
-		}
-		target += "/speech-to-text"
-	default:
-		return "", ErrUnsupported
-	}
-	fileHeader := textproto.MIMEHeader{}
-	fileHeader.Set("Content-Disposition", `form-data; name="file"; filename="recording.`+extension+`"`)
-	fileHeader.Set("Content-Type", mimeType)
-	file, err := writer.CreatePart(fileHeader)
-	if err != nil {
-		return "", ErrProvider
-	}
-	if _, err = file.Write(upload.Data); err != nil || writer.Close() != nil {
-		return "", ErrProvider
-	}
-	parsed, err := url.Parse(target)
-	if err != nil || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" || parsed.Scheme != "https" && parsed.Scheme != "http" {
-		return "", ErrProvider
-	}
 	callCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	request, err := http.NewRequestWithContext(callCtx, http.MethodPost, target, &body)
+	request, err := transcriptionRequest(callCtx, cfg, credential, upload, mimeType, extension)
 	if err != nil {
-		return "", ErrProvider
-	}
-	request.Header.Set("Content-Type", writer.FormDataContentType())
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("User-Agent", "Lester-Agent/1.0")
-	if cfg.Provider == "openai" {
-		request.Header.Set("Authorization", "Bearer "+credential)
-	} else {
-		request.Header.Set("xi-api-key", credential)
+		return "", err
 	}
 	client := http.Client{}
 	if configured != nil {
@@ -174,13 +118,11 @@ func providerCall(ctx context.Context, configured *http.Client, cfg Config, cred
 	if err != nil || len(raw) > maxProviderResponseBytes || !utf8.Valid(raw) {
 		return "", ErrProvider
 	}
-	var result struct {
-		Text *string `json:"text"`
+	text, err := transcriptionText(cfg.Provider, raw)
+	if err != nil {
+		return "", err
 	}
-	if json.Unmarshal(raw, &result) != nil || result.Text == nil || strings.ContainsRune(*result.Text, 0) {
-		return "", ErrProvider
-	}
-	text := strings.TrimSpace(*result.Text)
+	text = strings.TrimSpace(text)
 	if text == "" {
 		return "", ErrNoSpeech
 	}

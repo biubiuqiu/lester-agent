@@ -39,23 +39,15 @@ func normalizeConfig(in ConfigChange) (Config, error) {
 	if c.Provider == "" {
 		c.Provider = "openai"
 	}
-	switch c.Provider {
-	case "openai":
-		if c.Endpoint == "" {
-			c.Endpoint = "https://api.openai.com/v1"
-		}
-		if c.ModelID == "" {
-			c.ModelID = "gpt-4o-transcribe"
-		}
-	case "elevenlabs":
-		if c.Endpoint == "" {
-			c.Endpoint = "https://api.elevenlabs.io/v1"
-		}
-		if c.ModelID == "" {
-			c.ModelID = "scribe_v2"
-		}
-	default:
+	defaultEndpoint, defaultModel, supported := providerDefaults(c.Provider)
+	if !supported {
 		return Config{}, ErrConfig
+	}
+	if c.Endpoint == "" {
+		c.Endpoint = defaultEndpoint
+	}
+	if c.ModelID == "" {
+		c.ModelID = defaultModel
 	}
 	u, err := url.Parse(c.Endpoint)
 	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.RawPath != "" || len(c.Endpoint) > 2048 || strings.ContainsAny(c.Endpoint, "\x00\r\n\\") {
@@ -70,7 +62,7 @@ func normalizeConfig(in ConfigChange) (Config, error) {
 			return Config{}, ErrConfig
 		}
 	}
-	if c.Provider == "elevenlabs" && c.Endpoint != "https://api.elevenlabs.io/v1" {
+	if c.Provider != "openai" && c.Endpoint != defaultEndpoint {
 		return Config{}, ErrConfig
 	}
 	if c.ModelID == "" || len(c.ModelID) > 200 || strings.ContainsAny(c.ModelID, "\x00\r\n\t") || len(in.Credential) > 8192 || strings.ContainsAny(in.Credential, "\x00\r\n") || in.ClearCredential && strings.TrimSpace(in.Credential) != "" {

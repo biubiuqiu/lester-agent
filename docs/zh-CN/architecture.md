@@ -38,7 +38,7 @@ Web、API 和 Sandbox Service 分别构建和运行在独立容器中。Sandbox 
 
 ### 语音输入
 
-`internal/speech` 是 API 内独立的输入服务。管理员开启 OpenAI 兼容转写或 ElevenLabs Scribe，密钥加密保存在服务端。Web 与原生薄客户端录制的有界音频直接发送到此 API，不进入 Computer、Skill 或 Agent 工具；返回文字加入当前用户的最新草稿，仍需明确发送。
+`internal/speech` 是 API 内独立的输入服务。管理员选择一个转写服务，密钥加密保存在服务端。OpenAI 兼容协议包含 Groq 与 Together AI 预设；ElevenLabs Scribe、Deepgram Nova 与 Mistral Voxtral 使用独立适配器。Web 与原生薄客户端录制的有界音频直接发送到此 API，不进入 Computer、Skill 或 Agent 工具；返回文字加入当前用户的最新草稿，仍需明确发送。
 
 服务商调用前先保存稳定请求回执，恢复时只读原记录、不重复转写。文字恢复窗口为五分钟，后续转写请求清理过期文字，并删除超过 24 小时的请求身份。Lester 不持久保存录音，服务商保留政策独立。麦克风限定在可信应用页面，原生端还需显式系统权限；预览和公开产物禁止获取麦克风。配置与限制见[语音输入](speech-input.md)。
 
@@ -158,7 +158,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --buil
 
 ### 成果登记与可靠事件升级
 
-当前版本需要迁移 001–034；账号机制的 013 迁移见下方“账号、第三方登录与头像”。上面的 004–005 命令仅说明历史聊天升级，不足以升级到当前版本；请按编号补齐所有尚未执行的迁移。若数据库已完成 001–011，先备份、停止 API 写入，再执行一次 012，并继续补齐 013、014、015 后重建 API/Web：
+当前版本需要迁移 001–035；账号机制的 013 迁移见下方“账号、第三方登录与头像”。上面的 004–005 命令仅说明历史聊天升级，不足以升级到当前版本；请按编号补齐所有尚未执行的迁移。若数据库已完成 001–011，先备份、停止 API 写入，再执行一次 012，并继续补齐 013、014、015 后重建 API/Web：
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
@@ -167,7 +167,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T post
   < backend/migrations/000012_deliverables_events.up.sql
 ```
 
-全新 Compose 数据卷会按序执行 001–034；已有数据卷不会自动升级，勿删除数据卷。012 回滚会删除成果登记和待投递记录，保留原文件、消息、运行事件及已发布站点；回滚前停止新版 API，并配套恢复兼容的应用版本。Redis 长期不可用时待投递表会增长，需要监控数量和磁盘空间。
+全新 Compose 数据卷会按序执行 001–035；已有数据卷不会自动升级，勿删除数据卷。012 回滚会删除成果登记和待投递记录，保留原文件、消息、运行事件及已发布站点；回滚前停止新版 API，并配套恢复兼容的应用版本。Redis 长期不可用时待投递表会增长，需要监控数量和磁盘空间。
 
 ---
 

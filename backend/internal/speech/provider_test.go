@@ -70,7 +70,7 @@ func TestAudioContainerGateUsesBytesRatherThanFilename(t *testing.T) {
 }
 
 func TestProviderProtocolUsesSeparateMultipartAndAuthentication(t *testing.T) {
-	for _, provider := range []string{"openai", "elevenlabs"} {
+	for _, provider := range []string{"openai", "elevenlabs", "mistral"} {
 		t.Run(provider, func(t *testing.T) {
 			var calls atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -96,6 +96,10 @@ func TestProviderProtocolUsesSeparateMultipartAndAuthentication(t *testing.T) {
 				if provider == "openai" {
 					if r.URL.Path != "/v1/audio/transcriptions" || r.Header.Get("Authorization") != "Bearer fixture-secret" || r.Header.Get("xi-api-key") != "" || r.FormValue("model") != "gpt-4o-transcribe" || r.FormValue("response_format") != "json" || r.FormValue("language") != "zh" || r.FormValue("model_id") != "" {
 						t.Error("incorrect OpenAI transcriptions wire format")
+					}
+				} else if provider == "mistral" {
+					if r.URL.Path != "/v1/audio/transcriptions" || r.Header.Get("Authorization") != "Bearer fixture-secret" || r.Header.Get("xi-api-key") != "" || r.FormValue("model") != "voxtral-mini-latest" || r.FormValue("response_format") != "" || r.FormValue("language") != "zh" || r.FormValue("model_id") != "" || r.FormValue("stream") != "false" || r.FormValue("diarize") != "false" {
+						t.Error("incorrect Mistral Voxtral wire format")
 					}
 				} else {
 					if r.URL.Path != "/v1/speech-to-text" || r.Header.Get("xi-api-key") != "fixture-secret" || r.Header.Get("Authorization") != "" || r.FormValue("model_id") != "scribe_v2" || r.FormValue("language_code") != "zh" || r.FormValue("diarize") != "false" || r.FormValue("tag_audio_events") != "false" || r.FormValue("webhook") != "false" || r.URL.RawQuery != "" {

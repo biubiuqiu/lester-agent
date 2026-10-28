@@ -19,7 +19,7 @@ Click a project name in the sidebar to open its workspace. The separate chevron 
 
 The catalogue combines registered HTML/Markdown deliverables from the project's conversations, including unpublished work. Search by title, file path or source conversation, filter by type, and load 24 records at a time. Each card retains its source and registration update time. Registration does not prove file availability, review or task success. Preview/continue first check the source file; continuing returns to the original conversation with the file reference and existing draft, without sending. Files discovered only through a live directory listing remain available inside their conversation.
 
-`/app/p/{projectId}/overview` is the workspace; `/app/p/{projectId}` continues to start a task. This is a metadata view: no file relocation, automatic publication, extra SSE or model call. It reuses existing schema/indexes; rebuild API and Web together, with no migration beyond the existing 001–034 requirement.
+`/app/p/{projectId}/overview` is the workspace; `/app/p/{projectId}` continues to start a task. This is a metadata view: no file relocation, automatic publication, extra SSE or model call. It reuses existing schema/indexes; rebuild API and Web together, with no migration beyond the existing 001–035 requirement.
 
 ## Projects and published artifacts
 
@@ -89,7 +89,7 @@ Restoring a confirmed modification of an existing retained text file requires ex
 
 The project menu provides **Project rules** with content, version and SHA-256. Saving a stale version preserves the editor draft and refuses overwrite. Initial sends and accepted queued tasks snapshot rules from the project settings at acceptance; later edits or conversation moves affect future accepted tasks only. The input message exposes the accepted source/version/content. Rules are explicit user guidance and grant no tools, @ access or Plan approval. Platform constraints and the latest direct user requirements take precedence. File arrivals during an open settings/review dialog still add tabs without opening a covering preview.
 
-For databases already on 001–022, back up and stop API writes, then apply `000023_file_changes.up.sql` and `000024_project_rules.up.sql` once in order. Earlier versions apply every missing migration; fresh Compose volumes initialize 001–034. Stop active tasks and restore compatible API/Web before rollback. Roll back 024 before 023 when downgrading this batch. 024 removes editable project rules while accepted message snapshots remain; 023 removes review/rollback records. Neither rollback restores file or external effects. Preserve database backups, keys and Computer volumes.
+For databases already on 001–022, back up and stop API writes, then apply `000023_file_changes.up.sql` and `000024_project_rules.up.sql` once in order. Earlier versions apply every missing migration; fresh Compose volumes initialize 001–035. Stop active tasks and restore compatible API/Web before rollback. Roll back 024 before 023 when downgrading this batch. 024 removes editable project rules while accepted message snapshots remain; 023 removes review/rollback records. Neither rollback restores file or external effects. Preserve database backups, keys and Computer volumes.
 
 ---
 

@@ -114,6 +114,67 @@ test("changing a compatible endpoint cannot reuse a saved key or retain a key ty
   expect(writes[0].credential).toBeUndefined();
 });
 
+for (const service of [
+  { id: "groq", provider: "openai", endpoint: "https://api.groq.com/openai/v1", model: "whisper-large-v3-turbo", editableEndpoint: true },
+  { id: "together", provider: "openai", endpoint: "https://api.together.xyz/v1", model: "openai/whisper-large-v3", editableEndpoint: true },
+  { id: "deepgram", provider: "deepgram", endpoint: "https://api.deepgram.com/v1", model: "nova-3", editableEndpoint: false },
+  { id: "mistral", provider: "mistral", endpoint: "https://api.mistral.ai/v1", model: "voxtral-mini-latest", editableEndpoint: false },
+]) {
+  test(`${service.id} preset saves its protocol and survives reload with an edited model`, async ({ page, context, api }) => {
+    const writes = await configure(context, { ...initial(), enabled: true, has_credential: true });
+    await page.goto("/admin/speech");
+    await page.getByLabel("API 密钥", { exact: true }).fill("fixture-key-for-previous-service");
+    await page.getByLabel("转写服务", { exact: true }).selectOption(service.id);
+    await expect(page.getByLabel("转写模型", { exact: true })).toHaveValue(service.model);
+    await expect(page.getByLabel("API 密钥", { exact: true })).toHaveValue("");
+    await expect(page.getByLabel("API 密钥", { exact: true })).toHaveAttribute("placeholder", "输入服务商 API 密钥");
+    await page.getByText("高级设置", { exact: true }).click();
+    const endpoint = page.getByLabel("接口基础地址", { exact: true });
+    await expect(endpoint).toHaveValue(service.endpoint);
+    if (service.editableEndpoint) await expect(endpoint).toBeEditable();
+    else await expect(endpoint).not.toBeEditable();
+    await page.getByRole("button", { name: "保存", exact: true }).click();
+    await expect(page.locator(".speech-admin").getByRole("alert")).toContainText("开启语音输入前，请填写服务商、模型和密钥。");
+    expect(writes).toHaveLength(0);
+    await page.getByLabel("API 密钥", { exact: true }).fill(`fixture-${service.id}-secret`);
+    await page.getByLabel("转写模型", { exact: true }).fill("my-provider-model");
+    await page.getByRole("button", { name: "保存", exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("语音配置已保存");
+    expect(writes[0]).toMatchObject({ provider: service.provider, endpoint: service.endpoint, model_id: "my-provider-model", credential: `fixture-${service.id}-secret` });
+    await page.reload();
+    await expect(page.getByLabel("转写服务", { exact: true })).toHaveValue(service.id);
+    await expect(page.getByLabel("转写模型", { exact: true })).toHaveValue("my-provider-model");
+    await expect(page.getByLabel("API 密钥", { exact: true })).toHaveValue("");
+    await expect(page.getByLabel("API 密钥", { exact: true })).toHaveAttribute("placeholder", "已保存密钥，留空保留");
+    await expect(page.locator(".speech-admin")).not.toContainText(`fixture-${service.id}-secret`);
+    await page.getByLabel("转写模型", { exact: true }).fill("another-provider-model");
+    await page.getByRole("button", { name: "保存", exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("语音配置已保存");
+    expect(writes[1].credential).toBeUndefined();
+    expect(api.mutations).toEqual([]);
+  });
+}
+
+test("a custom compatible endpoint stays custom after saving and returning", async ({ page, context }) => {
+  const writes = await configure(context, { ...initial(), enabled: true, has_credential: true, endpoint: "https://api.groq.com/openai/v1", model_id: "whisper-large-v3" });
+  await page.goto("/admin/speech");
+  await expect(page.getByLabel("转写服务", { exact: true })).toHaveValue("groq");
+  await page.getByText("高级设置", { exact: true }).click();
+  await page.getByLabel("接口基础地址", { exact: true }).fill("https://asr.example.test/v1");
+  await expect(page.getByLabel("转写服务", { exact: true })).toHaveValue("openai");
+  await expect(page.getByLabel("转写模型", { exact: true })).toHaveValue("whisper-large-v3");
+  await page.getByLabel("API 密钥", { exact: true }).fill("fixture-custom-relay-secret");
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("语音配置已保存");
+  expect(writes[0]).toMatchObject({ provider: "openai", endpoint: "https://asr.example.test/v1", model_id: "whisper-large-v3", credential: "fixture-custom-relay-secret" });
+  await page.reload();
+  await expect(page.getByLabel("转写服务", { exact: true })).toHaveValue("openai");
+  await expect(page.getByLabel("转写模型", { exact: true })).toHaveValue("whisper-large-v3");
+  await page.getByText("高级设置", { exact: true }).click();
+  await expect(page.getByLabel("接口基础地址", { exact: true })).toHaveValue("https://asr.example.test/v1");
+  await expect(page.getByLabel("API 密钥", { exact: true })).toHaveValue("");
+});
+
 for (const locale of ["zh-CN", "en", "ja", "ko", "fr", "es"] as Locale[]) {
   test(`${locale} speech administration stays localized and usable at 320px`, async ({ page, context }, info) => {
     const t = translator(locale === "zh-CN" ? {} : JSON.parse(readFileSync(join(process.cwd(), `src/lib/i18n/messages/${locale}.json`), "utf8")));
@@ -124,6 +185,12 @@ for (const locale of ["zh-CN", "en", "ja", "ko", "fr", "es"] as Locale[]) {
     await expect(page.locator("html")).toHaveAttribute("lang", locale);
     await expect(page.getByRole("heading", { name: t("语音输入"), exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: t("语音输入"), exact: true })).toHaveAttribute("aria-current", "page");
+    const service = page.getByLabel(t("转写服务"), { exact: true });
+    await expect(service.locator("option")).toHaveCount(6);
+    for (const label of ["OpenAI 兼容接口", "Groq Whisper", "Together Whisper", "ElevenLabs Scribe", "Deepgram Nova", "Mistral Voxtral"]) {
+      await expect(service.getByRole("option", { name: t(label), exact: true })).toHaveCount(1);
+    }
+    await expect(page.locator(".speech-admin")).toContainText(t("模型和语言范围以服务商支持为准。"));
     await expect(page.getByLabel(t("转写模型"), { exact: true })).toHaveValue("gpt-4o-transcribe");
     await page.getByLabel(t("转写模型"), { exact: true }).fill("keep-model-name");
     await page.getByRole("button", { name: t("保存"), exact: true }).click();
