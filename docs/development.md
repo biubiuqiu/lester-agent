@@ -47,7 +47,7 @@ The runtime imposes no global model output-token cap. OpenAI-compatible provider
 
 ## Development checks
 
-Backend (Go 1.26.9):
+Backend (Go 1.26.10):
 
 ```bash
 cd backend
@@ -55,6 +55,7 @@ go mod tidy
 go vet ./...
 go test ./...
 go build ./cmd/...
+go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 ```
 
 Commit the changes made by `go mod tidy`, including direct/indirect dependency classifications. Backend CI reruns tidy and requires the committed module files to stay unchanged; passing local tests alone does not satisfy this check.
@@ -68,6 +69,8 @@ pnpm install --frozen-lockfile
 pnpm test # includes six-language catalogue validation
 pnpm lint
 pnpm build
+# Also run when changing frontend dependencies:
+pnpm audit --prod --audit-level=high
 ```
 
 Or from the repository root:
@@ -98,6 +101,8 @@ GitHub Actions runs on pushes to `main`, pull requests, and manual dispatch. New
 | --- | --- | --- |
 | Backend | Backend changes | Committed module files, gofmt, go vet, uncached unit/PostgreSQL integration tests, all `cmd` builds |
 | Frontend | Frontend changes | Frozen dependencies, tests, ESLint, production build/type checking, desktop/mobile Chromium regressions |
+| iOS / iPadOS | Native source, resource or build changes | Six-language resources, Core Swift tests and unsigned simulator/device builds on Xcode 26+ |
+| Android | Native source, resource or build changes | Pinned SDK, six-language resources, JVM tests, lint and unsigned APK builds |
 | Gateway / Compose | Gateway, Compose or deployment environment template changes | Config resolution, routing/cookies, preview isolation, uploads, SSE and WebSocket fixtures |
 | Helm | Chart changes | Chart lint and rendering with artifact ingress |
 | Go dependency security | Backend changes and weekly | Reachable vulnerable symbols via govulncheck |
@@ -107,6 +112,8 @@ GitHub Actions runs on pushes to `main`, pull requests, and manual dispatch. New
 Browser regressions use the production standalone bundle and fixed REST/SSE fixtures; no live models, speech providers, OAuth providers or email delivery are involved. After building, run `pnpm exec playwright install chromium` then `pnpm test:e2e` in `frontend/`. Desktop and mobile Chromium cover login errors, explicit first-task creation, preserved drafts, failed sends, live file tabs and isolated HTML previews. They also check all six languages across the homepage and every help chapter, translated server HTML without JavaScript, onboarding, and language switching with retained drafts and attachments. Tests do not retry failures; CI retains failure screenshots/traces for seven days. Speech checks cover admin configuration, recording cancellation, draft/queue preservation and original-receipt recovery with controlled media/provider fixtures. CI uses two browser workers and a 25-minute Web job budget; the same run can be reproduced with `pnpm test:e2e --workers=2`.
 
 Security scans have their own job names and remain failures when vulnerabilities or scan errors occur. Monday's scheduled run (03:23 UTC) scans dependencies even when code has not changed; **Run workflow** runs everything. Jobs use Ubuntu 24.04, Node 22, the Go version in `backend/go.mod`, and pnpm from `frontend/package.json`. Integration tests use a disposable PostgreSQL service, never production data or live model-provider credentials. CI does not deploy the application.
+
+Native and security checks retain failure logs for seven days and publish bounded error annotations. Go annotations include the vulnerability ID and fixed version; frontend audit annotations include the affected range and patched release. Native annotations expose compiler/SDK/Gradle errors instead of only exit code 1 or 65. The build and audit commands still fail normally with Bash `pipefail`; annotating an error never changes the result. See the [2026-10-29 CI dependency investigation](security-ci-2026-10-29.md) for the latest dependency fixes.
 
 Use **CI result** as the required branch check if enabling branch protection: it accepts intentionally skipped jobs and rejects failed/cancelled checks or a failed selection job. Existing required check names may need updating to match this workflow. Local workflow validation and selection tests:
 

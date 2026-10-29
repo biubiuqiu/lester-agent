@@ -207,8 +207,9 @@ jobs:
             android/gradle/wrapper/gradle-wrapper.properties
             android/gradle/verification-metadata.xml
       - name: Install the pinned Android SDK
+        shell: bash
         run: |
-          python3 - <<'PYCODE'
+          python3 - <<'PYCODE' 2>&1 | tee "$RUNNER_TEMP/android-sdk.log"
           import os, subprocess
           sdk = os.environ["ANDROID_HOME"]
           manager = sdk + "/cmdline-tools/latest/bin/sdkmanager"
@@ -216,10 +217,15 @@ jobs:
           subprocess.run([manager, "platforms;android-36", "build-tools;36.0.0"], check=True)
           PYCODE
       - name: Check native localization and transport boundaries
-        run: python3 android/scripts/check-resources.py
+        shell: bash
+        run: python3 android/scripts/check-resources.py 2>&1 | tee "$RUNNER_TEMP/android-resources.log"
       - name: Run JVM tests, Android lint and Debug/Release builds
         working-directory: android
-        run: ./gradlew --no-daemon :core:test :app:lint :app:assembleDebug :app:assembleRelease
+        shell: bash
+        run: ./gradlew --no-daemon --console=plain --stacktrace :core:test :app:lint :app:assembleDebug :app:assembleRelease 2>&1 | tee "$RUNNER_TEMP/android-build.log"
+      - name: Annotate native build errors
+        if: failure()
+        run: python3 .github/scripts/report_ci_errors.py android "$RUNNER_TEMP"/android-*.log
       - name: Retain APKs and validation evidence
         if: always()
         uses: actions/upload-artifact@v6
@@ -229,6 +235,7 @@ jobs:
             android/app/build/outputs/apk/
             android/app/build/reports/lint-results*.html
             android/core/build/reports/tests/
+            ${{ runner.temp }}/android-*.log
           if-no-files-found: ignore
           retention-days: 7
 
@@ -260,11 +267,24 @@ jobs:
               output.write(f"DEVELOPER_DIR={developer}\n")
           PYCODE
       - name: Verify resources and native bridge tests
+        shell: bash
         run: |
-          python3 ios/scripts/check-resources.py
-          swift test --package-path ios/Packages/LesterCore --jobs 2
+          python3 ios/scripts/check-resources.py 2>&1 | tee "$RUNNER_TEMP/ios-resources.log"
+          swift test --package-path ios/Packages/LesterCore --jobs 2 2>&1 | tee "$RUNNER_TEMP/ios-core.log"
       - name: Build unsigned simulator and device clients
-        run: bash ios/scripts/check-build.sh
+        shell: bash
+        run: bash ios/scripts/check-build.sh 2>&1 | tee "$RUNNER_TEMP/ios-build.log"
+      - name: Annotate native build errors
+        if: failure()
+        run: python3 .github/scripts/report_ci_errors.py ios "$RUNNER_TEMP"/ios-*.log
+      - name: Retain native failure logs
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ios-build-failure
+          path: ${{ runner.temp }}/ios-*.log
+          if-no-files-found: ignore
+          retention-days: 7
 
   helm:
     name: Helm configuration
@@ -298,7 +318,19 @@ jobs:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
       - name: Check reachable vulnerable Go symbols
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+        shell: bash
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./... 2>&1 | tee "$RUNNER_TEMP/go-security.log"
+      - name: Annotate vulnerable dependencies and fixed versions
+        if: failure()
+        run: python3 ../.github/scripts/report_ci_errors.py security-go "$RUNNER_TEMP/go-security.log"
+      - name: Retain security failure log
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: go-security-failure
+          path: ${{ runner.temp }}/go-security.log
+          if-no-files-found: ignore
+          retention-days: 7
 
   security-web:
     name: Frontend dependency security
@@ -322,7 +354,18 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
       - name: Check high and critical production vulnerabilities
-        run: pnpm audit --prod --audit-level=high
+        run: pnpm audit --prod --audit-level=high --json > "$RUNNER_TEMP/web-security.json"
+      - name: Annotate vulnerable dependencies and fixed versions
+        if: failure()
+        run: python3 ../.github/scripts/report_ci_errors.py security-web "$RUNNER_TEMP/web-security.json"
+      - name: Retain security failure log
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: web-security-failure
+          path: ${{ runner.temp }}/web-security.json
+          if-no-files-found: ignore
+          retention-days: 7
 
   sandbox-runtime:
     name: Sandbox runtime image

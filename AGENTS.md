@@ -209,7 +209,7 @@ Preserve these behaviors when changing the implementation:
 
 ## Backend conventions
 
-- Use Go `1.26.9` and keep the module rooted at `backend/`.
+- Use Go `1.26.10` and keep the module rooted at `backend/`.
 - Keep `cmd/*/main.go` focused on dependency wiring and process lifecycle.
 - Put application behavior in the appropriate `backend/internal/*` package.
 - Keep the HTTP transport on standard `net/http` with `chi`. Do not introduce Gin or another HTTP framework unless a measured requirement cannot be met by the current stack.
@@ -332,6 +332,7 @@ For `sandbox.provider=docker`, Helm keeps `sandbox-service` at one replica and r
 ## Change discipline
 
 - GitHub CI runs on main pushes, PRs and manual dispatch; weekly runs scan dependencies. Keep path selection in `.github/scripts/ci_changes.py` conservative: unavailable comparisons, unknown paths and CI changes run all checks; include both sides of renames and deletions. Preserve real PostgreSQL integration tests, dependency security failures and the stable `CI result` aggregate check. Documentation-only changes may skip unrelated jobs. Validate workflow edits with actionlint and the selection regression tests; do not suppress real failures or introduce live model/OAuth/SMTP credentials into CI.
+- Match the selected security checks locally: backend changes require the reachable-symbol `govulncheck` scan, and frontend dependency changes require `pnpm audit --prod --audit-level=high`. Unit tests, successful builds and browser regressions do not replace vulnerability scans. Keep the Go module and all four Docker build toolchains aligned when applying standard-library fixes. Native/security failures retain logs and publish bounded actionable annotations, including vulnerability IDs and fixed versions; reporting must preserve the failing command's exit status and never add `continue-on-error`.
 
 - Browser regressions exercise the production standalone bundle with fixed REST and native HTTP SSE fixtures on desktop/mobile Chromium. Keep task creation explicit, check draft recovery and private preview isolation, reject unexpected API calls, and do not hide failures with retries. CI retains failure screenshots/traces and annotates failing Go/Docker integration tests; these fixtures do not validate live model/OAuth/SMTP integration.
 - Legacy Docker/ACS command launchers must wait for a forked `setsid` child. Keep the forced-fork cancellation regression, start-time identity protection and cleanup assertions; local ACS transport fixtures must map `/workspace` into an isolated temporary directory rather than require host write access.

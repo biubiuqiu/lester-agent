@@ -121,7 +121,7 @@ Migration 015 invalidates old sessions: users sign in once after upgrade. Accoun
 
 ## Security notes
 
-Security audit and fixes: [2026-10-10 report](security-audit-2026-10-10.md). Backend builds now require Go 1.26.9 for current security patches.
+Security audit and fixes: [2026-10-10 report](security-audit-2026-10-10.md) and [2026-10-29 CI dependency fixes](security-ci-2026-10-29.md). Backend builds now require Go 1.26.10 for current security patches.
 
 Behind a gateway/Ingress, set `AUTH_TRUSTED_PROXY_CIDRS` to the actual proxy peer CIDRs (comma-separated), or Helm `config.auth.trustedProxyCIDRs`. Inspect the gateway address/subnet with `docker network inspect <network-name>`; trust only the dedicated proxy IP (`/32` or `/128`) or its controlled subnet, update after a changed address, and restrict API access to that proxy. An empty value ignores forwarding headers, so users behind the same gateway share its IP rate bucket. Never trust `0.0.0.0/0`, `::/0`, arbitrary client headers, or unrelated workloads. Only `X-Forwarded-For` from a trusted peer is used; the supplied gateway replaces it and strips `True-Client-IP`.
 

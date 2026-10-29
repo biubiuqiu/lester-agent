@@ -87,7 +87,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --buil
 
 ## 安全提示
 
-本次扫描与修复见 [2026-10-10 安全报告](../security-audit-2026-10-10.md)。Go 构建升级至 1.26.9 以应用当前安全补丁。
+历史扫描见 [2026-10-10 安全报告](../security-audit-2026-10-10.md)，最新依赖修复见 [2026-10-29 CI 排查](../security-ci-2026-10-29.md)。当前 Go 构建使用 1.26.10 安全补丁版本。
 
 网关 / Ingress 部署需将实际可信代理的 CIDR 填入 `AUTH_TRUSTED_PROXY_CIDRS`（逗号分隔），Helm 对应 `config.auth.trustedProxyCIDRs`。用 `docker network inspect <网络名称>` 查看网关 IP / 子网，优先信任专用代理的 `/32` 或 `/128`，或其受控子网；地址变化时更新，并限制 API 只接受该代理。留空会忽略所有转发头，同一网关后的用户共用网关 IP 的限流桶。禁止使用 `/0` 或信任无关服务。只读取可信连接提供的 `X-Forwarded-For`；默认网关覆盖该头并移除 `True-Client-IP`。
 

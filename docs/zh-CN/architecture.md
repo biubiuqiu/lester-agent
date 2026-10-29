@@ -95,7 +95,7 @@ User
 
 ### 资源与后台任务
 
-默认 Docker Sandbox 使用 Compose 自动构建的 `lester-sandbox-runtime:local`。镜像预装 Node.js 22（npm / pnpm）、Python 3.12（pip / venv）、Go 1.26.9、Git、Bash 补全、ripgrep、curl / wget、jq、SQLite、SSH 客户端、编辑器、压缩工具、FFmpeg 和 C/C++ 编译工具。Node.js 与 Python 的 Playwright **1.63.0** 共用预下载的 Chromium 与系统依赖，包含中日韩字体和 Emoji 字体；在会话目录中可直接导入 Playwright，Node 的 ESM 和 CommonJS 都可用，也可运行 `playwright test`。
+默认 Docker Sandbox 使用 Compose 自动构建的 `lester-sandbox-runtime:local`。镜像预装 Node.js 22（npm / pnpm）、Python 3.12（pip / venv）、Go 1.26.10、Git、Bash 补全、ripgrep、curl / wget、jq、SQLite、SSH 客户端、编辑器、压缩工具、FFmpeg 和 C/C++ 编译工具。Node.js 与 Python 的 Playwright **1.63.0** 共用预下载的 Chromium 与系统依赖，包含中日韩字体和 Emoji 字体；在会话目录中可直接导入 Playwright，Node 的 ESM 和 CommonJS 都可用，也可运行 `playwright test`。
 
 运行 `make sandbox-check` 可构建镜像，并在非 root 的 `sandbox` 用户、禁用网络、2 CPU / 4 GB / 256 PID / `no-new-privileges` 条件下实际验证 Go/C 编译、Python 虚拟环境与两种语言的 Chromium 截图。CI 还检查命名卷写入、Toolbox 安装、保留文件的容器重建和交互式终端。预装工具不会开启外网；项目的新依赖、其他版本的 Playwright 及外部网站访问仍需要相应依赖和部署网络配置。
 
