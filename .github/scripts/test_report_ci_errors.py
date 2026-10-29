@@ -18,6 +18,13 @@ class ReportErrorsTest(unittest.TestCase):
         result = messages("android", "FAILURE: Build failed\n* What went wrong:\n> Could not resolve pinned artifact\nverification failed")
         self.assertTrue(any("Could not resolve pinned artifact" in item for item in result))
 
+    def test_verification_error_keeps_all_missing_artifacts_and_skips_success_logs(self):
+        log = "3 artifacts failed verification:\n- one.pom\n- two.pom\n- three.module\nMissing checksums"
+        result = messages("android", log)
+        self.assertTrue(any("one.pom" in item and "three.module" in item for item in result))
+        self.assertEqual(messages("ios", "All tests passed with 0 failures"), [])
+        self.assertEqual(messages("android", "All SDK package licenses accepted"), [])
+
     def test_go_reports_id_and_fixed_version_instead_of_only_call_trace(self):
         result = messages("security-go", "Vulnerability #1: GO-2026-6809\n  Certificate validation\n  More info: example.test\n  Module: standard library\n    Found in: go1.26.9\n    Fixed in: go1.26.10\n\n  Trace:\n    SMTPMailer.Send calls Verify")
         self.assertEqual(len(result), 1)

@@ -235,6 +235,7 @@ jobs:
             android/app/build/outputs/apk/
             android/app/build/reports/lint-results*.html
             android/core/build/reports/tests/
+            android/build/reports/dependency-verification/
             ${{ runner.temp }}/android-*.log
           if-no-files-found: ignore
           retention-days: 7

@@ -27,7 +27,7 @@ struct WorkspaceWebView: UIViewRepresentable {
         model.back = { [weak web] in web?.goBack() }
         model.navigate = { [weak web] command in
             guard let web, let url = web.url, server.acceptsBridge(from: url, mainFrame: true) else { return }
-            web.callAsyncJavaScript("window.dispatchEvent(new CustomEvent('lester:native-command',{detail: command}));", arguments: ["command": command], in: nil, contentWorld: .page, completionHandler: nil)
+            web.callAsyncJavaScript("window.dispatchEvent(new CustomEvent('lester:native-command',{detail: command}));", arguments: ["command": command], in: nil, in: .page, completionHandler: nil)
         }
         web.load(URLRequest(url: server.url("/app")))
         return web

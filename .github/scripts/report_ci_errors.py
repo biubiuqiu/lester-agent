@@ -17,7 +17,7 @@ TITLES = {
     "security-web": "Frontend dependency vulnerability",
 }
 ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
-ERROR = re.compile(r"(?:\berror:|^e:|^FAILURE:|^\* What went wrong:|^> |AssertionError|^Traceback)")
+ERROR = re.compile(r"(?:\berror:|^e:|^FAILURE:|^\* What went wrong:|^> (?!Run with|Get more help)|artifacts failed verification|AssertionError|^Traceback)")
 
 
 def messages(mode, raw):
@@ -50,8 +50,10 @@ def messages(mode, raw):
             return ["\n".join(lines[start : start + 10]) for start in starts]
     indices = [index for index, line in enumerate(lines) if ERROR.search(line.strip())]
     if not indices:
+        if mode in ("ios", "android"):
+            return []
         return ["\n".join(lines[-20:]) or "The check failed before producing a log."]
-    return ["\n".join(lines[max(0, index - 1) : index + 3]) for index in indices]
+    return ["\n".join(lines[max(0, index - 1) : index + 9]) for index in indices]
 
 
 def annotation(title, message):
