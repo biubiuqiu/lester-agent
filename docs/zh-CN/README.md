@@ -32,7 +32,7 @@
 
 原有专题文档保留各自的语言与范围，与分章指南互相补充。
 
-- [个人助理的记忆与委派机制](../personal-assistant.md)
+- [个人助理的记忆、任务与未读回复](personal-assistant.md)
 - [自动任务、入站 Webhook 与结构化提问](../automations-and-questions.md)
 - [Claude Code 对标](../claude-code-alignment.md)
 - [云端 Agent 优先方向](../cloud-agent-priorities.md)

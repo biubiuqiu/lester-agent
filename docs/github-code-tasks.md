@@ -47,7 +47,7 @@ Publication records its intent before external mutation. The uploaded bytes, exp
 
 ## Upgrade and verification
 
-Back up the database, object storage and Computer volumes. Stop API writes/active tasks, apply all missing migrations through `000034_speech_input.up.sql`, then rebuild **API, Web and Sandbox Service** together. Preserve the existing encryption key. Fresh Compose mounts 001–035; Helm installations apply SQL separately. Migration 033 rollback removes only code grants/checkouts/proposal records; it does not delete working trees, undo commits or close PRs. Unresolved publication/approval records must be handled before rollback.
+Back up the database, object storage and Computer volumes. Stop API writes/active tasks, apply all missing migrations through `000034_speech_input.up.sql`, then rebuild **API, Web and Sandbox Service** together. Preserve the existing encryption key. Fresh Compose mounts 001–036; Helm installations apply SQL separately. Migration 033 rollback removes only code grants/checkouts/proposal records; it does not delete working trees, undo commits or close PRs. Unresolved publication/approval records must be handled before rollback.
 
 Docker's Sandbox Service installs its new Toolbox into existing Computers with atomic replacement on startup. Retain their workspace volumes and installed runtime. ACS requires an updated runtime image/template and an explicit existing-Computer upgrade plan that preserves workspace data. Custom or older images also need a usable Git executable.
 

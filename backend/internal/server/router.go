@@ -86,6 +86,8 @@ func Router(deps Dependencies) http.Handler {
 				private.Post("/personal/messages", deps.Personal.Chat)
 				private.Get("/personal/messages/{id}", deps.Personal.Turn)
 				private.Get("/personal/tasks", deps.Personal.Tasks)
+				private.Get("/personal/unread", deps.Personal.UnreadTasks)
+				private.Post("/conversations/{id}/read", deps.Personal.MarkRead)
 				private.Patch("/personal/settings", deps.Personal.Settings)
 				private.Patch("/personal/memories/{id}", deps.Personal.EditMemory)
 				private.Post("/personal/changes/{id}/undo", deps.Personal.Undo)

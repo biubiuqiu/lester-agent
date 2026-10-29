@@ -72,14 +72,18 @@ type Delegation struct {
 	InputID        *uuid.UUID `json:"input_id"`
 }
 type Task struct {
-	ID          uuid.UUID  `json:"id"`
-	ProjectID   uuid.UUID  `json:"project_id"`
-	ProjectName string     `json:"project_name"`
-	Title       string     `json:"title"`
-	Status      string     `json:"status"`
-	RunID       *uuid.UUID `json:"run_id"`
-	Reply       string     `json:"reply"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID             uuid.UUID  `json:"id"`
+	ProjectID      uuid.UUID  `json:"project_id"`
+	ProjectName    string     `json:"project_name"`
+	Title          string     `json:"title"`
+	Status         string     `json:"status"`
+	RunID          *uuid.UUID `json:"run_id"`
+	Reply          string     `json:"reply"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	LatestReplyID  *uuid.UUID `json:"latest_reply_id"`
+	LatestReplySeq int64      `json:"latest_reply_seq"`
+	ReplyAt        *time.Time `json:"reply_at"`
+	Unread         bool       `json:"unread"`
 }
 type projectItem struct {
 	ID      uuid.UUID `json:"id"`
@@ -155,10 +159,15 @@ func decodeReply(raw string) (modelReply, error) {
 			return v, ErrModel
 		}
 	}
-	if v.Task.Action != "none" && v.Task.Action != "create" && v.Task.Action != "continue" && v.Task.Action != "inspect" && v.Task.Action != "search" {
+	if v.Task.Action != "none" && v.Task.Action != "create" && v.Task.Action != "continue" && v.Task.Action != "inspect" && v.Task.Action != "search" && v.Task.Action != "unread" {
 		return v, ErrModel
 	}
-	if (v.Task.Action == "inspect" || v.Task.Action == "search") && len(v.Changes) > 0 {
+	if (v.Task.Action == "inspect" || v.Task.Action == "search" || v.Task.Action == "unread") && len(v.Changes) > 0 {
+		return v, ErrModel
+	}
+	// Unread lookup is a fixed server-owned query. Model text cannot select
+	// another actor, change a read receipt or smuggle delegation instructions.
+	if v.Task.Action == "unread" && (v.Task.ProjectID != "" || v.Task.ConversationID != "" || v.Task.Title != "" || v.Task.Instructions != "" || v.Task.Evidence != "") {
 		return v, ErrModel
 	}
 	return v, nil
@@ -177,6 +186,6 @@ func responseSchema() map[string]any {
 	return object(map[string]any{
 		"reply":          str,
 		"memory_changes": map[string]any{"type": "array", "items": object(map[string]any{"operation": map[string]any{"type": "string", "enum": []string{"remember", "forget"}}, "id": str, "scope": map[string]any{"type": "string", "enum": []string{"personal", "project"}}, "kind": map[string]any{"type": "string", "enum": []string{"preference", "project", "work"}}, "topic": str, "content": str, "evidence": str, "automatic": map[string]any{"type": "boolean"}})},
-		"task":           object(map[string]any{"action": map[string]any{"type": "string", "enum": []string{"none", "inspect", "search", "create", "continue"}}, "project_id": str, "conversation_id": str, "title": str, "instructions": str, "evidence": str}),
+		"task":           object(map[string]any{"action": map[string]any{"type": "string", "enum": []string{"none", "inspect", "search", "unread", "create", "continue"}}, "project_id": str, "conversation_id": str, "title": str, "instructions": str, "evidence": str}),
 	})
 }

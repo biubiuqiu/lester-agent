@@ -1,6 +1,6 @@
 import { test as base, expect, type Page } from "@playwright/test";
 import { WorkspaceApi, conversationId } from "./workspace-api";
-import type { PersonalState, PersonalTurn } from "../src/lib/personal";
+import type { PersonalState, PersonalTask, PersonalTurn } from "../src/lib/personal";
 
 const test = base.extend<{ api: WorkspaceApi }>({ api: async ({ context }, run) => {
   const api = new WorkspaceApi(); await api.install(context);
@@ -19,7 +19,179 @@ async function openAssistant(page: Page) {
   await page.locator(".personal-dock-launcher").click();
   await expect(page.getByRole("textbox", { name: "个人助理消息", exact: true })).toBeVisible();
 }
-function empty(): PersonalState { return { turns: [], has_more: false, memories: [], tasks: [], auto_memory: true }; }
+function empty(): PersonalState { return { turns: [], has_more: false, memories: [], tasks: [], inbox: { tasks: [], total: 0, next_cursor: "" }, auto_memory: true }; }
+function unreadTask(id = conversationId, title = "介绍页有了新回复"): PersonalTask {
+  const now = new Date().toISOString();
+  return { id, title, project_id: "fixture-project", project_name: "产品项目", status: "completed", run_id: "fixture-run", reply: "readme 已更新，可以检查这份成果。", updated_at: now, latest_reply_id: "33333333-3333-4333-8333-333333333333", latest_reply_seq: 2, reply_at: now, unread: true };
+}
+
+test("assistant examples preserve the current draft and only an explicit send delegates a new task", async ({ page, context, api }) => {
+  const state = empty(); let sends = 0;
+  await context.route("**/api/v1/personal**", route => {
+    const path = new URL(route.request().url()).pathname;
+    if (route.request().method() === "GET") return route.fulfill({ json: path.endsWith("/tasks") ? { tasks: state.tasks, inbox: state.inbox } : state });
+    expect(path).toBe("/api/v1/personal/messages"); sends++;
+    const body = route.request().postDataJSON();
+    expect(body.content).toContain("先保留这个想法");
+    expect(body.content).toContain("帮我新建一个任务会话，完成：");
+    const turn: PersonalTurn = { id: body.id, seq: 1, content: body.content, reply: "已交给新的任务会话。", status: "completed", created_at: new Date().toISOString(), changes: [], task: { conversation_id: conversationId, project_id: "fixture-project", title: "新建的介绍页任务", status: "started", run_id: "fixture-run", input_id: null } };
+    state.turns.push(turn); return route.fulfill({ json: turn });
+  });
+  await login(page);
+  const initialMutations = [...api.mutations];
+  const input = page.getByRole("textbox", { name: "个人助理消息", exact: true });
+  await input.fill("先保留这个想法");
+  await page.getByRole("button", { name: "安排新任务", exact: true }).click();
+  await expect(input).toHaveValue("先保留这个想法\n\n帮我新建一个任务会话，完成：");
+  await page.getByRole("button", { name: "查看未读回复", exact: true }).click();
+  await expect(input).toHaveValue("先保留这个想法\n\n帮我新建一个任务会话，完成：\n\n帮我看看哪些会话有新回复，但我还没看。");
+  expect(sends).toBe(0); expect(api.mutations).toEqual(initialMutations);
+  await input.press("Enter");
+  await expect(page.getByRole("link", { name: "打开任务 新建的介绍页任务", exact: true })).toHaveAttribute("href", `/app/c/${conversationId}`);
+  await expect(input).toHaveValue(""); expect(sends).toBe(1);
+});
+
+test("unread reply lists keep project labels and previews read-only, with recoverable pagination", async ({ page, context, api }, info) => {
+  const state = empty(), first = unreadTask(), second = unreadTask("44444444-4444-4444-8444-444444444444", "另一项目的测试结果");
+  second.project_name = "基础服务";
+  state.inbox = { tasks: [first], total: 2, next_cursor: "page-two/+" };
+  let pageReads = 0;
+  await context.route("**/api/v1/personal**", route => {
+    expect(route.request().method()).toBe("GET");
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith("/unread")) {
+      pageReads++; expect(url.searchParams.get("cursor")).toBe("page-two/+");
+      return pageReads === 1 ? route.fulfill({ status: 503, json: { error: "fixture read failure" } }) : route.fulfill({ json: { tasks: [second], total: 2, next_cursor: "" } });
+    }
+    return route.fulfill({ json: url.pathname.endsWith("/tasks") ? { tasks: state.tasks, inbox: state.inbox } : state });
+  });
+  await login(page);
+  const initialMutations = [...api.mutations];
+  const inbox = page.locator(".personal-inbox");
+  await expect(inbox.getByRole("button", { name: "未读回复 2", exact: true })).toHaveAttribute("aria-expanded", "false");
+  await inbox.getByRole("button", { name: "未读回复 2", exact: true }).click();
+  await expect(inbox.getByRole("link", { name: "打开会话 介绍页有了新回复", exact: true })).toHaveAttribute("href", `/app/c/${conversationId}`);
+  await expect(inbox).toContainText("产品项目");
+  await inbox.getByText("预览回复", { exact: true }).click();
+  await expect(inbox.getByText(first.reply, { exact: true })).toBeVisible();
+  expect(api.readAcks).toEqual([]); expect(api.mutations).toEqual(initialMutations);
+  await inbox.getByRole("button", { name: "加载更多回复", exact: true }).click();
+  await expect(inbox.getByRole("alert")).toContainText("未读回复加载失败，请重试。");
+  await expect(inbox).not.toContainText("暂无未读回复");
+  await expect(inbox.getByRole("link", { name: "打开会话 介绍页有了新回复", exact: true })).toBeVisible();
+  await inbox.getByRole("button", { name: "重试", exact: true }).click();
+  await expect(inbox.getByRole("link", { name: "打开会话 另一项目的测试结果", exact: true })).toBeVisible();
+  await expect(inbox).toContainText("基础服务"); await expect(inbox.getByRole("alert")).toHaveCount(0);
+  expect(pageReads).toBe(2); expect(api.readAcks).toEqual([]); expect(api.mutations).toEqual(initialMutations);
+  await page.screenshot({ path: info.outputPath("personal-unread-replies.png") });
+});
+
+test("confirmed matching read receipts refresh the inbox without erasing drafts or opening the list", async ({ page, context, api }) => {
+  const state = empty(); state.inbox = { tasks: [unreadTask()], total: 1, next_cursor: "" }; let reads = 0;
+  await context.route("**/api/v1/personal**", route => {
+    expect(route.request().method()).toBe("GET");
+    if (new URL(route.request().url()).pathname.endsWith("/tasks")) { reads++; return route.fulfill({ json: { tasks: [], inbox: state.inbox } }); }
+    return route.fulfill({ json: state });
+  });
+  await login(page);
+  const initialMutations = [...api.mutations];
+  const input = page.getByRole("textbox", { name: "个人助理消息", exact: true }), toggle = page.locator(".personal-inbox-toggle");
+  await input.fill("正在想的下一件事");
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent("lester:conversation-read", { detail: { userId: "other-user", workspaceId: "fixture-workspace", conversationId: "any", lastReadSeq: 2 } })));
+  await expect(toggle).toHaveText("未读回复1");
+  state.inbox = { tasks: [], total: 0, next_cursor: "" };
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent("lester:conversation-read", { detail: { userId: "22222222-2222-4222-8222-222222222222", workspaceId: "fixture-workspace", conversationId: "11111111-1111-4111-8111-111111111111", lastReadSeq: 2 } })));
+  await expect(toggle).toHaveText("未读回复0");
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(input).toHaveValue("正在想的下一件事"); expect(reads).toBe(1);
+  await toggle.click(); await expect(page.locator(".personal-inbox")).toContainText("暂无未读回复");
+  expect(api.mutations).toEqual(initialMutations);
+});
+
+test("a newer inbox read wins over a delayed initial assistant state", async ({ page, context, api }) => {
+  const old = empty(); old.inbox = { tasks: [unreadTask()], total: 1, next_cursor: "" };
+  let release!: () => void, started!: () => void, taskReads = 0;
+  const held = new Promise<void>(resolve => { release = resolve; }), initialStarted = new Promise<void>(resolve => { started = resolve; });
+  await context.route("**/api/v1/personal**", async route => {
+    if (new URL(route.request().url()).pathname.endsWith("/tasks")) { taskReads++; return route.fulfill({ json: { tasks: [], inbox: { tasks: [], total: 0, next_cursor: "" } } }); }
+    started(); await held; return route.fulfill({ json: old });
+  });
+  try {
+    await login(page); await initialStarted;
+    const initialMutations = [...api.mutations];
+    const taskResponse = page.waitForResponse(response => new URL(response.url()).pathname === "/api/v1/personal/tasks");
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent("lester:conversation-read", { detail: { userId: "22222222-2222-4222-8222-222222222222", workspaceId: "fixture-workspace", conversationId: "11111111-1111-4111-8111-111111111111", lastReadSeq: 2 } })));
+    await expect.poll(() => taskReads).toBe(1);
+    await (await taskResponse).finished();
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+    release();
+    await expect(page.locator(".personal-inbox-toggle")).toHaveText("未读回复0");
+    await page.locator(".personal-inbox-toggle").click();
+    await expect(page.locator(".personal-inbox")).toContainText("暂无未读回复");
+    expect(api.mutations).toEqual(initialMutations); expect(api.unexpected).toEqual([]);
+  } finally { release(); }
+});
+
+test("reading a task in another tab refreshes the assistant inbox through the actual broadcast channel", async ({ page, context, api }) => {
+  const state = empty(), reply = unreadTask(), now = new Date().toISOString();
+  state.inbox = { tasks: [reply], total: 1, next_cursor: "" };
+  api.conversation = { id: conversationId, project_id: "fixture-project", workspace_id: "fixture-workspace", created_by: "22222222-2222-4222-8222-222222222222", agent_slug: "lester", agent_name: "Lester", model_deployment_id: "fixture-model", title: reply.title, run_status: "completed", pinned: false, created_at: now, updated_at: now };
+  api.messages = [{ id: "fixture-user", role: "user", seq: 1, content: "检查这份介绍页", created_at: now }, { id: reply.latest_reply_id!, role: "assistant", seq: 2, content: reply.reply, created_at: now }];
+  let assistantTaskReads = 0, readWrites = 0;
+  await context.route("**/api/v1/personal**", route => {
+    expect(route.request().method()).toBe("GET");
+    if (new URL(route.request().url()).pathname.endsWith("/tasks")) {
+      if (route.request().frame().page() === page) assistantTaskReads++;
+      return route.fulfill({ json: { tasks: state.tasks, inbox: state.inbox } });
+    }
+    return route.fulfill({ json: state });
+  });
+  await context.route(`**/api/v1/conversations/${conversationId}/read`, route => {
+    expect(route.request().method()).toBe("POST");
+    expect(route.request().postDataJSON()).toEqual({ message_id: reply.latest_reply_id });
+    readWrites++; state.inbox = { tasks: [], total: 0, next_cursor: "" };
+    return route.fulfill({ json: { last_read_seq: 2 } });
+  });
+  await login(page);
+  const initialMutations = [...api.mutations], beforeRead = assistantTaskReads;
+  const input = page.getByRole("textbox", { name: "个人助理消息", exact: true });
+  await input.fill("等看完以后再安排下一步");
+  await expect(page.locator(".personal-inbox-toggle")).toHaveText("未读回复1");
+  const other = await context.newPage();
+  try {
+    await other.goto(`/app/c/${conversationId}`); await other.bringToFront();
+    await expect(other.locator(`[data-reply-read-id="${reply.latest_reply_id}"]`)).toBeVisible();
+    await expect.poll(() => readWrites).toBe(1);
+    // Keep the assistant tab in the background: a focus refresh cannot mask a
+    // missing BroadcastChannel subscription or account-scope mismatch.
+    await expect(page.locator(".personal-inbox-toggle")).toHaveText("未读回复0");
+    await expect.poll(() => assistantTaskReads).toBeGreaterThan(beforeRead);
+    await expect(input).toHaveValue("等看完以后再安排下一步");
+    await expect(page.locator(".personal-inbox-toggle")).toHaveAttribute("aria-expanded", "false");
+    expect(api.mutations).toEqual(initialMutations); expect(api.unexpected).toEqual([]);
+  } finally { await other.close(); }
+});
+
+test("returning to the active assistant reconciles remotely changed read state through reads only", async ({ page, context, api }) => {
+  const state = empty(); state.inbox = { tasks: [unreadTask()], total: 1, next_cursor: "" }; let taskReads = 0;
+  await context.route("**/api/v1/personal**", route => {
+    expect(route.request().method()).toBe("GET");
+    if (new URL(route.request().url()).pathname.endsWith("/tasks")) { taskReads++; return route.fulfill({ json: { tasks: state.tasks, inbox: state.inbox } }); }
+    return route.fulfill({ json: state });
+  });
+  await login(page);
+  const initialMutations = [...api.mutations], beforeFocus = taskReads;
+  const input = page.getByRole("textbox", { name: "个人助理消息", exact: true });
+  await input.fill("这条草稿继续保留");
+  await expect(page.locator(".personal-inbox-toggle")).toHaveText("未读回复1");
+  state.inbox = { tasks: [], total: 0, next_cursor: "" };
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect.poll(() => taskReads).toBeGreaterThan(beforeFocus);
+  await expect(page.locator(".personal-inbox-toggle")).toHaveText("未读回复0");
+  await expect(input).toHaveValue("这条草稿继续保留");
+  await expect(page.locator(".personal-inbox-toggle")).toHaveAttribute("aria-expanded", "false");
+  expect(api.mutations).toEqual(initialMutations); expect(api.readAcks).toEqual([]);
+});
 
 test("the independent dock preserves two drafts across tasks, settings and minimizing", async ({ page, context, api }, info) => {
   const state = empty(), now = new Date().toISOString(), errors: string[] = [];

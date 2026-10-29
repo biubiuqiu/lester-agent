@@ -29,7 +29,7 @@ function ChatMessage({ message }: { message: Message }) {
   const t = useT();
   const isUser = message.role === "user";
   return (
-    <article className={`chat-message ${isUser ? "user" : "assistant"}`}>
+    <article className={`chat-message ${isUser ? "user" : "assistant"}`} data-message-id={message.id} data-message-seq={message.seq}>
       {isUser && <span className="message-avatar">W</span>}
       <div className="chat-message-content">
         <MessageContent content={message.content} linkFiles={!isUser} actions={!isUser} quoteSource={!isUser ? t("引用回答") : undefined} />
@@ -41,6 +41,7 @@ function ChatMessage({ message }: { message: Message }) {
         </div> : null}
         <ProjectRulesReceipt rules={message.metadata?.project_rules} />
         <time>{new Date(message.created_at).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}</time>
+        {message.role === "assistant" && message.content.trim() && Number.isSafeInteger(message.seq) && message.seq! > 0 ? <span aria-hidden="true" data-reply-read-id={message.id} style={{ display: "block", width: 1, height: 1 }} /> : null}
       </div>
     </article>
   );

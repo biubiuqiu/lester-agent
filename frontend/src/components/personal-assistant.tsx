@@ -5,11 +5,12 @@ import Link from "next/link";
 import { ArrowUp, ArrowUpRight, Brain, Check, LoaderCircle, Pencil, Trash2, Undo2, X, SlidersHorizontal, Minus } from "lucide-react";
 import { api, ApiError, type Deployment, type Project, type UserProfile } from "@/lib/api";
 import { readView, updateView, viewKey } from "@/lib/conversation-view-state";
-import { mergePersonalTurns, readPersonal, type PersonalMemory, type PersonalState, type PersonalTask, type PersonalTurn } from "@/lib/personal";
+import { mergePersonalTurns, readPersonal, type PersonalInbox as InboxSnapshot, type PersonalMemory, type PersonalState, type PersonalTask, type PersonalTurn } from "@/lib/personal";
 import { randomId } from "@/lib/random-id";
 import { useI18n } from "./i18n";
 import { MessageContent } from "./message-content";
 import { SpeechComposer } from "./speech-input";
+import { PersonalInbox } from "./personal-inbox";
 
 export function PersonalAssistant({ user, projects, deployments, revision, active, onClose, onActivity, onDelegated }: { user: UserProfile; projects: Project[]; deployments: Deployment[]; revision: number; active: boolean; onClose: () => void; onActivity: (busy: boolean) => void; onDelegated: () => void }) {
   const { t, locale } = useI18n();
@@ -27,6 +28,8 @@ export function PersonalAssistant({ user, projects, deployments, revision, activ
   const mounted = useRef(true), sending = useRef(false), scroll = useRef<HTMLDivElement>(null), follow = useRef(true), input = useRef<HTMLTextAreaElement>(null);
   const loadedRevision = useRef(revision);
   const readGeneration = useRef(0);
+  const taskRead = useRef<{ generation: number; controller: AbortController | null }>({ generation: 0, controller: null });
+  const latestTasks = useRef<{ generation: number; tasks: PersonalTask[]; inbox?: InboxSnapshot } | null>(null);
   const activeRef = useRef(active);
   useEffect(() => { onActivity(busy); }, [busy, onActivity]);
   useEffect(() => {
@@ -35,12 +38,30 @@ export function PersonalAssistant({ user, projects, deployments, revision, activ
     input.current?.focus({ preventScroll: true });
     if (follow.current && scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight;
   }, [active]);
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useEffect(() => { mounted.current = true; const reads = taskRead.current; return () => { mounted.current = false; reads.controller?.abort(); }; }, []);
   const draft = (value: string) => { setText(value); updateView(key, { text: value }); };
   const refresh = useCallback(async (signal?: AbortSignal) => {
     const generation = ++readGeneration.current;
+    const taskGeneration = latestTasks.current?.generation ?? 0;
     const next = await readPersonal(undefined, signal);
-    if (mounted.current && !signal?.aborted && generation === readGeneration.current) setState(previous => ({ ...next, turns: mergePersonalTurns(previous?.turns ?? [], next.turns), has_more: previous && previous.turns.length > next.turns.length ? previous.has_more : next.has_more }));
+    if (mounted.current && !signal?.aborted && generation === readGeneration.current) {
+      const newerTasks = latestTasks.current && latestTasks.current.generation > taskGeneration ? latestTasks.current : null;
+      setState(previous => ({ ...next, ...(newerTasks ? { tasks: newerTasks.tasks, inbox: newerTasks.inbox } : {}), turns: mergePersonalTurns(previous?.turns ?? [], next.turns), has_more: previous && previous.turns.length > next.turns.length ? previous.has_more : next.has_more }));
+    }
+  }, []);
+  const refreshTasks = useCallback(async () => {
+    taskRead.current.controller?.abort();
+    const controller = new AbortController(), generation = ++taskRead.current.generation;
+    taskRead.current.controller = controller;
+    try {
+      const next = await api<{ tasks: PersonalTask[]; inbox?: InboxSnapshot }>("/api/v1/personal/tasks", { signal: controller.signal });
+      if (mounted.current && !controller.signal.aborted && generation === taskRead.current.generation) {
+        latestTasks.current = { ...next, generation };
+        setState(previous => previous ? { ...previous, tasks: next.tasks, inbox: next.inbox } : previous);
+      }
+    } catch {
+      if (mounted.current && !controller.signal.aborted && generation === taskRead.current.generation) setError("任务进展同步失败，请检查状态");
+    }
   }, []);
   useEffect(() => {
     if (!active) return;
@@ -51,20 +72,36 @@ export function PersonalAssistant({ user, projects, deployments, revision, activ
   useEffect(() => {
     if (loadedRevision.current === revision) return;
     loadedRevision.current = revision;
-    const controller = new AbortController();
-    void api<{ tasks: PersonalTask[] }>("/api/v1/personal/tasks", { signal: controller.signal }).then(next => { if (!controller.signal.aborted) setState(previous => previous ? { ...previous, tasks: next.tasks } : previous); }).catch(() => { if (!controller.signal.aborted) setError("任务进展同步失败，请检查状态"); });
-    return () => controller.abort();
-  }, [revision]);
+    void refreshTasks();
+  }, [revision, refreshTasks]);
+  useEffect(() => {
+    const receive = (detail: unknown) => {
+      if (!detail || typeof detail !== "object") return;
+      const scope = detail as { userId?: string; workspaceId?: string };
+      if (scope.userId === user.user_id && scope.workspaceId === user.workspace_id) void refreshTasks();
+    };
+    const read = (event: Event) => receive((event as CustomEvent).detail);
+    let channel: BroadcastChannel | undefined;
+    try { channel = new BroadcastChannel(`lester.conversation-read.v1.${user.user_id}.${user.workspace_id}`); channel.onmessage = event => receive(event.data); } catch { /* Opening again still refreshes when cross-tab messaging is unavailable. */ }
+    window.addEventListener("lester:conversation-read", read);
+    return () => { window.removeEventListener("lester:conversation-read", read); channel?.close(); };
+  }, [user.user_id, user.workspace_id, refreshTasks]);
   useEffect(() => { if (follow.current && scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight; }, [state?.turns, busy]);
   useEffect(() => {
     const sync = (event: StorageEvent) => { if (event.key === `lester.draft.v1.${key}`) { const saved = readView(key); setText(saved.text); setPending(saved.personalPending); setProject(saved.personalProject); setModel(saved.personalModel); } };
     window.addEventListener("storage", sync); return () => window.removeEventListener("storage", sync);
   }, [key]);
   useEffect(() => {
-    const reload = () => { if (activeRef.current && document.visibilityState === "visible") void refresh().catch(() => { if (mounted.current) setError("任务进展同步失败，请检查状态"); }); };
+    const reload = () => {
+      if (!activeRef.current || document.visibilityState !== "visible") return;
+      // Returning from another device/tab reconciles read state from PostgreSQL;
+      // it does not depend on a same-browser broadcast or start a polling loop.
+      void refreshTasks();
+      void refresh().catch(() => { if (mounted.current) setError("任务进展同步失败，请检查状态"); });
+    };
     window.addEventListener("focus", reload); document.addEventListener("visibilitychange", reload);
     return () => { window.removeEventListener("focus", reload); document.removeEventListener("visibilitychange", reload); };
-  }, [refresh]);
+  }, [refresh, refreshTasks]);
   const accept = (turn: PersonalTurn) => {
     if (!mounted.current) return;
     readGeneration.current++;
@@ -127,17 +164,23 @@ export function PersonalAssistant({ user, projects, deployments, revision, activ
     setState(previous => previous ? { ...previous, turns: previous.turns.map(turn => ({ ...turn, changes: turn.changes.map(change => change.id === id ? { ...change, undone: true } : change) })) } : previous);
     await refresh();
   }
+  function prepare(prompt: string) {
+    const latest = readView(key).text;
+    if (latest.length < 12000) draft(`${latest}${latest.trim() ? "\n\n" : ""}${t(prompt)}`.slice(0, 12000));
+    input.current?.focus({ preventScroll: true });
+  }
   return <div className="personal-assistant" onClick={event => { if (event.target instanceof Element && event.target.closest('a[href^="/app/"]') && window.matchMedia("(max-width: 1279px)").matches) onClose(); }}>
     <div className="personal-toolbar"><div className="personal-identity"><span className="personal-identity-mark" aria-hidden="true">L</span><span><strong>Lester</strong><small>{t("个人助理")}</small></span></div><div className="personal-header-actions"><button type="button" onClick={() => setMemoryOpen(true)} disabled={!state} aria-label={t("管理记忆")}><Brain size={16} />{t("记忆")}{state?.memories.length ? <small>{state.memories.length}</small> : null}</button>
       <details className="personal-options" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) event.currentTarget.open = false; }} onKeyDown={event => { if (event.key === "Escape" && event.currentTarget.open) { event.stopPropagation(); event.preventDefault(); event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }}><summary aria-label={t("助理设置")} title={t("助理设置")}><SlidersHorizontal size={16} /></summary><div>
         <label>{t("任务项目")}<select aria-label={t("对话项目范围")} value={selectedProject} onChange={event => { setProject(event.target.value); updateView(key, { personalProject: event.target.value }); }} disabled={busy}><option value="">{t("由 Lester 选择")}</option>{projects.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         <label>{t("个人助理模型")}<select aria-label={t("个人助理模型")} value={selectedModel} disabled={busy || !deployments.length} onChange={event => { setModel(event.target.value); updateView(key, { personalModel: event.target.value }); }}>{deployments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
       </div></details><button type="button" aria-label={t("收起个人助理")} title={t("收起个人助理")} onClick={onClose}><Minus size={17} /></button></div></div>
+    {state ? <PersonalInbox snapshot={state.inbox} active={active} /> : null}
     <div className="personal-scroll" ref={scroll} onScroll={event => { const node = event.currentTarget; follow.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80; }}>
       <div className="personal-transcript" aria-busy={busy}>
         {state?.has_more ? <button type="button" className="personal-history" disabled={historyBusy} onClick={() => void older()}>{t(historyBusy ? "正在载入…" : "查看更早的对话")}</button> : null}
         {!state && !error ? <p role="status">{t("正在载入…")}</p> : null}
-        {state && !state.turns.length ? <div className="personal-welcome"><span className="personal-monogram" aria-hidden="true">L</span><h2>{t("随时接着聊。")}</h2><p>{t("我会记住重要的事，帮你安排接下来的工作。")}</p></div> : null}
+        {state && !state.turns.length ? <div className="personal-welcome"><span className="personal-monogram" aria-hidden="true">L</span><h2>{t("随时接着聊。")}</h2><p>{t("我会记住重要的事，帮你安排接下来的工作。")}</p><div className="personal-suggestions"><button type="button" disabled={busy || !!pending} onClick={() => prepare("帮我新建一个任务会话，完成：")}>{t("安排新任务")}</button><button type="button" disabled={busy || !!pending} onClick={() => prepare("帮我看看哪些会话有新回复，但我还没看。")}>{t("查看未读回复")}</button></div></div> : null}
         {state?.turns.map(turn => <article className="personal-turn" id={`personal-${turn.id}`} key={turn.id}>
           <div className="personal-user">{turn.content}</div>
           {turn.reply ? <div className="personal-reply"><MessageContent content={turn.reply} /></div> : null}

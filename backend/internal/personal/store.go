@@ -140,16 +140,16 @@ func (s *Service) Tasks(ctx context.Context, p auth.Principal) ([]Task, error) {
 }
 func (s *Service) searchTasks(ctx context.Context, p auth.Principal, project *uuid.UUID, query string) ([]Task, error) {
 	pattern := "%" + strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(query) + "%"
-	rows, err := s.DB.Query(ctx, `SELECT c.id,c.project_id,p.name,c.title,CASE WHEN r.status='running' AND (EXISTS(SELECT 1 FROM run_permissions approval WHERE approval.workspace_id=c.workspace_id AND approval.conversation_id=c.id AND approval.run_id=r.id AND approval.status='pending') OR EXISTS(SELECT 1 FROM run_interactions interaction WHERE interaction.workspace_id=c.workspace_id AND interaction.conversation_id=c.id AND interaction.run_id=r.id AND interaction.status='pending')) THEN 'awaiting_input' ELSE COALESCE(r.status,'idle') END,r.id,COALESCE(left(m.content,1800),''),c.updated_at FROM conversations c JOIN projects p ON p.id=c.project_id AND p.workspace_id=c.workspace_id LEFT JOIN LATERAL(SELECT id,status FROM runs WHERE conversation_id=c.id ORDER BY created_at DESC,id DESC LIMIT 1)r ON true LEFT JOIN LATERAL(SELECT content FROM messages WHERE conversation_id=c.id AND role='assistant' AND (tool_calls IS NULL OR tool_calls='[]'::jsonb) AND COALESCE(metadata->>'incomplete','false')!='true' ORDER BY seq DESC LIMIT 1)m ON true WHERE c.workspace_id=$1 AND c.created_by=$2 AND ($3::uuid IS NULL OR c.project_id=$3) AND (c.title ILIKE $4 OR p.name ILIKE $4) ORDER BY c.updated_at DESC,c.id DESC LIMIT 30`, p.WorkspaceID, p.UserID, project, pattern)
+	rows, err := s.DB.Query(ctx, `SELECT `+taskColumns+` `+taskJoins+` WHERE c.workspace_id=$1 AND c.created_by=$2 AND ($3::uuid IS NULL OR c.project_id=$3) AND (c.title ILIKE $4 OR p.name ILIKE $4) ORDER BY c.updated_at DESC,c.id DESC LIMIT 30`, p.WorkspaceID, p.UserID, project, pattern)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	items := []Task{}
 	for rows.Next() {
-		var v Task
-		if err = rows.Scan(&v.ID, &v.ProjectID, &v.ProjectName, &v.Title, &v.Status, &v.RunID, &v.Reply, &v.UpdatedAt); err != nil {
-			return nil, err
+		v, e := scanTask(rows)
+		if e != nil {
+			return nil, e
 		}
 		items = append(items, v)
 	}

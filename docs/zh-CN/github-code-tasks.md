@@ -47,7 +47,7 @@ API 使用服务端保存的 GitHub 授权读取固定 commit/tree/blob，并执
 
 ## 升级与验证
 
-先备份数据库、对象存储和 Computer 数据卷，停止 API 写入与活跃任务，按顺序补齐迁移到 `000034_speech_input.up.sql`，然后一起重建 **API、Web、Sandbox Service**。保留原加密密钥。新 Compose 初始化 001–035；Helm 需单独执行 SQL。033 的安全回滚只删除代码授权标记、工作目录绑定和预览记录，不删除工作树、不撤销提交或关闭 PR；未确认的发布或审批必须先处理。
+先备份数据库、对象存储和 Computer 数据卷，停止 API 写入与活跃任务，按顺序补齐迁移到 `000034_speech_input.up.sql`，然后一起重建 **API、Web、Sandbox Service**。保留原加密密钥。新 Compose 初始化 001–036；Helm 需单独执行 SQL。033 的安全回滚只删除代码授权标记、工作目录绑定和预览记录，不删除工作树、不撤销提交或关闭 PR；未确认的发布或审批必须先处理。
 
 Docker 的 Sandbox Service 启动时会原子更新已有 Computer 的 Toolbox，保留工作区数据和运行镜像。ACS 需更新运行时镜像/模板，再显式安排已有 Computer 升级并保留持久工作区。旧镜像或自定义镜像也需要可用的 Git。
 

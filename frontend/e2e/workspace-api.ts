@@ -14,6 +14,7 @@ const deployment = { id: "fixture-model", connection_id: "fixture-connection", n
 export class WorkspaceApi {
   mutations: { path: string; body: Record<string, unknown> }[] = [];
   unexpected: string[] = [];
+  readAcks: { conversationId: string; messageId: string; seq: number }[] = [];
   hasModel = true;
   modelName = deployment.name;
   failCreate = false;
@@ -138,8 +139,9 @@ export class WorkspaceApi {
     if (!request.headers().cookie?.includes("lester_access_token=browser-test-access")) return reply({ code: "access_required", error: "需要登录" }, 401);
     if (path === "/api/v1/auth/session") return reply({ access_expires_at: new Date(Date.now() + 7200000).toISOString(), refresh_expires_at: new Date(Date.now() + 2592000000).toISOString() });
     if (path === "/api/v1/speech/capabilities" && method === "GET") return reply({ enabled: false, provider: "openai", revision: 0, max_audio_bytes: 10485760, max_duration_seconds: 120 });
-    if (path === "/api/v1/personal" && method === "GET") return reply({ turns: [], has_more: false, memories: [], tasks: [], auto_memory: true });
-    if (path === "/api/v1/personal/tasks" && method === "GET") return reply({ tasks: [] });
+    if (path === "/api/v1/personal" && method === "GET") return reply({ turns: [], has_more: false, memories: [], tasks: [], inbox: { tasks: [], total: 0, next_cursor: "" }, auto_memory: true });
+    if (path === "/api/v1/personal/tasks" && method === "GET") return reply({ tasks: [], inbox: { tasks: [], total: 0, next_cursor: "" } });
+    if (path === "/api/v1/personal/unread" && method === "GET") return reply({ tasks: [], total: 0, next_cursor: "" });
     if (path === "/api/v1/tasks") return reply({ tasks: [], next_cursor: "", attention_count: 0, observed_at: new Date().toISOString() });
     if (path === "/api/v1/me") return reply(user);
     if (path === "/api/v1/me/guides") return reply({ guides: ["welcome", "models", "projects", "files", "agents", "contexts", "computer", "skills", "profile", "publishing"].map(topic => ({ topic, step: 0, status: "completed" })) });
@@ -186,6 +188,12 @@ export class WorkspaceApi {
       return item ? reply({ ...item, type: "skill", title: item.name }) : reply({ error: "引用对象已不可用，请移除后重新选择。" }, 404);
     }
     const prefix = `/api/v1/conversations/${conversationId}`;
+    if (path === `${prefix}/read` && method === "POST") {
+      const message = this.messages.find(item => item.id === request.postDataJSON().message_id && item.role === "assistant" && Number.isSafeInteger(item.seq));
+      if (!message) return reply({ error: "reply not found" }, 404);
+      this.readAcks.push({ conversationId, messageId: message.id, seq: message.seq! });
+      return reply({ last_read_seq: Math.max(...this.readAcks.map(item => item.seq)) });
+    }
     if (path === `${prefix}/runs/fixture-run/permissions`) {
       if (method === "PUT") {
         const body = request.postDataJSON(); this.mutations.push({ path: rawPath, body });

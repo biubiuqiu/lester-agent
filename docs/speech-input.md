@@ -43,7 +43,7 @@ If the upload response is lost, recovery only reads the original request receipt
 
 ## Upgrade and verification
 
-Back up the database and stop API writes. Apply all missing migrations through `000035_speech_providers.up.sql`, then rebuild **API and Web** together. Preserve the existing encryption key and volumes. Fresh Compose initializes 001–035; existing volumes need explicit migration. Rebuild native clients to receive microphone permission handling. Speech setup does not require a new Computer or sandbox runtime.
+Back up the database and stop API writes. Apply all missing migrations through `000036_conversation_reads.up.sql`, then rebuild **API and Web** together. Preserve the existing encryption key and volumes. Fresh Compose initializes 001–036; existing volumes need explicit migration. Rebuild native clients to receive microphone permission handling. Speech setup does not require a new Computer or sandbox runtime.
 
 Migration 035 only extends the allowed provider protocols. Its rollback requires selecting OpenAI-compatible or ElevenLabs settings first; it refuses to discard a selected Deepgram/Mistral configuration. Rolling back 034 removes speech configuration and short-lived transcription receipts. Neither rollback deletes ordinary conversations, task files or already sent messages, or undoes a provider request and its cost.
 

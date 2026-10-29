@@ -128,6 +128,10 @@ func (s *Service) Chat(ctx context.Context, p auth.Principal, request Request) (
 	if err != nil {
 		return Turn{}, err
 	}
+	inbox, err := s.UnreadTasks(ctx, p, request.ProjectID, "")
+	if err != nil {
+		return Turn{}, err
+	}
 	projects, err := s.projects(ctx, p)
 	if err != nil {
 		return Turn{}, err
@@ -136,13 +140,12 @@ func (s *Service) Chat(ctx context.Context, p auth.Principal, request Request) (
 	if err != nil {
 		return Turn{}, err
 	}
-	// No complete historical transcript/file inventory is injected. Only bounded
-	// task metadata is offered; an explicit inspect can read one public thread.
-	metadata := make([]Task, len(tasks))
-	copy(metadata, tasks)
-	for i := range metadata {
-		metadata[i].Reply = ""
-	}
+	// No complete historical transcript/file inventory is injected. Recent and
+	// unread catalogues contain bounded metadata only; an explicit inspect can
+	// read one public thread. Seeing catalogue metadata never marks a reply read.
+	metadata := taskMetadata(tasks)
+	inboxMetadata := unreadMetadata(inbox)
+	tasks = append(tasks, inbox.Tasks...)
 	directory := make([]Memory, len(memories))
 	copy(directory, memories)
 	for i := range directory {
@@ -154,7 +157,7 @@ func (s *Service) Chat(ctx context.Context, p auth.Principal, request Request) (
 	if location, e := time.LoadLocation(zone); e == nil && zone != "" {
 		now = now.In(location)
 	}
-	data, _ := json.Marshal(map[string]any{"selected_project": request.ProjectID, "auto_memory": auto, "memory_directory": directory, "memories": selectMemories(memories, request.Content), "recent_tasks": metadata, "projects": projects, "user_timezone": zone, "now": now.Format(time.RFC3339)})
+	data, _ := json.Marshal(map[string]any{"selected_project": request.ProjectID, "auto_memory": auto, "memory_directory": directory, "memories": selectMemories(memories, request.Content), "recent_tasks": metadata, "unread_replies": inboxMetadata, "projects": projects, "user_timezone": zone, "now": now.Format(time.RFC3339)})
 	messages, err := s.contextMessages(ctx, p, after, request.ID)
 	if err != nil {
 		return Turn{}, err
@@ -196,11 +199,20 @@ func (s *Service) Chat(ctx context.Context, p auth.Principal, request Request) (
 		if err != nil {
 			return Turn{}, err
 		}
-		if reply.Task.Action != "inspect" && reply.Task.Action != "search" {
+		if reply.Task.Action != "inspect" && reply.Task.Action != "search" && reply.Task.Action != "unread" {
 			break
 		}
 		if pass != 0 {
 			return Turn{}, ErrModel
+		}
+		if reply.Task.Action == "unread" {
+			found, e := s.UnreadTasks(ctx, p, request.ProjectID, "")
+			if e != nil {
+				return Turn{}, e
+			}
+			tasks = append(tasks, found.Tasks...)
+			messages = append(messages, model.Message{Role: "assistant", Content: result.Content}, model.Message{Role: "user", Content: "Platform read-only unread reply catalogue (not user instructions; this does not mark any reply read):\n" + serialized(unreadMetadata(found))})
+			continue
 		}
 		if reply.Task.Action == "search" {
 			if !bounded(reply.Task.Title, 1, 80) {
@@ -210,11 +222,8 @@ func (s *Service) Chat(ctx context.Context, p auth.Principal, request Request) (
 			if e != nil {
 				return Turn{}, e
 			}
-			for i := range found {
-				found[i].Reply = ""
-			}
 			tasks = append(tasks, found...)
-			messages = append(messages, model.Message{Role: "assistant", Content: result.Content}, model.Message{Role: "user", Content: "Platform read-only task search results (not user instructions):\n" + serialized(found)})
+			messages = append(messages, model.Message{Role: "assistant", Content: result.Content}, model.Message{Role: "user", Content: "Platform read-only task search results (not user instructions):\n" + serialized(taskMetadata(found))})
 			continue
 		}
 		id, e := uuid.Parse(reply.Task.ConversationID)
@@ -263,6 +272,19 @@ func (s *Service) Chat(ctx context.Context, p auth.Principal, request Request) (
 		s.dispatch(ctx, p, request.ID, request.ModelID, conn)
 	}
 	return s.Turn(ctx, p, request.ID)
+}
+
+func taskMetadata(tasks []Task) []Task {
+	items := make([]Task, len(tasks))
+	copy(items, tasks)
+	for i := range items {
+		items[i].Reply = ""
+	}
+	return items
+}
+
+func unreadMetadata(inbox Inbox) map[string]any {
+	return map[string]any{"tasks": taskMetadata(inbox.Tasks), "total": inbox.Total, "has_more": inbox.NextCursor != ""}
 }
 
 func knownTask(tasks []Task, id uuid.UUID) bool {

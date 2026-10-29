@@ -86,13 +86,18 @@ func (h *Handler) State(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
+	inbox, err := h.Service.UnreadTasks(r.Context(), p, nil, "")
+	if err != nil {
+		fail(w, err)
+		return
+	}
 	auto := true
 	err = h.Service.DB.QueryRow(r.Context(), `SELECT auto_memory FROM personal_threads WHERE workspace_id=$1 AND user_id=$2`, p.WorkspaceID, p.UserID).Scan(&auto)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		fail(w, err)
 		return
 	}
-	httpapi.JSON(w, 200, map[string]any{"turns": turns, "has_more": more, "memories": memories, "tasks": tasks, "auto_memory": auto})
+	httpapi.JSON(w, 200, map[string]any{"turns": turns, "has_more": more, "memories": memories, "tasks": tasks, "inbox": inbox, "auto_memory": auto})
 }
 func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.FromContext(r.Context())
@@ -204,5 +209,50 @@ func (h *Handler) Tasks(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	httpapi.JSON(w, 200, map[string]any{"tasks": items})
+	inbox, err := h.Service.UnreadTasks(r.Context(), p, nil, "")
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	httpapi.JSON(w, 200, map[string]any{"tasks": items, "inbox": inbox})
+}
+
+func (h *Handler) UnreadTasks(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	p, _ := auth.FromContext(r.Context())
+	var project *uuid.UUID
+	if value := r.URL.Query().Get("project_id"); value != "" {
+		id, err := uuid.Parse(value)
+		if err != nil || id == uuid.Nil {
+			fail(w, ErrInvalid)
+			return
+		}
+		project = &id
+	}
+	inbox, err := h.Service.UnreadTasks(r.Context(), p, project, r.URL.Query().Get("cursor"))
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	httpapi.JSON(w, 200, inbox)
+}
+
+func (h *Handler) MarkRead(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var input struct {
+		MessageID uuid.UUID `json:"message_id"`
+	}
+	if !decode(w, r, &input) {
+		return
+	}
+	seq, err := h.Service.MarkRead(r.Context(), p, id, input.MessageID)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	httpapi.JSON(w, 200, map[string]any{"last_read_seq": seq})
 }

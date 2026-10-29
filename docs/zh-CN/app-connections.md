@@ -8,7 +8,7 @@
 
 ## 部署
 
-先备份、停止 API 写入与活跃任务，按编号执行所有缺失迁移，直到 `backend/migrations/000034_speech_input.up.sql`，然后一起重建 API、Web 和 Sandbox Service。新 Compose 初始化挂载 001–035；已有数据卷需手动升级。保留原 `MASTER_KEY_BASE64` 和数据卷。032 引入应用连接，033 增加独立授权的代码任务。回滚需倒序执行，并先检查[代码任务的回滚保护](github-code-tasks.md#升级与验证)；不会删除账号、登录会话、任务文件，也不撤销已执行操作。
+先备份、停止 API 写入与活跃任务，按编号执行所有缺失迁移，直到 `backend/migrations/000034_speech_input.up.sql`，然后一起重建 API、Web 和 Sandbox Service。新 Compose 初始化挂载 001–036；已有数据卷需手动升级。保留原 `MASTER_KEY_BASE64` 和数据卷。032 引入应用连接，033 增加独立授权的代码任务。回滚需倒序执行，并先检查[代码任务的回滚保护](github-code-tasks.md#升级与验证)；不会删除账号、登录会话、任务文件，也不撤销已执行操作。
 
 分别创建服务商应用并填写以下可选凭据。仅 API 接收密钥，不得放入 `NEXT_PUBLIC_*`、Skill 或 Computer。它们与 Lester 登录使用的 `GOOGLE_OAUTH_*` / `GITHUB_OAUTH_*` 独立。
 

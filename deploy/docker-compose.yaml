@@ -51,6 +51,7 @@ services:
       - ../backend/migrations/000033_github_code_workflows.up.sql:/docker-entrypoint-initdb.d/033.sql:ro
       - ../backend/migrations/000034_speech_input.up.sql:/docker-entrypoint-initdb.d/034.sql:ro
       - ../backend/migrations/000035_speech_providers.up.sql:/docker-entrypoint-initdb.d/035.sql:ro
+      - ../backend/migrations/000036_conversation_reads.up.sql:/docker-entrypoint-initdb.d/036.sql:ro
     healthcheck:
       test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
       interval: 3s

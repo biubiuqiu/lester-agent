@@ -8,7 +8,7 @@ An open-source, self-hostable AI agent workspace. Talk to one enduring Lester: i
 
 ## Features
 
-- **A personal assistant:** a persistent dialogue with private, editable memory and task delegation.
+- **A personal assistant:** a persistent dialogue with private memory, task delegation and unread replies across your projects.
 - **Work in projects:** recent conversations, project context, task queues, questions and explicit permissions.
 - **See the results:** file tabs, HTML/Markdown previews, source inspection and static-site publishing.
 - **Choose your tools:** multiple model providers, custom Agents, @ references, Skills and attachments.
@@ -52,7 +52,7 @@ Open [http://localhost:13000](http://localhost:13000), enter the workspace, regi
 
 [Full setup, PowerShell and alternate ports](docs/getting-started.md). Saving model configuration does not verify provider access; the first task confirms the actual call.
 
-**Existing installations:** preserve `.env`, encryption keys and volumes. Back up and apply every missing migration through **035** before running the matching services. Follow the [upgrade checklist](docs/deployment.md#upgrading-an-existing-installation); do not overwrite an existing configuration or delete volumes.
+**Existing installations:** preserve `.env`, encryption keys and volumes. Back up and apply every missing migration through **036** before running the matching services. Follow the [upgrade checklist](docs/deployment.md#upgrading-an-existing-installation); do not overwrite an existing configuration or delete volumes.
 
 Connect GitHub, Gmail, X, Feishu and Slack for [read-only task research](docs/app-connections.md).
 
