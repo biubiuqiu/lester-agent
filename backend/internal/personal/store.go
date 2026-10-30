@@ -180,48 +180,12 @@ func barrier(ctx context.Context, tx pgx.Tx, p auth.Principal) error {
 }
 
 func (s *Service) EditMemory(ctx context.Context, p auth.Principal, id uuid.UUID, revision int64, content string, forget bool) (Memory, error) {
-	if !forget && !bounded(content, 1, 600) {
-		return Memory{}, ErrInvalid
-	}
-	tx, err := s.DB.Begin(ctx)
-	if err != nil {
-		return Memory{}, err
-	}
-	defer tx.Rollback(ctx)
-	if _, _, _, err = ensureThread(ctx, tx, p); err != nil {
-		return Memory{}, err
-	}
-	m, err := scanMemory(tx.QueryRow(ctx, `SELECT `+memoryColumns+` FROM personal_memories WHERE workspace_id=$1 AND user_id=$2 AND id=$3 FOR UPDATE`, p.WorkspaceID, p.UserID, id))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return m, ErrNotFound
-	}
-	if err != nil {
-		return m, err
-	}
-	if m.Revision != revision || m.Deleted {
-		return m, ErrConflict
-	}
-	before := m
-	m.Content = strings.TrimSpace(content)
-	m.Deleted = forget
-	m.Automatic = false
-	m.Evidence = ""
-	m.SourceTurnID = nil
-	m, err = writeMemory(ctx, tx, p, m)
-	if err != nil {
-		return m, err
-	}
-	if _, err = recordChange(ctx, tx, p, &before, m, nil); err != nil {
-		return m, err
-	}
-	if err = barrier(ctx, tx, p); err != nil {
-		return m, err
-	}
-	return m, tx.Commit(ctx)
+	receipt, err := s.UpdateMemory(ctx, p, id, revision, content, forget, nil)
+	return receipt.Memory, err
 }
 
 func writeMemory(ctx context.Context, tx pgx.Tx, p auth.Principal, m Memory) (Memory, error) {
-	return scanMemory(tx.QueryRow(ctx, `UPDATE personal_memories SET content=$4,evidence=$5,source_turn_id=$6,automatic=$7,deleted=$8,revision=revision+1,updated_at=now() WHERE workspace_id=$1 AND user_id=$2 AND id=$3 RETURNING `+memoryColumns, p.WorkspaceID, p.UserID, m.ID, m.Content, m.Evidence, m.SourceTurnID, m.Automatic, m.Deleted))
+	return scanMemory(tx.QueryRow(ctx, `UPDATE personal_memories SET content=$4,evidence=$5,source_turn_id=$6,automatic=$7,deleted=$8,topic=$9,kind=$10,project_id=$11,revision=revision+1,updated_at=now() WHERE workspace_id=$1 AND user_id=$2 AND id=$3 RETURNING `+memoryColumns, p.WorkspaceID, p.UserID, m.ID, m.Content, m.Evidence, m.SourceTurnID, m.Automatic, m.Deleted, m.Topic, m.Kind, m.ProjectID))
 }
 
 func (s *Service) Undo(ctx context.Context, p auth.Principal, id uuid.UUID) error {
@@ -272,8 +236,11 @@ func (s *Service) Undo(ctx context.Context, p auth.Principal, id uuid.UUID) erro
 			return ErrMemoryFull
 		}
 	}
-	if _, err = writeMemory(ctx, tx, p, restored); err != nil {
+	if err = checkMemoryProject(ctx, tx, p, restored.ProjectID); err != nil {
 		return err
+	}
+	if _, err = writeMemory(ctx, tx, p, restored); err != nil {
+		return memoryWriteError(err)
 	}
 	if _, err = tx.Exec(ctx, `UPDATE personal_memory_changes SET undone=true WHERE id=$1`, id); err != nil {
 		return err

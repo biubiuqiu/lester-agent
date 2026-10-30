@@ -1,5 +1,11 @@
 import { api } from "./api";
 export type PersonalMemory = { id: string; project_id: string | null; kind: "preference" | "project" | "work"; topic: string; content: string; evidence: string; source_turn_id: string | null; automatic: boolean; deleted: boolean; revision: number; updated_at: string };
+export type PersonalMemoryInput = Pick<PersonalMemory, "topic" | "content" | "kind" | "project_id">;
+export type PersonalMemoryReceipt = { memory: PersonalMemory; change_id: string };
+export const createPersonalMemory = (id: string, input: PersonalMemoryInput, signal?: AbortSignal) => api<PersonalMemoryReceipt>(`/api/v1/personal/memories/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(input), signal });
+export const editPersonalMemory = (id: string, revision: number, input: PersonalMemoryInput, signal?: AbortSignal) => api<PersonalMemoryReceipt>(`/api/v1/personal/memories/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ revision, content: input.content, details: { topic: input.topic, kind: input.kind, project_id: input.project_id } }), signal });
+export const forgetPersonalMemory = (id: string, revision: number, signal?: AbortSignal) => api<PersonalMemoryReceipt>(`/api/v1/personal/memories/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ revision, content: "", forget: true }), signal });
+export const readPersonalMemory = (id: string, signal?: AbortSignal) => api<PersonalMemory>(`/api/v1/personal/memories/${encodeURIComponent(id)}`, { signal });
 export type MemoryChange = { id: string; memory_id: string; topic: string; deleted: boolean; automatic: boolean; undone: boolean };
 export type DelegatedTask = { conversation_id: string; project_id: string; title: string; status: "prepared" | "dispatching" | "started" | "queued" | "failed" | "unknown"; run_id: string | null; input_id: string | null };
 export type PersonalTurn = { id: string; seq: number; content: string; reply: string; memory_notice?: string; status: "pending" | "completed" | "failed" | "interrupted"; created_at: string; changes: MemoryChange[]; task?: DelegatedTask };

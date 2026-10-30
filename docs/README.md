@@ -33,6 +33,7 @@ Start with installation, then choose a chapter for the work you want to do. Comm
 These existing notes retain their own scope and language. They complement the chapters above.
 
 - [Personal assistant memory and delegation](personal-assistant.md)
+- [Agent memory research: OpenClaw, Letta and Mem0](research/agent-memory-design.md)
 - [Automations, webhooks and structured questions](automations-and-questions.md)
 - [Claude Code alignment](claude-code-alignment.md)
 - [Cloud Agent priorities](cloud-agent-priorities.md)

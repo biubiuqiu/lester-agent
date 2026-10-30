@@ -8,7 +8,7 @@ An open-source, self-hostable AI agent workspace. Talk to one enduring Lester: i
 
 ## Features
 
-- **A personal assistant:** a persistent dialogue with private memory, task delegation and unread replies across your projects.
+- **A personal assistant:** a persistent dialogue with [editable private memory](docs/personal-assistant.md), task delegation and unread replies across your projects. Add memories directly without a model, or remember them in conversation.
 - **Work in projects:** recent conversations, project context, task queues, questions and explicit permissions.
 - **See the results:** file tabs, HTML/Markdown previews, source inspection and static-site publishing.
 - **Choose your tools:** multiple model providers, custom Agents, @ references, Skills and attachments.

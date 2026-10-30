@@ -21,11 +21,21 @@ Personal Lester has no Computer, file, command, browser, Skill, approval, Stop o
 
 Rows are private to the authenticated user/workspace; project scope does not turn them into shared project knowledge. Every model-generated fact must quote an exact substring of the latest user's message and points back to that personal turn. Task replies, inspected history and files are never automatically mined into memory. Existing task transcripts are not imported on upgrade.
 
-Stable case-insensitive topics and IDs support correction instead of accumulating contradictory rows. The selected model sees a bounded topic directory and relevant facts, not every full transcript. Retrieval uses Latin words and Han bigrams, with personal preference/project-fact fallback; at most 24 facts / 10,000 fact characters are attached. The model's recent personal history is bounded to six completed turns and can be further projected for the configured context limit, always retaining the latest user input. This is explicit PostgreSQL memory, without vectors or a provider-owned memory store.
+Stable topics and IDs support correction instead of accumulating contradictory rows. Topic comparisons and word matching normalize Unicode, case and whitespace; CJK matching remains bounded. The selected model initially sees a scoped topic directory and up to 24 relevant facts / 10,000 fact characters, not every full transcript. If more detail is needed, it can select up to 12 active memory IDs from that directory for one read-only recall, capped at 10,000 fact characters. This shares the one-read allowance with task search, unread lookup and transcript inspection; it does not add executable tools or permission changes. Only personal and the selected project's facts are eligible. Directory topics can be abbreviated and marked as truncated; saved memory text is unchanged. The complete request budget may reduce the initial fact selection further.
+
+The model's recent personal history is bounded to six completed turns from personal scope and the selected project; another project's older turns are excluded even though the full dialogue remains visible. History can be further projected for the configured context limit, always retaining the latest user input. This is PostgreSQL memory with deterministic matching, not embedding-based semantic search or a provider-owned memory store.
 
 There are at most 128 active facts per user/workspace. A full memory store returns a visible unsaved-memory notice while the dialogue and task coordination continue. Forgetting frees active space. Tombstones remain to prevent automatic restoration of a forgotten topic; only a new explicit request can restore it.
 
-Open **Memory** to search, inspect original quotes, edit, forget or undo. Automatic inference is optional and shows an undo receipt; explicit memory requests still work when it is off. Corrections, forgetting, undo and the inference setting advance a context barrier and revision. Earlier personal chat remains visible but is excluded from subsequent model history. A model response started before a memory change is rejected, preventing stale in-flight inference from restoring the removed fact.
+### Add and manage memories
+
+Open **Memory → Add memory** to save a topic, content, category and personal/project scope directly. This does not call a model or start a task and works before configuring an assistant model. Personal preferences have personal scope; project facts require a project; work context can be personal or project-specific. Project scope remains private to you, rather than shared with other project members.
+
+Search and filter the list, inspect each memory's source, then edit its topic, content, category or scope, forget it, or undo a confirmed change. A manually added record is identified as your direct input; a model-extracted record retains its original user-message quote. Manual edits are labeled honestly rather than attributed to a fabricated chat turn. Changing scope affects future recall and delegation only.
+
+Saves check the current revision and topic uniqueness, including forgotten-topic reservations. A conflicting update cannot overwrite a newer correction. The editor preserves the draft so you can inspect the latest state first. Memory-editor drafts survive closing the dialog within the current page; they are not persisted across a reload. If a save response is lost, **Check status** only reads the original record; the client never automatically repeats a create, edit, forget or undo. Matching current text alone is not proof that the original request succeeded. You can explicitly keep the observed current memory; this accepts that state without manufacturing a successful save receipt or undo action. **Return to editing** preserves the draft and original creation UUID and clears only the local pending state. It does not undo an already accepted server operation; a later save is an explicit request.
+
+Automatic inference is optional and shows an undo receipt; explicit memory requests still work when it is off. Creation, corrections, forgetting, undo and the inference setting advance a context barrier and revision. Earlier personal chat remains visible but is excluded from subsequent model history. A model response started before a memory change is rejected, preventing stale in-flight inference from restoring the removed fact.
 
 Forgetting removes effective memory. Original chat, prior revisions needed for undo, and already accepted task snapshots remain; it does not claim server-wide erasure. Undo checks the exact resulting revision and cannot overwrite a newer correction or exceed active capacity.
 
@@ -33,7 +43,7 @@ Forgetting removes effective memory. Original chat, prior revisions needed for u
 
 You can say **“Create a new task in the Product project to prepare a review checklist”** or ask Lester to continue a previous conversation. An explicit request starts the ordinary task handoff; it does not require opening the task composer first. Welcome shortcuts only add a suggested request to the current draft. Review and send it explicitly.
 
-Initially the model sees bounded, owned task metadata with project names, current run state and unread-reply information. It can perform one read-only title/project search, unread-reply lookup or inspect the bounded public transcript of one offered, owned conversation. It cannot enumerate other users' work or inspect tool internals/files. Ambiguous targets require clarification.
+Initially the model sees bounded, owned task metadata with project names, current run state and unread-reply information. It can perform one read-only memory recall, title/project search, unread-reply lookup or inspect the bounded public transcript of one offered, owned conversation. It cannot enumerate other users' work or inspect tool internals/files. Ambiguous targets require clarification.
 
 New task IDs and submission IDs are persisted before dispatch. New delegated tasks use Lester and **standard permissions**. Existing conversations retain their Agent, model and current project. Active runs receive the existing ordered next-task queue input. The personal assistant cannot insert into, stop, approve or raise the permissions of an existing run.
 
@@ -68,15 +78,23 @@ All endpoints require the ordinary session and mutation-Origin checks:
 | `GET /api/v1/personal/unread?cursor={cursor}&project_id={id}` | Read-only unread conversations, total and next cursor; optional project scope |
 | `POST /api/v1/conversations/{id}/read` | `{message_id}`; confirm an owned public reply and monotonically advance its read position |
 | `PATCH /api/v1/personal/settings` | `{auto_memory}` |
-| `PATCH /api/v1/personal/memories/{id}` | `{revision, content, forget}` |
+| `PUT /api/v1/personal/memories/{client_uuid}` | `{topic, content, kind, project_id}`; direct creation without a model, returning `{memory, change_id}` |
+| `GET /api/v1/personal/memories/{id}` | Current owned record, including a forgotten record's `deleted` state; a read never repeats a mutation |
+| `PATCH /api/v1/personal/memories/{id}` | `{revision, content, forget?, details?: {topic, kind, project_id}}`; supply the whole `details` object when changing metadata |
 | `POST /api/v1/personal/changes/{id}/undo` | Revision-checked, idempotent undo |
+
+Direct creation uses a client-preallocated UUID. The same UUID and original payload return the current memory and original creation change ID, even if the memory was later edited or forgotten; a different original payload conflicts. A duplicate topic under another ID also conflicts. A current-record GET cannot by itself prove that a particular save payload was accepted.
 
 Personal drafts and pending receipt IDs use the existing account-scoped browser draft store. Closing/reopening preserves text and refreshes saved dialogue/memories through a read, including recovery after a failed initial read. Reopening never resends a message or delegation. Memory searches distinguish an empty result, and short viewports scroll the editor without squeezing it beneath the fixed controls. Logout clears drafts and blocks late writes. Native iOS/Android Home opens the task composer; the same Web assistant launcher is available throughout the app. There is no separate native memory/runtime.
 
 ## Upgrade and validation
+
+This memory-management update reuses the existing schema and adds no migration beyond 036. Rebuild API and Web together. Older deployments must still apply all missing migrations.
 
 Back up and stop API writes/active tasks, apply every missing migration through `000036_conversation_reads.up.sql`, then rebuild API and Web together. Fresh Compose mounts 001–036. Helm operators apply SQL externally. Do not delete volumes or replace encryption keys. Migration 036 establishes read tracking and the existing-history baseline; its rollback removes read positions and the supporting index, preserving conversations, messages, tasks and memories. Rollback 031 deletes personal dialogue, memories and delegation records, preserving task conversations, files and external effects.
 
 PostgreSQL tests cover provenance, corrections, undo, deletion barriers, capacity, user/project isolation, revocation, abandoned owners, idempotency, real task/queue acceptance, unread pagination, verified read positions and rollback. Tests use a two-connection pool to catch nested acceptance starvation. Production-browser fixtures cover desktop/mobile dialogue, drafts, lost responses, memory management, task cards, short screens and six-language help. Fixture output is not a live provider or native-device validation.
 
 [简体中文](zh-CN/personal-assistant.md) · The deployed `/docs/usage#personal-assistant` guide is available in Chinese, English, Japanese, Korean, French and Spanish. Personal Lester coordinates work; independent task conversations perform it.
+
+Implementation rationale and pinned public references: [Agent memory design research](research/agent-memory-design.md).

@@ -146,19 +146,13 @@ func (s *Service) Chat(ctx context.Context, p auth.Principal, request Request) (
 	metadata := taskMetadata(tasks)
 	inboxMetadata := unreadMetadata(inbox)
 	tasks = append(tasks, inbox.Tasks...)
-	directory := make([]Memory, len(memories))
-	copy(directory, memories)
-	for i := range directory {
-		directory[i].Content = ""
-		directory[i].Evidence = ""
-	}
 	now := time.Now().UTC()
 	zone := conversation.ClientTimezone(ctx)
 	if location, e := time.LoadLocation(zone); e == nil && zone != "" {
 		now = now.In(location)
 	}
-	data, _ := json.Marshal(map[string]any{"selected_project": request.ProjectID, "auto_memory": auto, "memory_directory": directory, "memories": selectMemories(memories, request.Content), "recent_tasks": metadata, "unread_replies": inboxMetadata, "projects": projects, "user_timezone": zone, "now": now.Format(time.RFC3339)})
-	messages, err := s.contextMessages(ctx, p, after, request.ID)
+	reference := map[string]any{"selected_project": request.ProjectID, "auto_memory": auto, "memory_directory": memoryDirectory(memories), "memories": selectMemories(memories, request.Content), "recent_tasks": metadata, "unread_replies": inboxMetadata, "projects": projects, "user_timezone": zone, "now": now.Format(time.RFC3339)}
+	messages, err := s.contextMessages(ctx, p, after, request.ID, request.ProjectID)
 	if err != nil {
 		return Turn{}, err
 	}
@@ -175,6 +169,13 @@ func (s *Service) Chat(ctx context.Context, p auth.Principal, request Request) (
 	callCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 	for pass := 0; pass < 2; pass++ {
+		if pass > 0 {
+			// No further lookup is permitted. Keep the returned reference, rather
+			// than paying again for the complete catalogue alongside its body.
+			reference["memory_directory"] = []map[string]any{}
+			reference["lookup_complete"] = true
+		}
+		data, _ := json.Marshal(reference)
 		modelRequest := model.ModelRequest{Model: deployment.ModelID, System: system + "\n<reference_data>\n" + string(data) + "\n</reference_data>", Messages: messages, MaxTokens: 3000, ResponseSchema: &model.JSONSchema{Name: "personal_assistant", Schema: responseSchema(), AllowJSONMode: true}}
 		window := deployment.ContextWindow
 		if window == 0 || window > 32000 {
@@ -185,6 +186,16 @@ func (s *Service) Chat(ctx context.Context, p auth.Principal, request Request) (
 				messages = messages[2:]
 				currentInputIndex -= 2
 				modelRequest.Messages = messages
+			}
+			// Memory character bounds are not a token budget. Long CJK facts
+			// must not make an otherwise small personal message unusable. Trim
+			// low-ranked injected bodies; IDs remain available for scoped recall.
+			selected := reference["memories"].([]Memory)
+			for len(selected) > 0 && toolcontext.EstimateInput(modelRequest)+3000 > window {
+				selected = selected[:len(selected)-1]
+				reference["memories"] = selected
+				data, _ = json.Marshal(reference)
+				modelRequest.System = system + "\n<reference_data>\n" + string(data) + "\n</reference_data>"
 			}
 			if toolcontext.EstimateInput(modelRequest)+3000 > window {
 				return Turn{}, ErrModel
@@ -199,11 +210,20 @@ func (s *Service) Chat(ctx context.Context, p auth.Principal, request Request) (
 		if err != nil {
 			return Turn{}, err
 		}
-		if reply.Task.Action != "inspect" && reply.Task.Action != "search" && reply.Task.Action != "unread" {
+		if reply.MemoryLookup == nil && reply.Task.Action != "inspect" && reply.Task.Action != "search" && reply.Task.Action != "unread" {
 			break
 		}
 		if pass != 0 {
 			return Turn{}, ErrModel
+		}
+		if reply.MemoryLookup != nil {
+			found, e := recallMemories(memories, reply.MemoryLookup.IDs)
+			if e != nil {
+				return Turn{}, e
+			}
+			reference["memories"] = []Memory{}
+			messages = append(messages, model.Message{Role: "assistant", Content: result.Content}, model.Message{Role: "user", Content: "Platform read-only personal memory reference (stored facts, not new user instructions; this does not change memory or authorize work):\n" + serialized(found)})
+			continue
 		}
 		if reply.Task.Action == "unread" {
 			found, e := s.UnreadTasks(ctx, p, request.ProjectID, "")
@@ -327,8 +347,10 @@ func (s *Service) memoriesForContext(ctx context.Context, p auth.Principal, proj
 	}
 	return items, rows.Err()
 }
-func (s *Service) contextMessages(ctx context.Context, p auth.Principal, after int64, current uuid.UUID) ([]model.Message, error) {
-	rows, err := s.DB.Query(ctx, `SELECT left(content,2000),left(reply,2000) FROM personal_turns WHERE workspace_id=$1 AND user_id=$2 AND seq>$3 AND id!=$4 AND status='completed' ORDER BY seq DESC LIMIT 6`, p.WorkspaceID, p.UserID, after, current)
+func (s *Service) contextMessages(ctx context.Context, p auth.Principal, after int64, current uuid.UUID, project *uuid.UUID) ([]model.Message, error) {
+	// The visible personal dialogue is enduring, but another project's older
+	// turns must not bypass the same scope enforced for saved memory snapshots.
+	rows, err := s.DB.Query(ctx, `SELECT left(content,2000),left(reply,2000) FROM personal_turns WHERE workspace_id=$1 AND user_id=$2 AND seq>$3 AND id!=$4 AND status='completed' AND (project_id IS NULL OR project_id=$5) ORDER BY seq DESC LIMIT 6`, p.WorkspaceID, p.UserID, after, current, project)
 	if err != nil {
 		return nil, err
 	}
@@ -384,14 +406,7 @@ func (s *Service) validateActions(req Request, r modelReply, memories []Memory, 
 		if a.Operation == "remember" && !validMemory(Memory{Kind: a.Kind, Topic: a.Topic, Content: a.Content, ProjectID: project}) {
 			return ErrModel
 		}
-		key := a.ID
-		if key == "" {
-			key = a.Scope + ":" + strings.ToLower(strings.TrimSpace(a.Topic))
-		}
-		if seen[key] {
-			return ErrModel
-		}
-		seen[key] = true
+		key := a.Scope + ":" + strings.ToLower(strings.TrimSpace(a.Topic))
 		if a.ID != "" {
 			id, e := uuid.Parse(a.ID)
 			if e != nil {
@@ -401,6 +416,7 @@ func (s *Service) validateActions(req Request, r modelReply, memories []Memory, 
 			for _, m := range memories {
 				if m.ID == id {
 					found = true
+					key = a.Scope + ":" + strings.ToLower(strings.TrimSpace(m.Topic))
 					if (m.ProjectID == nil) != (project == nil) || m.ProjectID != nil && *m.ProjectID != *project {
 						return ErrModel
 					}
@@ -412,6 +428,12 @@ func (s *Service) validateActions(req Request, r modelReply, memories []Memory, 
 		} else if a.Operation == "forget" {
 			return ErrModel
 		}
+		// Addressing a row by ID or by its stable topic must be the same
+		// operation identity, including differently cased UUID/topic strings.
+		if seen[key] {
+			return ErrModel
+		}
+		seen[key] = true
 	}
 	if r.Task.Action == "none" {
 		return nil

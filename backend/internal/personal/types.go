@@ -109,9 +109,16 @@ type taskAction struct {
 	Evidence       string `json:"evidence"`
 }
 type modelReply struct {
-	Reply   string         `json:"reply"`
-	Changes []memoryAction `json:"memory_changes"`
-	Task    taskAction     `json:"task"`
+	Reply        string         `json:"reply"`
+	Changes      []memoryAction `json:"memory_changes"`
+	Task         taskAction     `json:"task"`
+	MemoryLookup *memoryLookup  `json:"memory_lookup"`
+}
+
+// A fixed read-only lookup, not an Agent tool or an arbitrary database query.
+// IDs must come from the current personal/project memory directory.
+type memoryLookup struct {
+	IDs []string `json:"ids"`
 }
 
 func bounded(s string, min, max int) bool {
@@ -130,8 +137,14 @@ func decodeReply(raw string) (modelReply, error) {
 	}
 	// Independently require the whole schema, even when a provider ignores it.
 	var shape map[string]json.RawMessage
-	if json.Unmarshal([]byte(raw), &shape) != nil || len(shape) != 3 {
+	if json.Unmarshal([]byte(raw), &shape) != nil || len(shape) != 4 {
 		return v, ErrModel
+	}
+	if string(shape["memory_lookup"]) != "null" {
+		var lookup map[string]json.RawMessage
+		if json.Unmarshal(shape["memory_lookup"], &lookup) != nil || len(lookup) != 1 || len(lookup["ids"]) == 0 || lookup["ids"][0] != '[' || v.MemoryLookup == nil || len(v.MemoryLookup.IDs) == 0 || len(v.MemoryLookup.IDs) > 12 || len(v.Changes) > 0 || v.Task != (taskAction{Action: "none"}) {
+			return v, ErrModel
+		}
 	}
 	var task map[string]json.RawMessage
 	if json.Unmarshal(shape["task"], &task) != nil || len(task) != 6 {
@@ -183,8 +196,11 @@ func responseSchema() map[string]any {
 		sort.Strings(required)
 		return map[string]any{"type": "object", "additionalProperties": false, "properties": props, "required": required}
 	}
+	lookup := object(map[string]any{"ids": map[string]any{"type": "array", "items": str, "minItems": 1, "maxItems": 12}})
+	lookup["type"] = []string{"object", "null"}
 	return object(map[string]any{
 		"reply":          str,
+		"memory_lookup":  lookup,
 		"memory_changes": map[string]any{"type": "array", "items": object(map[string]any{"operation": map[string]any{"type": "string", "enum": []string{"remember", "forget"}}, "id": str, "scope": map[string]any{"type": "string", "enum": []string{"personal", "project"}}, "kind": map[string]any{"type": "string", "enum": []string{"preference", "project", "work"}}, "topic": str, "content": str, "evidence": str, "automatic": map[string]any{"type": "boolean"}})},
 		"task":           object(map[string]any{"action": map[string]any{"type": "string", "enum": []string{"none", "inspect", "search", "unread", "create", "continue"}}, "project_id": str, "conversation_id": str, "title": str, "instructions": str, "evidence": str}),
 	})

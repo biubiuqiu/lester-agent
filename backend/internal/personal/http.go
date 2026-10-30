@@ -152,24 +152,53 @@ func (h *Handler) EditMemory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Revision int64  `json:"revision"`
-		Content  string `json:"content"`
-		Forget   bool   `json:"forget"`
+		Revision int64          `json:"revision"`
+		Content  string         `json:"content"`
+		Forget   bool           `json:"forget"`
+		Details  *MemoryDetails `json:"details"`
 	}
 	if !decode(w, r, &input) {
 		return
 	}
-	item, err := h.Service.EditMemory(r.Context(), p, id, input.Revision, input.Content, input.Forget)
+	item, err := h.Service.UpdateMemory(r.Context(), p, id, input.Revision, input.Content, input.Forget, input.Details)
 	if err != nil {
 		fail(w, err)
 		return
 	}
-	var changeID uuid.UUID
-	if err = h.Service.DB.QueryRow(r.Context(), `SELECT id FROM personal_memory_changes WHERE workspace_id=$1 AND user_id=$2 AND memory_id=$3 AND revision=$4`, p.WorkspaceID, p.UserID, id, item.Revision).Scan(&changeID); err != nil {
+	httpapi.JSON(w, 200, item)
+}
+
+func (h *Handler) CreateMemory(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var input ManualMemoryInput
+	if !decode(w, r, &input) {
+		return
+	}
+	item, err := h.Service.CreateMemory(r.Context(), p, id, input)
+	if err != nil {
 		fail(w, err)
 		return
 	}
-	httpapi.JSON(w, 200, map[string]any{"memory": item, "change_id": changeID})
+	httpapi.JSON(w, 200, item)
+}
+
+func (h *Handler) Memory(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	p, _ := auth.FromContext(r.Context())
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	item, err := h.Service.Memory(r.Context(), p, id)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	httpapi.JSON(w, 200, item)
 }
 func (h *Handler) Undo(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.FromContext(r.Context())

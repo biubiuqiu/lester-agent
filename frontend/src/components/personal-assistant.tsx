@@ -2,15 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { ArrowUp, ArrowUpRight, Brain, Check, LoaderCircle, Pencil, Trash2, Undo2, X, SlidersHorizontal, Minus } from "lucide-react";
+import { ArrowUp, ArrowUpRight, Brain, LoaderCircle, Undo2, SlidersHorizontal, Minus } from "lucide-react";
 import { api, ApiError, type Deployment, type Project, type UserProfile } from "@/lib/api";
 import { readView, updateView, viewKey } from "@/lib/conversation-view-state";
-import { mergePersonalTurns, readPersonal, type PersonalInbox as InboxSnapshot, type PersonalMemory, type PersonalState, type PersonalTask, type PersonalTurn } from "@/lib/personal";
+import { mergePersonalTurns, readPersonal, type PersonalInbox as InboxSnapshot, type PersonalState, type PersonalTask, type PersonalTurn } from "@/lib/personal";
 import { randomId } from "@/lib/random-id";
 import { useI18n } from "./i18n";
 import { MessageContent } from "./message-content";
 import { SpeechComposer } from "./speech-input";
 import { PersonalInbox } from "./personal-inbox";
+import { PersonalMemoryManager } from "./personal-memory-manager";
 
 export function PersonalAssistant({ user, projects, deployments, revision, active, onClose, onActivity, onDelegated }: { user: UserProfile; projects: Project[]; deployments: Deployment[]; revision: number; active: boolean; onClose: () => void; onActivity: (busy: boolean) => void; onDelegated: () => void }) {
   const { t, locale } = useI18n();
@@ -202,7 +203,7 @@ export function PersonalAssistant({ user, projects, deployments, revision, activ
         <SpeechComposer draftKey={key} inputRef={input} onText={draft} active={active} maxLength={12000} className="personal-composer-actions"><span className="personal-composer-hint">{t("记住重要的事，安排接下来的工作")}</span><span className="personal-composer-spacer" /><button className="send-button" aria-label={t("发送给个人助理")} disabled={!text.trim() || busy || !!pending || !state || !deployments.length}>{busy ? <LoaderCircle className="personal-spinner" /> : <ArrowUp />}</button></SpeechComposer>
       </form>
     </div>
-    {memoryOpen && state ? <MemoryManager memories={state.memories} projects={projects} automatic={state.auto_memory} locale={locale} onClose={() => setMemoryOpen(false)} onRefresh={refresh} onAutomatic={async enabled => { await api("/api/v1/personal/settings", { method: "PATCH", body: JSON.stringify({ auto_memory: enabled }) }); setState(previous => previous ? { ...previous, auto_memory: enabled } : previous); }} /> : null}
+    {state ? <PersonalMemoryManager key={key} open={memoryOpen} memories={state.memories} projects={projects} automatic={state.auto_memory} locale={locale} onClose={() => setMemoryOpen(false)} onRefresh={refresh} onAutomatic={async enabled => { await api("/api/v1/personal/settings", { method: "PATCH", body: JSON.stringify({ auto_memory: enabled }) }); if (mounted.current) setState(previous => previous ? { ...previous, auto_memory: enabled } : previous); }} /> : null}
   </div>;
 }
 
@@ -216,34 +217,4 @@ function TaskCard({ delegation, live, projectName, onInspect }: { delegation: No
   const [checking, setChecking] = useState(false), [error, setError] = useState("");
   const confirmed = delegation.status === "started" || delegation.status === "queued";
   return <div className="personal-task-card"><span className="personal-task-icon"><ArrowUpRight size={18} /></span><div><strong>{delegation.title}</strong><small>{live?.project_name ?? projectName ?? t("项目不可用")} · {t(live?.status === "awaiting_input" ? "等待你确认" : delegation.status === "queued" ? "已加入会话队列" : delegation.status === "failed" ? "任务未接受" : !confirmed ? "委派结果待确认" : live ? taskStatus(live.status) : "已交给任务会话")}</small>{confirmed && live?.reply && live.status === "completed" ? <details><summary>{t("查看最新回复")}</summary><p>{live.reply}</p></details> : null}</div>{confirmed ? <Link href={`/app/c/${delegation.conversation_id}`} aria-label={t("打开任务 {0}", [delegation.title])}>{t("查看任务")}<ArrowUpRight size={14} /></Link> : delegation.status !== "failed" ? <button type="button" className="personal-task-inspect" disabled={checking} onClick={async () => { if (checking) return; setChecking(true); setError(""); try { await onInspect(); } catch (reason) { setError(reason instanceof Error ? reason.message : "任务进展同步失败，请检查状态"); } finally { setChecking(false); } }}>{t("检查状态")}</button> : null}{error ? <p role="alert">{t(error)}</p> : null}</div>;
-}
-
-function MemoryManager({ memories, projects, automatic, locale, onClose, onRefresh, onAutomatic }: { memories: PersonalMemory[]; projects: Project[]; automatic: boolean; locale: string; onClose: () => void; onRefresh: () => Promise<void>; onAutomatic: (enabled: boolean) => Promise<void> }) {
-  const { t } = useI18n(), dialog = useRef<HTMLDialogElement>(null);
-  const [query, setQuery] = useState(""), [editing, setEditing] = useState(""), [content, setContent] = useState(""), [busy, setBusy] = useState(""), [error, setError] = useState("");
-  const [lastChange, setLastChange] = useState("");
-  const [automaticValue, setAutomaticValue] = useState(automatic);
-  const matching = memories.filter(memory => `${memory.topic} ${memory.content} ${projects.find(project => project.id === memory.project_id)?.name ?? ""}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
-  useEffect(() => { const element = dialog.current; element?.showModal(); return () => element?.close(); }, []);
-  const close = () => { dialog.current?.close(); onClose(); };
-  async function mutate(id: string, operation: () => Promise<unknown>) {
-    if (busy) return; setBusy(id); setError("");
-    try { const result = await operation(); if (result && typeof result === "object" && "change_id" in result && typeof result.change_id === "string") setLastChange(result.change_id); setEditing(""); try { await onRefresh(); } catch { setError("修改已保存，列表刷新失败，请检查状态。"); } }
-    catch (reason) { setError(reason instanceof Error ? reason.message : "操作失败"); }
-    finally { setBusy(""); }
-  }
-  const formatter = new Intl.DateTimeFormat(locale, { dateStyle: "medium" });
-  return <dialog className="personal-memory-dialog" ref={dialog} aria-labelledby="personal-memory-title" onCancel={event => { event.preventDefault(); close(); }} onClick={event => { if (event.target === event.currentTarget) { const rect = event.currentTarget.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) close(); } }}>
-    <header><div><h2 id="personal-memory-title">{t("Lester 的记忆")}</h2><p>{t("记忆仅供你使用。项目记忆只带入对应项目的任务。")}</p></div><button type="button" className="icon-button" aria-label={t("关闭记忆")} onClick={close}><X size={18} /></button></header>
-    <label className="personal-auto-memory"><input type="checkbox" checked={automaticValue} disabled={!!busy} onChange={event => { const enabled = event.target.checked; setAutomaticValue(enabled); void mutate("settings", async () => { try { await onAutomatic(enabled); } catch (reason) { setAutomaticValue(automatic); throw reason; } }); }} /><span>{t("自动记住重要信息")}<small>{t("关闭后仍可明确说“记住这个”。")}</small></span></label>
-    <input className="personal-memory-search" type="search" aria-label={t("搜索记忆")} placeholder={t("搜索记忆")} value={query} onChange={event => setQuery(event.target.value)} />
-    {error ? <p className="personal-error" role="alert">{t(error)}<button type="button" disabled={!!busy} onClick={() => void onRefresh().then(() => setError("")).catch(reason => setError(reason.message))}>{t("检查状态")}</button></p> : null}
-    <div className="personal-memory-list">{matching.map(memory => <article key={memory.id}>
-      <div className="personal-memory-heading"><strong>{memory.topic}</strong><small>{memory.project_id ? projects.find(project => project.id === memory.project_id)?.name : t(memory.kind === "work" ? "工作脉络" : "个人偏好")}</small></div>
-      {editing === memory.id ? <form onSubmit={event => { event.preventDefault(); void mutate(memory.id, () => api(`/api/v1/personal/memories/${memory.id}`, { method: "PATCH", body: JSON.stringify({ revision: memory.revision, content }) })); }}><textarea aria-label={t("编辑记忆内容")} value={content} maxLength={600} onChange={event => setContent(event.target.value)} /><div><button disabled={!!busy || !content.trim()}><Check size={14} />{t("保存")}</button><button type="button" disabled={!!busy} onClick={() => setEditing("")}>{t("取消")}</button></div></form> : <p>{memory.content}</p>}
-      <details><summary>{t("记忆来源")} · {formatter.format(new Date(memory.updated_at))}</summary><p>{memory.evidence || t("你手动编辑的记忆")}</p><small>{t(memory.automatic ? "自动提炼，可撤销" : "由你明确记住或更正")}</small></details>
-      <div className="personal-memory-actions"><button type="button" disabled={!!busy} onClick={() => { setEditing(memory.id); setContent(memory.content); }}><Pencil size={13} />{t("编辑")}</button><button type="button" disabled={!!busy} onClick={() => void mutate(memory.id, () => api(`/api/v1/personal/memories/${memory.id}`, { method: "PATCH", body: JSON.stringify({ revision: memory.revision, content: "", forget: true }) }))}><Trash2 size={13} />{t("忘记")}</button></div>
-    </article>)}{!matching.length ? <p className="personal-memory-empty" role="status">{t(memories.length ? "没有匹配的记忆，试试其他关键词。" : "还没有记忆。聊天时告诉我“记住这个”就好。")}</p> : null}</div>
-    <footer>{lastChange ? <button type="button" disabled={!!busy} onClick={() => void mutate("undo", async () => { await api(`/api/v1/personal/changes/${lastChange}/undo`, { method: "POST", body: "{}" }); setLastChange(""); })}><Undo2 size={13} />{t("撤销这次记忆修改")}</button> : null}{t("忘记不会删除原聊天记录或已委派的任务。")}</footer>
-  </dialog>;
 }
