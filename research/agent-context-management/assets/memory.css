@@ -1,0 +1,152 @@
+.memory-story{--ms-ink:#172c32;--ms-muted:#546e70;--ms-green:#126d60;--ms-line:#d8e5df;color:var(--ms-ink);font:15px/1.7 Inter,"Noto Sans CJK SC","PingFang SC","Microsoft YaHei",sans-serif;max-width:100%;margin-top:20px}
+.memory-story *{box-sizing:border-box}
+.memory-story [hidden]{display:none!important}
+.memory-story button{font:inherit;font-size:13px;line-height:1.4;cursor:pointer;border:1px solid #bdcec5;background:#fff;color:var(--ms-ink);border-radius:5px;padding:8px 12px;min-height:37px}
+.memory-story button:focus-visible,.memory-story [tabindex]:focus-visible{outline:3px solid #c18d38;outline-offset:3px}
+.memory-story button:hover:not(:disabled){background:#edf6f0}
+.memory-story button:disabled{opacity:.4;cursor:default}
+.memory-story .ms-intro{display:grid;grid-template-columns:1fr 1fr;gap:25px;margin-bottom:14px;align-items:start}
+.memory-story .ms-intro p{margin:0;font-size:13px;line-height:1.8}
+.ms-intro strong{display:block;font-size:17px;line-height:1.6}
+.memory-story .ms-intro .ms-analogy{color:var(--ms-muted);border-left:3px solid #c1d8cb;padding-left:14px;font-size:12px}
+.ms-stage{scroll-margin-top:16px;border:1px solid var(--ms-line);border-radius:10px;overflow:hidden;background:#fbfdfc;box-shadow:0 5px 22px #214d3c08}
+.ms-controls{display:flex;gap:8px;align-items:center;padding:10px 17px;background:#edf5f0;flex-wrap:nowrap}
+.memory-story .ms-play{background:var(--ms-green);border-color:var(--ms-green);color:#fff;font-weight:650;min-width:100px}
+.memory-story .ms-play:hover:not(:disabled){background:#0e574d}
+.ms-step-count{margin-left:auto;color:var(--ms-muted);font:12px/1.5 monospace;min-width:38px;text-align:right;white-space:nowrap}
+.ms-progress{display:flex;align-items:center;gap:9px;padding:8px 19px 10px;background:#fff;border-bottom:1px solid var(--ms-line)}
+.memory-story .ms-progress>button{border:0;min-height:26px;padding:0;flex:1;background:transparent;position:relative;color:#6b8376;border-radius:0}
+.ms-progress>button:before{content:"";position:absolute;left:0;right:-9px;top:12px;border-top:2px solid #dbe8e0;z-index:0}
+.ms-progress>button:last-child:before{right:0}
+.ms-progress>button>span{display:flex;position:relative;z-index:1;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#edf4ef;border:1px solid #d4e5da;font:11px/1 monospace}
+.ms-progress>button.ms-current>span{color:#fff;background:#126d60;border-color:#126d60;box-shadow:0 0 0 3px #e5f2eb}
+.ms-progress>button.ms-past:before{border-color:#88b69e}
+.ms-progress>button.ms-past>span{background:#d6ecdf;color:#17654d}
+.ms-scene-copy{padding:9px 22px 7px;background:#fbfdfc}
+.ms-phase-status{font:600 11px/1.5 monospace;color:#668078;min-height:17px;margin-bottom:2px}
+.memory-story .ms-title{font-size:22px;line-height:1.45;margin:0 0 4px;letter-spacing:-.3px}
+.memory-story .ms-sentence{font-size:14px;line-height:1.7;margin:0;color:#425e60;min-height:24px}
+.ms-moving .ms-phase-status{color:#9d652d}
+.ms-paused .ms-phase-status{color:#966142;background:#fff3dd;display:inline-block;padding:0 6px;border-radius:3px}
+.ms-readouts{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:7px 22px 9px;background:#fbfdfc}
+.ms-readouts>div{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;border-top:1px solid #d9e7df;padding-top:6px}
+.ms-readouts span{font-size:12px;color:var(--ms-muted)}
+.ms-readouts strong{font:700 24px/1.2 "SFMono-Regular",Consolas,monospace;color:#126d60}
+.ms-readouts small{font-size:10px;color:#6d8177}
+.ms-readouts>div:last-child strong{color:#ae6644}
+.ms-visual{background:linear-gradient(#fbfdfc,#f5faf6);overflow:hidden}
+.ms-svg{display:block;width:100%;height:clamp(285px,36vh,360px);overflow:visible}
+.ms-svg text{font-family:Inter,"Noto Sans CJK SC","PingFang SC","Microsoft YaHei",sans-serif;fill:#284b4e}
+.ms-svg .ms-svg-heading{font-size:21px;font-weight:700;letter-spacing:-.25px}
+.ms-svg .ms-svg-small{font-size:14px;fill:#4f6b67}
+.ms-svg .ms-svg-micro{font-size:12px;fill:#617f74}
+.ms-tray-size{font:700 25px "SFMono-Regular",Consolas,monospace!important;fill:#a3653d!important}
+.ms-svg .ms-tray-caption{font-size:14px;fill:#93603f}
+.ms-cell{transform-origin:0 0;transform-box:view-box;cursor:pointer;will-change:transform,opacity}
+.ms-cell rect{transition:filter .25s}
+.ms-cell:hover rect,.ms-cell:focus rect,.ms-inspect-cell rect{filter:brightness(1.08) drop-shadow(0 0 3px #0d6c5b80);stroke:#174b3e;stroke-width:2.5px}
+.ms-selected-cell rect{stroke:#855830;stroke-width:3px;filter:drop-shadow(0 0 4px #b7843e55)}
+.ms-compactor{opacity:.52}
+.ms-machine-active{opacity:1}
+.ms-machine-active>rect{fill:#dff2e7;stroke:#489c75;stroke-width:2.5}
+.ms-machine-done{opacity:.85}
+.ms-tray-document,.ms-stop,.ms-reply-bubble{transition:opacity .35s}
+.ms-reply-bubble{pointer-events:none}
+.memory-story .ms-window-note{font-size:11px;line-height:1.65;margin:0;padding:5px 20px;background:#f1f7f3;color:#49675d;border-top:1px solid #e0ebe4;text-align:center}
+.ms-action{font-size:13px;font-weight:650;text-align:center;line-height:1.6;color:#176b55;padding:7px 16px;background:#eaf5ee}
+.ms-semantic{font-size:12px;line-height:1.65;padding:7px 18px 0;background:#fff;color:#3d5a53}
+.ms-semantic:before{content:"本步保留什么：";font-weight:700;color:#126d60}
+.ms-detail-links{display:flex;gap:8px;justify-content:center;padding:8px 16px 10px;background:#fff}
+.memory-story .ms-detail-links button{font-size:12px;padding:6px 10px;min-height:32px;border-color:#d3e0d8;color:#49685c}
+.ms-details-relevant button:first-child{background:#eaf5ee;border-color:#81ad97;color:#105f4f;font-weight:650}
+.ms-mobile-ports,.ms-mobile-memory-heading{display:none}
+.ms-legend{display:flex;flex-wrap:wrap;gap:8px;padding:15px 0 0}
+.memory-story .ms-legend>button{display:flex;align-items:center;gap:7px;padding:6px 10px;min-height:33px;font-size:12px;border-color:#d1ded7}
+.ms-legend i{height:11px;width:11px;display:block;border-radius:3px}
+.ms-legend strong{font:600 12px/1.5 monospace;color:#4f6f62}
+.ms-explain{font-size:12px;line-height:1.8;padding:9px 0 0;color:#5c746a;min-height:31px}
+.memory-story .ms-tip{font-size:12px;line-height:1.85;margin:12px 0 0;padding:11px 15px;background:#fcf7ed;color:#715934;border-left:3px solid #c79548}
+.memory-story .ms-reduced{font-size:12px;line-height:1.8;color:#61796e;margin:8px 0}
+.ms-live{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+.ms-learning{scroll-margin-top:18px;margin-top:16px;border:1px solid #b7d0c1;border-radius:8px;background:#fff;padding:19px}
+.ms-learning-header{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.memory-story .ms-learning-header h4{font-size:18px;line-height:1.5;margin:0}
+.memory-story .ms-close-lesson{font-size:12px;white-space:nowrap}
+.ms-learning-tabs{display:flex;gap:8px;margin-top:14px;border-bottom:1px solid var(--ms-line);padding-bottom:12px}
+.memory-story .ms-learning-tabs button{min-height:35px;font-size:12px;padding:7px 14px}
+.memory-story .ms-learning-tabs button.ms-selected-tab{background:#126d60;border-color:#126d60;color:#fff}
+.memory-story .ms-learning-body p{font-size:13px;line-height:1.85;margin:7px 0;white-space:pre-line}
+.memory-story .ms-learning-body h5{font-size:15px;line-height:1.6;margin:0 0 8px;color:#213f37}
+.memory-story .ms-learning-body .ms-teaching-note{font-size:12px;color:#60796c;background:#f4f8f5;padding:10px 12px}
+.ms-task{font-weight:650}
+.ms-before-after{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin:15px 0}
+.memory-story .ms-before-after>section{margin:0;padding:15px;background:#fbf8f2;border:1px solid #eadfcf;border-radius:6px;min-width:0}
+.memory-story .ms-before-after>.ms-after{background:#eff8f2;border-color:#bbd7c5}
+.ms-fact-list{list-style:none;margin:0;padding:0}
+.ms-fact-list li{padding:9px 0;border-top:1px solid #e3e6dc}
+.ms-fact-list li:first-child{border-top:0;padding-top:0}
+.ms-fact-list li strong{font-size:12px;color:#74613f}
+.ms-after .ms-fact-list li strong{color:#206b4e}
+.memory-story .ms-fact-list li p{font-size:12px;line-height:1.85;margin:3px 0}
+.memory-story .ms-omitted{margin:14px 0;padding:13px 15px;background:#fff7ee;border-left:3px solid #c18a43}
+.memory-story .ms-omitted h5{font-size:13px}
+.ms-recovery{margin-top:12px;background:#f5f8fa;border:1px dashed #94b4c4;padding:13px 15px}
+.ms-recovery>strong{font-size:13px;color:#365b70;overflow-wrap:anywhere}
+.ms-request-input{padding:13px 15px;background:#f6f8f4;border:1px solid #dbe5d8;border-radius:6px;margin-top:13px}
+.ms-request-input>strong{font-size:13px}
+.ms-request-input ul{margin:7px 0 0;padding-left:20px}
+.ms-request-input li{font-size:12px;line-height:1.8;margin:5px 0}
+.ms-request-budget{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:13px 0}
+.ms-request-budget>div{background:#eef6f2;border:1px solid #d3e4da;border-radius:5px;padding:12px}
+.ms-request-budget span{display:block;font-size:11px;line-height:1.7;color:#5b7468}
+.ms-request-budget strong{display:block;font:700 24px/1.5 monospace;color:#126d60}
+.ms-request-pipeline{list-style:none;margin:15px 0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.ms-request-pipeline li{display:flex;gap:10px;padding:13px;background:#fbfcfb;border:1px solid #d9e6dd;border-radius:6px;position:relative}
+.ms-request-pipeline li>span{display:flex;width:27px;height:27px;flex:0 0 27px;justify-content:center;align-items:center;background:#dfeee5;color:#23634a;border-radius:50%;font:600 12px/1 monospace}
+.ms-request-pipeline strong{font-size:13px}
+.memory-story .ms-request-pipeline p{font-size:12px}
+.memory-story .ms-commit-note{font-size:12px;background:#fff7e9;border-left:3px solid #c79548;padding:11px 14px;color:#70562d}
+.ms-mapping-list{display:grid;gap:10px;margin-top:14px}
+.memory-story .ms-mapping-list section{display:flex;gap:15px;align-items:flex-start;padding:14px;background:#f6f9f7;border:1px solid #e0e8e2;border-radius:6px;margin:0}
+.ms-symbol{display:flex;align-items:center;justify-content:center;flex:0 0 36px;width:36px;height:36px;background:#e0eee6;color:#126d60;font:700 20px/1 monospace;border-radius:5px}
+.memory-story .ms-mapping-list h5{font-size:14px;margin:0}
+.memory-story .ms-mapping-list p{font-size:12px;margin:3px 0}
+.ms-mapping-story{color:#2c7158}
+@media(max-width:900px){.memory-story .ms-intro{grid-template-columns:1fr;gap:8px}.memory-story .ms-intro .ms-analogy{font-size:12px}.ms-readouts small{display:none}.ms-svg{height:320px}.memory-story .ms-title{font-size:21px}}
+@media(max-width:560px){
+.memory-story{margin-top:14px;font-size:14px}.memory-story .ms-intro{gap:7px;margin-bottom:11px}.ms-intro strong{font-size:15px}.memory-story .ms-intro p{font-size:12px}.memory-story .ms-intro .ms-analogy{font-size:11px;padding-left:10px}
+.ms-stage{scroll-margin-top:8px;border-radius:8px}.ms-controls{padding:8px 10px;gap:6px}.memory-story .ms-controls button{font-size:12px;padding:7px 9px;min-height:34px;white-space:nowrap}.memory-story .ms-play{min-width:74px}.ms-step-count{font-size:11px;min-width:30px}
+.ms-progress{gap:5px;padding:6px 12px 8px}.memory-story .ms-progress>button{min-width:0;min-height:24px}.ms-progress>button>span{width:24px;height:24px;font-size:10px}.ms-progress>button:before{top:11px;right:-5px}
+.ms-scene-copy{padding:7px 13px 4px}.ms-phase-status{font-size:10px;line-height:1.5;min-height:15px}.memory-story .ms-title{font-size:18px;line-height:1.45;margin-bottom:3px}.memory-story .ms-sentence{font-size:12px;line-height:1.65;min-height:40px}
+.ms-readouts{gap:10px;padding:4px 13px 8px}.ms-readouts>div{display:block;padding-top:5px}.ms-readouts span{font-size:10px;display:block}.ms-readouts strong{font-size:22px;display:block;margin-top:1px}.ms-readouts small{display:none}
+.memory-story .ms-window-note{font-size:10px;line-height:1.7;padding:5px 13px;text-align:left}.ms-action{display:none}.ms-semantic{font-size:11px;line-height:1.65;padding:6px 13px 0}.ms-semantic:before{content:"保留："}.ms-detail-links{gap:5px;padding:7px 9px 9px}.memory-story .ms-detail-links button{font-size:10px;padding:6px 5px;min-height:32px;flex:1}
+.ms-legend{gap:6px;padding-top:12px}.memory-story .ms-legend>button{font-size:11px;gap:5px;padding:6px 8px;min-height:32px}.ms-legend strong{font-size:10px}.ms-explain{font-size:11px;min-height:30px}.memory-story .ms-tip{font-size:11px;padding:10px 12px}
+.ms-learning{padding:13px;scroll-margin-top:10px}.ms-learning-header{align-items:flex-start;gap:9px}.memory-story .ms-learning-header h4{font-size:15px}.memory-story .ms-close-lesson{font-size:10px;padding:6px;min-height:31px}.ms-learning-tabs{gap:5px;margin-top:10px;padding-bottom:10px}.memory-story .ms-learning-tabs button{font-size:11px;padding:7px 10px;min-height:33px}.ms-before-after{grid-template-columns:1fr;gap:10px}.memory-story .ms-before-after>section{padding:12px}.memory-story .ms-learning-body p{font-size:12px;overflow-wrap:anywhere}.memory-story .ms-learning-body h5{font-size:14px}.memory-story .ms-learning-body .ms-teaching-note{font-size:11px;padding:9px 10px}.ms-request-budget{gap:6px}.ms-request-budget>div{padding:9px}.ms-request-budget span{font-size:10px}.ms-request-budget strong{font-size:22px}.ms-request-pipeline{grid-template-columns:1fr;gap:9px}.ms-request-pipeline li{padding:11px}.ms-request-pipeline li:not(:last-child):after{content:"↓";position:absolute;bottom:-14px;left:23px;font-size:17px;z-index:1;color:#528068}.memory-story .ms-mapping-list section{padding:11px;gap:10px}.ms-symbol{flex-basis:30px;width:30px;height:30px;font-size:18px}
+}
+.memory-story[data-layout=compact] .ms-mobile-ports{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 12px 7px;background:#f8fbf8}
+.memory-story .ms-mobile-ports>button,.ms-mobile-tray{border:1px solid #d8e4dc;border-radius:5px;padding:6px 9px;min-height:45px;text-align:left;background:#f2f7f3;line-height:1.4}
+.ms-mobile-ports span{display:block;font-size:10px;color:#61776b}
+.ms-mobile-ports strong{display:block;font-size:12px;font-weight:650;color:#3e6252}
+.ms-mobile-tray{background:#fff7ef;border-color:#ead4bd}
+.ms-mobile-tray strong{color:#9a623d}
+.ms-mobile-tray.ms-tray-waiting{background:#fff0e3;border-color:#d2a37a}
+.memory-story[data-layout=compact] .ms-mobile-memory-heading{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:0 15px 3px;background:#f8fbf8;color:#396052}
+.ms-mobile-memory-heading span{font:10px/1.6 monospace;color:#6a8074}
+.memory-story[data-layout=compact] .ms-svg{height:min(37vh,235px);min-height:205px;max-height:235px;width:100%;overflow:hidden}
+.memory-story[data-layout=compact] .ms-memory>text,.memory-story[data-layout=compact] .ms-cabinet,.memory-story[data-layout=compact] .ms-tray,.memory-story[data-layout=compact] .ms-svg>path,.memory-story[data-layout=compact] .ms-svg>text,.memory-story[data-layout=compact] .ms-reply-bubble{display:none}
+.memory-story[data-layout=compact] .ms-memory>rect{fill:transparent;stroke:none}
+.memory-story[data-layout=compact] .ms-machine-title{font-size:25px}
+.memory-story[data-layout=compact] .ms-machine-caption{display:none}
+.memory-story[data-layout=compact] .ms-compactor>rect{height:67px}
+.memory-story[data-layout=compact] .ms-machine-title{transform:translate(-8px,9px)}
+.memory-story[data-layout=compact] .ms-machine-symbol{transform:translateY(-2px)}
+@media(prefers-reduced-motion:reduce){.memory-story *{scroll-behavior:auto!important;transition:none!important}}
+@media print{.ms-controls,.ms-progress,.ms-detail-links,.ms-learning-tabs,.ms-close-lesson{display:none!important}.ms-stage{height:auto!important;max-height:none!important;overflow:visible;box-shadow:none}.ms-visual{break-inside:avoid;overflow:visible}.ms-svg{height:auto!important;max-height:none!important;width:100%;overflow:visible}.ms-cell-ghost{display:none}.ms-learning{break-inside:auto}.memory-story .ms-learning[hidden]{display:block!important}.ms-learning-body:empty:after{content:"摘要、请求预算与抽象对象对应关系请查看交互版本。";font-size:12px;color:#60796c}.ms-before-after{grid-template-columns:1fr 1fr}.memory-story[data-layout=compact] .ms-svg{height:300px!important}}
+/* Labels remain readable when the diagram fits within the stage. */
+.memory-story[data-layout=wide] .ms-svg .ms-svg-heading{font-size:24px}
+.memory-story[data-layout=wide] .ms-svg .ms-svg-small,.memory-story[data-layout=wide] .ms-svg .ms-tray-caption{font-size:19px}
+.memory-story[data-layout=wide] .ms-svg .ms-svg-micro{font-size:16px}
+.memory-story[data-layout=wide] .ms-svg .ms-machine-caption{font-size:17px}
+.memory-story[data-layout=wide] .ms-svg .ms-tray-caption{font-size:17px}
+.memory-story .ms-window-note>span{display:block;color:#62766b;font-size:10px}
+.ms-mini-key{display:flex;flex-wrap:wrap;justify-content:center;gap:3px 13px;padding:5px 16px;color:#405f59;font-size:12px;line-height:1.6;background:#f8fcf9}.ms-mini-key span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}.ms-mini-key i{display:inline-block;width:9px;height:9px;border-radius:2px}@media(max-width:680px){.ms-mini-key{justify-content:flex-start;gap:2px 10px;font-size:11px;padding:3px 14px}}

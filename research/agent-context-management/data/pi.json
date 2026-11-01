@@ -1,0 +1,1420 @@
+{
+  "id": "pi",
+  "name": "Pi",
+  "commit": "b9fb2b854b7a19b28a68c3421365fee0a5342ce6",
+  "repository": "https://github.com/badlogic/pi-mono",
+  "overview": "Pi把上下文管理实现为持久事件树→活动分支投影→provider请求的转换流水线。压缩保存的是可重建的checkpoint（摘要、保留边界、完整system/tool状态），而非简单删除旧消息；context_edit使失败恢复和请求投影可持久审计。预算分成压缩触发与provider输出clamp两层。",
+  "researchScope": "固定commit静态调用链阅读，未调用真实模型或执行此仓库测试；源码路径/函数为证据，动画token大小为教学设定。",
+  "layers": [
+    {
+      "name": "持久树 / 审计层",
+      "source": "session-manager JSONL entries、id/parentId、all branches",
+      "lifecycle": "追加保存；切换leaf选择路径；不会因模型压缩删除旧记录",
+      "budget": "磁盘历史不等于模型token窗口"
+    },
+    {
+      "name": "指令与工具状态层",
+      "source": "SystemMessage.content/sections/toolsAdded/toolsRemoved；global+ancestor AGENTS；skill metadata",
+      "lifecycle": "run开始与下一响应前diff；compaction快照当前完整system态",
+      "budget": "规则和schema占真实输入；未声明为固定免费前缀"
+    },
+    {
+      "name": "按需材料层",
+      "source": "/skill:name user block；read/bash/tool results；custom messages",
+      "lifecycle": "按需加入；read/bash先局部截断；custom display与上下文可见性独立",
+      "budget": "read/bash 2000行/50KiB；summary serialization tool结果2000字符"
+    },
+    {
+      "name": "当前分支投影层",
+      "source": "latest compaction + firstKeptEntryId suffix + later entries + latest context_edit",
+      "lifecycle": "每次prepareRequest/reload/compact重建；省略与替换只改变model-visible贡献",
+      "budget": "按usage+delta或当前纯估计判断是否接近window"
+    },
+    {
+      "name": "历史摘要层",
+      "source": "CompactionEntry summary、previousSummary、split-turn prefix summary、BranchSummaryEntry",
+      "lifecycle": "默认LLM结构化摘要；追加成功boundary后代替旧前缀；branch summary另有导航生命周期",
+      "budget": "reserve=16384触发，keep=20000选近期；摘要输出使用model limit而非reserve"
+    },
+    {
+      "name": "Provider wire层",
+      "source": "transformContext → convertToLlm → normalizeContext → transport transcript resolution",
+      "lifecycle": "按API是否支持mid-conversation system/工具delta折叠；可隐藏工具声明/forced prompt",
+      "budget": "simple-options clamp estimated input + 4096 safety，至少1 output；不等于必然不超限"
+    }
+  ],
+  "rules": [
+    {
+      "id": "PI01",
+      "title": "仓库规则按目录范围加载，并非简单拼入全部同名文件",
+      "condition": "资源加载 / reload 时",
+      "action": "先读 agentDir 的一份规则，再从文件系统祖先到 cwd；每目录按 AGENTS.override.md、AGENTS.md、AGENTS.MD、CLAUDE.md、CLAUDE.MD 找到首个可读普通文件；路径去重，嵌套 linked worktree 避免主库同范围规则重复",
+      "preserve": "选中的规则正文与文件路径",
+      "loss": "同目录低优先级候选不会同时加入；不是递归加载 cwd 下所有子目录规则",
+      "default": "默认资源加载行为",
+      "gate": "自定义 resourceLoader / noContextFiles 等设置可改变",
+      "evidence": [
+        {
+          "path": "packages/coding-agent/src/core/resource-loader.ts",
+          "line": 184,
+          "end": 210,
+          "symbol": "function loadContextFileFromDir",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/resource-loader.ts#L184-L210"
+        },
+        {
+          "path": "packages/coding-agent/src/core/resource-loader.ts",
+          "line": 232,
+          "end": 277,
+          "symbol": "export function loadProjectContextFiles",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/resource-loader.ts#L232-L277"
+        }
+      ],
+      "certainty": "直接源码确认"
+    },
+    {
+      "id": "PI02",
+      "title": "system 是可重放的 section patch，tool schema 也是状态事件",
+      "condition": "开始 run 或下一 assistant 响应前，配置/工具集有变化",
+      "action": "buildSystemPromptSections 组装 preamble/tools/rules/docs/addendum/project_context/skills/cwd；diffSystemPromptSections 仅返回改变或删除的 section；工具声明用 toolsAdded/toolsRemoved；provider 不支持中途 system 时折叠为一个当前 head",
+      "preserve": "当前有效指令、工具声明和顺序化变化",
+      "loss": "hidden tools 的声明在请求投影中移除；历史差分不是每轮重复全文",
+      "default": "默认 preamble 下分 section；customPrompt 替换默认前缀但不自动去掉项目/skill/cwd",
+      "gate": "before_agent_start 可修改 options，forceSystemPrompt 可替换本轮最终请求而不覆写持久结构",
+      "evidence": [
+        {
+          "path": "packages/coding-agent/src/core/system-prompt.ts",
+          "line": 128,
+          "end": 195,
+          "symbol": "export function buildSystemPromptSections",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/system-prompt.ts#L128-L195"
+        },
+        {
+          "path": "packages/coding-agent/src/core/system-prompt.ts",
+          "line": 217,
+          "end": 229,
+          "symbol": "export function diffSystemPromptSections",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/system-prompt.ts#L217-L229"
+        },
+        {
+          "path": "packages/coding-agent/src/core/agent-session.ts",
+          "line": 1758,
+          "end": 1778,
+          "symbol": "private _preparePromptAndToolLoadout",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L1758-L1778"
+        },
+        {
+          "path": "packages/ai/src/utils/transcript.ts",
+          "line": 73,
+          "end": 120,
+          "symbol": "export function getCurrentSystemMessage",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/ai/src/utils/transcript.ts#L73-L120"
+        }
+      ],
+      "certainty": "直接源码确认"
+    },
+    {
+      "id": "PI03",
+      "title": "Skills 目录先提供目录索引，正文按需进入消息",
+      "condition": "存在 read/bash（包括 hidden 间接 reader）并且发现 skills",
+      "action": "system 只列可模型调用 skill 的 name/description/location，提示按需读文件；显式 /skill:name 命令读 SKILL.md、去 frontmatter，把完整正文包装为 user skill block",
+      "preserve": "skill 元信息；真正调用后正文进入相应 user/工具消息",
+      "loss": "索引不包含所有正文；disableModelInvocation 的 skill 不出现在自动目录，但显式命令可用",
+      "default": "默认渐进披露；不是所有 skill 全文常驻 system",
+      "gate": "reader 可用性、noSkills、自定义 resource loader、input handlers",
+      "evidence": [
+        {
+          "path": "packages/coding-agent/src/core/skills.ts",
+          "line": 358,
+          "end": 400,
+          "symbol": "export function formatSkillsForPrompt",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/skills.ts#L358-L400"
+        },
+        {
+          "path": "packages/coding-agent/src/core/agent-session.ts",
+          "line": 2211,
+          "end": 2244,
+          "symbol": "private _expandSkillCommand",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L2211-L2244"
+        },
+        {
+          "path": "packages/coding-agent/src/core/system-prompt.ts",
+          "line": 175,
+          "end": 185,
+          "symbol": "const readers =",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/system-prompt.ts#L175-L185"
+        }
+      ],
+      "certainty": "直接源码确认"
+    },
+    {
+      "id": "PI04",
+      "title": "原始 session 树、活动投影、provider 请求是三种不同对象",
+      "condition": "每次 prepareRequest / reload / compaction",
+      "action": "从 leaf 沿 parentId 找活动分支；取最新 compaction 和它的 kept suffix；apply context_edit；convertToLlm 再把自定义消息映射成 provider roles；transformContext 可再变换",
+      "preserve": "原始 entry 与 provenance、模型/思考状态、当前投影",
+      "loss": "其他分支不自动进工作集，metadata-only/custom state/usage entry 不自动发给模型；display=false 不等于排除上下文",
+      "default": "append-only tree + canonical projection",
+      "gate": "扩展可用 context transform 修改当次发包",
+      "evidence": [
+        {
+          "path": "packages/coding-agent/src/core/session-manager.ts",
+          "line": 390,
+          "end": 424,
+          "symbol": "function buildSessionPath",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/session-manager.ts#L390-L424"
+        },
+        {
+          "path": "packages/coding-agent/src/core/session-manager.ts",
+          "line": 543,
+          "end": 577,
+          "symbol": "export function buildSessionProjection",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/session-manager.ts#L543-L577"
+        },
+        {
+          "path": "packages/coding-agent/src/core/messages.ts",
+          "line": 148,
+          "end": 195,
+          "symbol": "export function convertToLlm",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/messages.ts#L148-L195"
+        },
+        {
+          "path": "packages/agent/src/agent-loop.ts",
+          "line": 390,
+          "end": 416,
+          "symbol": "async function streamAssistantResponse",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/agent/src/agent-loop.ts#L390-L416"
+        }
+      ],
+      "certainty": "直接源码确认"
+    },
+    {
+      "id": "PI05",
+      "title": "context_edit 是分支局部的追加事件，不修改原文",
+      "condition": "appendContextEdit(targetId,replacement)",
+      "action": "目标必须在当前分支且为可编辑 message/custom_message；null 令其模型贡献为空，非 null 只换内容而非身份/元信息；同一目标采用当前可见路径中最后 edit",
+      "preserve": "原始记录、ID、审计历史；其他分支不受本 edit 影响",
+      "loss": "模型不再看 omitted 内容；replacement 不是原文",
+      "default": "公开 API 与恢复逻辑都使用",
+      "gate": "不适用于 system/compaction/meta 等不可编辑 entry",
+      "evidence": [
+        {
+          "path": "packages/coding-agent/src/core/session-manager.ts",
+          "line": 1360,
+          "end": 1413,
+          "symbol": "appendContextEdit(targetId",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/session-manager.ts#L1360-L1413"
+        },
+        {
+          "path": "packages/coding-agent/src/core/session-manager.ts",
+          "line": 519,
+          "end": 546,
+          "symbol": "function projectContextEntry",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/session-manager.ts#L519-L546"
+        },
+        {
+          "path": "packages/coding-agent/src/core/session-manager.ts",
+          "line": 551,
+          "end": 567,
+          "symbol": "const edits = new Map",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/session-manager.ts#L551-L567"
+        }
+      ],
+      "certainty": "直接源码确认"
+    },
+    {
+      "id": "PI06",
+      "title": "compaction 触发计数优先 usage，编辑后避免旧 usage 冒充当前量",
+      "condition": "评估压缩时",
+      "action": "取最近非 error/aborted、非零 usage；用 totalTokens 或 input+output+cacheRead+cacheWrite；追加消息按 chars/4；若后面有 context_edit 或 compaction 使 usage 过时，则按当前重建 system + 非 system 消息重新估算",
+      "preserve": "来源是否 usage-backed 与 trailing estimate 的区分",
+      "loss": "不是精确 tokenizer；没有覆盖 provider 序列化的数学保证；图片以4800估计字符计入",
+      "default": "纯估算与 usage anchor 混用",
+      "gate": "与 provider 请求 clamp 的 chars/3.5 是另一层",
+      "evidence": [
+        {
+          "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+          "line": 140,
+          "end": 164,
+          "symbol": "export function calculateContextTokens",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L140-L164"
+        },
+        {
+          "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+          "line": 196,
+          "end": 236,
+          "symbol": "export function estimateContextTokens",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L196-L236"
+        },
+        {
+          "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+          "line": 227,
+          "end": 273,
+          "symbol": "export function estimateProjectedContextTokens",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L227-L273"
+        },
+        {
+          "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+          "line": 298,
+          "end": 351,
+          "symbol": "export function estimateTokens",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L298-L351"
+        }
+      ],
+      "certainty": "直接源码确认"
+    },
+    {
+      "id": "PI07",
+      "title": "触发公式与按模型覆盖",
+      "condition": "compaction.enabled=true，current context > model.contextWindow-reserveTokens",
+      "action": "自动压缩；严格大于而非 >=；默认 reserve=16384、keepRecent=20000；每个 provider/modelId 精确键可分别覆盖两项，再回退普通配置、内置默认",
+      "preserve": "低于触发线时正常继续",
+      "loss": "触发线不是压缩后的目标总量；keep 不是摘要输出上限",
+      "default": "enabled=true，reserveTokens=16384，keepRecentTokens=20000",
+      "gate": "普通/override 只能非负安全整数；无效配置报错；enabled 全局",
+      "evidence": [
+        {
+          "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+          "line": 126,
+          "end": 133,
+          "symbol": "export const DEFAULT_COMPACTION_SETTINGS",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L126-L133"
+        },
+        {
+          "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+          "line": 267,
+          "end": 271,
+          "symbol": "export function shouldCompact",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L267-L271"
+        },
+        {
+          "path": "packages/coding-agent/src/core/settings-manager.ts",
+          "line": 833,
+          "end": 891,
+          "symbol": "private getCompactionTokenSetting",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/settings-manager.ts#L833-L891"
+        }
+      ],
+      "certainty": "直接源码确认"
+    },
+    {
+      "id": "PI08",
+      "title": "检查点不是只有 agent_end：请求前、run后都检查",
+      "condition": "_prepareRun、prepareNextTurnWithContext 与 post-agent handling",
+      "action": "新run开始先检查上次assistant，随后才加入本次user/handler消息；low-level loop已有lastCompletedTurn后，下一assistant前针对当前projection做threshold检查（已含工具结果），然后才注入prepared/steering；virtual prepareRequest在消息加入后按实际route窗口再检查；agent_end后处理overflow/threshold",
+      "preserve": "已完成响应不被盲目重试；新用户消息/steering 在准备阶段照队列顺序注入",
+      "loss": "实体模型首请求前并非对本次新user作完整重新预检；工具轮preflight后的steering、section patch与extension transform也可继续增大，所以preflight不是强保证",
+      "default": "自动检查开启时",
+      "gate": "实体 model preflight window<=0 跳过；virtual 路径单独处理",
+      "evidence": [
+        {
+          "path": "packages/coding-agent/src/core/agent-session.ts",
+          "line": 776,
+          "end": 791,
+          "symbol": "private async _compactBeforeNextAssistantResponse",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L776-L791"
+        },
+        {
+          "path": "packages/coding-agent/src/core/agent-session.ts",
+          "line": 898,
+          "end": 939,
+          "symbol": "private _installAgentNextTurnRefresh",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L898-L939"
+        },
+        {
+          "path": "packages/coding-agent/src/core/agent-session.ts",
+          "line": 1926,
+          "end": 1940,
+          "symbol": "private async _prepareRun",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L1926-L1940"
+        },
+        {
+          "path": "packages/coding-agent/src/core/agent-session.ts",
+          "line": 1979,
+          "end": 2028,
+          "symbol": "private async _handlePostAgentRun",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L1979-L2028"
+        },
+        {
+          "path": "packages/coding-agent/src/core/agent-session.ts",
+          "line": 838,
+          "end": 844,
+          "symbol": "if (this._exceedsCompactionThreshold(route.model",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L838-L844"
+        },
+        {
+          "path": "packages/agent/src/agent-loop.ts",
+          "line": 191,
+          "end": 242,
+          "symbol": "runLoop / lastCompletedTurn guard and later message injection",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/agent/src/agent-loop.ts#L191-L242"
+        }
+      ],
+      "certainty": "直接源码确认"
+    },
+    {
+      "id": "PI09",
+      "title": "切点按估算近期量选，不能切到孤立 tool result",
+      "condition": "prepareCompaction 对 canonical projection 规划",
+      "action": "从后向前累加估计，达到 keepRecentTokens 时选附近有效 user-like/assistant 切点；toolResult 不是切点；巨大单轮可切在 assistant，找到该用户跨度起点并标记 split",
+      "preserve": "assistant tool-call 与后续结果的结构连续性；近期后缀",
+      "loss": "keep 是近似目标，原子工具组可使实际超过；用户输入在巨大单轮前缀时可能被概括，不能宣称无条件原样保留最新 user",
+      "default": "默认 keep约20000",
+      "gate": "特殊闭合 recovery omission suffix 可推进边界；任意 metadata 不得让未发送输入消失",
+      "evidence": [
+        {
+          "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+          "line": 351,
+          "end": 376,
+          "symbol": "function isCutPointMessage",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L351-L376"
+        },
+        {
+          "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+          "line": 789,
+          "end": 873,
+          "symbol": "function findProjectedCutPoint",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L789-L873"
+        },
+        {
+          "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+          "line": 859,
+          "end": 922,
+          "symbol": "export function prepareCompaction",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L859-L922"
+        }
+      ],
+      "certainty": "直接源码确认"
+    },
+    {
+      "id": "PI10",
+      "title": "连续压缩是在投影上更新上一份摘要",
+      "condition": "已有最新 compaction",
+      "action": "projection 把最新 checkpoint 放首位，把上次 firstKeptEntryId 起的幸存消息放其后；preparation 单独拿 previousSummary，针对当前幸存前缀重新总结；更老 compaction 即使原始ID落在保留区内也不再次贡献摘要",
+      "preserve": "上一摘要 + 上次幸存但现在要概括的消息",
+      "loss": "摘要反复总结可累积遗漏，原文还在 session；不会把全原始树每次重新喂入",
+      "default": "默认摘要更新 prompt",
+      "gate": "扩展可替换 summary/boundary",
+      "evidence": [
+        {
+          "path": "packages/coding-agent/src/core/session-manager.ts",
+          "line": 476,
+          "end": 520,
+          "symbol": "export function buildContextEntries",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/session-manager.ts#L476-L520"
+        },
+        {
+          "path": "packages/coding-agent/src/core/session-manager.ts",
+          "line": 562,
+          "end": 568,
+          "symbol": "sourceEntry.type === \"compaction\" && index > 0",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/session-manager.ts#L562-L568"
+        },
+        {
+          "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+          "line": 859,
+          "end": 925,
+          "symbol": "export function prepareCompaction",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L859-L925"
+        }
+      ],
+      "certainty": "直接源码确认"
+    },
+    {
+      "id": "PI11",
+      "title": "普通摘要和 split-turn 摘要的调用数不同",
+      "condition": "isSplitTurn 且 turnPrefixMessages非空",
+      "action": "先概括历史（有历史需概括时），再单独概括当前用户跨度的前缀，两份文本合并；无新历史时复用 previousSummary / No prior history；普通情况只调用历史摘要",
+      "preserve": "当前单轮请求与进度在专用 turn context 区",
+      "loss": "最多两次摘要请求（每次内部还可能 transient retry），不是永远一次；不包含 kept suffix 原文",
+      "default": "内置 compaction",
+      "gate": "session_before_compact 可以提供自定义结果跳过默认推理",
+      "evidence": [
+        {
+          "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+          "line": 952,
+          "end": 1067,
+          "symbol": "export async function compact(",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L952-L1067"
+        },
+        {
+          "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+          "line": 1062,
+          "end": 1104,
+          "symbol": "async function generateTurnPrefixSummary",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L1062-L1104"
+        }
+      ],
+      "certainty": "直接源码确认"
+    },
+    {
+      "id": "PI12",
+      "title": "摘要输入先做有损序列化，摘要输出不以 reserveTokens 封顶",
+      "condition": "调用 generateSummaryWithUsage / turn prefix summary",
+      "action": "convertToLlm 后转带角色标签文本；丢 thinking，tool result 最多2000字符并附省略量；生成结构化 goal/constraints/progress/decisions/next/critical summary；_reserveTokens 参数不再使用",
+      "preserve": "可见文本、工具名称参数、前2000字符结果、上次摘要",
+      "loss": "工具结果2000字符后半截与thinking不进摘要推理；不能说摘要保留全部事实",
+      "default": "摘要用模型输出上限，不是16384固定输出",
+      "gate": "completeSummarization cacheRetention=none；独立请求不继承全主对话 system/tools",
+      "evidence": [
+        {
+          "path": "packages/coding-agent/src/core/compaction/utils.ts",
+          "line": 94,
+          "end": 152,
+          "symbol": "const TOOL_RESULT_MAX_CHARS",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/utils.ts#L94-L152"
+        },
+        {
+          "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+          "line": 696,
+          "end": 770,
+          "symbol": "export async function generateSummaryWithUsage",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L696-L770"
+        },
+        {
+          "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+          "line": 682,
+          "end": 695,
+          "symbol": "function buildSummarizationContext",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L682-L695"
+        },
+        {
+          "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+          "line": 618,
+          "end": 645,
+          "symbol": "export async function completeSummarization",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L618-L645"
+        }
+      ],
+      "certainty": "直接源码确认"
+    },
+    {
+      "id": "PI13",
+      "title": "输出预算另有 provider 层 clamp",
+      "condition": "buildBaseOptions/simple API 发请求",
+      "action": "desired max=调用者maxTokens或model.maxTokens；maxTokens=min(desired,max(1,window-estimatedContext-4096))；AI estimator 用chars/3.5、tool schema与当前可用 usage，不同于compaction层chars/4",
+      "preserve": "至少1个输出token请求；非估计的usage优先",
+      "loss": "是估算式输出预算，不会裁剪保护输入；因此输入本身过长仍会被拒",
+      "default": "CONTEXT_SAFETY_TOKENS=4096、MIN_MAX_TOKENS=1",
+      "gate": "model.contextWindow<=0 时仅确保输出>=1；低层/自定义stream可能不同",
+      "evidence": [
+        {
+          "path": "packages/ai/src/api/simple-options.ts",
+          "line": 18,
+          "end": 25,
+          "symbol": "export function clampMaxTokensToContext",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/ai/src/api/simple-options.ts#L18-L25"
+        },
+        {
+          "path": "packages/ai/src/api/simple-options.ts",
+          "line": 36,
+          "end": 53,
+          "symbol": "export function buildBaseOptions",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/ai/src/api/simple-options.ts#L36-L53"
+        },
+        {
+          "path": "packages/ai/src/utils/estimate.ts",
+          "line": 15,
+          "end": 21,
+          "symbol": "const CHARS_PER_TOKEN",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/ai/src/utils/estimate.ts#L15-L21"
+        },
+        {
+          "path": "packages/ai/src/utils/estimate.ts",
+          "line": 97,
+          "end": 117,
+          "symbol": "export function estimateContextTokens",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/ai/src/utils/estimate.ts#L97-L117"
+        }
+      ],
+      "certainty": "直接源码确认"
+    },
+    {
+      "id": "PI14",
+      "title": "只在成功并未取消后追加 compaction，保存完整 system/tool 态",
+      "condition": "摘要或扩展结果返回，abort signal 未取消",
+      "action": "appendCompaction(summary,firstKept,tokensBefore,details,fromHook,usage)，附当前 getCurrentSystemMessage 快照；firstKept为null时用自身ID表示不保留旧消息；刷新projection并计算estimatedTokensAfter",
+      "preserve": "原始日志不删除，当前指令与tool loadout不会随着旧system事件被丢弃",
+      "loss": "tokensBefore/estimatedAfter 是报告估计；没有在此强制“压缩后必须低于阈值”的减量校验",
+      "default": "自动与手动共用持久边界语义",
+      "gate": "手动compact先abort现有run，绝不自动继续旧run",
+      "evidence": [
+        {
+          "path": "packages/coding-agent/src/core/session-manager.ts",
+          "line": 1261,
+          "end": 1297,
+          "symbol": "appendCompaction<T",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/session-manager.ts#L1261-L1297"
+        },
+        {
+          "path": "packages/coding-agent/src/core/agent-session.ts",
+          "line": 2911,
+          "end": 2924,
+          "symbol": "this.sessionManager.appendCompaction(summary",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L2911-L2924"
+        },
+        {
+          "path": "packages/coding-agent/src/core/agent-session.ts",
+          "line": 2828,
+          "end": 2843,
+          "symbol": "async compact(customInstructions",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L2828-L2843"
+        }
+      ],
+      "certainty": "直接源码确认"
+    },
+    {
+      "id": "PI15",
+      "title": "摘要长度耗尽或工具调用不能成为有效 checkpoint",
+      "condition": "summary response error / length / toolCall",
+      "action": "getSummarizationFailure 返回错误，throw而不append；完整摘要与turn-prefix都拒绝toolCall；abort由controller检查；transient stream失败经retryAssistantCall，deterministic/abort立即返回",
+      "preserve": "此前有效checkpoint和原始消息",
+      "loss": "不提供“失败就丢中段”的默认fallback；失败不能假装成功",
+      "default": "默认安全失败",
+      "gate": "扩展自供summary不经过相同LLM输出校验，扩展承担格式语义",
+      "evidence": [
+        {
+          "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+          "line": 585,
+          "end": 597,
+          "symbol": "export function getSummarizationFailure",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L585-L597"
+        },
+        {
+          "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+          "line": 618,
+          "end": 645,
+          "symbol": "export async function completeSummarization",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L618-L645"
+        },
+        {
+          "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+          "line": 742,
+          "end": 754,
+          "symbol": "const failure = getSummarizationFailure(response, \"Summarization\")",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L742-L754"
+        },
+        {
+          "path": "packages/coding-agent/src/core/agent-session.ts",
+          "line": 3157,
+          "end": 3298,
+          "symbol": "private async _runAutoCompaction",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L3157-L3298"
+        }
+      ],
+      "certainty": "直接源码确认"
+    },
+    {
+      "id": "PI16",
+      "title": "overflow 与 recoverable length 不是普通网络重试",
+      "condition": "同模型有效响应，显式错误模式或silent overflow，或length输出小于原始模型maxTokens",
+      "action": "成功 stop 的silent overflow只压缩不重答；错误/可恢复length压缩后最多一次新run重试；旧模型错误/旧checkpoint前usage不会触发当前模型恢复",
+      "preserve": "完整成功回答；错误历史仍审计可见",
+      "loss": "第二次仍超限停止恢复并给出错误；length若已达到desiredMaxOutput不按这条恢复",
+      "default": "bounded compact-and-retry一次",
+      "gate": "compaction.enabled=false跳过；新用户消息或非error/length成功assistant会重置恢复标记",
+      "evidence": [
+        {
+          "path": "packages/coding-agent/src/core/agent-session.ts",
+          "line": 3011,
+          "end": 3145,
+          "symbol": "private async _checkCompaction",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L3011-L3145"
+        },
+        {
+          "path": "packages/ai/src/utils/overflow.ts",
+          "line": 142,
+          "end": 180,
+          "symbol": "export function isContextOverflow",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/ai/src/utils/overflow.ts#L142-L180"
+        },
+        {
+          "path": "packages/ai/src/utils/overflow.ts",
+          "line": 184,
+          "end": 187,
+          "symbol": "export function isRecoverableLength",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/ai/src/utils/overflow.ts#L184-L187"
+        },
+        {
+          "path": "packages/coding-agent/src/core/agent-session.ts",
+          "line": 1123,
+          "end": 1128,
+          "symbol": "this._overflowRecoveryAttempted = false;",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L1123-L1128"
+        }
+      ],
+      "certainty": "直接源码确认"
+    },
+    {
+      "id": "PI17",
+      "title": "失败尝试和结果先成对持久省略，再压缩和重试",
+      "condition": "overflow/length 恢复或一般可重试错误",
+      "action": "已完成attempt先经message_end持久化，turn_end/agent_end对外事件完成；_omitRecoveryAttempt找assistant及其callId匹配tool results，为每个追加null context_edit，再refresh；之后尝试摘要",
+      "preserve": "原始失败与token账单/导出；工具call/result不会孤立重放",
+      "loss": "省略后摘要失败或取消：omissions仍保存，但无新compaction、无内部retry；不回滚成重新喂入失败内容",
+      "default": "默认持久恢复路径",
+      "gate": "若目标source ID无法解析则抛错，不能悄悄仅内存删除",
+      "evidence": [
+        {
+          "path": "packages/coding-agent/src/core/agent-session.ts",
+          "line": 1244,
+          "end": 1287,
+          "symbol": "private _omitRecoveryAttempt",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L1244-L1287"
+        },
+        {
+          "path": "packages/coding-agent/src/core/agent-session.ts",
+          "line": 3103,
+          "end": 3109,
+          "symbol": "this._omitRecoveryAttempt(assistantMessage)",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L3103-L3109"
+        },
+        {
+          "path": "packages/coding-agent/src/core/agent-session.ts",
+          "line": 1979,
+          "end": 2028,
+          "symbol": "private async _handlePostAgentRun",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L1979-L2028"
+        },
+        {
+          "path": "packages/agent/src/agent-loop.ts",
+          "line": 263,
+          "end": 267,
+          "symbol": "await emit({ type: \"agent_end\", messages: newMessages })",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/agent/src/agent-loop.ts#L263-L267"
+        }
+      ],
+      "certainty": "直接源码确认"
+    },
+    {
+      "id": "PI18",
+      "title": "取消和队列属于压缩正确性的一部分",
+      "condition": "用户abort、扩展cancel、压缩期间steering/follow-up到达",
+      "action": "检查signal后再append；auto成功且willRetry则continue；非恢复压缩也可continue一次投递队列；manual永不重启打断的run；prepare期间重新取steering但避免one-at-a-time重复取两条；compaction期间普通prompt报错要求等完成",
+      "preserve": "已接受队列顺序、Stop效力、工具批边界",
+      "loss": "取消不等于auth错误：只有实际controller aborted或扩展cancel才标aborted；其他同名错误仍为failed",
+      "default": "默认cancel lifecycle",
+      "gate": "扩展可取消session_before_compact或提供替代summary",
+      "evidence": [
+        {
+          "path": "packages/coding-agent/src/core/agent-session.ts",
+          "line": 2978,
+          "end": 2982,
+          "symbol": "abortCompaction(): void",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L2978-L2982"
+        },
+        {
+          "path": "packages/coding-agent/src/core/agent-session.ts",
+          "line": 3267,
+          "end": 3302,
+          "symbol": "if (willRetry) return true;",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L3267-L3302"
+        },
+        {
+          "path": "packages/coding-agent/src/core/agent-session.ts",
+          "line": 2112,
+          "end": 2116,
+          "symbol": "Cannot submit a prompt while compaction",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L2112-L2116"
+        },
+        {
+          "path": "packages/agent/src/agent-loop.ts",
+          "line": 210,
+          "end": 218,
+          "symbol": "Preparation can be long-running",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/agent/src/agent-loop.ts#L210-L218"
+        }
+      ],
+      "certainty": "直接源码确认"
+    },
+    {
+      "id": "PI19",
+      "title": "分支摘要是导航知识迁移，不是同一份compaction算法",
+      "condition": "navigateTree(target,{summarize:true})",
+      "action": "找旧leaf与target最深共同祖先，收集离开路径；以window-reserve(默认16384)从新到旧挑消息；toolResult在分支摘要输入中直接跳过；已有summary较重要可在总量<90%预算时超额加入；最后在目标新leaf追加BranchSummaryEntry",
+      "preserve": "所离开分支的进度摘要与文件线索",
+      "loss": "过旧消息可因预算不入摘要；原始context_edit在此 raw-entry 路径不按 canonical projection套用；不应宣称所有摘要采用同一套过滤",
+      "default": "显式summarize；window未知按128000做branch summary预算",
+      "gate": "session_before_tree可取消/改说明/自供摘要；未请求summarize不生成",
+      "evidence": [
+        {
+          "path": "packages/coding-agent/src/core/compaction/branch-summarization.ts",
+          "line": 108,
+          "end": 153,
+          "symbol": "export function collectEntriesForBranchSummary",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/branch-summarization.ts#L108-L153"
+        },
+        {
+          "path": "packages/coding-agent/src/core/compaction/branch-summarization.ts",
+          "line": 156,
+          "end": 187,
+          "symbol": "function getMessageFromEntry",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/branch-summarization.ts#L156-L187"
+        },
+        {
+          "path": "packages/coding-agent/src/core/compaction/branch-summarization.ts",
+          "line": 195,
+          "end": 255,
+          "symbol": "export function prepareBranchEntries",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/branch-summarization.ts#L195-L255"
+        },
+        {
+          "path": "packages/coding-agent/src/core/compaction/branch-summarization.ts",
+          "line": 293,
+          "end": 328,
+          "symbol": "export async function generateBranchSummary",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/branch-summarization.ts#L293-L328"
+        },
+        {
+          "path": "packages/coding-agent/src/core/agent-session.ts",
+          "line": 4024,
+          "end": 4049,
+          "symbol": "async navigateTree(",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L4024-L4049"
+        }
+      ],
+      "certainty": "直接源码确认"
+    },
+    {
+      "id": "PI20",
+      "title": "工具边界先控制单次膨胀，和窗口摘要是不同层",
+      "condition": "read/bash产生大结果",
+      "action": "文本read默认截头，2000行或50KiB先到者，提供offset继续；bash默认保留末2000行/50KiB并保存fullOutputPath；read图像走原生image与resize；主循环对length中工具调用生成失败结果而不执行可能截断的参数",
+      "preserve": "读取原文件和命令fullOutputPath供后续恢复；tool call/result结构",
+      "loss": "单次read响应只保留页面，摘要输入还会再限2000字符；read实现仍可整文件读入内存，不能称streaming bounded IO",
+      "default": "DEFAULT_MAX_LINES=2000、DEFAULT_MAX_BYTES=51200",
+      "gate": "自定义tool和extension result hooks可改变返回内容",
+      "evidence": [
+        {
+          "path": "packages/coding-agent/src/core/tools/read.ts",
+          "line": 96,
+          "end": 103,
+          "symbol": "description: `Read the contents",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/tools/read.ts#L96-L103"
+        },
+        {
+          "path": "packages/coding-agent/src/core/tools/read.ts",
+          "line": 177,
+          "end": 205,
+          "symbol": "const truncation = truncateHead",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/tools/read.ts#L177-L205"
+        },
+        {
+          "path": "packages/coding-agent/src/core/tools/truncate.ts",
+          "line": 11,
+          "end": 14,
+          "symbol": "export const DEFAULT_MAX_LINES",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/tools/truncate.ts#L11-L14"
+        },
+        {
+          "path": "packages/coding-agent/src/core/tools/bash.ts",
+          "line": 255,
+          "end": 260,
+          "symbol": "description: `Execute a",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/tools/bash.ts#L255-L260"
+        },
+        {
+          "path": "packages/agent/src/agent-loop.ts",
+          "line": 273,
+          "end": 283,
+          "symbol": "A \"length\" stop means",
+          "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/agent/src/agent-loop.ts#L273-L283"
+        }
+      ],
+      "certainty": "直接源码确认"
+    }
+  ],
+  "pipeline": [
+    {
+      "phase": "发现与装配",
+      "functions": [
+        "loadProjectContextFiles",
+        "formatSkillsForPrompt",
+        "buildSystemPromptSections",
+        "_preparePromptAndToolLoadout"
+      ],
+      "inputs": [
+        "资源配置",
+        "AGENTS候选",
+        "skill索引",
+        "active tool registry"
+      ],
+      "outputs": [
+        "section patch",
+        "tool declarations",
+        "user skill block（按需）"
+      ],
+      "ruleIds": [
+        "PI01",
+        "PI02",
+        "PI03"
+      ]
+    },
+    {
+      "phase": "取活动工作集",
+      "functions": [
+        "buildSessionPath",
+        "buildContextEntries",
+        "buildSessionProjection",
+        "_installAgentRequestProjection"
+      ],
+      "inputs": [
+        "session tree",
+        "leafId",
+        "latest checkpoint",
+        "context edits"
+      ],
+      "outputs": [
+        "canonical projection",
+        "source→message provenance"
+      ],
+      "ruleIds": [
+        "PI04",
+        "PI05",
+        "PI10"
+      ]
+    },
+    {
+      "phase": "响应前预算闸门",
+      "functions": [
+        "prepareNextTurnWithContext",
+        "_compactBeforeNextAssistantResponse",
+        "estimateProjectedContextTokens",
+        "shouldCompact"
+      ],
+      "inputs": [
+        "projection",
+        "current/routed model",
+        "resolved compaction settings"
+      ],
+      "outputs": [
+        "正常继续或threshold compaction"
+      ],
+      "ruleIds": [
+        "PI06",
+        "PI07",
+        "PI08"
+      ]
+    },
+    {
+      "phase": "压缩规划",
+      "functions": [
+        "prepareCompaction",
+        "findProjectedCutPoint"
+      ],
+      "inputs": [
+        "projected branch",
+        "keepRecentTokens",
+        "previousSummary"
+      ],
+      "outputs": [
+        "messagesToSummarize",
+        "turnPrefixMessages",
+        "firstKeptEntryId",
+        "fileOps"
+      ],
+      "ruleIds": [
+        "PI09",
+        "PI10"
+      ]
+    },
+    {
+      "phase": "压缩执行",
+      "functions": [
+        "session_before_compact",
+        "compact",
+        "generateSummaryWithUsage",
+        "generateTurnPrefixSummary",
+        "completeSummarization"
+      ],
+      "inputs": [
+        "plan",
+        "自定义焦点",
+        "model/auth",
+        "abort signal"
+      ],
+      "outputs": [
+        "validated summary+usage 或failed/aborted"
+      ],
+      "ruleIds": [
+        "PI11",
+        "PI12",
+        "PI15",
+        "PI18"
+      ]
+    },
+    {
+      "phase": "提交与重建",
+      "functions": [
+        "appendCompaction",
+        "_refreshFinalizedContext",
+        "buildSessionProjection"
+      ],
+      "inputs": [
+        "summary",
+        "kept ID",
+        "current system/tool state"
+      ],
+      "outputs": [
+        "追加checkpoint",
+        "system snapshot + summary + suffix"
+      ],
+      "ruleIds": [
+        "PI14"
+      ]
+    },
+    {
+      "phase": "真正发包",
+      "functions": [
+        "transformContext",
+        "convertToLlm",
+        "normalizeContext",
+        "resolveTranscript",
+        "clampMaxTokensToContext"
+      ],
+      "inputs": [
+        "当前消息",
+        "工具执行loadout",
+        "provider capabilities"
+      ],
+      "outputs": [
+        "provider context",
+        "clamped output max"
+      ],
+      "ruleIds": [
+        "PI02",
+        "PI04",
+        "PI13"
+      ]
+    },
+    {
+      "phase": "反馈与恢复",
+      "functions": [
+        "message_end persistence",
+        "turn_end / agent_end",
+        "_checkCompaction",
+        "_omitRecoveryAttempt",
+        "_runAutoCompaction"
+      ],
+      "inputs": [
+        "response usage/error/length",
+        "queues",
+        "cancel"
+      ],
+      "outputs": [
+        "正常完成",
+        "压缩后新run重试一次",
+        "失败停止"
+      ],
+      "ruleIds": [
+        "PI16",
+        "PI17",
+        "PI18",
+        "PI20"
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "pi-normal",
+      "title": "200K窗口：工具循环中在下一响应前切换checkpoint",
+      "kind": "规则驱动示意，非真实模型trace",
+      "parameters": {
+        "window": 200000,
+        "reserve": 16384,
+        "keep": 20000,
+        "trigger": 183616,
+        "notes": "除trigger算术外，各物件token大小与摘要产物大小是教学设定。184K>183616才触发。"
+      },
+      "steps": [
+        {
+          "title": "初始化指令与工具",
+          "before": [],
+          "after": [
+            "S0 sections+schema",
+            "U1 goal"
+          ],
+          "context": [
+            "S0",
+            "U1"
+          ],
+          "archive": [
+            "S0",
+            "U1"
+          ],
+          "rules": [
+            "PI01",
+            "PI02",
+            "PI03"
+          ],
+          "explanation": "稳定层包含项目规则和skill索引，而非全部skill全文。"
+        },
+        {
+          "title": "累计工作与工具输出",
+          "before": [
+            "S0",
+            "U1"
+          ],
+          "after": [
+            "S0",
+            "U1",
+            "A1 call",
+            "T1 result",
+            "U2",
+            "A2 call",
+            "T2 result"
+          ],
+          "context": [
+            "S0",
+            "U1",
+            "A1",
+            "T1",
+            "U2",
+            "A2",
+            "T2"
+          ],
+          "archive": [
+            "同context"
+          ],
+          "rules": [
+            "PI20",
+            "PI06"
+          ],
+          "explanation": "单个工具先限输出，累计usage+新结果delta仍可能升到184K。"
+        },
+        {
+          "title": "下一assistant前检测",
+          "before": [
+            "184K input working set"
+          ],
+          "after": [
+            "threshold gate:184000>183616"
+          ],
+          "context": [
+            "旧prefix",
+            "最近约20K后缀"
+          ],
+          "archive": [
+            "完整树"
+          ],
+          "rules": [
+            "PI07",
+            "PI08"
+          ],
+          "explanation": "不是等下一次API报错才做压缩；此时检查当前持久投影。"
+        },
+        {
+          "title": "画出保留切点",
+          "before": [
+            "旧prefix",
+            "新近后缀"
+          ],
+          "after": [
+            "history to summarize",
+            "kept from K=U2/A2"
+          ],
+          "context": [
+            "待摘要prefix",
+            "成对保留A2+T2"
+          ],
+          "archive": [
+            "完整树"
+          ],
+          "rules": [
+            "PI09",
+            "PI10"
+          ],
+          "explanation": "切点不可落在T2而把A2丢掉；若切在单轮内部，另生成turn-prefix摘要。"
+        },
+        {
+          "title": "序列化并生成摘要",
+          "before": [
+            "history raw text"
+          ],
+          "after": [
+            "Q:goal/constraints/progress/decisions/next"
+          ],
+          "context": [
+            "S0",
+            "old prefix（等待提交）",
+            "kept suffix"
+          ],
+          "archive": [
+            "完整树"
+          ],
+          "rules": [
+            "PI11",
+            "PI12",
+            "PI15"
+          ],
+          "explanation": "摘要是独立LLM调用；tool result只带前2000字符，thinking不进入；失败不提交。"
+        },
+        {
+          "title": "追加checkpoint并重建",
+          "before": [
+            "S0",
+            "old prefix",
+            "kept suffix"
+          ],
+          "after": [
+            "C1{summary,firstKeptEntryId,systemMessage}",
+            "S_current",
+            "Q",
+            "kept suffix"
+          ],
+          "context": [
+            "S_current snapshot",
+            "Q summary",
+            "kept A2+T2"
+          ],
+          "archive": [
+            "原树所有entry",
+            "C1"
+          ],
+          "rules": [
+            "PI14",
+            "PI04"
+          ],
+          "explanation": "旧prefix退出模型工作集但仍在JSONL；system/tool当前态从C1快照保留下来。"
+        },
+        {
+          "title": "provider预算与继续",
+          "before": [
+            "S_current",
+            "Q",
+            "kept suffix"
+          ],
+          "after": [
+            "wire context",
+            "output max clamp",
+            "A3 next response"
+          ],
+          "context": [
+            "system+summary+recent+new"
+          ],
+          "archive": [
+            "原树+C1+A3"
+          ],
+          "rules": [
+            "PI13",
+            "PI18"
+          ],
+          "explanation": "发包输出上限另扣4096估算安全空间；threshold压缩不重答已完成A2，只继续自然工具循环。"
+        }
+      ]
+    },
+    {
+      "id": "pi-overflow",
+      "title": "Provider拒绝：失败尝试仍审计可见，投影先成对省略",
+      "kind": "规则驱动示意，非真实模型trace",
+      "steps": [
+        {
+          "title": "估算偏低或大输入突增",
+          "before": [
+            "current projection"
+          ],
+          "after": [
+            "provider request rejected / recoverable length"
+          ],
+          "context": [
+            "S",
+            "U",
+            "A_failed",
+            "T_failed_if_any"
+          ],
+          "archive": [
+            "S",
+            "U",
+            "A_failed",
+            "T_failed_if_any"
+          ],
+          "rules": [
+            "PI06",
+            "PI13",
+            "PI16"
+          ],
+          "explanation": "提前阈值不能数学保证不超限；length的潜在半截工具参数不会执行。"
+        },
+        {
+          "title": "完成事件生命周期",
+          "before": [
+            "attempt completion"
+          ],
+          "after": [
+            "persist message_end",
+            "turn_end",
+            "agent_end"
+          ],
+          "context": [
+            "失败attempt仍暂可见"
+          ],
+          "archive": [
+            "完整失败attempt"
+          ],
+          "rules": [
+            "PI17"
+          ],
+          "explanation": "扩展/监听器先看到这次尝试真实结束，然后进行post-run恢复。"
+        },
+        {
+          "title": "追加omission edits",
+          "before": [
+            "A_failed",
+            "T_failed"
+          ],
+          "after": [
+            "E1 target=A_failed null",
+            "E2 target=T_failed null"
+          ],
+          "context": [
+            "S",
+            "U",
+            "更早有效消息"
+          ],
+          "archive": [
+            "失败attempt",
+            "E1",
+            "E2"
+          ],
+          "rules": [
+            "PI05",
+            "PI17"
+          ],
+          "explanation": "不是删除日志；按callId成对排除，防止orphan tool result破坏下一请求。"
+        },
+        {
+          "title": "运行一次overflow compaction",
+          "before": [
+            "repaired projection"
+          ],
+          "after": [
+            "summary+checkpoint（成功）或no checkpoint（失败/取消）"
+          ],
+          "context": [
+            "成功:新checkpoint与suffix",
+            "失败:已省略attempt的projection"
+          ],
+          "archive": [
+            "omission持久",
+            "成功才追加C"
+          ],
+          "rules": [
+            "PI15",
+            "PI17",
+            "PI18"
+          ],
+          "explanation": "摘要失败/取消不会回滚省略，不会调度内部retry。"
+        },
+        {
+          "title": "仅成功后重试一次",
+          "before": [
+            "成功checkpoint"
+          ],
+          "after": [
+            "fresh run retry"
+          ],
+          "context": [
+            "更小工作集",
+            "新response"
+          ],
+          "archive": [
+            "旧失败attempt",
+            "新attempt"
+          ],
+          "rules": [
+            "PI16",
+            "PI18"
+          ],
+          "explanation": "_overflowRecoveryAttempted限制同一恢复链；第二次仍失败则停止并提示减上下文/换模型。"
+        }
+      ]
+    },
+    {
+      "id": "pi-branch",
+      "title": "从探索分支返回：把知识带回，不把整条分支塞进窗口",
+      "kind": "显式tree导航示意",
+      "steps": [
+        {
+          "title": "定位共同祖先",
+          "before": [
+            "root→A→B→C (old leaf)",
+            "root→A→D (target)"
+          ],
+          "after": [
+            "ancestor=A",
+            "to summarize=B,C"
+          ],
+          "rules": [
+            "PI19"
+          ],
+          "context": [
+            "旧分支"
+          ],
+          "archive": [
+            "全树"
+          ]
+        },
+        {
+          "title": "按分支预算收集",
+          "before": [
+            "B,C raw entries"
+          ],
+          "after": [
+            "newest-first selected messages",
+            "toolResult skipped",
+            "old summary optionally included"
+          ],
+          "rules": [
+            "PI19"
+          ],
+          "context": [
+            "selected text"
+          ],
+          "archive": [
+            "全树"
+          ]
+        },
+        {
+          "title": "目标分支追加摘要",
+          "before": [
+            "root→A→D"
+          ],
+          "after": [
+            "root→A→D→BranchSummary(B,C)"
+          ],
+          "rules": [
+            "PI19",
+            "PI04"
+          ],
+          "context": [
+            "目标路径",
+            "探索摘要"
+          ],
+          "archive": [
+            "旧分支仍存在"
+          ]
+        }
+      ]
+    }
+  ],
+  "corrections": [
+    "旧版只讲摘要+20K近期后缀，遗漏system section/tool声明差分与compaction快照。",
+    "旧版只说auto threshold，未说明prepareNextTurnWithContext在下一assistant响应前检查、virtual route再次检查。",
+    "reserveTokens不再是摘要最大输出；generateSummary _reserveTokens为兼容保留但已不使用；真正输出用模型limit并由simple-options另扣4096。",
+    "两套估算器：compaction层chars/4，AI发包层chars/3.5；不能把任一个描述成精确tokenizer。",
+    "失败恢复不是内存里简单删除assistant：追加context_edit成对省略assistant及tool results；压缩失败仍保留这些省略事件。",
+    "分支摘要跳过toolResult并走raw-entry路径，不能把正常compaction的projection过滤和工具正文规则套用给branch summary。",
+    "Pi默认不会无条件原样保留最新用户整段；巨大单个user跨度可在assistant边界切分，用户请求前缀改为turn-context摘要。",
+    "没有在append checkpoint之前强制核验压缩后token必须低于阈值；estimatedTokensAfter属于结果估计而非强约束。",
+    "实体模型首请求前先检查旧assistant后才加本次user；tool-cycle preflight也在steering注入前。不能称每个最终完整请求都已预检。"
+  ],
+  "validation": {
+    "method": "Static source tracing and inspection of cancellation regression tests, no live model benchmark",
+    "inspectedTest": "packages/coding-agent/test/suite/regressions/9340-9777-auto-compaction-cancellation.test.ts",
+    "testFindings": [
+      "abort之后不开始post-run压缩",
+      "鉴权阶段的signal可取消",
+      "compaction_start同步取消不应调用LLM",
+      "仅同名错误文字或无关AbortError仍应报告failed而非aborted"
+    ]
+  }
+}

@@ -42,7 +42,8 @@ def select_jobs(event_name, paths):
         if path.startswith(".github/"):
             return dict.fromkeys(JOBS, True)
         # Built-in Skills also use Markdown, but are embedded runtime inputs.
-        if (path.startswith("docs/") or ("/" not in path and path.endswith(".md"))
+        # research/ is independently validated by the Research Pages workflow.
+        if (path.startswith(("docs/", "research/")) or ("/" not in path and path.endswith(".md"))
                 or Path(path).name in ("README.md", "README.zh-CN.md", "AGENTS.md")
                 or path in ("backend/ARCHITECTURE.md", ".gitignore", ".gitattributes", "LICENSE")):
             continue

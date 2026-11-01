@@ -1,0 +1,2562 @@
+[
+  {
+    "path": "src/utils/claudemd.ts",
+    "line": 790,
+    "end": 945,
+    "symbol": "export const getMemoryFiles",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/claudemd.ts#L790-L945",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/context.ts",
+    "line": 155,
+    "end": 189,
+    "symbol": "export const getUserContext",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/context.ts#L155-L189",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/utils/api.ts",
+    "line": 437,
+    "end": 485,
+    "symbol": "export function appendSystemContext",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/api.ts#L437-L485",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/query.ts",
+    "line": 660,
+    "end": 668,
+    "symbol": "messages: prependUserContext",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/query.ts#L660-L668",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/utils/claudemd.ts",
+    "line": 537,
+    "end": 545,
+    "symbol": "const MAX_INCLUDE_DEPTH",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/claudemd.ts#L537-L545",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/utils/claudemd.ts",
+    "line": 1132,
+    "end": 1144,
+    "symbol": "export function getLargeMemoryFiles",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/claudemd.ts#L1132-L1144",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/utils/attachments.ts",
+    "line": 1722,
+    "end": 1742,
+    "symbol": "toolUseContext.loadedNestedMemoryPaths?.has",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/attachments.ts#L1722-L1742",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/api/claude.ts",
+    "line": 1155,
+    "end": 1182,
+    "symbol": "// Dynamic tool loading",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/api/claude.ts#L1155-L1182",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/utils/api.ts",
+    "line": 119,
+    "end": 164,
+    "symbol": "export async function toolToAPISchema",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/api.ts#L119-L164",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/tools/SkillTool/prompt.ts",
+    "line": 21,
+    "end": 144,
+    "symbol": "export const SKILL_BUDGET_CONTEXT_PERCENT",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/tools/SkillTool/prompt.ts#L21-L144",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/utils/attachments.ts",
+    "line": 2661,
+    "end": 2750,
+    "symbol": "async function getSkillListingAttachments",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/attachments.ts#L2661-L2750",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/utils/tokens.ts",
+    "line": 46,
+    "end": 56,
+    "symbol": "export function getTokenCountFromUsage",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/tokens.ts#L46-L56",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/utils/tokens.ts",
+    "line": 226,
+    "end": 261,
+    "symbol": "export function tokenCountWithEstimation",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/tokens.ts#L226-L261",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/constants/toolLimits.ts",
+    "line": 13,
+    "end": 55,
+    "symbol": "export const DEFAULT_MAX_RESULT_SIZE_CHARS",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/constants/toolLimits.ts#L13-L55",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/utils/toolResultStorage.ts",
+    "line": 447,
+    "end": 471,
+    "symbol": "export function provisionContentReplacementState",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/toolResultStorage.ts#L447-L471",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/utils/toolResultStorage.ts",
+    "line": 675,
+    "end": 697,
+    "symbol": "function selectFreshToReplace",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/toolResultStorage.ts#L675-L697",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/query.ts",
+    "line": 369,
+    "end": 400,
+    "symbol": "// Enforce per-message budget",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/query.ts#L369-L400",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/query.ts",
+    "line": 365,
+    "end": 455,
+    "symbol": "let messagesForQuery = [...getMessagesAfterCompactBoundary",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/query.ts#L365-L455",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/timeBasedMCConfig.ts",
+    "line": 30,
+    "end": 43,
+    "symbol": "const TIME_BASED_MC_CONFIG_DEFAULTS",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/timeBasedMCConfig.ts#L30-L43",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/microCompact.ts",
+    "line": 422,
+    "end": 505,
+    "symbol": "export function evaluateTimeBasedTrigger",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/microCompact.ts#L422-L505",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/microCompact.ts",
+    "line": 253,
+    "end": 301,
+    "symbol": "export async function microcompactMessages",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/microCompact.ts#L253-L301",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/microCompact.ts",
+    "line": 305,
+    "end": 397,
+    "symbol": "async function cachedMicrocompactPath",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/microCompact.ts#L305-L397",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/autoCompact.ts",
+    "line": 30,
+    "end": 95,
+    "symbol": "const MAX_OUTPUT_TOKENS_FOR_SUMMARY",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L30-L95",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/autoCompact.ts",
+    "line": 147,
+    "end": 248,
+    "symbol": "export function isAutoCompactEnabled",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L147-L248",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/autoCompact.ts",
+    "line": 160,
+    "end": 265,
+    "symbol": "export async function shouldAutoCompact",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L160-L265",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/sessionMemoryCompact.ts",
+    "line": 403,
+    "end": 437,
+    "symbol": "export function shouldUseSessionMemoryCompaction",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L403-L437",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/sessionMemoryCompact.ts",
+    "line": 514,
+    "end": 627,
+    "symbol": "export async function trySessionMemoryCompaction",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L514-L627",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/SessionMemory/sessionMemoryUtils.ts",
+    "line": 89,
+    "end": 108,
+    "symbol": "export async function waitForSessionMemoryExtraction",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/SessionMemory/sessionMemoryUtils.ts#L89-L108",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/sessionMemoryCompact.ts",
+    "line": 57,
+    "end": 64,
+    "symbol": "export const DEFAULT_SM_COMPACT_CONFIG",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L57-L64",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/sessionMemoryCompact.ts",
+    "line": 324,
+    "end": 400,
+    "symbol": "export function calculateMessagesToKeepIndex",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L324-L400",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/sessionMemoryCompact.ts",
+    "line": 232,
+    "end": 315,
+    "symbol": "export function adjustIndexToPreserveAPIInvariants",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L232-L315",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/compact.ts",
+    "line": 387,
+    "end": 457,
+    "symbol": "export async function compactConversation",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L387-L457",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/compact.ts",
+    "line": 741,
+    "end": 750,
+    "symbol": "attachments: postCompactFileAttachments",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L741-L750",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/compact.ts",
+    "line": 330,
+    "end": 340,
+    "symbol": "export function buildPostCompactMessages",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L330-L340",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/compact.ts",
+    "line": 1136,
+    "end": 1226,
+    "symbol": "async function streamCompactSummary",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L1136-L1226",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/compact.ts",
+    "line": 1125,
+    "end": 1145,
+    "symbol": "function createCompactCanUseTool",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L1125-L1145",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/compact.ts",
+    "line": 1250,
+    "end": 1348,
+    "symbol": "// Regular streaming path",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L1250-L1348",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/compact.ts",
+    "line": 518,
+    "end": 634,
+    "symbol": "const preCompactReadFileState",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L518-L634",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/compact.ts",
+    "line": 1415,
+    "end": 1475,
+    "symbol": "export async function createPostCompactFileAttachments",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L1415-L1475",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/compact.ts",
+    "line": 1494,
+    "end": 1545,
+    "symbol": "export function createSkillAttachmentIfNeeded",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L1494-L1545",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/postCompactCleanup.ts",
+    "line": 31,
+    "end": 77,
+    "symbol": "export function runPostCompactCleanup",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/postCompactCleanup.ts#L31-L77",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/compact.ts",
+    "line": 626,
+    "end": 694,
+    "symbol": "// Previously \"postCompactTokenCount\"",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L626-L694",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/sessionMemoryCompact.ts",
+    "line": 602,
+    "end": 624,
+    "symbol": "const postCompactTokenCount = estimateMessageTokens",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L602-L624",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/compact.ts",
+    "line": 227,
+    "end": 300,
+    "symbol": "const MAX_PTL_RETRIES",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L227-L300",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/compact.ts",
+    "line": 449,
+    "end": 495,
+    "symbol": "let ptlAttempts = 0",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L449-L495",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/compact.ts",
+    "line": 131,
+    "end": 134,
+    "symbol": "const MAX_COMPACT_STREAMING_RETRIES",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L131-L134",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/autoCompact.ts",
+    "line": 257,
+    "end": 274,
+    "symbol": "// Circuit breaker: stop retrying",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L257-L274",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/autoCompact.ts",
+    "line": 334,
+    "end": 351,
+    "symbol": "} catch (error) {",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L334-L351",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/query.ts",
+    "line": 592,
+    "end": 670,
+    "symbol": "// Block if we've hit the hard blocking limit",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/query.ts#L592-L670",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/autoCompact.ts",
+    "line": 123,
+    "end": 142,
+    "symbol": "const defaultBlockingLimit",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L123-L142",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/compact/apiMicrocompact.ts",
+    "line": 64,
+    "end": 153,
+    "symbol": "export function getAPIContextManagement",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/apiMicrocompact.ts#L64-L153",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/SessionMemory/sessionMemoryUtils.ts",
+    "line": 32,
+    "end": 39,
+    "symbol": "export const DEFAULT_SESSION_MEMORY_CONFIG",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/SessionMemory/sessionMemoryUtils.ts#L32-L39",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/SessionMemory/sessionMemory.ts",
+    "line": 134,
+    "end": 178,
+    "symbol": "export function shouldExtractMemory",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/SessionMemory/sessionMemory.ts#L134-L178",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/SessionMemory/sessionMemory.ts",
+    "line": 277,
+    "end": 352,
+    "symbol": "// Only run session memory on main REPL thread",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/SessionMemory/sessionMemory.ts#L277-L352",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/SessionMemory/sessionMemory.ts",
+    "line": 460,
+    "end": 490,
+    "symbol": "function createMemoryFileCanUseTool",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/SessionMemory/sessionMemory.ts#L460-L490",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/SessionMemory/prompts.ts",
+    "line": 8,
+    "end": 14,
+    "symbol": "const MAX_SECTION_LENGTH",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/SessionMemory/prompts.ts#L8-L14",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/services/SessionMemory/prompts.ts",
+    "line": 256,
+    "end": 305,
+    "symbol": "export function truncateSessionMemoryForCompact",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/SessionMemory/prompts.ts#L256-L305",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "src/utils/claudemd.ts",
+    "line": 381,
+    "end": 391,
+    "symbol": "// Truncate MEMORY.md entrypoints",
+    "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/claudemd.ts#L381-L391",
+    "framework": "Claude Code"
+  },
+  {
+    "path": "codex-rs/core/src/session/mod.rs",
+    "line": 808,
+    "end": 854,
+    "symbol": "// Resolve base instructions for the session.",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/mod.rs#L808-L854",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/agents_md.rs",
+    "line": 58,
+    "end": 121,
+    "symbol": "pub(crate) async fn load_project_instructions",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/agents_md.rs#L58-L121",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/agents_md.rs",
+    "line": 125,
+    "end": 205,
+    "symbol": "async fn read_agents_md",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/agents_md.rs#L125-L205",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/config/src/config_toml.rs",
+    "line": 75,
+    "end": 85,
+    "symbol": "pub const DEFAULT_PROJECT_DOC_MAX_BYTES",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/config/src/config_toml.rs#L75-L85",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/agents_md.rs",
+    "line": 272,
+    "end": 322,
+    "symbol": "fn candidate_filenames",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/agents_md.rs#L272-L322",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/mod.rs",
+    "line": 4996,
+    "end": 5091,
+    "symbol": "pub(crate) async fn record_context_updates_and_set_reference_context_item",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/mod.rs#L4996-L5091",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/context/world_state/agents_md.rs",
+    "line": 44,
+    "end": 85,
+    "symbol": "fn render_diff",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/context/world_state/agents_md.rs#L44-L85",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/turn.rs",
+    "line": 1104,
+    "end": 1239,
+    "symbol": "async fn build_skills_and_plugins",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/turn.rs#L1104-L1239",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/turn_context.rs",
+    "line": 1323,
+    "end": 1361,
+    "symbol": "let skills_snapshot = if",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/turn_context.rs#L1323-L1361",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/turn.rs",
+    "line": 1672,
+    "end": 1703,
+    "symbol": "pub(crate) fn build_prompt",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/turn.rs#L1672-L1703",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/context_manager/history.rs",
+    "line": 968,
+    "end": 991,
+    "symbol": "fn normalize_history",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/context_manager/history.rs#L968-L991",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/world_state.rs",
+    "line": 44,
+    "end": 63,
+    "symbol": "pub(crate) async fn current_window_uses_incremental_tools",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/world_state.rs#L44-L63",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/context/world_state/tools.rs",
+    "line": 29,
+    "end": 35,
+    "symbol": "const MAX_RENDERED_FRAGMENT_BYTES",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/context/world_state/tools.rs#L29-L35",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/context_manager/history.rs",
+    "line": 555,
+    "end": 598,
+    "symbol": "fn record_item_with_metadata",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/context_manager/history.rs#L555-L598",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/context_manager/history.rs",
+    "line": 518,
+    "end": 535,
+    "symbol": "/// Tool output truncation applies only to live history",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/context_manager/history.rs#L518-L535",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/step_settings.rs",
+    "line": 203,
+    "end": 213,
+    "symbol": "tool_output_token_limit: self.tool_output_token_limit",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/step_settings.rs#L203-L213",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/models-manager/src/model_info.rs",
+    "line": 98,
+    "end": 144,
+    "symbol": "pub fn model_info_from_slug",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/models-manager/src/model_info.rs#L98-L144",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/models-manager/src/model_info.rs",
+    "line": 32,
+    "end": 48,
+    "symbol": "if let Some(token_limit) = config.tool_output_token_limit",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/models-manager/src/model_info.rs#L32-L48",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/context_manager/history.rs",
+    "line": 939,
+    "end": 967,
+    "symbol": "pub(crate) fn get_total_token_usage",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/context_manager/history.rs#L939-L967",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/context_manager/history.rs",
+    "line": 661,
+    "end": 688,
+    "symbol": "pub(crate) fn estimate_token_count_with_base_instructions",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/context_manager/history.rs#L661-L688",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/mod.rs",
+    "line": 5178,
+    "end": 5256,
+    "symbol": "pub(crate) async fn record_token_usage_info",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/mod.rs#L5178-L5256",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/context_window.rs",
+    "line": 53,
+    "end": 130,
+    "symbol": "async fn context_window_token_status_with_config",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/context_window.rs#L53-L130",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/protocol/src/openai_models.rs",
+    "line": 529,
+    "end": 545,
+    "symbol": "pub fn auto_compact_token_limit",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/protocol/src/openai_models.rs#L529-L545",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/protocol/src/openai_models.rs",
+    "line": 393,
+    "end": 397,
+    "symbol": "const fn default_effective_context_window_percent",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/protocol/src/openai_models.rs#L393-L397",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/protocol/src/config_types.rs",
+    "line": 49,
+    "end": 57,
+    "symbol": "pub enum AutoCompactTokenLimitScope",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/protocol/src/config_types.rs#L49-L57",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/protocol/src/openai_models.rs",
+    "line": 529,
+    "end": 546,
+    "symbol": "pub fn auto_compact_token_limit",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/protocol/src/openai_models.rs#L529-L546",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/context_window.rs",
+    "line": 98,
+    "end": 127,
+    "symbol": "let auto_compact_fallback_buffer_tokens",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/context_window.rs#L98-L127",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/turn.rs",
+    "line": 173,
+    "end": 216,
+    "symbol": "pub(crate) async fn run_turn",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/turn.rs#L173-L216",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/turn.rs",
+    "line": 664,
+    "end": 717,
+    "symbol": "let should_roll_over =",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/turn.rs#L664-L717",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/turn.rs",
+    "line": 783,
+    "end": 837,
+    "symbol": "// Token-budget resets do not summarize",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/turn.rs#L783-L837",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/config/mod.rs",
+    "line": 4463,
+    "end": 4469,
+    "symbol": "model_post_turn_compact_threshold_percent: cfg",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/config/mod.rs#L4463-L4469",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/turn.rs",
+    "line": 1412,
+    "end": 1423,
+    "symbol": "fn comp_hash_changed",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/turn.rs#L1412-L1423",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/turn.rs",
+    "line": 1422,
+    "end": 1518,
+    "symbol": "async fn maybe_run_previous_model_inline_compact",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/turn.rs#L1422-L1518",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/turn.rs",
+    "line": 1513,
+    "end": 1633,
+    "symbol": "async fn run_auto_compact",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/turn.rs#L1513-L1633",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/model-provider/src/capabilities.rs",
+    "line": 31,
+    "end": 57,
+    "symbol": "pub(crate) fn from_config",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/model-provider/src/capabilities.rs#L31-L57",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/compact_remote_history.rs",
+    "line": 70,
+    "end": 153,
+    "symbol": "pub(crate) fn trim_function_call_history_to_fit_context_window",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_remote_history.rs#L70-L153",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/compact_remote_history.rs",
+    "line": 138,
+    "end": 202,
+    "symbol": "fn rewritten_output_for_context_window",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_remote_history.rs#L138-L202",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/compact_remote_v2_attempt.rs",
+    "line": 104,
+    "end": 133,
+    "symbol": "trim_function_call_history_to_fit_context_window(",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_remote_v2_attempt.rs#L104-L133",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/compact_remote_v2_attempt.rs",
+    "line": 172,
+    "end": 203,
+    "symbol": "input.push(ResponseItem::CompactionTrigger",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_remote_v2_attempt.rs#L172-L203",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/compact_remote_v2.rs",
+    "line": 464,
+    "end": 486,
+    "symbol": "if compaction_count != 1",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_remote_v2.rs#L464-L486",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/compact_remote_v2.rs",
+    "line": 91,
+    "end": 98,
+    "symbol": "MAX_REMOTE_COMPACTION_V2_STREAM_RETRIES",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_remote_v2.rs#L91-L98",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/compact_remote_v2.rs",
+    "line": 480,
+    "end": 518,
+    "symbol": "fn build_v2_compacted_history",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_remote_v2.rs#L480-L518",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/compact_remote_v2.rs",
+    "line": 529,
+    "end": 590,
+    "symbol": "fn is_retained_for_remote_compaction_v2",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_remote_v2.rs#L529-L590",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/compact_remote_v2.rs",
+    "line": 87,
+    "end": 95,
+    "symbol": "pub(crate) const RETAINED_MESSAGE_TOKEN_BUDGET",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_remote_v2.rs#L87-L95",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/compact_remote_v2_images.rs",
+    "line": 31,
+    "end": 103,
+    "symbol": "pub(super) fn truncate_message_to_token_budget",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_remote_v2_images.rs#L31-L103",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/features/src/lib.rs",
+    "line": 2142,
+    "end": 2165,
+    "symbol": "id: Feature::CompactionImageBudget",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/features/src/lib.rs#L2142-L2165",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/compact.rs",
+    "line": 63,
+    "end": 69,
+    "symbol": "const COMPACT_USER_MESSAGE_MAX_TOKENS",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact.rs#L63-L69",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/compact.rs",
+    "line": 263,
+    "end": 295,
+    "symbol": "async fn run_compact_task_inner_impl",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact.rs#L263-L295",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/compact.rs",
+    "line": 710,
+    "end": 815,
+    "symbol": "fn build_compacted_history_with_limit",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact.rs#L710-L815",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/compact.rs",
+    "line": 84,
+    "end": 119,
+    "symbol": "pub(crate) async fn build_compaction_replacement_history",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact.rs#L84-L119",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/compact.rs",
+    "line": 358,
+    "end": 392,
+    "symbol": "Err(e) if matches!(e.details(), CodexErrorDetails::ContextWindowExceeded)",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact.rs#L358-L392",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/context_manager/history.rs",
+    "line": 685,
+    "end": 699,
+    "symbol": "pub(crate) fn remove_first_item",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/context_manager/history.rs#L685-L699",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/features/src/lib.rs",
+    "line": 1980,
+    "end": 1992,
+    "symbol": "id: Feature::TokenBudget",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/features/src/lib.rs#L1980-L1992",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/token_budget.rs",
+    "line": 123,
+    "end": 166,
+    "symbol": "pub(super) fn apply_model_defaults",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/token_budget.rs#L123-L166",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/token_budget.rs",
+    "line": 21,
+    "end": 71,
+    "symbol": "pub(super) fn apply_experimental_context",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/token_budget.rs#L21-L71",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/mod.rs",
+    "line": 4919,
+    "end": 4983,
+    "symbol": "pub(crate) async fn start_new_context_window",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/mod.rs#L4919-L4983",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/compact_token_budget.rs",
+    "line": 42,
+    "end": 69,
+    "symbol": "async fn run_compact_task_inner",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_token_budget.rs#L42-L69",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/mod.rs",
+    "line": 4674,
+    "end": 4721,
+    "symbol": "// Keep the legacy bridge hint when native Notes is disabled.",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/mod.rs#L4674-L4721",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/async_compaction.rs",
+    "line": 40,
+    "end": 55,
+    "symbol": "pub(super) fn enabled",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/async_compaction.rs#L40-L55",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/async_compaction.rs",
+    "line": 52,
+    "end": 152,
+    "symbol": "pub(super) async fn maybe_start",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/async_compaction.rs#L52-L152",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/context_manager/history.rs",
+    "line": 715,
+    "end": 723,
+    "symbol": "self.history_version = self.history_version.saturating_add(1)",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/context_manager/history.rs#L715-L723",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/config/mod.rs",
+    "line": 226,
+    "end": 229,
+    "symbol": "const DEFAULT_ASYNC_COMPACTION_THRESHOLD_PERCENT",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/config/mod.rs#L226-L229",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/mod.rs",
+    "line": 4359,
+    "end": 4439,
+    "symbol": "// Validate immediately before slicing and replacing the captured prefix.",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/mod.rs#L4359-L4439",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/compact_remote_v2_installation.rs",
+    "line": 85,
+    "end": 95,
+    "symbol": "if let Some(candidate) = &candidate",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_remote_v2_installation.rs#L85-L95",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/compact_remote_v2_installation.rs",
+    "line": 29,
+    "end": 72,
+    "symbol": "if let Some(candidate) = candidate",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_remote_v2_installation.rs#L29-L72",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/mod.rs",
+    "line": 4430,
+    "end": 4505,
+    "symbol": "let replacement_history = items.clone()",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/mod.rs#L4430-L4505",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/history/src/compaction_checkpoint.rs",
+    "line": 36,
+    "end": 61,
+    "symbol": "pub fn is_usable",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/history/src/compaction_checkpoint.rs#L36-L61",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/turn.rs",
+    "line": 1807,
+    "end": 1813,
+    "symbol": "CodexErrorDetails::ContextWindowExceeded => {",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/turn.rs#L1807-L1813",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/turn.rs",
+    "line": 196,
+    "end": 204,
+    "symbol": "// TODO(ccunningham): Pre-turn compaction runs",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/turn.rs#L196-L204",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/core/src/session/turn.rs",
+    "line": 837,
+    "end": 854,
+    "symbol": "&& !guardian_budget_compacted",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/turn.rs#L837-L854",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/models-manager/src/model_info.rs",
+    "line": 98,
+    "end": 153,
+    "symbol": "pub fn model_info_from_slug",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/models-manager/src/model_info.rs#L98-L153",
+    "framework": "Codex"
+  },
+  {
+    "path": "codex-rs/models-manager/src/model_info.rs",
+    "line": 19,
+    "end": 48,
+    "symbol": "pub fn with_config_overrides",
+    "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/models-manager/src/model_info.rs#L19-L48",
+    "framework": "Codex"
+  },
+  {
+    "path": "packages/core/src/session/runner/llm.ts",
+    "line": 195,
+    "end": 240,
+    "symbol": "prepareContext/runStep",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/runner/llm.ts#L195-L240",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/context.ts",
+    "line": 126,
+    "end": 184,
+    "symbol": "select/load",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/context.ts#L126-L184",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/context.ts",
+    "line": 132,
+    "end": 164,
+    "symbol": "select",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/context.ts#L132-L164",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/skill/instructions.ts",
+    "line": 79,
+    "end": 95,
+    "symbol": "load",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/skill/instructions.ts#L79-L95",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/context.ts",
+    "line": 152,
+    "end": 163,
+    "symbol": "Instructions.combine",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/context.ts#L152-L163",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/model-request.ts",
+    "line": 92,
+    "end": 111,
+    "symbol": "baseTranscript",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/model-request.ts#L92-L111",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/instruction-state.ts",
+    "line": 21,
+    "end": 60,
+    "symbol": "observe/commit",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/instruction-state.ts#L21-L60",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/instruction-state.ts",
+    "line": 139,
+    "end": 181,
+    "symbol": "advanceEpoch/initial",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/instruction-state.ts#L139-L181",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/projector.ts",
+    "line": 756,
+    "end": 760,
+    "symbol": "Compaction.Ended",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/projector.ts#L756-L760",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/instruction-discovery.ts",
+    "line": 127,
+    "end": 148,
+    "symbol": "renderUpdate",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/instruction-discovery.ts#L127-L148",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/config/plugin/instruction.ts",
+    "line": 24,
+    "end": 56,
+    "symbol": "discovery candidates",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/config/plugin/instruction.ts#L24-L56",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/config/plugin/instruction.ts",
+    "line": 78,
+    "end": 109,
+    "symbol": "globalSource/projectSource",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/config/plugin/instruction.ts#L78-L109",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/tool/plugin/read.ts",
+    "line": 82,
+    "end": 106,
+    "symbol": "read instruction discovery",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/tool/plugin/read.ts#L82-L106",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/instructions.ts",
+    "line": 35,
+    "end": 43,
+    "symbol": "visible ledger",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/instructions.ts#L35-L43",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/instructions.ts",
+    "line": 99,
+    "end": 110,
+    "symbol": "previouslyInjected",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/instructions.ts#L99-L110",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/skill/instructions.ts",
+    "line": 16,
+    "end": 33,
+    "symbol": "render",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/skill/instructions.ts#L16-L33",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/runner/to-llm-message.ts",
+    "line": 256,
+    "end": 277,
+    "symbol": "user/skill",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/runner/to-llm-message.ts#L256-L277",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/compaction.ts",
+    "line": 799,
+    "end": 811,
+    "symbol": "recentUserMessages",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L799-L811",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/tool-output.ts",
+    "line": 13,
+    "end": 15,
+    "symbol": "MAX_LINES/MAX_BYTES/RETENTION",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/tool-output.ts#L13-L15",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/tool-output.ts",
+    "line": 69,
+    "end": 119,
+    "symbol": "truncate",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/tool-output.ts#L69-L119",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/runner/step.ts",
+    "line": 123,
+    "end": 128,
+    "symbol": "toolOutput.truncate",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/runner/step.ts#L123-L128",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/model-request.ts",
+    "line": 42,
+    "end": 45,
+    "symbol": "image bounds constants",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/model-request.ts#L42-L45",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/model-request.ts",
+    "line": 141,
+    "end": 145,
+    "symbol": "mediaBytes",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/model-request.ts#L141-L145",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/model-request.ts",
+    "line": 181,
+    "end": 208,
+    "symbol": "boundImages",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/model-request.ts#L181-L208",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/model-request.ts",
+    "line": 289,
+    "end": 291,
+    "symbol": "post-hook shaping",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/model-request.ts#L289-L291",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/compaction.ts",
+    "line": 819,
+    "end": 843,
+    "symbol": "estimatePrompt",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L819-L843",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/compaction.ts",
+    "line": 868,
+    "end": 873,
+    "symbol": "hasMeasuredPrompt",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L868-L873",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/compaction.ts",
+    "line": 899,
+    "end": 936,
+    "symbol": "estimateRequest/estimatePart",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L899-L936",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/util/token.ts",
+    "line": 3,
+    "end": 5,
+    "symbol": "Token.estimate",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/util/token.ts#L3-L5",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/compaction.ts",
+    "line": 93,
+    "end": 108,
+    "symbol": "constants",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L93-L108",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/compaction.ts",
+    "line": 197,
+    "end": 202,
+    "symbol": "state defaults",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L197-L202",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/compaction.ts",
+    "line": 210,
+    "end": 255,
+    "symbol": "compact/due",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L210-L255",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/compaction.ts",
+    "line": 851,
+    "end": 862,
+    "symbol": "calculateCeiling/summaryRoom",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L851-L862",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/model-request.ts",
+    "line": 47,
+    "end": 54,
+    "symbol": "output constants",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/model-request.ts#L47-L54",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/model-request.ts",
+    "line": 84,
+    "end": 90,
+    "symbol": "outputLimit",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/model-request.ts#L84-L90",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/model-request.ts",
+    "line": 244,
+    "end": 255,
+    "symbol": "default hook options",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/model-request.ts#L244-L255",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/compaction.ts",
+    "line": 111,
+    "end": 181,
+    "symbol": "buildPrompt",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L111-L181",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/compaction.ts",
+    "line": 218,
+    "end": 238,
+    "symbol": "model selection",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L218-L238",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/compaction.ts",
+    "line": 278,
+    "end": 333,
+    "symbol": "summarize",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L278-L333",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/history.ts",
+    "line": 144,
+    "end": 181,
+    "symbol": "withRecentText",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/history.ts#L144-L181",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/recent-text.ts",
+    "line": 5,
+    "end": 81,
+    "symbol": "messageToText/truncateToolOutput",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/recent-text.ts#L5-L81",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/runner/to-llm-message.ts",
+    "line": 293,
+    "end": 312,
+    "symbol": "checkpoint lowering",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/runner/to-llm-message.ts#L293-L312",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/compaction.ts",
+    "line": 716,
+    "end": 774,
+    "symbol": "splitConversation/recentStart/oldestToDrop",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L716-L774",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/compaction.ts",
+    "line": 336,
+    "end": 385,
+    "symbol": "compactNatively",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L336-L385",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/history.ts",
+    "line": 20,
+    "end": 46,
+    "symbol": "Boundary/replayable",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/history.ts#L20-L46",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/history.ts",
+    "line": 103,
+    "end": 141,
+    "symbol": "messageEntries",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/history.ts#L103-L141",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/compaction.ts",
+    "line": 388,
+    "end": 477,
+    "symbol": "deliver",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L388-L477",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/compaction.ts",
+    "line": 480,
+    "end": 526,
+    "symbol": "flattenAndDropOldest",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L480-L526",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/compaction.ts",
+    "line": 776,
+    "end": 796,
+    "symbol": "flattenMessage",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L776-L796",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/compaction.ts",
+    "line": 93,
+    "end": 93,
+    "symbol": "SHRINK_STEPS",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L93",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/compaction.ts",
+    "line": 419,
+    "end": 477,
+    "symbol": "deliver retry loop",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L419-L477",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/runner/step.ts",
+    "line": 113,
+    "end": 120,
+    "symbol": "preoutput overflow capture",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/runner/step.ts#L113-L120",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/runner/step.ts",
+    "line": 155,
+    "end": 166,
+    "symbol": "recoverOverflow",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/runner/step.ts#L155-L166",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/runner/llm.ts",
+    "line": 208,
+    "end": 209,
+    "symbol": "recovery flags",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/runner/llm.ts#L208-L209",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/runner/llm.ts",
+    "line": 259,
+    "end": 264,
+    "symbol": "recoverOverflow callback",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/runner/llm.ts#L259-L264",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/runner/llm.ts",
+    "line": 314,
+    "end": 317,
+    "symbol": "Compacted outcome",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/runner/llm.ts#L314-L317",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/compaction.ts",
+    "line": 289,
+    "end": 317,
+    "symbol": "filled/send/NUDGE",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L289-L317",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/compaction.ts",
+    "line": 530,
+    "end": 585,
+    "symbol": "stream",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L530-L585",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "packages/core/src/session/compaction.ts",
+    "line": 615,
+    "end": 675,
+    "symbol": "fromHook/spend/publish",
+    "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L615-L675",
+    "framework": "OpenCode"
+  },
+  {
+    "path": "agent/system_prompt.py",
+    "line": 736,
+    "end": 756,
+    "symbol": "def build_system_prompt_parts",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/system_prompt.py#L736-L756",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/system_prompt.py",
+    "line": 814,
+    "end": 834,
+    "symbol": "def invalidate_system_prompt",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/system_prompt.py#L814-L834",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/prompt_builder.py",
+    "line": 1051,
+    "end": 1071,
+    "symbol": "_CONTEXT_FILE_WINDOW_FRACTION",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/prompt_builder.py#L1051-L1071",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/prompt_builder.py",
+    "line": 1063,
+    "end": 1083,
+    "symbol": "def _get_context_file_max_chars",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/prompt_builder.py#L1063-L1083",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 852,
+    "end": 872,
+    "symbol": "SKILL_PRUNED_MARKER_PREFIX",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L852-L872",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/turn_preflight.py",
+    "line": 392,
+    "end": 396,
+    "symbol": "# A committed prune is a content-loss boundary",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/turn_preflight.py#L392-L396",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/usage_anchor.py",
+    "line": 46,
+    "end": 66,
+    "symbol": "def _priced_prefix_fingerprint",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/usage_anchor.py#L46-L66",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/usage_anchor.py",
+    "line": 67,
+    "end": 87,
+    "symbol": "def capture_usage_anchor",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/usage_anchor.py#L67-L87",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/usage_anchor.py",
+    "line": 87,
+    "end": 107,
+    "symbol": "def _anchor_matches",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/usage_anchor.py#L87-L107",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/usage_anchor.py",
+    "line": 108,
+    "end": 128,
+    "symbol": "def anchored_context_tokens",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/usage_anchor.py#L108-L128",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 2983,
+    "end": 3003,
+    "symbol": "def should_defer_preflight_to_real_usage",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L2983-L3003",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 2964,
+    "end": 2984,
+    "symbol": "def note_usage_less_response",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L2964-L2984",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 2763,
+    "end": 2783,
+    "symbol": "def _effective_threshold_percent",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L2763-L2783",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 2777,
+    "end": 2797,
+    "symbol": "def _compute_threshold_tokens",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L2777-L2797",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 2751,
+    "end": 2771,
+    "symbol": "def _apply_threshold_tokens_cap",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L2751-L2771",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "gateway/run_turn_hygiene.py",
+    "line": 94,
+    "end": 114,
+    "symbol": "async def _hmwa_hygiene_settings",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/gateway/run_turn_hygiene.py#L94-L114",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "gateway/run_turn_hygiene.py",
+    "line": 156,
+    "end": 176,
+    "symbol": "async def _hmwa_hygiene_plan",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/gateway/run_turn_hygiene.py#L156-L176",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/turn_context_compaction.py",
+    "line": 129,
+    "end": 149,
+    "symbol": "def run_turn_start_compaction",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/turn_context_compaction.py#L129-L149",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/turn_preflight.py",
+    "line": 57,
+    "end": 77,
+    "symbol": "def run_preflight_compression",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/turn_preflight.py#L57-L77",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/turn_preflight.py",
+    "line": 244,
+    "end": 264,
+    "symbol": "def compress_after_tool_results",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/turn_preflight.py#L244-L264",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor_prune.py",
+    "line": 28,
+    "end": 48,
+    "symbol": "def prune_tool_results_only",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor_prune.py#L28-L48",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/agent_init.py",
+    "line": 1565,
+    "end": 1585,
+    "symbol": "proactive_prune_tokens=max",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/agent_init.py#L1565-L1585",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 3285,
+    "end": 3323,
+    "symbol": "def _prune_old_tool_results",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L3285-L3323",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 5447,
+    "end": 5467,
+    "symbol": "def compress(",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L5447-L5467",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 3285,
+    "end": 3305,
+    "symbol": "def _prune_old_tool_results",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L3285-L3305",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 4566,
+    "end": 4586,
+    "symbol": "def _effective_protect_first_n",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L4566-L4586",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 4578,
+    "end": 4598,
+    "symbol": "def _protect_head_size",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L4578-L4598",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 2235,
+    "end": 2255,
+    "symbol": "def tail_token_budget",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L2235-L2255",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 3214,
+    "end": 3234,
+    "symbol": "def _tail_soft_ceiling",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L3214-L3234",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 4980,
+    "end": 5000,
+    "symbol": "def _find_tail_cut_by_tokens",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L4980-L5000",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/agent_init.py",
+    "line": 1560,
+    "end": 1580,
+    "symbol": "tail_mode=str",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/agent_init.py#L1560-L1580",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 4587,
+    "end": 4607,
+    "symbol": "def _align_boundary_backward",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L4587-L4607",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 4513,
+    "end": 4533,
+    "symbol": "def _sanitize_tool_pairs",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L4513-L4533",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 4772,
+    "end": 4792,
+    "symbol": "def _reappend_inflight_user_task",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L4772-L4792",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 4916,
+    "end": 4936,
+    "symbol": "def _ensure_last_n_user_messages_in_tail",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L4916-L4936",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 830,
+    "end": 850,
+    "symbol": "_SUMMARY_INPUT_MAX_CHARS =",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L830-L850",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 3423,
+    "end": 3443,
+    "symbol": "def _serialize_records_for_summary",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L3423-L3443",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 3651,
+    "end": 3671,
+    "symbol": "def _sample_summary_records",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L3651-L3671",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 3395,
+    "end": 3415,
+    "symbol": "def _compute_summary_budget",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L3395-L3415",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 823,
+    "end": 843,
+    "symbol": "_SUMMARY_TOKENS_CEILING =",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L823-L843",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor_tail.py",
+    "line": 49,
+    "end": 69,
+    "symbol": "def demote_stale_tail_tools",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor_tail.py#L49-L69",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/conversation_compression.py",
+    "line": 3989,
+    "end": 4009,
+    "symbol": "def compress_context(",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/conversation_compression.py#L3989-L4009",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/conversation_compression.py",
+    "line": 578,
+    "end": 598,
+    "symbol": "def begin_commit",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/conversation_compression.py#L578-L598",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "hermes_state_messages.py",
+    "line": 901,
+    "end": 921,
+    "symbol": "def archive_and_compact",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/hermes_state_messages.py#L901-L921",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "hermes_state_messages.py",
+    "line": 968,
+    "end": 988,
+    "symbol": "if held_for_cas:",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/hermes_state_messages.py#L968-L988",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/agent_init.py",
+    "line": 1586,
+    "end": 1606,
+    "symbol": "micro_compact=is_truthy_value",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/agent_init.py#L1586-L1606",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/turn_finalizer.py",
+    "line": 299,
+    "end": 319,
+    "symbol": "and getattr(_compressor, '_micro_compact_enabled'",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/turn_finalizer.py#L299-L319",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/micro_compaction.py",
+    "line": 205,
+    "end": 225,
+    "symbol": "def _micro_compact",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/micro_compaction.py#L205-L225",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 2925,
+    "end": 2945,
+    "symbol": "# Anti-thrashing verdict",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L2925-L2945",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 3027,
+    "end": 3047,
+    "symbol": "def _tripped",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L3027-L3047",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 4087,
+    "end": 4107,
+    "symbol": "def _on_summary_failure",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L4087-L4107",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 3513,
+    "end": 3533,
+    "symbol": "def _build_static_fallback_summary",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L3513-L3533",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 5238,
+    "end": 5258,
+    "symbol": "def _abort_on_summary_failure",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L5238-L5258",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/turn_overflow.py",
+    "line": 128,
+    "end": 148,
+    "symbol": "def count_attempt",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/turn_overflow.py#L128-L148",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/turn_overflow.py",
+    "line": 149,
+    "end": 169,
+    "symbol": "def compress(",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/turn_overflow.py#L149-L169",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/turn_preflight.py",
+    "line": 221,
+    "end": 241,
+    "symbol": "if provider_overflow_preflight:",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/turn_preflight.py#L221-L241",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/conversation_compression_codex.py",
+    "line": 51,
+    "end": 71,
+    "symbol": "def _compress_context_via_codex_app_server",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/conversation_compression_codex.py#L51-L71",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/conversation_compression.py",
+    "line": 3962,
+    "end": 3982,
+    "symbol": "if getattr(agent, \"api_mode\", None)",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/conversation_compression.py#L3962-L3982",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "agent/context_compressor.py",
+    "line": 2969,
+    "end": 2989,
+    "symbol": "def note_native_compaction_checkpoint",
+    "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L2969-L2989",
+    "framework": "Hermes Agent"
+  },
+  {
+    "path": "packages/coding-agent/src/core/resource-loader.ts",
+    "line": 184,
+    "end": 210,
+    "symbol": "function loadContextFileFromDir",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/resource-loader.ts#L184-L210",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/resource-loader.ts",
+    "line": 232,
+    "end": 277,
+    "symbol": "export function loadProjectContextFiles",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/resource-loader.ts#L232-L277",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/system-prompt.ts",
+    "line": 128,
+    "end": 195,
+    "symbol": "export function buildSystemPromptSections",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/system-prompt.ts#L128-L195",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/system-prompt.ts",
+    "line": 217,
+    "end": 229,
+    "symbol": "export function diffSystemPromptSections",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/system-prompt.ts#L217-L229",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/agent-session.ts",
+    "line": 1758,
+    "end": 1778,
+    "symbol": "private _preparePromptAndToolLoadout",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L1758-L1778",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/ai/src/utils/transcript.ts",
+    "line": 73,
+    "end": 120,
+    "symbol": "export function getCurrentSystemMessage",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/ai/src/utils/transcript.ts#L73-L120",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/skills.ts",
+    "line": 358,
+    "end": 400,
+    "symbol": "export function formatSkillsForPrompt",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/skills.ts#L358-L400",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/agent-session.ts",
+    "line": 2211,
+    "end": 2244,
+    "symbol": "private _expandSkillCommand",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L2211-L2244",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/system-prompt.ts",
+    "line": 175,
+    "end": 185,
+    "symbol": "const readers =",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/system-prompt.ts#L175-L185",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/session-manager.ts",
+    "line": 390,
+    "end": 424,
+    "symbol": "function buildSessionPath",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/session-manager.ts#L390-L424",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/session-manager.ts",
+    "line": 543,
+    "end": 577,
+    "symbol": "export function buildSessionProjection",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/session-manager.ts#L543-L577",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/messages.ts",
+    "line": 148,
+    "end": 195,
+    "symbol": "export function convertToLlm",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/messages.ts#L148-L195",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/agent/src/agent-loop.ts",
+    "line": 390,
+    "end": 416,
+    "symbol": "async function streamAssistantResponse",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/agent/src/agent-loop.ts#L390-L416",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/session-manager.ts",
+    "line": 1360,
+    "end": 1413,
+    "symbol": "appendContextEdit(targetId",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/session-manager.ts#L1360-L1413",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/session-manager.ts",
+    "line": 519,
+    "end": 546,
+    "symbol": "function projectContextEntry",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/session-manager.ts#L519-L546",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/session-manager.ts",
+    "line": 551,
+    "end": 567,
+    "symbol": "const edits = new Map",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/session-manager.ts#L551-L567",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+    "line": 140,
+    "end": 164,
+    "symbol": "export function calculateContextTokens",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L140-L164",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+    "line": 196,
+    "end": 236,
+    "symbol": "export function estimateContextTokens",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L196-L236",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+    "line": 227,
+    "end": 273,
+    "symbol": "export function estimateProjectedContextTokens",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L227-L273",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+    "line": 298,
+    "end": 351,
+    "symbol": "export function estimateTokens",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L298-L351",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+    "line": 126,
+    "end": 133,
+    "symbol": "export const DEFAULT_COMPACTION_SETTINGS",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L126-L133",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+    "line": 267,
+    "end": 271,
+    "symbol": "export function shouldCompact",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L267-L271",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/settings-manager.ts",
+    "line": 833,
+    "end": 891,
+    "symbol": "private getCompactionTokenSetting",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/settings-manager.ts#L833-L891",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/agent-session.ts",
+    "line": 776,
+    "end": 791,
+    "symbol": "private async _compactBeforeNextAssistantResponse",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L776-L791",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/agent-session.ts",
+    "line": 898,
+    "end": 939,
+    "symbol": "private _installAgentNextTurnRefresh",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L898-L939",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/agent-session.ts",
+    "line": 1926,
+    "end": 1940,
+    "symbol": "private async _prepareRun",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L1926-L1940",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/agent-session.ts",
+    "line": 1979,
+    "end": 2028,
+    "symbol": "private async _handlePostAgentRun",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L1979-L2028",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/agent-session.ts",
+    "line": 838,
+    "end": 844,
+    "symbol": "if (this._exceedsCompactionThreshold(route.model",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L838-L844",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/agent/src/agent-loop.ts",
+    "line": 191,
+    "end": 242,
+    "symbol": "runLoop / lastCompletedTurn guard and later message injection",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/agent/src/agent-loop.ts#L191-L242",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+    "line": 351,
+    "end": 376,
+    "symbol": "function isCutPointMessage",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L351-L376",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+    "line": 789,
+    "end": 873,
+    "symbol": "function findProjectedCutPoint",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L789-L873",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+    "line": 859,
+    "end": 922,
+    "symbol": "export function prepareCompaction",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L859-L922",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/session-manager.ts",
+    "line": 476,
+    "end": 520,
+    "symbol": "export function buildContextEntries",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/session-manager.ts#L476-L520",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/session-manager.ts",
+    "line": 562,
+    "end": 568,
+    "symbol": "sourceEntry.type === \"compaction\" && index > 0",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/session-manager.ts#L562-L568",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+    "line": 859,
+    "end": 925,
+    "symbol": "export function prepareCompaction",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L859-L925",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+    "line": 952,
+    "end": 1067,
+    "symbol": "export async function compact(",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L952-L1067",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+    "line": 1062,
+    "end": 1104,
+    "symbol": "async function generateTurnPrefixSummary",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L1062-L1104",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/compaction/utils.ts",
+    "line": 94,
+    "end": 152,
+    "symbol": "const TOOL_RESULT_MAX_CHARS",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/utils.ts#L94-L152",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+    "line": 696,
+    "end": 770,
+    "symbol": "export async function generateSummaryWithUsage",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L696-L770",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+    "line": 682,
+    "end": 695,
+    "symbol": "function buildSummarizationContext",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L682-L695",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+    "line": 618,
+    "end": 645,
+    "symbol": "export async function completeSummarization",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L618-L645",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/ai/src/api/simple-options.ts",
+    "line": 18,
+    "end": 25,
+    "symbol": "export function clampMaxTokensToContext",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/ai/src/api/simple-options.ts#L18-L25",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/ai/src/api/simple-options.ts",
+    "line": 36,
+    "end": 53,
+    "symbol": "export function buildBaseOptions",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/ai/src/api/simple-options.ts#L36-L53",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/ai/src/utils/estimate.ts",
+    "line": 15,
+    "end": 21,
+    "symbol": "const CHARS_PER_TOKEN",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/ai/src/utils/estimate.ts#L15-L21",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/ai/src/utils/estimate.ts",
+    "line": 97,
+    "end": 117,
+    "symbol": "export function estimateContextTokens",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/ai/src/utils/estimate.ts#L97-L117",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/session-manager.ts",
+    "line": 1261,
+    "end": 1297,
+    "symbol": "appendCompaction<T",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/session-manager.ts#L1261-L1297",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/agent-session.ts",
+    "line": 2911,
+    "end": 2924,
+    "symbol": "this.sessionManager.appendCompaction(summary",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L2911-L2924",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/agent-session.ts",
+    "line": 2828,
+    "end": 2843,
+    "symbol": "async compact(customInstructions",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L2828-L2843",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+    "line": 585,
+    "end": 597,
+    "symbol": "export function getSummarizationFailure",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L585-L597",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/compaction/compaction.ts",
+    "line": 742,
+    "end": 754,
+    "symbol": "const failure = getSummarizationFailure(response, \"Summarization\")",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/compaction.ts#L742-L754",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/agent-session.ts",
+    "line": 3157,
+    "end": 3298,
+    "symbol": "private async _runAutoCompaction",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L3157-L3298",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/agent-session.ts",
+    "line": 3011,
+    "end": 3145,
+    "symbol": "private async _checkCompaction",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L3011-L3145",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/ai/src/utils/overflow.ts",
+    "line": 142,
+    "end": 180,
+    "symbol": "export function isContextOverflow",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/ai/src/utils/overflow.ts#L142-L180",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/ai/src/utils/overflow.ts",
+    "line": 184,
+    "end": 187,
+    "symbol": "export function isRecoverableLength",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/ai/src/utils/overflow.ts#L184-L187",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/agent-session.ts",
+    "line": 1123,
+    "end": 1128,
+    "symbol": "this._overflowRecoveryAttempted = false;",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L1123-L1128",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/agent-session.ts",
+    "line": 1244,
+    "end": 1287,
+    "symbol": "private _omitRecoveryAttempt",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L1244-L1287",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/agent-session.ts",
+    "line": 3103,
+    "end": 3109,
+    "symbol": "this._omitRecoveryAttempt(assistantMessage)",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L3103-L3109",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/agent/src/agent-loop.ts",
+    "line": 263,
+    "end": 267,
+    "symbol": "await emit({ type: \"agent_end\", messages: newMessages })",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/agent/src/agent-loop.ts#L263-L267",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/agent-session.ts",
+    "line": 2978,
+    "end": 2982,
+    "symbol": "abortCompaction(): void",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L2978-L2982",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/agent-session.ts",
+    "line": 3267,
+    "end": 3302,
+    "symbol": "if (willRetry) return true;",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L3267-L3302",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/agent-session.ts",
+    "line": 2112,
+    "end": 2116,
+    "symbol": "Cannot submit a prompt while compaction",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L2112-L2116",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/agent/src/agent-loop.ts",
+    "line": 210,
+    "end": 218,
+    "symbol": "Preparation can be long-running",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/agent/src/agent-loop.ts#L210-L218",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/compaction/branch-summarization.ts",
+    "line": 108,
+    "end": 153,
+    "symbol": "export function collectEntriesForBranchSummary",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/branch-summarization.ts#L108-L153",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/compaction/branch-summarization.ts",
+    "line": 156,
+    "end": 187,
+    "symbol": "function getMessageFromEntry",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/branch-summarization.ts#L156-L187",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/compaction/branch-summarization.ts",
+    "line": 195,
+    "end": 255,
+    "symbol": "export function prepareBranchEntries",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/branch-summarization.ts#L195-L255",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/compaction/branch-summarization.ts",
+    "line": 293,
+    "end": 328,
+    "symbol": "export async function generateBranchSummary",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/compaction/branch-summarization.ts#L293-L328",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/agent-session.ts",
+    "line": 4024,
+    "end": 4049,
+    "symbol": "async navigateTree(",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/agent-session.ts#L4024-L4049",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/tools/read.ts",
+    "line": 96,
+    "end": 103,
+    "symbol": "description: `Read the contents",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/tools/read.ts#L96-L103",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/tools/read.ts",
+    "line": 177,
+    "end": 205,
+    "symbol": "const truncation = truncateHead",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/tools/read.ts#L177-L205",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/tools/truncate.ts",
+    "line": 11,
+    "end": 14,
+    "symbol": "export const DEFAULT_MAX_LINES",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/tools/truncate.ts#L11-L14",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/coding-agent/src/core/tools/bash.ts",
+    "line": 255,
+    "end": 260,
+    "symbol": "description: `Execute a",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/coding-agent/src/core/tools/bash.ts#L255-L260",
+    "framework": "Pi"
+  },
+  {
+    "path": "packages/agent/src/agent-loop.ts",
+    "line": 273,
+    "end": 283,
+    "symbol": "A \"length\" stop means",
+    "url": "https://github.com/badlogic/pi-mono/blob/b9fb2b854b7a19b28a68c3421365fee0a5342ce6/packages/agent/src/agent-loop.ts#L273-L283",
+    "framework": "Pi"
+  }
+]

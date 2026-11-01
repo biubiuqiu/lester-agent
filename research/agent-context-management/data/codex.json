@@ -1,0 +1,1618 @@
+{
+  "id": "codex",
+  "name": "Codex",
+  "repository": "openai/codex",
+  "commit": "61f34c35af77777db4d77d0ea2aeb8547a6b4523",
+  "overview": "以持久rollout保存可恢复事件，以world-state full/diff维持权威指令，以ContextManager保存有界活动工作集；按provider能力和运行特性选择local文本摘要、remote V2 opaque checkpoint或TokenBudget新window。压缩不是单个阈值函数，而是计量、策略、保留、安装、恢复的协议。",
+  "researchMethod": "读取固定commit静态调用链和配置/测试定位；未运行模型请求、未验证远端压缩语义和线上服务端开关。",
+  "correctionsToPrevious": [
+    "补上AGENTS发现与字节预算、world-state full/diff替换语义。",
+    "区分active usage与累计消费账单；actual+增量并非所有内容精确tokenizer。",
+    "remote V2原文保留64K，与local20K不同；是客户端可见代码，不需猜服务端。",
+    "remote预裁剪从尾部连续outputs，不是最老消息。local摘要超限才删最老item。",
+    "TokenBudget table默认false，但模型元数据/合格实验路径可运行时启用，不能绝对声称off。",
+    "pre-turn旧history检查未含新input（TODO）；普通sampling超限直接返回而非普遍同轮自动压缩重试。"
+  ],
+  "layers": [
+    {
+      "name": "持久事件/原始记录（rollout）",
+      "source": "SessionMeta、ResponseItem、TokenUsageRecord、WorldState、TurnContext、Compacted等rollout项",
+      "lifecycle": "跨进程；resume/fork读取；历史记录不是全部逐轮重放到provider",
+      "budget": "磁盘/存储策略，不是模型window预算",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/session/mod.rs",
+          "line": 4472,
+          "end": 4490,
+          "symbol": "let rollout_items = [",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/mod.rs#L4472-L4490"
+        }
+      ]
+    },
+    {
+      "name": "权威上下文状态（world state）",
+      "source": "当前模型、权限、AGENTS、环境、skills目录、tools能力与extension贡献",
+      "lifecycle": "首次full；之后diff；压缩后full重建；snapshot单独保存",
+      "budget": "分组件预算，如AGENTS32KiB、namespace简述4KiB；不代表总请求限额",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/session/mod.rs",
+          "line": 4996,
+          "end": 5076,
+          "symbol": "pub(crate) async fn record_context_updates_and_set_reference_context_item",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/mod.rs#L4996-L5076"
+        },
+        {
+          "path": "codex-rs/core/src/session/world_state.rs",
+          "line": 59,
+          "end": 94,
+          "symbol": "pub(crate) async fn build_world_state_for_step",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/world_state.rs#L59-L94"
+        }
+      ]
+    },
+    {
+      "name": "活动会话工作集（ContextManager）",
+      "source": "已记录并经工具截断的ResponseItemEnvelope数组，含用户、assistant、tools和context diff",
+      "lifecycle": "每步增长；合法配对/模态归一化；压缩时替换或前缀替换",
+      "budget": "actual anchor + local增量；full与scope双检查",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/context_manager/history.rs",
+          "line": 603,
+          "end": 626,
+          "symbol": "pub(crate) fn for_prompt",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/context_manager/history.rs#L603-L626"
+        },
+        {
+          "path": "codex-rs/core/src/context_manager/history.rs",
+          "line": 939,
+          "end": 967,
+          "symbol": "pub(crate) fn get_total_token_usage",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/context_manager/history.rs#L939-L967"
+        }
+      ]
+    },
+    {
+      "name": "真正模型请求（Prompt）",
+      "source": "normalized history + 当前tool specs/base instructions/output schema，或incremental history中的base/tools",
+      "lifecycle": "每次sampling/compaction构造；网络缓存优化不等于内容免占window",
+      "budget": "provider语义约束；本地估计不能精确计opaque项",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/session/turn.rs",
+          "line": 1672,
+          "end": 1703,
+          "symbol": "pub(crate) fn build_prompt",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/turn.rs#L1672-L1703"
+        }
+      ]
+    },
+    {
+      "name": "压缩表示/原文保留区",
+      "source": "local:20K user文本+summary；V2:64K筛选原消息+opaque compaction；TokenBudget:new-window权威context+可选client items",
+      "lifecycle": "替换history并重置world-state reference；之后增长至下一次压缩",
+      "budget": "20K与64K为特定保留策略预算，不是整轮总量/summary上限",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/compact.rs",
+          "line": 63,
+          "end": 66,
+          "symbol": "const COMPACT_USER_MESSAGE_MAX_TOKENS",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact.rs#L63-L66"
+        },
+        {
+          "path": "codex-rs/core/src/compact_remote_v2.rs",
+          "line": 87,
+          "end": 92,
+          "symbol": "pub(crate) const RETAINED_MESSAGE_TOKEN_BUDGET",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_remote_v2.rs#L87-L92"
+        },
+        {
+          "path": "codex-rs/core/src/session/mod.rs",
+          "line": 4919,
+          "end": 4977,
+          "symbol": "pub(crate) async fn start_new_context_window",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/mod.rs#L4919-L4977"
+        }
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "id": "DX01",
+      "title": "base instructions 在启动时选定来源优先级",
+      "condition": "新建/恢复会话",
+      "action": "优先 config.base_instructions，其次历史 session_meta.base_instructions，否则渲染当前模型 instructions_template；动态 tools 定义也能从 session metadata 恢复",
+      "preserve": "启动时选中的指令来源和 provenance",
+      "loss": "不是每轮随机重拼一个独立 system prompt；模型切换可通过 world state 差异补充",
+      "default": "正常启动规则",
+      "gate": "自定义配置/恢复历史/模型元数据共同决定",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/session/mod.rs",
+          "line": 808,
+          "end": 854,
+          "symbol": "// Resolve base instructions for the session.",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/mod.rs#L808-L854"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "DX02",
+      "title": "AGENTS.md 发现有目录、信任与字节预算边界",
+      "condition": "可信项目且 project_doc_max_bytes > 0",
+      "action": "从项目根到 cwd 搜集；默认 .git 定位根；同层优先 override，再 AGENTS，再配置 fallback；跨环境共享 remaining byte budget；读超预算则截断",
+      "preserve": "host-provided user instructions 与预算内仓库规则；根到叶顺序",
+      "loss": "超预算尾部不可见；untrusted project 不加载项目 docs；这不是 tokens 预算",
+      "default": "project_doc_max_bytes 默认 32 KiB；LOCAL_AGENTS_MD_FILENAME 为 AGENTS.override.md",
+      "gate": "project_root_markers 可配置；空 markers 禁用上溯",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/agents_md.rs",
+          "line": 58,
+          "end": 121,
+          "symbol": "pub(crate) async fn load_project_instructions",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/agents_md.rs#L58-L121"
+        },
+        {
+          "path": "codex-rs/core/src/agents_md.rs",
+          "line": 125,
+          "end": 205,
+          "symbol": "async fn read_agents_md",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/agents_md.rs#L125-L205"
+        },
+        {
+          "path": "codex-rs/config/src/config_toml.rs",
+          "line": 75,
+          "end": 85,
+          "symbol": "pub const DEFAULT_PROJECT_DOC_MAX_BYTES",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/config/src/config_toml.rs#L75-L85"
+        },
+        {
+          "path": "codex-rs/core/src/agents_md.rs",
+          "line": 272,
+          "end": 322,
+          "symbol": "fn candidate_filenames",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/agents_md.rs#L272-L322"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "DX03",
+      "title": "规则不是每轮追加全量：world state 通过 snapshot/diff 更新",
+      "condition": "首次 real turn 无 reference_context_item，或之后 world state 变化",
+      "action": "首次渲染 full initial context 并建立 baseline；后续只 emit diff，记录 WorldState 与 TurnContext 供恢复；压缩安装后重新建立 full baseline",
+      "preserve": "有效当前环境/权限/模型/规则/能力信息",
+      "loss": "若把所有历史规则都当永久有效会误读；AGENTS 变化时新消息明确 replace/remove",
+      "default": "稳定轮不重复无变化段落",
+      "gate": "WorldStateSection 各段 render_diff",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/session/mod.rs",
+          "line": 4996,
+          "end": 5091,
+          "symbol": "pub(crate) async fn record_context_updates_and_set_reference_context_item",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/mod.rs#L4996-L5091"
+        },
+        {
+          "path": "codex-rs/core/src/context/world_state/agents_md.rs",
+          "line": 44,
+          "end": 85,
+          "symbol": "fn render_diff",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/context/world_state/agents_md.rs#L44-L85"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "DX04",
+      "title": "Skill 目录元数据与被显式调用正文分开注入",
+      "condition": "真实用户输入命中 explicit skill mentions",
+      "action": "读取当前 skills_snapshot，load_skill_prompts 只为 mentioned skills 生成 fragments；避免同一已注入路径重复；Guardian 不把父 transcript 里的 mention 当指令加载",
+      "preserve": "当前明确选择的 Skill instructions 和错误/警告",
+      "loss": "不能从“catalog 中有 skill”推断它的全文已进入请求",
+      "default": "host skills snapshot 每 turn 记录；正文按 mentions 加载",
+      "gate": "guardian session 特殊 skip；plugin dependency/access 规则仍独立",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/session/turn.rs",
+          "line": 1104,
+          "end": 1239,
+          "symbol": "async fn build_skills_and_plugins",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/turn.rs#L1104-L1239"
+        },
+        {
+          "path": "codex-rs/core/src/session/turn_context.rs",
+          "line": 1323,
+          "end": 1361,
+          "symbol": "let skills_snapshot = if",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/turn_context.rs#L1323-L1361"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "DX05",
+      "title": "模型请求 = 归一化活动历史 + 当前工具 specs + base + output schema",
+      "condition": "每次 sampling 前",
+      "action": "history.for_prompt 按模型输入模态归一化；build_prompt 单独加入 tool_router.model_visible_specs 和 final output schema；incremental_tools 模式则把 base/tools 放进 history，不再在顶层重复",
+      "preserve": "工具调用配对；当前可用 schema；声明的输出schema",
+      "loss": "unsupported images/audio 被剥离；工具 namespace 4KiB 简述限额不等于完整工具schema总预算",
+      "default": "普通模式单独发 specs；responses-lite incremental 模式有条件",
+      "gate": "use_responses_lite + incremental tools settings",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/session/turn.rs",
+          "line": 1672,
+          "end": 1703,
+          "symbol": "pub(crate) fn build_prompt",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/turn.rs#L1672-L1703"
+        },
+        {
+          "path": "codex-rs/core/src/context_manager/history.rs",
+          "line": 968,
+          "end": 991,
+          "symbol": "fn normalize_history",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/context_manager/history.rs#L968-L991"
+        },
+        {
+          "path": "codex-rs/core/src/session/world_state.rs",
+          "line": 44,
+          "end": 63,
+          "symbol": "pub(crate) async fn current_window_uses_incremental_tools",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/world_state.rs#L44-L63"
+        },
+        {
+          "path": "codex-rs/core/src/context/world_state/tools.rs",
+          "line": 29,
+          "end": 35,
+          "symbol": "const MAX_RENDERED_FRAGMENT_BYTES",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/context/world_state/tools.rs#L29-L35"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "DX06",
+      "title": "进入工作集时先对工具输出做局部截断",
+      "condition": "record_item_with_metadata 收到 FunctionCallOutput/CustomToolCallOutput",
+      "action": "使用 metadata.history_truncation_token_limit 覆盖，或模型 truncation_policy + 序列化 allowance 截断 payload，再记录 processed item",
+      "preserve": "调用ID、工具语义和预算内输出",
+      "loss": "大输出在进入后续请求前已可能丢部分正文；不能认为摘要能补回工作集中从未保留的字节；record_annotated_items明确只截断live history，完整rollout payload保留",
+      "default": "模型元数据可为 byte/token policy；未知slug fallback descriptor 是10,000 bytes，不应宣称所有模型都10K tokens",
+      "gate": "可由tool_output_token_limit / 每结果 metadata override",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/context_manager/history.rs",
+          "line": 555,
+          "end": 598,
+          "symbol": "fn record_item_with_metadata",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/context_manager/history.rs#L555-L598"
+        },
+        {
+          "path": "codex-rs/core/src/context_manager/history.rs",
+          "line": 518,
+          "end": 535,
+          "symbol": "/// Tool output truncation applies only to live history",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/context_manager/history.rs#L518-L535"
+        },
+        {
+          "path": "codex-rs/core/src/session/step_settings.rs",
+          "line": 203,
+          "end": 213,
+          "symbol": "tool_output_token_limit: self.tool_output_token_limit",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/step_settings.rs#L203-L213"
+        },
+        {
+          "path": "codex-rs/models-manager/src/model_info.rs",
+          "line": 98,
+          "end": 144,
+          "symbol": "pub fn model_info_from_slug",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/models-manager/src/model_info.rs#L98-L144"
+        },
+        {
+          "path": "codex-rs/models-manager/src/model_info.rs",
+          "line": 32,
+          "end": 48,
+          "symbol": "if let Some(token_limit) = config.tool_output_token_limit",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/models-manager/src/model_info.rs#L32-L48"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "DX07",
+      "title": "active usage 是上次请求实际观测 + 新增项估算，不是生命周期总账",
+      "condition": "采样后或新增本地上下文后判断预算",
+      "action": "last_token_usage.total_tokens 加最后 model-generated item 之后新增项的估算；服务端未含旧 reasoning 时再加相关旧reasoning估计",
+      "preserve": "provider 已知基线与新tool/user/diff增长",
+      "loss": "估计是 coarse lower bound；不是精确tokenizer；billing total 不能用作当前窗口大小",
+      "default": "Sampling usage 更新 last；SpendingOnly 只累计消费，不替换当前context测量",
+      "gate": "server_reasoning_included 决定是否补估旧reasoning",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/context_manager/history.rs",
+          "line": 939,
+          "end": 967,
+          "symbol": "pub(crate) fn get_total_token_usage",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/context_manager/history.rs#L939-L967"
+        },
+        {
+          "path": "codex-rs/core/src/context_manager/history.rs",
+          "line": 661,
+          "end": 688,
+          "symbol": "pub(crate) fn estimate_token_count_with_base_instructions",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/context_manager/history.rs#L661-L688"
+        },
+        {
+          "path": "codex-rs/core/src/session/mod.rs",
+          "line": 5178,
+          "end": 5256,
+          "symbol": "pub(crate) async fn record_token_usage_info",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/mod.rs#L5178-L5256"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "DX08",
+      "title": "同时检查 auto scope 与整个模型窗口",
+      "condition": "计算 ContextWindowTokenStatus",
+      "action": "Total 直接对 active；BodyAfterPrefix 扣当前window prefill baseline；full limit = resolved window × effective percent；任一硬线触发；剩余量取两者较小",
+      "preserve": "完整context硬约束独立于body预算",
+      "loss": "BodyAfterPrefix 不意味着前缀不占模型window；baseline未知时先以active作baseline，之后实测替代",
+      "default": "scope 默认 Total；effective_context_window_percent 默认95",
+      "gate": "body scope可配置；fallback buffer仅有token_budget fallback prompt时适用",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/session/context_window.rs",
+          "line": 53,
+          "end": 130,
+          "symbol": "async fn context_window_token_status_with_config",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/context_window.rs#L53-L130"
+        },
+        {
+          "path": "codex-rs/protocol/src/openai_models.rs",
+          "line": 529,
+          "end": 545,
+          "symbol": "pub fn auto_compact_token_limit",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/protocol/src/openai_models.rs#L529-L545"
+        },
+        {
+          "path": "codex-rs/protocol/src/openai_models.rs",
+          "line": 393,
+          "end": 397,
+          "symbol": "const fn default_effective_context_window_percent",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/protocol/src/openai_models.rs#L393-L397"
+        },
+        {
+          "path": "codex-rs/protocol/src/config_types.rs",
+          "line": 49,
+          "end": 57,
+          "symbol": "pub enum AutoCompactTokenLimitScope",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/protocol/src/config_types.rs#L49-L57"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "DX09",
+      "title": "90% 只是模型基础自动阈值，不是所有触发规则",
+      "condition": "resolved_context_window 已知",
+      "action": "auto_compact_token_limit=min(显式模型limit, floor(window×0.9))；无显式limit使用90%；full/分域/备用buffer/手动/模型降档另判断",
+      "preserve": "当前模型真实catalog/config约束",
+      "loss": "window未知时不生成90%假限制；不是任何情况下input+output精确安全保证",
+      "default": "基础90%；有效window默认95%是另一线",
+      "gate": "用户覆盖model/window metadata与scope可变",
+      "evidence": [
+        {
+          "path": "codex-rs/protocol/src/openai_models.rs",
+          "line": 529,
+          "end": 546,
+          "symbol": "pub fn auto_compact_token_limit",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/protocol/src/openai_models.rs#L529-L546"
+        },
+        {
+          "path": "codex-rs/core/src/session/context_window.rs",
+          "line": 98,
+          "end": 127,
+          "symbol": "let auto_compact_fallback_buffer_tokens",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/context_window.rs#L98-L127"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "DX10",
+      "title": "触发分布在 turn 前、需要续跑时的 turn 中、可选 turn 后",
+      "condition": "turn 开始 / 采样完成还有工具或输入续跑 / turn真正结束",
+      "action": "Pre-turn先看旧history；Mid-turn needs_follow_up 且token limit/new_window请求/async candidate时切换；Post-turn只在配置percent>0且无pending input且未取消时尝试",
+      "preserve": "已完成答复在post-turn压缩失败时保留",
+      "loss": "源码TODO：最前面的pre-turn检查发生在新user/context diffs入history之前，无法声称总能提前阻断巨大新输入",
+      "default": "post_turn_percent 默认0；AutoCompactionDisabled线程扩展可停自动压缩",
+      "gate": "TokenBudget与普通summarization不同；guardians另有特殊检查",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/session/turn.rs",
+          "line": 173,
+          "end": 216,
+          "symbol": "pub(crate) async fn run_turn",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/turn.rs#L173-L216"
+        },
+        {
+          "path": "codex-rs/core/src/session/turn.rs",
+          "line": 664,
+          "end": 717,
+          "symbol": "let should_roll_over =",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/turn.rs#L664-L717"
+        },
+        {
+          "path": "codex-rs/core/src/session/turn.rs",
+          "line": 783,
+          "end": 837,
+          "symbol": "// Token-budget resets do not summarize",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/turn.rs#L783-L837"
+        },
+        {
+          "path": "codex-rs/core/src/config/mod.rs",
+          "line": 4463,
+          "end": 4469,
+          "symbol": "model_post_turn_compact_threshold_percent: cfg",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/config/mod.rs#L4463-L4469"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "DX11",
+      "title": "模型降档或 comp_hash 不兼容可以在阈值前先压缩",
+      "condition": "两端comp_hash均存在且不同，或切换到更小window且旧context超过新限制",
+      "action": "用previous model/previous access program总结旧window，但replacement step使用current model；单纯换model未满足条件不一定触发",
+      "preserve": "旧window模型兼容性与当前新模型状态",
+      "loss": "未知hash不等于不兼容；远端fallback仅特定错误条件",
+      "default": "按真实switch状态判断",
+      "gate": "Total scope与BodyAfterPrefix降档判断不同",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/session/turn.rs",
+          "line": 1412,
+          "end": 1423,
+          "symbol": "fn comp_hash_changed",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/turn.rs#L1412-L1423"
+        },
+        {
+          "path": "codex-rs/core/src/session/turn.rs",
+          "line": 1422,
+          "end": 1518,
+          "symbol": "async fn maybe_run_previous_model_inline_compact",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/turn.rs#L1422-L1518"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "DX12",
+      "title": "先按模式分派，不是所有压缩都做文本摘要",
+      "condition": "run_auto_compact",
+      "action": "TokenBudget优先开始新window；否则provider能力V2走remote；Unsupported走客户端编排local LLM摘要",
+      "preserve": "当前选择路径的生命周期/hooks/事件",
+      "loss": "local不代表离线确定性算法；remote算法不在仓库内",
+      "default": "provider OpenAI/Azure配置默认V2，通用provider默认Unsupported，可override",
+      "gate": "model/provider能力与features先决",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/session/turn.rs",
+          "line": 1513,
+          "end": 1633,
+          "symbol": "async fn run_auto_compact",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/turn.rs#L1513-L1633"
+        },
+        {
+          "path": "codex-rs/model-provider/src/capabilities.rs",
+          "line": 31,
+          "end": 57,
+          "symbol": "pub(crate) fn from_config",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/model-provider/src/capabilities.rs#L31-L57"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "DX13",
+      "title": "remote请求发送前仅对连续新工具输出应急减量",
+      "condition": "remote前 history粗估 > model_context_window",
+      "action": "从尾部反向walk，FunctionCallOutput/CustomOutput变超窗stub，ToolSearchOutput清空tools；直到估计合窗或遇user/developer/不可重写item/受保护结果就停",
+      "preserve": "call_id及工具事件形状；边界前历史",
+      "loss": "这是最新连续尾部工具结果裁剪，不是删除最老message，也不是无条件剪全部tool结果",
+      "default": "只在窗口已知且估计超窗时",
+      "gate": "RetainClientToolOutputs启用时被标记结果成为不可跨越边界",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/compact_remote_history.rs",
+          "line": 70,
+          "end": 153,
+          "symbol": "pub(crate) fn trim_function_call_history_to_fit_context_window",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_remote_history.rs#L70-L153"
+        },
+        {
+          "path": "codex-rs/core/src/compact_remote_history.rs",
+          "line": 138,
+          "end": 202,
+          "symbol": "fn rewritten_output_for_context_window",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_remote_history.rs#L138-L202"
+        },
+        {
+          "path": "codex-rs/core/src/compact_remote_v2_attempt.rs",
+          "line": 104,
+          "end": 133,
+          "symbol": "trim_function_call_history_to_fit_context_window(",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_remote_v2_attempt.rs#L104-L133"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "DX14",
+      "title": "remote压缩请求是特殊协议：追加CompactionTrigger，期望恰好一个Compaction item",
+      "condition": "V2路径",
+      "action": "构造带base/specs的Prompt，附CompactionTrigger，发送流；必须收到completed且恰好1个Compaction输出；丢掉trigger后保留input metadata供重建",
+      "preserve": "明确的replacement checkpoint和source metadata",
+      "loss": "客户端不能验证encrypted_content语义保真，不能臆测远端摘要模板/抽取算法",
+      "default": "remote transport retries最多2且不超过provider stream retry上限",
+      "gate": "opaque provider contract；无Completed或错误数量判失败",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/compact_remote_v2_attempt.rs",
+          "line": 172,
+          "end": 203,
+          "symbol": "input.push(ResponseItem::CompactionTrigger",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_remote_v2_attempt.rs#L172-L203"
+        },
+        {
+          "path": "codex-rs/core/src/compact_remote_v2.rs",
+          "line": 464,
+          "end": 486,
+          "symbol": "if compaction_count != 1",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_remote_v2.rs#L464-L486"
+        },
+        {
+          "path": "codex-rs/core/src/compact_remote_v2.rs",
+          "line": 91,
+          "end": 98,
+          "symbol": "MAX_REMOTE_COMPACTION_V2_STREAM_RETRIES",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_remote_v2.rs#L91-L98"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "DX15",
+      "title": "remote客户端还会自己保留原始消息，不只收一个黑盒",
+      "condition": "remote输出成功后 build_v2_compacted_history",
+      "action": "先筛真实user/hook，合资格AgentMessage；client developer和标记tool outputs依features；筛完再按64,000 tokens从新到旧截断；最后追加opaque compaction item",
+      "preserve": "预算内真实用户原文/必要注释/可选client结果",
+      "loss": "合成环境/仓库规则不是普通user对话；assistant旧输出默认不逐条保留；图片按默认开启的image budget原子保留/丢弃",
+      "default": "RETAINED_MESSAGE_TOKEN_BUDGET=64,000；agent单条最多10,000；CompactionImageBudget table true",
+      "gate": "RetainClientDeveloperMessages/RetainClientToolOutputs table false，运行可配置",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/compact_remote_v2.rs",
+          "line": 480,
+          "end": 518,
+          "symbol": "fn build_v2_compacted_history",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_remote_v2.rs#L480-L518"
+        },
+        {
+          "path": "codex-rs/core/src/compact_remote_v2.rs",
+          "line": 529,
+          "end": 590,
+          "symbol": "fn is_retained_for_remote_compaction_v2",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_remote_v2.rs#L529-L590"
+        },
+        {
+          "path": "codex-rs/core/src/compact_remote_v2.rs",
+          "line": 87,
+          "end": 95,
+          "symbol": "pub(crate) const RETAINED_MESSAGE_TOKEN_BUDGET",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_remote_v2.rs#L87-L95"
+        },
+        {
+          "path": "codex-rs/core/src/compact_remote_v2_images.rs",
+          "line": 31,
+          "end": 103,
+          "symbol": "pub(super) fn truncate_message_to_token_budget",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_remote_v2_images.rs#L31-L103"
+        },
+        {
+          "path": "codex-rs/features/src/lib.rs",
+          "line": 2142,
+          "end": 2165,
+          "symbol": "id: Feature::CompactionImageBudget",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/features/src/lib.rs#L2142-L2165"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "DX16",
+      "title": "local摘要：用户原文20K预算 + 文本摘要 + 当前权威context",
+      "condition": "provider Unsupported且TokenBudget未开启",
+      "action": "克隆history追加summary prompt并调模型；选用户消息从新到旧最多20,000 tokens；超额边界截断文本，媒体不复制；加CompactionSummary，再重建当前world state",
+      "preserve": "预算内真实user文本、摘要、权威初始context",
+      "loss": "旧assistant和工具链主要依赖摘要；文本摘要也有损；media不等于完整保留",
+      "default": "COMPACT_USER_MESSAGE_MAX_TOKENS=20,000",
+      "gate": "不是remote64K策略；完整返回须通过hooks与安装",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/compact.rs",
+          "line": 63,
+          "end": 69,
+          "symbol": "const COMPACT_USER_MESSAGE_MAX_TOKENS",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact.rs#L63-L69"
+        },
+        {
+          "path": "codex-rs/core/src/compact.rs",
+          "line": 263,
+          "end": 295,
+          "symbol": "async fn run_compact_task_inner_impl",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact.rs#L263-L295"
+        },
+        {
+          "path": "codex-rs/core/src/compact.rs",
+          "line": 710,
+          "end": 815,
+          "symbol": "fn build_compacted_history_with_limit",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact.rs#L710-L815"
+        },
+        {
+          "path": "codex-rs/core/src/compact.rs",
+          "line": 84,
+          "end": 119,
+          "symbol": "pub(crate) async fn build_compaction_replacement_history",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact.rs#L84-L119"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "DX17",
+      "title": "摘要请求本身过长时，local路径从最老项开始逐项缩小",
+      "condition": "local summary调用被ContextWindowExceeded拒绝且输入多于1 item",
+      "action": "history.remove_first_item并重试；若被移除项是call/output会同步移除配对项；只剩1 item仍失败则markfull并报错；Interrupted/TurnAborted/预算耗尽/不完整响应不作为可无限重连",
+      "preserve": "较近上下文与合法工具配对",
+      "loss": "最早信息可能在摘要生成前就不在输入；该规则与remote最新连续output stub不是一个策略",
+      "default": "每次过长删除一个合法项组，直到可发或1项失败",
+      "gate": "一般transport重试受provider.max_retries约束",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/compact.rs",
+          "line": 358,
+          "end": 392,
+          "symbol": "Err(e) if matches!(e.details(), CodexErrorDetails::ContextWindowExceeded)",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact.rs#L358-L392"
+        },
+        {
+          "path": "codex-rs/core/src/context_manager/history.rs",
+          "line": 685,
+          "end": 699,
+          "symbol": "pub(crate) fn remove_first_item",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/context_manager/history.rs#L685-L699"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "DX18",
+      "title": "TokenBudget table默认false，但模型默认与实验条件可开启",
+      "condition": "token_budget feature / model_messages.token_budget / ContextManagement",
+      "action": "显式配置优先；无显式偏好且模型defaults enabled=true可开启；实验路径还校验ChatGPT套餐、模型支持、provider/auth，启用history notes extension",
+      "preserve": "预算提示、新window ID、可选历史notes提示",
+      "loss": "不能由feature table false推断所有线上模型都关闭；也不能由代码存在推断所有人开启",
+      "default": "TokenBudget与ContextManagement table false；模型defaults可覆盖实际启动激活",
+      "gate": "managed requirements仍可pin off",
+      "evidence": [
+        {
+          "path": "codex-rs/features/src/lib.rs",
+          "line": 1980,
+          "end": 1992,
+          "symbol": "id: Feature::TokenBudget",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/features/src/lib.rs#L1980-L1992"
+        },
+        {
+          "path": "codex-rs/core/src/session/token_budget.rs",
+          "line": 123,
+          "end": 166,
+          "symbol": "pub(super) fn apply_model_defaults",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/token_budget.rs#L123-L166"
+        },
+        {
+          "path": "codex-rs/core/src/session/token_budget.rs",
+          "line": 21,
+          "end": 71,
+          "symbol": "pub(super) fn apply_experimental_context",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/token_budget.rs#L21-L71"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "DX19",
+      "title": "TokenBudget新window不生成隐式摘要",
+      "condition": "start_new_context_window",
+      "action": "重新渲染initial context，仅保留feature允许的client tool/developer项（同64K选择器），其余旧workset清除；替换checkpoint、recompute usage；显式notes/外部记忆必须由对应机制承接",
+      "preserve": "当前权威context、window lineage和可选client items",
+      "loss": "普通user历史/assistant/tools不自动变为summary；这是语义上重要的窗口重置",
+      "default": "仅TokenBudget路径生效",
+      "gate": "保留client features表默认false；notes extension另有gate",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/session/mod.rs",
+          "line": 4919,
+          "end": 4983,
+          "symbol": "pub(crate) async fn start_new_context_window",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/mod.rs#L4919-L4983"
+        },
+        {
+          "path": "codex-rs/core/src/compact_token_budget.rs",
+          "line": 42,
+          "end": 69,
+          "symbol": "async fn run_compact_task_inner",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_token_budget.rs#L42-L69"
+        },
+        {
+          "path": "codex-rs/core/src/session/mod.rs",
+          "line": 4674,
+          "end": 4721,
+          "symbol": "// Keep the legacy bridge hint when native Notes is disabled.",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/mod.rs#L4674-L4721"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "DX20",
+      "title": "异步压缩是对前缀做投机，正常append不作废，替换历史会作废",
+      "condition": "AsyncCompaction=true，TokenBudget=false，provider V2，窗口达到async百分比且还没硬超",
+      "action": "捕获history generation/len、model/hash/auth generation和world state；后台请求，正常前台可继续append后缀；重复相同attempt不再发",
+      "preserve": "前台live suffix；截止时点world state",
+      "loss": "请求失败或被废弃依然可能收费；stop不再启动新candidate，session shutdown取消并drain usage",
+      "default": "AsyncCompaction table false；async默认阈值65%，允许feature config覆盖",
+      "gate": "必须provider V2；pre-turn未有turn_state不启动",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/session/async_compaction.rs",
+          "line": 40,
+          "end": 55,
+          "symbol": "pub(super) fn enabled",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/async_compaction.rs#L40-L55"
+        },
+        {
+          "path": "codex-rs/core/src/session/async_compaction.rs",
+          "line": 52,
+          "end": 152,
+          "symbol": "pub(super) async fn maybe_start",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/async_compaction.rs#L52-L152"
+        },
+        {
+          "path": "codex-rs/core/src/context_manager/history.rs",
+          "line": 715,
+          "end": 723,
+          "symbol": "self.history_version = self.history_version.saturating_add(1)",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/context_manager/history.rs#L715-L723"
+        },
+        {
+          "path": "codex-rs/core/src/config/mod.rs",
+          "line": 226,
+          "end": 229,
+          "symbol": "const DEFAULT_ASYNC_COMPACTION_THRESHOLD_PERCENT",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/config/mod.rs#L226-L229"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "DX21",
+      "title": "采用后台结果要再次校验，并保留live suffix与新目标编辑",
+      "condition": "安装Prefix/Complete replacement",
+      "action": "Prefix在同一state lock核验generation、长度、auth generation；检查model/hash；拼上未压缩suffix，刷新world-state baseline；Complete保留快照之后新接受的goal edits",
+      "preserve": "压缩启动后新输入/结果/目标更新",
+      "loss": "过期结果不能覆盖新历史；candidate成功也不代表工作集已足够小",
+      "default": "stale候选discard；采用后仍超budget最多再尝试一次foreground",
+      "gate": "fallback为Skip或Foreground由触发现场决定",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/session/mod.rs",
+          "line": 4359,
+          "end": 4439,
+          "symbol": "// Validate immediately before slicing and replacing the captured prefix.",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/mod.rs#L4359-L4439"
+        },
+        {
+          "path": "codex-rs/core/src/compact_remote_v2_installation.rs",
+          "line": 85,
+          "end": 95,
+          "symbol": "if let Some(candidate) = &candidate",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_remote_v2_installation.rs#L85-L95"
+        },
+        {
+          "path": "codex-rs/core/src/compact_remote_v2_installation.rs",
+          "line": 29,
+          "end": 72,
+          "symbol": "if let Some(candidate) = candidate",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/compact_remote_v2_installation.rs#L29-L72"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "DX22",
+      "title": "checkpoint写入rollout后，resume按replacement重建工作集",
+      "condition": "local/remote/TokenBudget成功安装",
+      "action": "统一replace_compacted_history写Compacted replacement_history + WorldState + TurnContext + applied thread settings；记录window lineage、producer hash、usage与资源来源；保持原始日志作为历史，而不是把旧全文继续发模型",
+      "preserve": "恢复基线、opaque producer兼容信息、retained metadata",
+      "loss": "完整rollout不等于provider可见history；malformed opaque checkpoint保留为未知/不可用而非退回旧授权",
+      "default": "同一checkpoint机制跨路径复用",
+      "gate": "持久化成功与usage重估/服务端下次usage不同",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/session/mod.rs",
+          "line": 4430,
+          "end": 4505,
+          "symbol": "let replacement_history = items.clone()",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/mod.rs#L4430-L4505"
+        },
+        {
+          "path": "codex-rs/history/src/compaction_checkpoint.rs",
+          "line": 36,
+          "end": 61,
+          "symbol": "pub fn is_usable",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/history/src/compaction_checkpoint.rs#L36-L61"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "DX23",
+      "title": "正常sampling被provider拒绝不等于本轮总会自动compact重试",
+      "condition": "普通run_sampling_request返回ContextWindowExceeded",
+      "action": "mark当前context full，返回error；下一轮precheck因full可进入压缩。Guardians exhausted review budget有独立受限压缩分支，不能泛化给普通会话",
+      "preserve": "已经记录的输入与执行证据",
+      "loss": "巨大新user输入可越过旧history precheck；不能声称token策略数学保证从不拒绝",
+      "default": "普通错误分支直接返回；不是普遍无限自动compact/retry",
+      "gate": "guardian特殊分支另有gate；manual compact也可由用户触发",
+      "evidence": [
+        {
+          "path": "codex-rs/core/src/session/turn.rs",
+          "line": 1807,
+          "end": 1813,
+          "symbol": "CodexErrorDetails::ContextWindowExceeded => {",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/turn.rs#L1807-L1813"
+        },
+        {
+          "path": "codex-rs/core/src/session/turn.rs",
+          "line": 196,
+          "end": 204,
+          "symbol": "// TODO(ccunningham): Pre-turn compaction runs",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/turn.rs#L196-L204"
+        },
+        {
+          "path": "codex-rs/core/src/session/turn.rs",
+          "line": 837,
+          "end": 854,
+          "symbol": "&& !guardian_budget_compacted",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/core/src/session/turn.rs#L837-L854"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "DX24",
+      "title": "软件回退窗口不是provider已经确认的能力",
+      "condition": "未知model slug或用户覆盖metadata",
+      "action": "未知slug使用最小fallback descriptor：context_window/max_context_window=272,000且标used_fallback_model_metadata；配置window override被max_context_window向下夹住；预算使用resolved元数据但不能将fallback当实测",
+      "preserve": "软件能够继续构建请求；来源标记存在",
+      "loss": "fallback仍可能与真实provider窗口不一致；手填1M也不能绕过catalog max clamp",
+      "default": "unknown slug fallback272K；不是所有unknown都保持None",
+      "gate": "models_manager config override；具体catalog可能有不同最大窗口",
+      "evidence": [
+        {
+          "path": "codex-rs/models-manager/src/model_info.rs",
+          "line": 98,
+          "end": 153,
+          "symbol": "pub fn model_info_from_slug",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/models-manager/src/model_info.rs#L98-L153"
+        },
+        {
+          "path": "codex-rs/models-manager/src/model_info.rs",
+          "line": 19,
+          "end": 48,
+          "symbol": "pub fn with_config_overrides",
+          "url": "https://github.com/openai/codex/blob/61f34c35af77777db4d77d0ea2aeb8547a6b4523/codex-rs/models-manager/src/model_info.rs#L19-L48"
+        }
+      ],
+      "certainty": "源码直接可见"
+    }
+  ],
+  "pipeline": [
+    {
+      "phase": "启动/恢复",
+      "functions": [
+        "Session::spawn/config resolution",
+        "initial_history.get_base_instructions",
+        "load_project_instructions"
+      ],
+      "inputs": [
+        "config",
+        "model catalog",
+        "rollout",
+        "filesystem"
+      ],
+      "outputs": [
+        "base指令",
+        "技能快照",
+        "指令来源",
+        "恢复活动history"
+      ],
+      "ruleIds": [
+        "DX01",
+        "DX02",
+        "DX22"
+      ]
+    },
+    {
+      "phase": "turn前检查",
+      "functions": [
+        "run_turn",
+        "run_pre_sampling_compact",
+        "maybe_run_previous_model_inline_compact"
+      ],
+      "inputs": [
+        "旧working set",
+        "当前/前一model",
+        "上次usage"
+      ],
+      "outputs": [
+        "保持旧window或完成压缩",
+        "新输入尚未入working set"
+      ],
+      "ruleIds": [
+        "DX08",
+        "DX09",
+        "DX10",
+        "DX11"
+      ]
+    },
+    {
+      "phase": "当前上下文与输入注入",
+      "functions": [
+        "record_context_updates_and_set_reference_context_item",
+        "build_skills_and_plugins",
+        "run_hooks_and_record_inputs"
+      ],
+      "inputs": [
+        "current world state",
+        "user input",
+        "explicit skills"
+      ],
+      "outputs": [
+        "full或diff items",
+        "skill body fragments",
+        "用户输入记录"
+      ],
+      "ruleIds": [
+        "DX03",
+        "DX04"
+      ]
+    },
+    {
+      "phase": "请求投影与采样",
+      "functions": [
+        "ContextManager::for_prompt",
+        "build_prompt",
+        "try_run_sampling_request"
+      ],
+      "inputs": [
+        "active items",
+        "input modalities",
+        "model_visible_specs"
+      ],
+      "outputs": [
+        "合法工具配对/模态的Prompt",
+        "assistant/tool calls/usage"
+      ],
+      "ruleIds": [
+        "DX05",
+        "DX06",
+        "DX07",
+        "DX23"
+      ]
+    },
+    {
+      "phase": "工具结果回写与续跑",
+      "functions": [
+        "record_item_with_metadata",
+        "context_window_token_status",
+        "run_auto_compact"
+      ],
+      "inputs": [
+        "tool results",
+        "实际usage+增量",
+        "needs_follow_up"
+      ],
+      "outputs": [
+        "被限长的工具项",
+        "normal/local/remote/new-window分派"
+      ],
+      "ruleIds": [
+        "DX06",
+        "DX08",
+        "DX10",
+        "DX12"
+      ]
+    },
+    {
+      "phase": "压缩/安装",
+      "functions": [
+        "run_compact_task_inner_impl",
+        "run_remote_compact_v2_attempt",
+        "build_v2_compacted_history",
+        "replace_compacted_history"
+      ],
+      "inputs": [
+        "captured prefix/current working set",
+        "world state",
+        "feature gates"
+      ],
+      "outputs": [
+        "替换工作集",
+        "retained originals",
+        "summary/opaque项",
+        "持久checkpoint"
+      ],
+      "ruleIds": [
+        "DX13",
+        "DX14",
+        "DX15",
+        "DX16",
+        "DX17",
+        "DX19",
+        "DX21",
+        "DX22"
+      ]
+    },
+    {
+      "phase": "下轮验证",
+      "functions": [
+        "recompute_token_usage",
+        "record_token_usage_info",
+        "context_window_token_status"
+      ],
+      "inputs": [
+        "replacement history",
+        "next provider response"
+      ],
+      "outputs": [
+        "局部估计重置→新的actual观测",
+        "后续正常增长"
+      ],
+      "ruleIds": [
+        "DX07",
+        "DX08",
+        "DX21"
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "normal-v2",
+      "title": "同一个任务从增长到remote V2压缩",
+      "assumptions": [
+        "说明性数字，不是实测或压缩率保证",
+        "W=200,000，Total scope，无fallback buffer",
+        "基础自动线180,000；full线默认190,000",
+        "provider V2；TokenBudget=false；Async=false"
+      ],
+      "steps": [
+        {
+          "step": 0,
+          "title": "权威状态与历史分居两个容器",
+          "before": {
+            "active": 40000,
+            "rawLog": "保留全部已有事件"
+          },
+          "after": {
+            "active": 40000
+          },
+          "objects": [
+            "world-state蓝色8K",
+            "真实user黄色12K",
+            "assistant/tools灰色20K"
+          ],
+          "ruleIds": [
+            "DX01",
+            "DX03",
+            "DX08"
+          ],
+          "note": "日志大容器与模型工作集分开；缓存不能擦掉蓝黄灰占用"
+        },
+        {
+          "step": 1,
+          "title": "工具循环增长，不重复注入全部规则",
+          "before": {
+            "active": 40000
+          },
+          "after": {
+            "active": 175000
+          },
+          "objects": [
+            "无变化world-state保持",
+            "assistant/tool组连续追加",
+            "usage观测刷新"
+          ],
+          "ruleIds": [
+            "DX03",
+            "DX06",
+            "DX07"
+          ],
+          "note": "每次工具输出先过局部限长；当前用量基于观测与增量，不是从第一轮账单累计"
+        },
+        {
+          "step": 2,
+          "title": "达到auto线且还要继续工具任务",
+          "before": {
+            "active": 175000,
+            "autoLine": 180000
+          },
+          "after": {
+            "active": 185000,
+            "needs_follow_up": true
+          },
+          "objects": [
+            "最近工具组追加10K",
+            "180K触发线亮起"
+          ],
+          "ruleIds": [
+            "DX08",
+            "DX10"
+          ],
+          "note": "needs_follow_up=true才在该处走mid-turn rollover；完成答复且post_turn=0不会在该分支强制摘要"
+        },
+        {
+          "step": 3,
+          "title": "发送特殊compaction请求",
+          "before": {
+            "active": 185000
+          },
+          "after": {
+            "request": "history+base+tools+CompactionTrigger"
+          },
+          "objects": [
+            "opaque远端处理盒",
+            "触发器小卡片"
+          ],
+          "ruleIds": [
+            "DX12",
+            "DX14"
+          ],
+          "note": "不画成已知的“服务端总结8个字段”；本仓库只证明协议和输出形状"
+        },
+        {
+          "step": 4,
+          "title": "客户端筛原文并安装replacement",
+          "before": {
+            "raw": "真实user24K + old assistant/tools153K + world8K"
+          },
+          "after": {
+            "activeIllustrative": 44000,
+            "rawLog": "旧记录仍在"
+          },
+          "objects": [
+            "蓝world-state8K重新渲染",
+            "黄user24K保留",
+            "紫opaque12K（演示）",
+            "灰assistant/tools移出工作集但留日志"
+          ],
+          "ruleIds": [
+            "DX15",
+            "DX21",
+            "DX22"
+          ],
+          "note": "64K是原文保留区预算；opaque大小12K仅示意，不是读取encrypted字符得出的值"
+        },
+        {
+          "step": 5,
+          "title": "下一轮用新观测校准",
+          "before": {
+            "activeEstimate": 44000
+          },
+          "after": {
+            "active": "以新provider usage更新"
+          },
+          "objects": [
+            "绿色actual anchor",
+            "之后新增tool增量"
+          ],
+          "ruleIds": [
+            "DX07",
+            "DX22"
+          ],
+          "note": "客户端先recompute估计，下次actual才提供新测量；完整请求仍需服从硬窗口"
+        }
+      ]
+    },
+    {
+      "id": "remote-tail-overflow",
+      "title": "remote压缩输入已经太大：只裁最新连续输出",
+      "assumptions": [
+        "W=200K；远端请求预估214K",
+        "先前user/developer内容受保留边界保护",
+        "TokenBudget=false；V2；不假定任何服务端摘要率"
+      ],
+      "steps": [
+        {
+          "step": 0,
+          "title": "倒序检查末尾",
+          "before": {
+            "items": [
+              "user",
+              "assistant(call)",
+              "tool A 30K",
+              "tool B 18K"
+            ],
+            "estimate": 214000
+          },
+          "after": {
+            "cursor": "tool B"
+          },
+          "objects": [
+            "两张同批tool卡片",
+            "user/assistant边界"
+          ],
+          "ruleIds": [
+            "DX13"
+          ],
+          "note": "不是从最老message开始"
+        },
+        {
+          "step": 1,
+          "title": "工具B替换为stub",
+          "before": {
+            "estimate": 214000
+          },
+          "after": {
+            "estimateIllustrative": 196100
+          },
+          "objects": [
+            "tool B正文淡出",
+            "call_id与超窗提示保留",
+            "tool A仍在"
+          ],
+          "ruleIds": [
+            "DX13"
+          ],
+          "note": "估计合窗即停；此处只损失B正文，仍保留调用/输出形状"
+        },
+        {
+          "step": 2,
+          "title": "若仍超窗继续A，遇非output就停止",
+          "before": {
+            "estimateCase2": 230000
+          },
+          "after": {
+            "stopAt": "assistant call/user boundary"
+          },
+          "objects": [
+            "不可跨越边界的红线",
+            "RetainClientToolOutputs保护标志"
+          ],
+          "ruleIds": [
+            "DX13"
+          ],
+          "note": "不能保证能缩到window，尤其巨大user本身不可由此裁剪"
+        },
+        {
+          "step": 3,
+          "title": "只有provider有效结果才安装",
+          "before": {
+            "candidate": "未完成"
+          },
+          "after": {
+            "install": "response.completed且1个Compaction"
+          },
+          "objects": [
+            "协议校验闸门",
+            "旧history保持直到成功结果"
+          ],
+          "ruleIds": [
+            "DX14",
+            "DX21"
+          ],
+          "note": "无completed/0或2个compaction都报错，不把部分流当有效checkpoint"
+        }
+      ]
+    },
+    {
+      "id": "local-summary-too-large",
+      "title": "local摘要自己的输入超限",
+      "assumptions": [
+        "provider Unsupported；普通summary路径",
+        "已完成原始工具副作用不能重放",
+        "以下删除只作用于当前摘要请求的history副本"
+      ],
+      "steps": [
+        {
+          "step": 0,
+          "title": "摘要请求被400 ContextWindowExceeded拒绝",
+          "before": {
+            "summaryRequest": "old history+summary prompt"
+          },
+          "after": {
+            "error": "ContextWindowExceeded"
+          },
+          "objects": [
+            "最老user U1",
+            "call/result配对",
+            "近期U3",
+            "摘要指令"
+          ],
+          "ruleIds": [
+            "DX16",
+            "DX17"
+          ],
+          "note": "不要动画成摘要模型可以吃下任意大的历史"
+        },
+        {
+          "step": 1,
+          "title": "移除最老item及必要配对再发",
+          "before": {
+            "oldest": "U1"
+          },
+          "after": {
+            "history": "去掉U1后的副本"
+          },
+          "objects": [
+            "U1从摘要输入移出",
+            "原始rollout保留"
+          ],
+          "ruleIds": [
+            "DX17"
+          ],
+          "note": "若删除call则同时删配对output，避免孤立结果"
+        },
+        {
+          "step": 2,
+          "title": "若摘要成功，构造20K用户文本保留区",
+          "before": {
+            "summaryInput": "可行大小"
+          },
+          "after": {
+            "replacement": "近期用户文本≤20K + summary + world-state"
+          },
+          "objects": [
+            "用户原文20K标尺",
+            "summary紫卡",
+            "当前蓝规则"
+          ],
+          "ruleIds": [
+            "DX16",
+            "DX22"
+          ],
+          "note": "用户原文保留区从实际活跃history选，不等于“只总结前20K”"
+        },
+        {
+          "step": 3,
+          "title": "只剩一项仍过长则明确失败",
+          "before": {
+            "items": 1,
+            "error": "ContextWindowExceeded"
+          },
+          "after": {
+            "outcome": "markfull + 返回error"
+          },
+          "objects": [
+            "无法裁剪的巨大单项红卡",
+            "失败终止"
+          ],
+          "ruleIds": [
+            "DX17"
+          ],
+          "note": "失败不生成假的summary，也不无限同样请求"
+        }
+      ]
+    },
+    {
+      "id": "async-prefix",
+      "title": "后台前缀压缩与前台新后缀如何共存",
+      "assumptions": [
+        "显式AsyncCompaction=true",
+        "TokenBudget=false且provider V2",
+        "generation只在history replacement等改变，普通append不改变该generation"
+      ],
+      "steps": [
+        {
+          "step": 0,
+          "title": "捕获前缀边界",
+          "before": {
+            "generation": 7,
+            "len": 40
+          },
+          "after": {
+            "capture": [
+              "generation7",
+              "len40",
+              "model/hash",
+              "auth-owner",
+              "cutoff world-state"
+            ]
+          },
+          "objects": [
+            "前40项蓝框",
+            "背景请求紫盒"
+          ],
+          "ruleIds": [
+            "DX20"
+          ],
+          "note": "捕获在锁内完成"
+        },
+        {
+          "step": 1,
+          "title": "前台继续append",
+          "before": {
+            "len": 40
+          },
+          "after": {
+            "len": 44,
+            "generation": 7
+          },
+          "objects": [
+            "40项前缀保持",
+            "新增4项橙色suffix"
+          ],
+          "ruleIds": [
+            "DX20"
+          ],
+          "note": "普通append不让候选失效，正是并发节省等待的目的"
+        },
+        {
+          "step": 2,
+          "title": "采用时再校验",
+          "before": {
+            "candidate": "generation7/len40"
+          },
+          "after": {
+            "replacement": "新prefix+权威state+原4项suffix"
+          },
+          "objects": [
+            "前缀收缩",
+            "橙suffix不变",
+            "auth/model gate"
+          ],
+          "ruleIds": [
+            "DX21"
+          ],
+          "note": "若generation变8、auth owner改变或model/hash不匹配，候选discard"
+        },
+        {
+          "step": 3,
+          "title": "加上suffix后仍超预算?",
+          "before": {
+            "prefixPlusSuffix": "仍可能过大"
+          },
+          "after": {
+            "fallback": "最多再试一次foreground路径"
+          },
+          "objects": [
+            "suffix撑满新window",
+            "一次foreground标记"
+          ],
+          "ruleIds": [
+            "DX21"
+          ],
+          "note": "后台成功不等于最终工作集一定合窗；废弃的完成请求usage仍计费"
+        }
+      ]
+    },
+    {
+      "id": "large-new-user",
+      "title": "巨大新输入为何可能仍被provider拒绝",
+      "assumptions": [
+        "普通非Guardian turn",
+        "旧history40K；新用户输入230K",
+        "本地pre-turn TODO未纳入全部incoming items"
+      ],
+      "steps": [
+        {
+          "step": 0,
+          "title": "pre-turn只检查旧工作集",
+          "before": {
+            "active": 40000
+          },
+          "after": {
+            "precheck": "未触发"
+          },
+          "objects": [
+            "旧40K条",
+            "新user230K仍在待注入区"
+          ],
+          "ruleIds": [
+            "DX10"
+          ],
+          "note": "不能声称有总请求精确发前安全保证"
+        },
+        {
+          "step": 1,
+          "title": "注入后请求达到270K",
+          "before": {
+            "active": 40000
+          },
+          "after": {
+            "activeIllustrative": 270000
+          },
+          "objects": [
+            "巨大用户卡加入",
+            "模型窗口200K红线"
+          ],
+          "ruleIds": [
+            "DX05",
+            "DX23"
+          ],
+          "note": "新input能越过precheck"
+        },
+        {
+          "step": 2,
+          "title": "普通sampling context error",
+          "before": {
+            "provider": "ContextWindowExceeded"
+          },
+          "after": {
+            "state": "markfull；本轮返回错误"
+          },
+          "objects": [
+            "红色拒绝",
+            "已存用户输入不丢"
+          ],
+          "ruleIds": [
+            "DX23"
+          ],
+          "note": "一般分支不自动在同轮compact-and-retry；Guardian另有专门分支"
+        },
+        {
+          "step": 3,
+          "title": "后续显式或下一轮触发压缩",
+          "before": {
+            "active": "标记full"
+          },
+          "after": {
+            "nextPrecheck": "可进入compaction"
+          },
+          "objects": [
+            "用户可见失败状态",
+            "后续压缩动作"
+          ],
+          "ruleIds": [
+            "DX10",
+            "DX17"
+          ],
+          "note": "输入无法缩小且保护集本身太大仍可能无法恢复"
+        }
+      ]
+    }
+  ],
+  "invariants": [
+    "完整窗口约束独立于body-after-prefix预算。",
+    "已有副作用不会因压缩恢复而自动重跑。",
+    "工具call/output关系在发送前归一化，删项时配对处理。",
+    "权威规则重建与历史摘要分开，规则变更有replace/remove语义。",
+    "Prefix异步安装需在锁内核验generation/auth/model并保留live suffix。",
+    "summary/opaque item的语义质量不是客户端协议校验能证明。"
+  ],
+  "unknowns": [
+    "服务端V2怎样编码/抽取/保留语义不可由此仓库证明。",
+    "模型catalog远端当前值、运行时feature activation会随配置与模型变更；固定快照不等于所有用户当前行为。",
+    "本地token估算是下界/近似，图片audio/opaque内容可能与provider定价不同。",
+    "本次没有实际模型压缩率、召回/延迟/成本benchmark。"
+  ]
+}

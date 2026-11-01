@@ -1,0 +1,1768 @@
+{
+  "id": "hermes",
+  "name": "Hermes Agent",
+  "commit": "944c3a434071f43e64b443d033f3eba30c64434c",
+  "repository": "NousResearch/hermes-agent",
+  "overview": "Hermes 是按缓存 epoch 冻结提示词、以 provider usage 锚定增量估算、用多入口 gate 触发事务式工作集替换的系统。廉价 prune、默认关闭的 rolling micro、批量摘要、Codex-owned native 各有不同所有权；原始会话保留用于恢复，活动 prompt 只是一个投影。",
+  "layers": [
+    {
+      "name": "stable system tier",
+      "source": "identity、SOUL、guidance、pinned/auto-load skills、coding brief",
+      "lifecycle": "一个缓存epoch保持字节稳定；pinned skill按agent首次解析后复用",
+      "budget": "context文件另有动态字符cap；不是总窗口保障",
+      "evidence": [
+        {
+          "path": "agent/system_prompt.py",
+          "line": 736,
+          "end": 756,
+          "symbol": "def build_system_prompt_parts",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/system_prompt.py#L736"
+        }
+      ]
+    },
+    {
+      "name": "project context tier",
+      "source": "caller system_message、CWD上下文文件、workspace snapshot",
+      "lifecycle": "组装时位于stable后、volatile前；不是每轮重读",
+      "budget": "context文件默认动态cap=max(20K,min(window×4×0.06,500K))字符，显式context_file_max_chars优先",
+      "evidence": [
+        {
+          "path": "agent/system_prompt.py",
+          "line": 715,
+          "end": 735,
+          "symbol": "def _context_files_part",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/system_prompt.py#L715"
+        },
+        {
+          "path": "agent/prompt_builder.py",
+          "line": 1055,
+          "end": 1075,
+          "symbol": "def _dynamic_context_file_max_chars",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/prompt_builder.py#L1055"
+        }
+      ]
+    },
+    {
+      "name": "volatile system tier",
+      "source": "skills index、MEMORY/USER、外部memory provider、plugin sections、timestamp、environment",
+      "lifecycle": "volatile指重建时更可能变化；会话中仍冻结，压缩后invalidate重新装配",
+      "budget": "占输入不可随消息摘要消失；存储/插件可各有限制，不能当成免费token",
+      "evidence": [
+        {
+          "path": "agent/system_prompt.py",
+          "line": 785,
+          "end": 805,
+          "symbol": "volatile_parts: list[str]",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/system_prompt.py#L785"
+        },
+        {
+          "path": "agent/system_prompt.py",
+          "line": 814,
+          "end": 834,
+          "symbol": "def invalidate_system_prompt",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/system_prompt.py#L814"
+        }
+      ]
+    },
+    {
+      "name": "tool schema floor",
+      "source": "agent.tools与provider最终request assembly",
+      "lifecycle": "正常每次请求携带，工具能力列表保持稳定",
+      "budget": "计入prompt压力；system+schema可成为不可压缩floor",
+      "evidence": [
+        {
+          "path": "agent/turn_request_assembly.py",
+          "line": 106,
+          "end": 126,
+          "symbol": "def assemble_api_request",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/turn_request_assembly.py#L106"
+        },
+        {
+          "path": "agent/context_compressor.py",
+          "line": 2925,
+          "end": 2945,
+          "symbol": "# Anti-thrashing verdict",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L2925"
+        }
+      ]
+    },
+    {
+      "name": "active messages",
+      "source": "用户输入、assistant、tool_calls与tool results",
+      "lifecycle": "正常追加；压缩候选替换活动序列",
+      "budget": "usage anchor + appended delta；无usage时启用明确heuristic",
+      "evidence": [
+        {
+          "path": "agent/usage_anchor.py",
+          "line": 108,
+          "end": 128,
+          "symbol": "def anchored_context_tokens",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/usage_anchor.py#L108"
+        }
+      ]
+    },
+    {
+      "name": "loaded skill bodies / subdirectory hints",
+      "source": "skill_view结果、slash user消息、文件工具结果上的子目录规则提示",
+      "lifecycle": "进入历史而非改写system；被压缩后须显式reload",
+      "budget": "占tool/user历史；SKILL_PRUNED标记指出正文已失",
+      "evidence": [
+        {
+          "path": "agent/context_compressor.py",
+          "line": 852,
+          "end": 872,
+          "symbol": "SKILL_PRUNED_MARKER_PREFIX",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L852"
+        },
+        {
+          "path": "agent/prompt_builder.py",
+          "line": 261,
+          "end": 281,
+          "symbol": "A skill placeholder containing",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/prompt_builder.py#L261"
+        }
+      ]
+    },
+    {
+      "name": "head / summary / tail projection",
+      "source": "ContextCompressor的边界选择与summary placement",
+      "lifecycle": "head额外早期消息仅首次受保护；摘要替代middle；尾部可有stub",
+      "budget": "lean默认clamp(2.5%W,10K,25K)再受20%W cap；摘要单独预算",
+      "evidence": [
+        {
+          "path": "agent/context_compressor.py",
+          "line": 4578,
+          "end": 4598,
+          "symbol": "def _protect_head_size",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L4578"
+        },
+        {
+          "path": "agent/context_compressor.py",
+          "line": 2235,
+          "end": 2255,
+          "symbol": "def tail_token_budget",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L2235"
+        },
+        {
+          "path": "agent/context_compressor.py",
+          "line": 5559,
+          "end": 5579,
+          "symbol": "def _assemble_compressed",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L5559"
+        }
+      ]
+    },
+    {
+      "name": "durable original transcript + archive",
+      "source": "SQLite session/messages archive_and_compact",
+      "lifecycle": "活动行软归档，保留可恢复证据；并发tail重排至新projection后",
+      "budget": "存储长度不受模型窗口同一上限约束",
+      "evidence": [
+        {
+          "path": "hermes_state_messages.py",
+          "line": 901,
+          "end": 921,
+          "symbol": "def archive_and_compact",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/hermes_state_messages.py#L901"
+        }
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "id": "H01",
+      "title": "缓存epoch内冻结system，而非每轮刷新记忆",
+      "condition": "build_system_prompt首次或压缩后重建",
+      "action": "按stable→context→volatile组装；invalidate后reload memory与plugin snapshot",
+      "preserve": "稳定prefix与先前指令字节",
+      "loss": "压缩前新写memory不会立即重进system",
+      "default": "正常启用",
+      "gate": "显式invalidate / 新epoch",
+      "evidence": [
+        {
+          "path": "agent/system_prompt.py",
+          "line": 736,
+          "end": 756,
+          "symbol": "def build_system_prompt_parts",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/system_prompt.py#L736"
+        },
+        {
+          "path": "agent/system_prompt.py",
+          "line": 814,
+          "end": 834,
+          "symbol": "def invalidate_system_prompt",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/system_prompt.py#L814"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H02",
+      "title": "context文件按字符cap，不是总token上限",
+      "condition": "加载CWD项目上下文文件",
+      "action": "显式cap优先，否则window×4×6%，clamp到20K..500K字符",
+      "preserve": "项目指导前缀；截断警告显式输出",
+      "loss": "超出cap正文不进入prompt",
+      "default": "动态cap，unknown回20K",
+      "gate": "skip_context_files可跳过",
+      "evidence": [
+        {
+          "path": "agent/prompt_builder.py",
+          "line": 1051,
+          "end": 1071,
+          "symbol": "_CONTEXT_FILE_WINDOW_FRACTION",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/prompt_builder.py#L1051"
+        },
+        {
+          "path": "agent/prompt_builder.py",
+          "line": 1063,
+          "end": 1083,
+          "symbol": "def _get_context_file_max_chars",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/prompt_builder.py#L1063"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H03",
+      "title": "loaded skill失去正文后必须reload",
+      "condition": "历史skill_view / slash inline body被裁剪或摘要",
+      "action": "加入SKILL_PRUNED与skill_view(name=...)恢复提示；重置读去重缓存",
+      "preserve": "skill名字与恢复路径",
+      "loss": "正文不再模型可见；摘要不能替代执行指导",
+      "default": "默认压缩路径防护",
+      "gate": "系统预加载skill位于stable，语义不同",
+      "evidence": [
+        {
+          "path": "agent/context_compressor.py",
+          "line": 852,
+          "end": 872,
+          "symbol": "SKILL_PRUNED_MARKER_PREFIX",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L852"
+        },
+        {
+          "path": "agent/turn_preflight.py",
+          "line": 392,
+          "end": 396,
+          "symbol": "# A committed prune is a content-loss boundary",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/turn_preflight.py#L392"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H04",
+      "title": "usage anchor绑定整个已计价prefix",
+      "condition": "provider返回可用prompt_tokens且有messages",
+      "action": "保存prompt+completion、base_count、最后消息fp和base_prefix_fp",
+      "preserve": "已确认用量锚点，可跨DB重读与进程重启",
+      "loss": "不是新请求精确token计数；tools/system独立变更需各处失效机制",
+      "default": "优先使用实际锚点",
+      "gate": "只有整个已计价message prefix仍匹配才复用",
+      "evidence": [
+        {
+          "path": "agent/usage_anchor.py",
+          "line": 46,
+          "end": 66,
+          "symbol": "def _priced_prefix_fingerprint",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/usage_anchor.py#L46"
+        },
+        {
+          "path": "agent/usage_anchor.py",
+          "line": 67,
+          "end": 87,
+          "symbol": "def capture_usage_anchor",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/usage_anchor.py#L67"
+        },
+        {
+          "path": "agent/usage_anchor.py",
+          "line": 87,
+          "end": 107,
+          "symbol": "def _anchor_matches",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/usage_anchor.py#L87"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H05",
+      "title": "只估算锚点之后的新增delta",
+      "condition": "_anchor_matches为true",
+      "action": "total=prompt_tokens+completion_tokens+rough(new appended messages)，跳过已计入completion的首个assistant",
+      "preserve": "实际prefix计数避免全量字符估算偏高",
+      "loss": "追加delta仍是粗估；reasoning计价与实际context可能不同",
+      "default": "anchored优先",
+      "gate": "无效锚点返回None",
+      "evidence": [
+        {
+          "path": "agent/usage_anchor.py",
+          "line": 108,
+          "end": 128,
+          "symbol": "def anchored_context_tokens",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/usage_anchor.py#L108"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H06",
+      "title": "无anchor的粗估过线可先等一次provider证据",
+      "condition": "first request / rewind / edit-resend / 压缩后且rough>=threshold",
+      "action": "threshold gate推迟一次；usage-less provider不再无限等",
+      "preserve": "不因膨胀粗估立即有损压缩",
+      "loss": "可能先遭一次真实超限拒绝",
+      "default": "built-in策略",
+      "gate": "真实overflow总有reactive path；anchor figures不defer",
+      "evidence": [
+        {
+          "path": "agent/context_compressor.py",
+          "line": 2983,
+          "end": 3003,
+          "symbol": "def should_defer_preflight_to_real_usage",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L2983"
+        },
+        {
+          "path": "agent/context_compressor.py",
+          "line": 2964,
+          "end": 2984,
+          "symbol": "def note_usage_less_response",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L2964"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H07",
+      "title": "先算有效比例，再扣输出与floor/cap",
+      "condition": "窗口已解析",
+      "action": "p=global或longest substring/provider scope override；W<512000时p>=.75；B=W-R(若<=0退W)；T=max(floor(Bp),64000)，floor绑定时cap到85%B，最终还有显式cap与aux ceiling",
+      "preserve": "输出余量、小模型可触发性",
+      "loss": "不是固定50%；特定Codex route会再抬阈值",
+      "default": "global .50；max_tokens未设视无预留",
+      "gate": "provider/model override和feasibility影响实际阈值",
+      "evidence": [
+        {
+          "path": "agent/context_compressor.py",
+          "line": 2763,
+          "end": 2783,
+          "symbol": "def _effective_threshold_percent",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L2763"
+        },
+        {
+          "path": "agent/context_compressor.py",
+          "line": 2777,
+          "end": 2797,
+          "symbol": "def _compute_threshold_tokens",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L2777"
+        },
+        {
+          "path": "agent/context_compressor.py",
+          "line": 2751,
+          "end": 2771,
+          "symbol": "def _apply_threshold_tokens_cap",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L2751"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H08",
+      "title": "网关hygiene是更外层安全网",
+      "condition": "入站history>=最小条件，compression enabled；usage或5000消息到线",
+      "action": "默认85%W gate；actual→persisted anchor→rough；检查持久cooldown与in-flight",
+      "preserve": "跨turn/重启仍能发现压力",
+      "loss": "outer粗估仍可能提前",
+      "default": "85%，hard message默认5000",
+      "gate": "配置可变hard limit，非agent50%比例",
+      "evidence": [
+        {
+          "path": "gateway/run_turn_hygiene.py",
+          "line": 94,
+          "end": 114,
+          "symbol": "async def _hmwa_hygiene_settings",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/gateway/run_turn_hygiene.py#L94"
+        },
+        {
+          "path": "gateway/run_turn_hygiene.py",
+          "line": 156,
+          "end": 176,
+          "symbol": "async def _hmwa_hygiene_plan",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/gateway/run_turn_hygiene.py#L156"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H09",
+      "title": "turn-start、pre-API、post-tool都可压缩",
+      "condition": "各entry point压力到阈值且attempt budget允许",
+      "action": "统一调用_compress_context，重建后重启当前iteration而非继续发旧request",
+      "preserve": "新用户task、原子工具组",
+      "loss": "不能声称只在用户turn末才检查",
+      "default": "max attempts默认3，配置clamp最高10",
+      "gate": "cooldown/structural/no-progress/ownership gates",
+      "evidence": [
+        {
+          "path": "agent/turn_context_compaction.py",
+          "line": 129,
+          "end": 149,
+          "symbol": "def run_turn_start_compaction",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/turn_context_compaction.py#L129"
+        },
+        {
+          "path": "agent/turn_preflight.py",
+          "line": 57,
+          "end": 77,
+          "symbol": "def run_preflight_compression",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/turn_preflight.py#L57"
+        },
+        {
+          "path": "agent/turn_preflight.py",
+          "line": 244,
+          "end": 264,
+          "symbol": "def compress_after_tool_results",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/turn_preflight.py#L244"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H10",
+      "title": "proactive prune默认关闭且有收益门槛",
+      "condition": "proactive_prune_tokens>0、压力到线、rearm满足",
+      "action": "确定性去重/缩短旧tool result bodies、退休旧图像；至少回收4096估算token才提交。tool_call arguments作为canonical execution records不改写；它们仅在送摘要模型的序列化副本中限长",
+      "preserve": "尾部、最后完整重复副本、明确stub与archive",
+      "loss": "非尾部大tool result细节与旧图像会失去模型当前可见性；执行参数原记录不改",
+      "default": "trigger=0 disabled；min result chars=8000；min reclaim4096",
+      "gate": "该独立prune不等同full compress的必经phase1",
+      "evidence": [
+        {
+          "path": "agent/context_compressor_prune.py",
+          "line": 28,
+          "end": 48,
+          "symbol": "def prune_tool_results_only",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor_prune.py#L28"
+        },
+        {
+          "path": "agent/agent_init.py",
+          "line": 1565,
+          "end": 1585,
+          "symbol": "proactive_prune_tokens=max",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/agent_init.py#L1565"
+        },
+        {
+          "path": "agent/context_compressor.py",
+          "line": 3285,
+          "end": 3323,
+          "symbol": "def _prune_old_tool_results",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L3285"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H11",
+      "title": "full compress phase1先裁剪候选副本",
+      "condition": "已进入compress且有足够消息",
+      "action": "复制canonical用于abort/no-op；对副本_prune_old_tool_results后选中段",
+      "preserve": "abort可返回canonical；调用参数full流程不改写",
+      "loss": "成功candidate里的旧结果可能已变stub",
+      "default": "每次full compression都会经历",
+      "gate": "不需要启用proactive trigger",
+      "evidence": [
+        {
+          "path": "agent/context_compressor.py",
+          "line": 5447,
+          "end": 5467,
+          "symbol": "def compress(",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L5447"
+        },
+        {
+          "path": "agent/context_compressor.py",
+          "line": 3285,
+          "end": 3305,
+          "symbol": "def _prune_old_tool_results",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L3285"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H12",
+      "title": "早期head保护会衰减",
+      "condition": "首次压缩前 vs 已compression_count>=1/previous_summary/重启读到summary",
+      "action": "system若存在始终单独保护；protect_first_n额外行首次后降为0",
+      "preserve": "system权威指令",
+      "loss": "最初用户轮不永久原样存活",
+      "default": "protect_first_n=3，额外于system",
+      "gate": "恢复的早期handoff也触发衰减",
+      "evidence": [
+        {
+          "path": "agent/context_compressor.py",
+          "line": 4566,
+          "end": 4586,
+          "symbol": "def _effective_protect_first_n",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L4566"
+        },
+        {
+          "path": "agent/context_compressor.py",
+          "line": 4578,
+          "end": 4598,
+          "symbol": "def _protect_head_size",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L4578"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H13",
+      "title": "lean尾部为预算目标，20条不是硬承诺",
+      "condition": "tail_mode=lean",
+      "action": "budget=max(10K,min(25K,floor(.025W)))，再min(.20W)；walk soft ceiling=min(1.5budget,.20W)",
+      "preserve": "最新row、必要user/assistant与原子工具组",
+      "loss": "可舍弃较老optional rows；实际tail可超预算",
+      "default": "lean默认；protect_last_n20仅bounded floor最多8",
+      "gate": "count floor在可满足空行开销时甚至floorless，保证中段可压",
+      "evidence": [
+        {
+          "path": "agent/context_compressor.py",
+          "line": 2235,
+          "end": 2255,
+          "symbol": "def tail_token_budget",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L2235"
+        },
+        {
+          "path": "agent/context_compressor.py",
+          "line": 3214,
+          "end": 3234,
+          "symbol": "def _tail_soft_ceiling",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L3214"
+        },
+        {
+          "path": "agent/context_compressor.py",
+          "line": 4980,
+          "end": 5000,
+          "symbol": "def _find_tail_cut_by_tokens",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L4980"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H14",
+      "title": "legacy与lean不能混同",
+      "condition": "tail_mode=legacy",
+      "action": "tail budget=threshold_tokens×target_ratio，再受20%W cap",
+      "preserve": "更长近期原文",
+      "loss": "更多token持续占窗口",
+      "default": "target_ratio=.20但只直接控制legacy",
+      "gate": "lean不按target_ratio算tail",
+      "evidence": [
+        {
+          "path": "agent/context_compressor.py",
+          "line": 2235,
+          "end": 2255,
+          "symbol": "def tail_token_budget",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L2235"
+        },
+        {
+          "path": "agent/agent_init.py",
+          "line": 1560,
+          "end": 1580,
+          "symbol": "tail_mode=str",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/agent_init.py#L1560"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H15",
+      "title": "原子tool group与最新行不能切断",
+      "condition": "候选cut落在tool结果组或最新row过大",
+      "action": "backward/forward align保留完整assistant(tool_calls)+tool results",
+      "preserve": "调用与结果对应",
+      "loss": "单组过大会使预算无法严格满足",
+      "default": "always-on结构约束",
+      "gate": "最后sanitize还移除孤立结果/修复孤立调用",
+      "evidence": [
+        {
+          "path": "agent/context_compressor.py",
+          "line": 4587,
+          "end": 4607,
+          "symbol": "def _align_boundary_backward",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L4587"
+        },
+        {
+          "path": "agent/context_compressor.py",
+          "line": 4513,
+          "end": 4533,
+          "symbol": "def _sanitize_tool_pairs",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L4513"
+        },
+        {
+          "path": "agent/context_compressor.py",
+          "line": 4980,
+          "end": 5000,
+          "symbol": "def _find_tail_cut_by_tokens",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L4980"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H16",
+      "title": "超大单轮允许有界拆分，但非任意删除最新请求",
+      "condition": "文本opening user正常大小，后续tool growth使整轮超soft ceiling",
+      "action": "保留组对齐mid-turn cut，opening request进入handoff并verbatim restate；图片/音频opening不可此替换",
+      "preserve": "最新用户语义与最新tool组",
+      "loss": "旧单轮中段被摘要",
+      "default": "batch/manual allow_split_turn=true",
+      "gate": "single oversized user本身不可拆；min_tail_user_messages>1承诺优先预算",
+      "evidence": [
+        {
+          "path": "agent/context_compressor.py",
+          "line": 4980,
+          "end": 5000,
+          "symbol": "def _find_tail_cut_by_tokens",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L4980"
+        },
+        {
+          "path": "agent/context_compressor.py",
+          "line": 4772,
+          "end": 4792,
+          "symbol": "def _reappend_inflight_user_task",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L4772"
+        },
+        {
+          "path": "agent/context_compressor.py",
+          "line": 4916,
+          "end": 4936,
+          "symbol": "def _ensure_last_n_user_messages_in_tail",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L4916"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H17",
+      "title": "摘要输入本身先有损限流",
+      "condition": "middle过大或单message过长",
+      "action": "每body总6000字符(head4000/tail1500)、args1500字符；aggregate160K字符，整段均匀sample记录覆盖而非多模型分块",
+      "preserve": "全时段抽样覆盖、精确标识符和省略说明",
+      "loss": "模型从未看到被裁/采样掉的正文",
+      "default": "lean一次aux summary call/attempt",
+      "gate": "retry/main fallback是失败重试，不是常规chunk summary",
+      "evidence": [
+        {
+          "path": "agent/context_compressor.py",
+          "line": 830,
+          "end": 850,
+          "symbol": "_SUMMARY_INPUT_MAX_CHARS =",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L830"
+        },
+        {
+          "path": "agent/context_compressor.py",
+          "line": 3423,
+          "end": 3443,
+          "symbol": "def _serialize_records_for_summary",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L3423"
+        },
+        {
+          "path": "agent/context_compressor.py",
+          "line": 3651,
+          "end": 3671,
+          "symbol": "def _sample_summary_records",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L3651"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H18",
+      "title": "摘要输出预算与tail独立",
+      "condition": "middle估算token为M",
+      "action": "summaryBudget=max(2000,min(.20M,min(.05W,10000)))；还受aux/output room处理",
+      "preserve": "结构化goal/constraints/workstate/IDs，lean recovery hints",
+      "loss": "模型摘要有损，无召回保证",
+      "default": "code ceiling10000，非文档旧值12000",
+      "gate": "模型返回length判失败，不当完整摘要",
+      "evidence": [
+        {
+          "path": "agent/context_compressor.py",
+          "line": 3395,
+          "end": 3415,
+          "symbol": "def _compute_summary_budget",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L3395"
+        },
+        {
+          "path": "agent/context_compressor.py",
+          "line": 823,
+          "end": 843,
+          "symbol": "_SUMMARY_TOKENS_CEILING =",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L823"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H19",
+      "title": "lean尾部旧工具结果可降成恢复stub",
+      "condition": "结果>1500chars且早于最新6个tool rounds",
+      "action": "一行说明+session_search(session_id)；skill正文损失附SKILL_PRUNED",
+      "preserve": "原archive恢复路径",
+      "loss": "tail保留不等于tool正文永远保留",
+      "default": "lean路径",
+      "gate": "required pending / skill markers按专门规则保护",
+      "evidence": [
+        {
+          "path": "agent/context_compressor_tail.py",
+          "line": 49,
+          "end": 69,
+          "symbol": "def demote_stale_tail_tools",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor_tail.py#L49"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H20",
+      "title": "候选生成与持久发布是不同阶段",
+      "condition": "LLM摘要完成但未begin_commit",
+      "action": "在session compression lease内生成candidate，校验progress与snapshot；cancel fence赢则不写；watermark/CAS写事务",
+      "preserve": "并发新消息、原history、唯一新generation",
+      "loss": "只有成功提交后活动窗口替换",
+      "default": "in_place=True默认，保留同session id",
+      "gate": "legacy rotation另分支；lease-less prune/micro有CAS gate",
+      "evidence": [
+        {
+          "path": "agent/conversation_compression.py",
+          "line": 3989,
+          "end": 4009,
+          "symbol": "def compress_context(",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/conversation_compression.py#L3989"
+        },
+        {
+          "path": "agent/conversation_compression.py",
+          "line": 578,
+          "end": 598,
+          "symbol": "def begin_commit",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/conversation_compression.py#L578"
+        },
+        {
+          "path": "hermes_state_messages.py",
+          "line": 901,
+          "end": 921,
+          "symbol": "def archive_and_compact",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/hermes_state_messages.py#L901"
+        },
+        {
+          "path": "hermes_state_messages.py",
+          "line": 968,
+          "end": 988,
+          "symbol": "if held_for_cas:",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/hermes_state_messages.py#L968"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H21",
+      "title": "摘要期间新消息必须留在新工作集尾部",
+      "condition": "新DB rows id>summary-start watermark",
+      "action": "archive只覆盖held范围，concurrent tail重新排到compacted projection后",
+      "preserve": "所有未被摘要worker看到的新用户/工具到达",
+      "loss": "不把迟到输入悄悄归档",
+      "default": "事务内实现",
+      "gate": "coverage/holder/held_for_cas验证；旧generation writer拒绝",
+      "evidence": [
+        {
+          "path": "hermes_state_messages.py",
+          "line": 901,
+          "end": 921,
+          "symbol": "def archive_and_compact",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/hermes_state_messages.py#L901"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H22",
+      "title": "micro是默认关闭的辅助LLM rolling summary",
+      "condition": "final_response存在且启用micro_compact，非checkpoint_required/非persist_disabled",
+      "action": "finalize后每N次吸收一个head-tail之间完整exchange，更新rolling summary；达到defrag门槛再压summary",
+      "preserve": "完整exchange边界；stale commit回滚cursor/summary",
+      "loss": "该exchange正文转入rolling marker",
+      "default": "micro_compact=false；every_n=1；defrag2000tokens",
+      "gate": "只strict True built-in callable，watermark不可回答则skip",
+      "evidence": [
+        {
+          "path": "agent/agent_init.py",
+          "line": 1586,
+          "end": 1606,
+          "symbol": "micro_compact=is_truthy_value",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/agent_init.py#L1586"
+        },
+        {
+          "path": "agent/turn_finalizer.py",
+          "line": 299,
+          "end": 319,
+          "symbol": "and getattr(_compressor, '_micro_compact_enabled'",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/turn_finalizer.py#L299"
+        },
+        {
+          "path": "agent/micro_compaction.py",
+          "line": 205,
+          "end": 225,
+          "symbol": "def _micro_compact",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/micro_compaction.py#L205"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H23",
+      "title": "压缩是否有效只由后续真实usage裁决",
+      "condition": "压缩后第一份真实provider计数仍>=threshold",
+      "action": "ineffective strike+1；连续2次自动breaker；低于线清零",
+      "preserve": "防system+schema不可压缩floor引起每轮循环",
+      "loss": "breaker可能留上下文仍高压，须显式处理",
+      "default": "strike>=2",
+      "gate": "static fallback streak不触发此breaker，它改为bench failing summary model",
+      "evidence": [
+        {
+          "path": "agent/context_compressor.py",
+          "line": 2925,
+          "end": 2945,
+          "symbol": "# Anti-thrashing verdict",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L2925"
+        },
+        {
+          "path": "agent/context_compressor.py",
+          "line": 3027,
+          "end": 3047,
+          "symbol": "def _tripped",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L3027"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H24",
+      "title": "失败不应统称丢middle或全部保留",
+      "condition": "辅助summary失败，distinct model可先一次main fallback",
+      "action": "network/auth/quota/empty/truncated等终态保canonical；timeout/truncation60→300→900 cooldown；JSON/closed/empty30s；持续overload3次可降deterministic",
+      "preserve": "原文在abort保留，fallback含旧summary快照与可抽取anchors",
+      "loss": "fallback不保证决策/活动状态召回，显式标Unknown",
+      "default": "abort_on_summary_failure=false不代表所有错误都丢原文",
+      "gate": "force可清cooldown；真实overflow只bypass cooldown不清状态",
+      "evidence": [
+        {
+          "path": "agent/context_compressor.py",
+          "line": 4087,
+          "end": 4107,
+          "symbol": "def _on_summary_failure",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L4087"
+        },
+        {
+          "path": "agent/context_compressor.py",
+          "line": 3513,
+          "end": 3533,
+          "symbol": "def _build_static_fallback_summary",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L3513"
+        },
+        {
+          "path": "agent/context_compressor.py",
+          "line": 5238,
+          "end": 5258,
+          "symbol": "def _abort_on_summary_failure",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L5238"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H25",
+      "title": "provider-proven overflow有界恢复",
+      "condition": "provider明确context too long",
+      "action": "计attempt，bypass_cooldown=True压缩重建；耗尽/timeout不重复送同样超限请求",
+      "preserve": "原history与unknown/partial失败状态",
+      "loss": "无法保证所有输入都可压缩进窗口",
+      "default": "max attempts默认3，配置最多10",
+      "gate": "lock/transient defer退还attempt，不误报exhaustion",
+      "evidence": [
+        {
+          "path": "agent/turn_overflow.py",
+          "line": 128,
+          "end": 148,
+          "symbol": "def count_attempt",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/turn_overflow.py#L128"
+        },
+        {
+          "path": "agent/turn_overflow.py",
+          "line": 149,
+          "end": 169,
+          "symbol": "def compress(",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/turn_overflow.py#L149"
+        },
+        {
+          "path": "agent/turn_preflight.py",
+          "line": 221,
+          "end": 241,
+          "symbol": "if provider_overflow_preflight:",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/turn_preflight.py#L221"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H26",
+      "title": "Codex-owned thread必须让Codex压缩",
+      "condition": "api_mode=codex_app_server",
+      "action": "compact_thread()操控权威线程；Hermes本地transcript保持不变",
+      "preserve": "provider真实thread ownership",
+      "loss": "Hermes自己摘要mirror无法节省Codex线程token",
+      "default": "auto_compaction native默认；hermes由Hermes gate initiate；off跳自动",
+      "gate": "force manual可发；checkpoint_required此route拒绝，因为无真实pre-boundary",
+      "evidence": [
+        {
+          "path": "agent/conversation_compression_codex.py",
+          "line": 51,
+          "end": 71,
+          "symbol": "def _compress_context_via_codex_app_server",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/conversation_compression_codex.py#L51"
+        },
+        {
+          "path": "agent/conversation_compression.py",
+          "line": 3962,
+          "end": 3982,
+          "symbol": "if getattr(agent, \"api_mode\", None)",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/conversation_compression.py#L3962"
+        }
+      ],
+      "certainty": "直接代码事实"
+    },
+    {
+      "id": "H27",
+      "title": "native opaque checkpoint不按密文字符定价",
+      "condition": "provider原生Responses压缩已capture",
+      "action": "note_native_compaction_checkpoint打开await-real-usage latch，清旧rough baseline",
+      "preserve": "原生ownership与真实计量",
+      "loss": "本地看似0或密文很长都不代表真实token",
+      "default": "条件route",
+      "gate": "与Codex app-server本地mirror不变不同",
+      "evidence": [
+        {
+          "path": "agent/context_compressor.py",
+          "line": 2969,
+          "end": 2989,
+          "symbol": "def note_native_compaction_checkpoint",
+          "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L2969"
+        }
+      ],
+      "certainty": "直接代码事实"
+    }
+  ],
+  "pipeline": [
+    {
+      "phase": "0 会话装配",
+      "functions": "build_system_prompt_parts → build_system_prompt",
+      "inputs": "identity/context files/memory/skills/tools",
+      "outputs": "冻结的三段system + 稳定tool schema",
+      "ruleIds": [
+        "H01",
+        "H02",
+        "H03"
+      ]
+    },
+    {
+      "phase": "1 外层入站安全网",
+      "functions": "GatewayTurnHygieneMixin._hmwa_hygiene_plan",
+      "inputs": "last actual / persisted anchor / history",
+      "outputs": "hygiene plan 或跳过",
+      "ruleIds": [
+        "H08"
+      ]
+    },
+    {
+      "phase": "2 组装turn并初查",
+      "functions": "build_turn_context → run_turn_start_compaction",
+      "inputs": "冻结system + 历史 + 新user",
+      "outputs": "idle/preflight compressed history 或原工作集",
+      "ruleIds": [
+        "H06",
+        "H09"
+      ]
+    },
+    {
+      "phase": "3 最终请求压力检查",
+      "functions": "run_preflight_compression",
+      "inputs": "完整request压力与attempt ledger",
+      "outputs": "允许发送 / 压缩后重启iteration / defer失败",
+      "ruleIds": [
+        "H04",
+        "H05",
+        "H06",
+        "H07",
+        "H25"
+      ]
+    },
+    {
+      "phase": "4 接收usage与工具输出",
+      "functions": "provider response → compress_after_tool_results",
+      "inputs": "actual prompt/completion + appended results",
+      "outputs": "新anchor、压缩或proactive prune候选",
+      "ruleIds": [
+        "H05",
+        "H09",
+        "H10"
+      ]
+    },
+    {
+      "phase": "5 准备压缩",
+      "functions": "_compress_context → compress_context",
+      "inputs": "snapshot、session lease、cancel fence、watermark",
+      "outputs": "唯一current attempt及fenced candidate输入",
+      "ruleIds": [
+        "H20",
+        "H21"
+      ]
+    },
+    {
+      "phase": "6 有损候选制作",
+      "functions": "ContextCompressor.compress",
+      "inputs": "canonical原文 + pruned copy",
+      "outputs": "head/middle/tail三分区",
+      "ruleIds": [
+        "H11",
+        "H12",
+        "H13",
+        "H15",
+        "H16"
+      ]
+    },
+    {
+      "phase": "7 摘要",
+      "functions": "_serialize_records_for_summary → _sample_summary_records → _generate_summary",
+      "inputs": "有界middle + previous summary + memory context",
+      "outputs": "结构化summary或abort/fallback",
+      "ruleIds": [
+        "H17",
+        "H18",
+        "H24"
+      ]
+    },
+    {
+      "phase": "8 重建候选",
+      "functions": "_assemble_compressed → _finalize_compressed",
+      "inputs": "head + summary + tail/stubs",
+      "outputs": "role合法、工具配对、actionable task恢复后的candidate",
+      "ruleIds": [
+        "H03",
+        "H19",
+        "H20"
+      ]
+    },
+    {
+      "phase": "9 发布",
+      "functions": "begin_commit → archive_and_compact",
+      "inputs": "candidate + covered ids + watermark/holder",
+      "outputs": "原行软归档、新active投影与并发tail，system重建",
+      "ruleIds": [
+        "H20",
+        "H21",
+        "H01"
+      ]
+    },
+    {
+      "phase": "10 新provider观测",
+      "functions": "update_from_response",
+      "inputs": "压缩后真实prompt_tokens",
+      "outputs": "清latch，更新ineffective verdict",
+      "ruleIds": [
+        "H23",
+        "H27"
+      ]
+    },
+    {
+      "phase": "11 可选逐轮维护",
+      "functions": "finalize_turn → _micro_compact",
+      "inputs": "已完成回复、旧完整exchange",
+      "outputs": "rolling summary marker + DB同步",
+      "ruleIds": [
+        "H22"
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "normal",
+      "name": "普通lean压缩：从缓存epoch到新的工作集",
+      "assumptions": "W=200000，max_tokens=20000，非Codex特例、无绝对/aux cap、有效p=.75，阈值135000；示例账本起170000。proactive prune与micro都未启用；phase1 prune仍在full compress内发生。",
+      "steps": [
+        {
+          "title": "冻结提示词与schema",
+          "action": "三个system tier堆入固定前缀，工具schema独立固定",
+          "before": [
+            "原始会话存储"
+          ],
+          "after": [
+            "稳定前缀",
+            "活动历史"
+          ],
+          "objects": [
+            "stable",
+            "context",
+            "volatile",
+            "tools"
+          ],
+          "ruleIds": [
+            "H01",
+            "H02"
+          ],
+          "evidence": [
+            {
+              "path": "agent/system_prompt.py",
+              "line": 736,
+              "end": 756,
+              "symbol": "def build_system_prompt_parts",
+              "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/system_prompt.py#L736"
+            }
+          ],
+          "metricsNote": "对象大小和总token仅示例账本，非真实运行、压缩率或tokenizer结果"
+        },
+        {
+          "title": "工具增长与计量",
+          "action": "provider anchor已计价prefix，新的tool结果只加delta",
+          "before": [
+            "用量锚点158000"
+          ],
+          "after": [
+            "示例pressure170000 > threshold135000"
+          ],
+          "objects": [
+            "anchor",
+            "new-tool-result"
+          ],
+          "ruleIds": [
+            "H04",
+            "H05",
+            "H07"
+          ],
+          "evidence": [
+            {
+              "path": "agent/usage_anchor.py",
+              "line": 46,
+              "end": 66,
+              "symbol": "def _priced_prefix_fingerprint",
+              "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/usage_anchor.py#L46"
+            }
+          ],
+          "metricsNote": "对象大小和总token仅示例账本，非真实运行、压缩率或tokenizer结果"
+        },
+        {
+          "title": "拿到租约并保存原文快照",
+          "action": "慢summary前capture watermark，尚未改变模型工作集",
+          "before": [
+            "DB active generation A"
+          ],
+          "after": [
+            "candidate generation B being prepared"
+          ],
+          "objects": [
+            "lease",
+            "fence",
+            "watermark",
+            "canonical"
+          ],
+          "ruleIds": [
+            "H20",
+            "H21"
+          ],
+          "evidence": [
+            {
+              "path": "agent/conversation_compression.py",
+              "line": 3989,
+              "end": 4009,
+              "symbol": "def compress_context(",
+              "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/conversation_compression.py#L3989"
+            }
+          ],
+          "metricsNote": "对象大小和总token仅示例账本，非真实运行、压缩率或tokenizer结果"
+        },
+        {
+          "title": "候选副本先清旧结果",
+          "action": "旧大tool body变短stub；调用组边界保留",
+          "before": [
+            "candidate170000"
+          ],
+          "after": [
+            "candidate150000 illustrative"
+          ],
+          "objects": [
+            "old-tool→stub",
+            "latest-tool-group"
+          ],
+          "ruleIds": [
+            "H11",
+            "H15"
+          ],
+          "evidence": [
+            {
+              "path": "agent/context_compressor.py",
+              "line": 5447,
+              "end": 5467,
+              "symbol": "def compress(",
+              "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L5447"
+            }
+          ],
+          "metricsNote": "对象大小和总token仅示例账本，非真实运行、压缩率或tokenizer结果"
+        },
+        {
+          "title": "画出三个区域",
+          "action": "head首次system+额外3rows；中段待总结；lean尾部原文目标10K但anchors可超",
+          "before": [
+            "pruned history"
+          ],
+          "after": [
+            "head",
+            "middle",
+            "tail"
+          ],
+          "objects": [
+            "head-lock",
+            "middle-bracket",
+            "tail-budget-marker"
+          ],
+          "ruleIds": [
+            "H12",
+            "H13",
+            "H16"
+          ],
+          "evidence": [
+            {
+              "path": "agent/context_compressor.py",
+              "line": 4566,
+              "end": 4586,
+              "symbol": "def _effective_protect_first_n",
+              "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L4566"
+            }
+          ],
+          "metricsNote": "对象大小和总token仅示例账本，非真实运行、压缩率或tokenizer结果"
+        },
+        {
+          "title": "给summary模型的也不是全量原文",
+          "action": "超大记录head/tail截断并均匀采样，保留省略标记",
+          "before": [
+            "middle full candidate"
+          ],
+          "after": [
+            "bounded summary input"
+          ],
+          "objects": [
+            "sampled records",
+            "elision markers"
+          ],
+          "ruleIds": [
+            "H17",
+            "H18"
+          ],
+          "evidence": [
+            {
+              "path": "agent/context_compressor.py",
+              "line": 830,
+              "end": 850,
+              "symbol": "_SUMMARY_INPUT_MAX_CHARS =",
+              "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L830"
+            }
+          ],
+          "metricsNote": "对象大小和总token仅示例账本，非真实运行、压缩率或tokenizer结果"
+        },
+        {
+          "title": "生成summary候选",
+          "action": "目标、约束、进度、路径、identifiers与恢复指针进入摘要",
+          "before": [
+            "middle"
+          ],
+          "after": [
+            "summary + head + tail"
+          ],
+          "objects": [
+            "summary",
+            "archive-pointer",
+            "SKILL_PRUNED"
+          ],
+          "ruleIds": [
+            "H18",
+            "H19",
+            "H03"
+          ],
+          "evidence": [
+            {
+              "path": "agent/context_compressor.py",
+              "line": 3395,
+              "end": 3415,
+              "symbol": "def _compute_summary_budget",
+              "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L3395"
+            }
+          ],
+          "metricsNote": "对象大小和总token仅示例账本，非真实运行、压缩率或tokenizer结果"
+        },
+        {
+          "title": "提交前并发输入",
+          "action": "另一surface追加新user，不属于摘要快照",
+          "before": [
+            "watermark N"
+          ],
+          "after": [
+            "new user row N+1"
+          ],
+          "objects": [
+            "concurrent-user-outside-coverage"
+          ],
+          "ruleIds": [
+            "H21"
+          ],
+          "evidence": [
+            {
+              "path": "hermes_state_messages.py",
+              "line": 901,
+              "end": 921,
+              "symbol": "def archive_and_compact",
+              "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/hermes_state_messages.py#L901"
+            }
+          ],
+          "metricsNote": "对象大小和总token仅示例账本，非真实运行、压缩率或tokenizer结果"
+        },
+        {
+          "title": "fence赢得commit，原子替换",
+          "action": "只归档covered原行；新active为candidate+N+1，旧正文仍archive",
+          "before": [
+            "generation A active"
+          ],
+          "after": [
+            "generation B active + concurrent tail"
+          ],
+          "objects": [
+            "archived old-middle",
+            "active summary",
+            "active latest"
+          ],
+          "ruleIds": [
+            "H20",
+            "H21"
+          ],
+          "evidence": [
+            {
+              "path": "agent/conversation_compression.py",
+              "line": 3989,
+              "end": 4009,
+              "symbol": "def compress_context(",
+              "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/conversation_compression.py#L3989"
+            }
+          ],
+          "metricsNote": "对象大小和总token仅示例账本，非真实运行、压缩率或tokenizer结果"
+        },
+        {
+          "title": "新epoch重组并再次观测",
+          "action": "重读memory/plugin，工具读去重重置；下一actual裁决是否真回到阈值内",
+          "before": [
+            "old cached system"
+          ],
+          "after": [
+            "rebuilt system + candidate + next usage"
+          ],
+          "objects": [
+            "new-epoch",
+            "actual-usage-verdict"
+          ],
+          "ruleIds": [
+            "H01",
+            "H23"
+          ],
+          "evidence": [
+            {
+              "path": "agent/system_prompt.py",
+              "line": 736,
+              "end": 756,
+              "symbol": "def build_system_prompt_parts",
+              "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/system_prompt.py#L736"
+            }
+          ],
+          "metricsNote": "对象大小和总token仅示例账本，非真实运行、压缩率或tokenizer结果"
+        }
+      ]
+    },
+    {
+      "id": "overflow",
+      "name": "真实超限与不能压缩的保护集合",
+      "assumptions": "provider明确拒绝，先前rough deferred一次或新工具突然变大；示例只演示控制流。",
+      "steps": [
+        {
+          "title": "粗估未获证实",
+          "action": "unanchored estimate超阈值先等一次provider",
+          "before": [
+            "rough only"
+          ],
+          "after": [
+            "one request allowed"
+          ],
+          "objects": [
+            "estimate-dashed"
+          ],
+          "ruleIds": [
+            "H06"
+          ],
+          "evidence": [
+            {
+              "path": "agent/context_compressor.py",
+              "line": 2983,
+              "end": 3003,
+              "symbol": "def should_defer_preflight_to_real_usage",
+              "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L2983"
+            }
+          ],
+          "metricsNote": "对象大小和总token仅示例账本，非真实运行、压缩率或tokenizer结果"
+        },
+        {
+          "title": "provider报context too long",
+          "action": "真实拒绝取代heuristic猜测",
+          "before": [
+            "request sent"
+          ],
+          "after": [
+            "provider overflow"
+          ],
+          "objects": [
+            "rejection-red"
+          ],
+          "ruleIds": [
+            "H25"
+          ],
+          "evidence": [
+            {
+              "path": "agent/turn_overflow.py",
+              "line": 128,
+              "end": 148,
+              "symbol": "def count_attempt",
+              "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/turn_overflow.py#L128"
+            }
+          ],
+          "metricsNote": "对象大小和总token仅示例账本，非真实运行、压缩率或tokenizer结果"
+        },
+        {
+          "title": "花一次恢复预算",
+          "action": "bypass cooldown一次，不清durable cooldown；走同一租约与候选流程",
+          "before": [
+            "attempt0"
+          ],
+          "after": [
+            "attempt1/3"
+          ],
+          "objects": [
+            "attempt-ledger",
+            "cooldown-bypass"
+          ],
+          "ruleIds": [
+            "H25",
+            "H20"
+          ],
+          "evidence": [
+            {
+              "path": "agent/turn_overflow.py",
+              "line": 128,
+              "end": 148,
+              "symbol": "def count_attempt",
+              "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/turn_overflow.py#L128"
+            }
+          ],
+          "metricsNote": "对象大小和总token仅示例账本，非真实运行、压缩率或tokenizer结果"
+        },
+        {
+          "title": "发现保护集合本身巨大",
+          "action": "单个用户图片或单tool组不可分，summary不能让总request可靠进窗口",
+          "before": [
+            "oversized protected set"
+          ],
+          "after": [
+            "no adequate shrink"
+          ],
+          "objects": [
+            "unbreakable group",
+            "system/schema floor"
+          ],
+          "ruleIds": [
+            "H15",
+            "H16",
+            "H23"
+          ],
+          "evidence": [
+            {
+              "path": "agent/context_compressor.py",
+              "line": 4587,
+              "end": 4607,
+              "symbol": "def _align_boundary_backward",
+              "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L4587"
+            }
+          ],
+          "metricsNote": "对象大小和总token仅示例账本，非真实运行、压缩率或tokenizer结果"
+        },
+        {
+          "title": "停止而非无尽重试",
+          "action": "耗尽或无进展返回typed partial/error；不重复工具与同样超限request",
+          "before": [
+            "attempt budget spent"
+          ],
+          "after": [
+            "explicit exhaustion / deferred"
+          ],
+          "objects": [
+            "stop",
+            "original archive"
+          ],
+          "ruleIds": [
+            "H25"
+          ],
+          "evidence": [
+            {
+              "path": "agent/turn_overflow.py",
+              "line": 128,
+              "end": 148,
+              "symbol": "def count_attempt",
+              "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/turn_overflow.py#L128"
+            }
+          ],
+          "metricsNote": "对象大小和总token仅示例账本，非真实运行、压缩率或tokenizer结果"
+        }
+      ]
+    },
+    {
+      "id": "failure",
+      "name": "摘要生成失败：保留原文还是显式降级",
+      "assumptions": "区别可恢复provider失败、持续overload、默认false abort配置，不能以一个动画把所有failure画成删中段。",
+      "steps": [
+        {
+          "title": "候选未发布",
+          "action": "原DB generation仍活动",
+          "before": [
+            "LLM pending"
+          ],
+          "after": [
+            "candidate only"
+          ],
+          "objects": [
+            "DB-lock",
+            "uncommitted-summary"
+          ],
+          "ruleIds": [
+            "H20"
+          ],
+          "evidence": [
+            {
+              "path": "agent/conversation_compression.py",
+              "line": 3989,
+              "end": 4009,
+              "symbol": "def compress_context(",
+              "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/conversation_compression.py#L3989"
+            }
+          ],
+          "metricsNote": "对象大小和总token仅示例账本，非真实运行、压缩率或tokenizer结果"
+        },
+        {
+          "title": "distinct auxiliary model失败",
+          "action": "允许一次main model摘要fallback",
+          "before": [
+            "aux failed"
+          ],
+          "after": [
+            "one main retry"
+          ],
+          "objects": [
+            "aux-route",
+            "main-route"
+          ],
+          "ruleIds": [
+            "H24"
+          ],
+          "evidence": [
+            {
+              "path": "agent/context_compressor.py",
+              "line": 4087,
+              "end": 4107,
+              "symbol": "def _on_summary_failure",
+              "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L4087"
+            }
+          ],
+          "metricsNote": "对象大小和总token仅示例账本，非真实运行、压缩率或tokenizer结果"
+        },
+        {
+          "title": "auth/network/empty/length等终态",
+          "action": "abort，canonical原文保持；cooldown持久化",
+          "before": [
+            "failed candidate"
+          ],
+          "after": [
+            "unchanged active transcript"
+          ],
+          "objects": [
+            "red failed candidate",
+            "unchanged DB"
+          ],
+          "ruleIds": [
+            "H24"
+          ],
+          "evidence": [
+            {
+              "path": "agent/context_compressor.py",
+              "line": 4087,
+              "end": 4107,
+              "symbol": "def _on_summary_failure",
+              "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L4087"
+            }
+          ],
+          "metricsNote": "对象大小和总token仅示例账本，非真实运行、压缩率或tokenizer结果"
+        },
+        {
+          "title": "或持续故障达降级策略",
+          "action": "如overload连续3次、重复stall等条件可确定性fallback，明确Active State Unknown",
+          "before": [
+            "no usable model summary"
+          ],
+          "after": [
+            "local extracted anchors + warning"
+          ],
+          "objects": [
+            "fallback-symbol",
+            "unknown-state"
+          ],
+          "ruleIds": [
+            "H24"
+          ],
+          "evidence": [
+            {
+              "path": "agent/context_compressor.py",
+              "line": 4087,
+              "end": 4107,
+              "symbol": "def _on_summary_failure",
+              "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/context_compressor.py#L4087"
+            }
+          ],
+          "metricsNote": "对象大小和总token仅示例账本，非真实运行、压缩率或tokenizer结果"
+        },
+        {
+          "title": "仍须统一事务提交",
+          "action": "fallback也经过fence/lease/watermark，不能绕过一致性",
+          "before": [
+            "fallback candidate"
+          ],
+          "after": [
+            "commit or abort"
+          ],
+          "objects": [
+            "same commit gate"
+          ],
+          "ruleIds": [
+            "H20",
+            "H21"
+          ],
+          "evidence": [
+            {
+              "path": "agent/conversation_compression.py",
+              "line": 3989,
+              "end": 4009,
+              "symbol": "def compress_context(",
+              "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/conversation_compression.py#L3989"
+            }
+          ],
+          "metricsNote": "对象大小和总token仅示例账本，非真实运行、压缩率或tokenizer结果"
+        }
+      ]
+    },
+    {
+      "id": "micro",
+      "name": "可选micro：逐个旧exchange吸收",
+      "assumptions": "micro_compact明确开启；默认关闭，final_response存在，非checkpoint_required。",
+      "steps": [
+        {
+          "title": "完成当前turn后",
+          "action": "不是请求前：finalizer启动cadence check",
+          "before": [
+            "final response persisted"
+          ],
+          "after": [
+            "eligible old exchange"
+          ],
+          "objects": [
+            "finished-turn",
+            "cadence"
+          ],
+          "ruleIds": [
+            "H22"
+          ],
+          "evidence": [
+            {
+              "path": "agent/agent_init.py",
+              "line": 1586,
+              "end": 1606,
+              "symbol": "micro_compact=is_truthy_value",
+              "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/agent_init.py#L1586"
+            }
+          ],
+          "metricsNote": "对象大小和总token仅示例账本，非真实运行、压缩率或tokenizer结果"
+        },
+        {
+          "title": "吸收一个完整exchange",
+          "action": "辅助LLM把一个旧exchange合入rolling summary",
+          "before": [
+            "exchange + rolling summary"
+          ],
+          "after": [
+            "updated rolling summary"
+          ],
+          "objects": [
+            "old-user+assistant+tools→summary"
+          ],
+          "ruleIds": [
+            "H22"
+          ],
+          "evidence": [
+            {
+              "path": "agent/agent_init.py",
+              "line": 1586,
+              "end": 1606,
+              "symbol": "micro_compact=is_truthy_value",
+              "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/agent_init.py#L1586"
+            }
+          ],
+          "metricsNote": "对象大小和总token仅示例账本，非真实运行、压缩率或tokenizer结果"
+        },
+        {
+          "title": "watermark/CAS检查",
+          "action": "摘要期间别的compression提交则还原cursor+summary，不发布旧候选",
+          "before": [
+            "candidate rolling summary"
+          ],
+          "after": [
+            "accepted or true no-op"
+          ],
+          "objects": [
+            "generation-check"
+          ],
+          "ruleIds": [
+            "H20",
+            "H22"
+          ],
+          "evidence": [
+            {
+              "path": "agent/conversation_compression.py",
+              "line": 3989,
+              "end": 4009,
+              "symbol": "def compress_context(",
+              "url": "https://github.com/NousResearch/hermes-agent/blob/944c3a434071f43e64b443d033f3eba30c64434c/agent/conversation_compression.py#L3989"
+            }
+          ],
+          "metricsNote": "对象大小和总token仅示例账本，非真实运行、压缩率或tokenizer结果"
+        }
+      ]
+    }
+  ]
+}

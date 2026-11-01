@@ -16,6 +16,11 @@ class ChangeSelectionTests(unittest.TestCase):
     def test_documentation_only(self):
         self.assertEqual(self.enabled("push", ["README.md", "AGENTS.md", "docs/media/demo.mp4", "backend/ARCHITECTURE.md"]), set())
 
+    def test_research_has_independent_validation(self):
+        self.assertEqual(self.enabled("push", ["research/index.html", "research/agent-context-management/scripts/build.py", "research/agent-context-management/data/scenes.json"]), set())
+        self.assertEqual(self.enabled("push", ["research/index.html", ".github/workflows/research-pages.yml"]), set(JOBS))
+        self.assertEqual(self.enabled("push", ["research/index.html", "backend/internal/toolcontext/budget.go"]), {"go", "security_go"})
+
     def test_source_and_lockfile_scans(self):
         cases = [
             (["frontend/src/app/page.tsx"], {"web"}),

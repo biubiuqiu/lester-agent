@@ -1,0 +1,3845 @@
+{
+  "id": "claude",
+  "name": "Claude Code",
+  "repository": "alex000kim/claude-code",
+  "commit": "6aa7e7f8789014d42247a0545ab4e9d4e531b0f2",
+  "overview": "由多寿命材料组装请求，以usage锚+增量估算测压；先条件结果减量，再按管理权与开关选择SM或完整摘要；压缩后恢复文件/Skill/模式/发现状态。它是多条门控路径，不是一条所有用户必经流水线。",
+  "scope": "社区公开泄露镜像，未对原始npm sourcemap逐字节认证；提交日2026-04-08。编译特性和远端配置未知，不推导2026-10-22生产默认。",
+  "layers": [
+    {
+      "name": "系统指令与环境",
+      "source": "query.systemPrompt + getSystemContext；appendSystemContext",
+      "lifecycle": "每次请求外层组装，稳定部分参与prompt cache",
+      "budget": "不是摘要条目；首次无usage时不能由消息粗估精确覆盖"
+    },
+    {
+      "name": "用户/项目指令上下文",
+      "source": "getUserContext→getMemoryFiles→getClaudeMds；prepend meta user reminder",
+      "lifecycle": "memoize；主线程compact清缓存重新发现；嵌套规则按工具路径注入",
+      "budget": "CLAUDE.md 40K字符是警告阈值，不是统一硬裁剪"
+    },
+    {
+      "name": "工具发现与schema",
+      "source": "filteredTools、toolToAPISchema、tool_reference与boundary metadata",
+      "lifecycle": "非deferred常驻，发现后加载deferred；schema会话稳定；compact重新公告已发现名",
+      "budget": "必须计入完整窗口；未加载deferred schema可省输入"
+    },
+    {
+      "name": "Skill索引与已调用正文",
+      "source": "skill_listing vs invokedSkills及Skill tool返回",
+      "lifecycle": "索引只发送新增；正文按调用进入；compact恢复作用域内正文",
+      "budget": "索引目标1%窗口折字符；正文恢复每项5K/总25K"
+    },
+    {
+      "name": "当前活动历史",
+      "source": "getMessagesAfterCompactBoundary与query state.messages",
+      "lifecycle": "工具轮次累积；请求投影可落盘、snip、microclear、collapse",
+      "budget": "usage锚+新增消息估算；工具结果先单项/聚合预算"
+    },
+    {
+      "name": "替代摘要与保留suffix",
+      "source": "SM或full CompactionResult；boundary + summary + kept + attachments +hooks",
+      "lifecycle": "新boundary确定活动视图；SM保留suffix，full不默认保留普通最近消息",
+      "budget": "SM负载阈值检查；full负载大小日志不等于完整请求验收"
+    },
+    {
+      "name": "可恢复外部记录",
+      "source": "tool-results磁盘、transcriptPath、SessionMemory文件、计划文件",
+      "lifecycle": "原始内容按路径再读；并不自动全部回灌prompt",
+      "budget": "路径/preview占少量窗口，恢复读取会再次占预算"
+    }
+  ],
+  "rules": [
+    {
+      "id": "CC01",
+      "title": "规则文件分层发现，不是单个全局 system 字符串",
+      "condition": "会话建立 / 用户上下文缓存失效；未禁用 CLAUDE.md 发现",
+      "action": "getMemoryFiles 先 Managed，再 User；项目目录从上层向 cwd 依次加入 CLAUDE.md、.claude/CLAUDE.md、无条件 rules 和 CLAUDE.local.md；嵌套 git worktree 避免重复加载父仓库已签入规则",
+      "preserve": "规则路径、类型与相对发现顺序",
+      "loss": "这只是组装次序，不是平台授权优先级；文件越晚不代表可覆盖系统权限",
+      "default": "User/Project/Local 由 settingSources 控制；Managed 总是处理",
+      "gate": "CLAUDE_CODE_DISABLE_CLAUDE_MDS；bare 跳过自动发现但显式目录有例外",
+      "evidence": [
+        {
+          "path": "src/utils/claudemd.ts",
+          "line": 790,
+          "end": 945,
+          "symbol": "export const getMemoryFiles",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/claudemd.ts#L790-L945"
+        },
+        {
+          "path": "src/context.ts",
+          "line": 155,
+          "end": 189,
+          "symbol": "export const getUserContext",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/context.ts#L155-L189"
+        }
+      ],
+      "certainty": "源码直接确认；只适用于该镜像快照"
+    },
+    {
+      "id": "CC02",
+      "title": "CLAUDE.md 被包装为首部 meta user context",
+      "condition": "query 真正调用模型前",
+      "action": "appendSystemContext 将环境字典追加到 system 数组；prependUserContext 将 CLAUDE.md / 日期包装到开头的 <system-reminder> meta user message，再接活动对话",
+      "preserve": "系统指令与用户上下文分属不同载体",
+      "loss": "把 CLAUDE.md 一律说成 API system message 会画错结构",
+      "default": "非测试环境且 userContext 非空才 prepend",
+      "gate": "getUserContext memoize；完整压缩后清缓存重建",
+      "evidence": [
+        {
+          "path": "src/utils/api.ts",
+          "line": 437,
+          "end": 485,
+          "symbol": "export function appendSystemContext",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/api.ts#L437-L485"
+        },
+        {
+          "path": "src/query.ts",
+          "line": 660,
+          "end": 668,
+          "symbol": "messages: prependUserContext",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/query.ts#L660-L668"
+        }
+      ],
+      "certainty": "源码直接确认；只适用于该镜像快照"
+    },
+    {
+      "id": "CC03",
+      "title": "规则按路径懒加载，超长警告不是硬截断",
+      "condition": "工具访问 cwd 以下文件；匹配 conditional rule 或嵌套目录规则",
+      "action": "发现目标目录的 CLAUDE.md / rules；loadedNestedMemoryPaths 去重；@include 跟踪 processedPaths 防循环并限制深度",
+      "preserve": "已加载的嵌套规则避免重复发送",
+      "loss": "MAX_MEMORY_CHARACTER_COUNT=40000 在此是警告筛选，不是所有 CLAUDE.md 的发送硬上限",
+      "default": "include 深度上限5；40,000字符筛选超长文件",
+      "gate": "conditional globs 与 read 路径触发；外部 include 有独立许可条件",
+      "evidence": [
+        {
+          "path": "src/utils/claudemd.ts",
+          "line": 537,
+          "end": 545,
+          "symbol": "const MAX_INCLUDE_DEPTH",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/claudemd.ts#L537-L545"
+        },
+        {
+          "path": "src/utils/claudemd.ts",
+          "line": 1132,
+          "end": 1144,
+          "symbol": "export function getLargeMemoryFiles",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/claudemd.ts#L1132-L1144"
+        },
+        {
+          "path": "src/utils/attachments.ts",
+          "line": 1722,
+          "end": 1742,
+          "symbol": "toolUseContext.loadedNestedMemoryPaths?.has",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/attachments.ts#L1722-L1742"
+        }
+      ],
+      "certainty": "源码直接确认；只适用于该镜像快照"
+    },
+    {
+      "id": "CC04",
+      "title": "工具 schema 按发现状态选择，并稳定缓存其字节",
+      "condition": "API queryModel 准备 tools",
+      "action": "tool search 开启时，非 deferred 工具始终加入；deferred 工具只在 tool_reference 已发现后加入；schema 本体按名称+inputJSONSchema缓存以减少中途漂移",
+      "preserve": "非deferred工具、ToolSearch与已发现工具",
+      "loss": "未发现的完整 schema 不进入请求；不能据此说所有工具不占窗口",
+      "default": "工具搜索可因模型/可用工具关闭；没有 deferred 且无待连接MCP时关闭",
+      "gate": "isToolSearchEnabled / provider能力 / defer_loading",
+      "evidence": [
+        {
+          "path": "src/services/api/claude.ts",
+          "line": 1155,
+          "end": 1182,
+          "symbol": "// Dynamic tool loading",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/api/claude.ts#L1155-L1182"
+        },
+        {
+          "path": "src/utils/api.ts",
+          "line": 119,
+          "end": 164,
+          "symbol": "export async function toolToAPISchema",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/api.ts#L119-L164"
+        }
+      ],
+      "certainty": "源码直接确认；只适用于该镜像快照"
+    },
+    {
+      "id": "CC05",
+      "title": "Skill发现清单与Skill正文分开预算",
+      "condition": "工具上下文含 Skill 工具且发现新增 skill",
+      "action": "清单按agent记录已发送名字，只追加delta；预算默认按窗口1%×4字符/token换成字符目标；每项描述最多250字符，压力大缩短非bundled描述甚至仅名字；正文在调用Skill后进入对话",
+      "preserve": "bundled描述、所有条目名；已调用正文在独立invokedSkills表中存续",
+      "loss": "清单预算不是正文预算；极端 names-only 与 bundled保留使目标不是严格总上限",
+      "default": "无窗口 fallback8000字符；可用 SLASH_COMMAND_TOOL_CHAR_BUDGET覆盖",
+      "gate": "EXPERIMENTAL_SKILL_SEARCH 开启时清单限 bundled+MCP；其他通过发现",
+      "evidence": [
+        {
+          "path": "src/tools/SkillTool/prompt.ts",
+          "line": 21,
+          "end": 144,
+          "symbol": "export const SKILL_BUDGET_CONTEXT_PERCENT",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/tools/SkillTool/prompt.ts#L21-L144"
+        },
+        {
+          "path": "src/utils/attachments.ts",
+          "line": 2661,
+          "end": 2750,
+          "symbol": "async function getSkillListingAttachments",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/attachments.ts#L2661-L2750"
+        }
+      ],
+      "certainty": "源码直接确认；只适用于该镜像快照"
+    },
+    {
+      "id": "CC06",
+      "title": "当前token不是把历史账单累加",
+      "condition": "自动阈值 / SM 初始化等读取当前窗口",
+      "action": "tokenCountWithEstimation 找最近真实assistant usage，计 input+cache_creation+cache_read+output，再粗估此后消息；平行工具响应拆分共享message.id时向前找同响应首片，避免漏算交错tool_result",
+      "preserve": "最后API实际观测作为锚；新增内容估计delta",
+      "loss": "不是精确重算整个新请求；首次无usage时仅消息粗估；已有usage可能反映剪裁前旧前缀",
+      "default": "排除synthetic消息；cache token明确占窗口",
+      "gate": "snip/collapse等改变旧前缀需要另行校正",
+      "evidence": [
+        {
+          "path": "src/utils/tokens.ts",
+          "line": 46,
+          "end": 56,
+          "symbol": "export function getTokenCountFromUsage",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/tokens.ts#L46-L56"
+        },
+        {
+          "path": "src/utils/tokens.ts",
+          "line": 226,
+          "end": 261,
+          "symbol": "export function tokenCountWithEstimation",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/tokens.ts#L226-L261"
+        }
+      ],
+      "certainty": "源码直接确认；只适用于该镜像快照"
+    },
+    {
+      "id": "CC07",
+      "title": "大工具结果先落盘，聚合预算只处理首次新结果",
+      "condition": "单结果过 persistence threshold；或启用每条user消息聚合工具结果预算",
+      "action": "大文本结果落盘替换为preview+路径；聚合时优先替换最大 fresh 结果；过去已经原样发出的frozen结果不再改写；恢复时重放持久替换决定保持相同字节",
+      "preserve": "旧决策、完整落盘文本、图片原样、Read自己的maxTokens边界",
+      "loss": "存储失败返回原结果；frozen本身超限允许超额；这不是全局窗口安全保证",
+      "default": "单工具默认阈值50,000字符；聚合默认200,000字符；聚合gate默认false",
+      "gate": "tengu_hawthorn_steeple；Infinity硬退出；远端阈值可覆盖",
+      "evidence": [
+        {
+          "path": "src/constants/toolLimits.ts",
+          "line": 13,
+          "end": 55,
+          "symbol": "export const DEFAULT_MAX_RESULT_SIZE_CHARS",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/constants/toolLimits.ts#L13-L55"
+        },
+        {
+          "path": "src/utils/toolResultStorage.ts",
+          "line": 447,
+          "end": 471,
+          "symbol": "export function provisionContentReplacementState",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/toolResultStorage.ts#L447-L471"
+        },
+        {
+          "path": "src/utils/toolResultStorage.ts",
+          "line": 675,
+          "end": 697,
+          "symbol": "function selectFreshToReplace",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/toolResultStorage.ts#L675-L697"
+        },
+        {
+          "path": "src/query.ts",
+          "line": 369,
+          "end": 400,
+          "symbol": "// Enforce per-message budget",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/query.ts#L369-L400"
+        }
+      ],
+      "certainty": "源码直接确认；只适用于该镜像快照"
+    },
+    {
+      "id": "CC08",
+      "title": "实际回收顺序比微压缩→自动压缩更长",
+      "condition": "每轮query准备活动视图",
+      "action": "getMessagesAfterCompactBoundary → applyToolResultBudget → 条件HISTORY_SNIP → microcompact → 条件CONTEXT_COLLAPSE投影 → autoCompact →阻塞检查→组装请求",
+      "preserve": "完整会话状态与request projection区分；collapse摘要放commit log非REPL数组",
+      "loss": "Snip/collapse源码模块在镜像缺失，不能展开其内部算法或默认开启",
+      "default": "门控关闭时直接跳过对应项",
+      "gate": "HISTORY_SNIP / CONTEXT_COLLAPSE是编译特性",
+      "evidence": [
+        {
+          "path": "src/query.ts",
+          "line": 365,
+          "end": 455,
+          "symbol": "let messagesForQuery = [...getMessagesAfterCompactBoundary",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/query.ts#L365-L455"
+        }
+      ],
+      "certainty": "源码直接确认；只适用于该镜像快照"
+    },
+    {
+      "id": "CC09",
+      "title": "冷缓存间隔微压缩默认关闭",
+      "condition": "明确主线程source、配置enabled，存在可解析最后assistant时间，gap≥阈值，且有可清理的旧工具结果",
+      "action": "按compactable tool-use IDs选择，保留最近max(1,keepRecent)，旧tool_result替换成[Old tool result content cleared]；不调用LLM；清理cached MC状态",
+      "preserve": "tool_use和tool_result配对ID；非可清理工具；最近至少1个结果",
+      "loss": "删除结果正文；没有自动产生事实摘要或通用恢复指针",
+      "default": "源码配置 enabled=false、gap60分钟、keep5；远端可变",
+      "gate": "tengu_slate_heron 配置；仅明确repl_main_thread前缀；不能把undefined视为本分支主线程",
+      "evidence": [
+        {
+          "path": "src/services/compact/timeBasedMCConfig.ts",
+          "line": 30,
+          "end": 43,
+          "symbol": "const TIME_BASED_MC_CONFIG_DEFAULTS",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/timeBasedMCConfig.ts#L30-L43"
+        },
+        {
+          "path": "src/services/compact/microCompact.ts",
+          "line": 422,
+          "end": 505,
+          "symbol": "export function evaluateTimeBasedTrigger",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/microCompact.ts#L422-L505"
+        }
+      ],
+      "certainty": "源码直接确认；只适用于该镜像快照"
+    },
+    {
+      "id": "CC10",
+      "title": "暖缓存微压缩是API cache editing合同",
+      "condition": "time-based未执行；CACHED_MICROCOMPACT编译特性存在，模型支持，cached模块开关开启，主线程来源",
+      "action": "登记工具结果ID及user消息分组；模块返回待删IDs后排队cache_edits；本地messages原样返回；API层注入cache_reference/cache_edits；边界事件等真实usage才记录节省量",
+      "preserve": "本地正文不改，已pin编辑在原位置重发维护cache前缀",
+      "loss": "服务端视图可能移除正文；无法从镜像确认缺失模块的triggerThreshold/keepRecent默认",
+      "default": "cachedMicrocompact.ts不在镜像；默认与内部选择不可核验",
+      "gate": "CACHED_MICROCOMPACT；isCachedMicrocompactEnabled；isModelSupportedForCacheEditing",
+      "evidence": [
+        {
+          "path": "src/services/compact/microCompact.ts",
+          "line": 253,
+          "end": 301,
+          "symbol": "export async function microcompactMessages",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/microCompact.ts#L253-L301"
+        },
+        {
+          "path": "src/services/compact/microCompact.ts",
+          "line": 305,
+          "end": 397,
+          "symbol": "async function cachedMicrocompactPath",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/microCompact.ts#L305-L397"
+        }
+      ],
+      "certainty": "调用方合同可证实；被调用模块缺失，内部规则未知"
+    },
+    {
+      "id": "CC11",
+      "title": "自动阈值是两次扣除而非固定比例",
+      "condition": "auto允许且无更高层机制取得上下文管理权",
+      "action": "W可被环境值下调；E=W−min(模型maxOutput,20,000)；T=E−13,000；百分比override仅能进一步下调；usage≥T触发",
+      "preserve": "给摘要输出与执行增长留下提前量",
+      "loss": "阈值用估算/usage锚，不是每次API请求前精确硬证明",
+      "default": "摘要预留上限20K、auto buffer13K；manual blocking E−3K",
+      "gate": "DISABLE_COMPACT/DISABLE_AUTO_COMPACT/userConfig.autoCompactEnabled；反应式/CONTEXT_COLLAPSE模式抑制主动压缩",
+      "evidence": [
+        {
+          "path": "src/services/compact/autoCompact.ts",
+          "line": 30,
+          "end": 95,
+          "symbol": "const MAX_OUTPUT_TOKENS_FOR_SUMMARY",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L30-L95"
+        },
+        {
+          "path": "src/services/compact/autoCompact.ts",
+          "line": 147,
+          "end": 248,
+          "symbol": "export function isAutoCompactEnabled",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L147-L248"
+        }
+      ],
+      "certainty": "源码直接确认；只适用于该镜像快照"
+    },
+    {
+      "id": "CC12",
+      "title": "递归与管理权排他",
+      "condition": "querySource=compact/session_memory；或内部context-agent；或反应式/上下文collapse拥有压力处理",
+      "action": "跳过主动autoCompact，避免摘要代理自己摘要自己或并行机制互相破坏；reactive/collapse抑制不等于isAutoCompactEnabled=false",
+      "preserve": "手动compact与独立恢复入口可继续",
+      "loss": "不能在动画中把所有机制串成必执行的一个流水线",
+      "default": "对应feature关闭时这些分支不存在",
+      "gate": "REACTIVE_COMPACT / CONTEXT_COLLAPSE；内部被引用实现缺失",
+      "evidence": [
+        {
+          "path": "src/services/compact/autoCompact.ts",
+          "line": 160,
+          "end": 265,
+          "symbol": "export async function shouldAutoCompact",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L160-L265"
+        }
+      ],
+      "certainty": "源码直接确认；只适用于该镜像快照"
+    },
+    {
+      "id": "CC13",
+      "title": "SM压缩先复用已有记忆，不新调用摘要模型",
+      "condition": "自动阈值已到且SM开关启用；记忆文件有实际内容；已知最后覆盖ID存在或恢复无ID场景",
+      "action": "最多等正在提取的记忆15秒；选择未被记忆覆盖尾部，必要时向前扩展；把sessionMemory文件包装成summary；SessionStart(compact) hooks与plan附件加入",
+      "preserve": "确定边界后的原样近期消息；旧工具调用配对及同响应thinking兄弟片段",
+      "loss": "记忆正文可能每节截断；缺失/空模板/ID失踪则返回null改走完整摘要",
+      "default": "SM远端两gate默认false；ENABLE_CLAUDE_CODE_SM_COMPACT可强开，DISABLE可关",
+      "gate": "tengu_session_memory && tengu_sm_compact；ENABLE优先于DISABLE",
+      "evidence": [
+        {
+          "path": "src/services/compact/sessionMemoryCompact.ts",
+          "line": 403,
+          "end": 437,
+          "symbol": "export function shouldUseSessionMemoryCompaction",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L403-L437"
+        },
+        {
+          "path": "src/services/compact/sessionMemoryCompact.ts",
+          "line": 514,
+          "end": 627,
+          "symbol": "export async function trySessionMemoryCompaction",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L514-L627"
+        },
+        {
+          "path": "src/services/SessionMemory/sessionMemoryUtils.ts",
+          "line": 89,
+          "end": 108,
+          "symbol": "export async function waitForSessionMemoryExtraction",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/SessionMemory/sessionMemoryUtils.ts#L89-L108"
+        }
+      ],
+      "certainty": "源码直接确认；只适用于该镜像快照"
+    },
+    {
+      "id": "CC14",
+      "title": "SM的40K不是硬裁尾总上限",
+      "condition": "calculateMessagesToKeepIndex选择边界",
+      "action": "从lastSummarizedID后起算，再向前扩到至少10K估算tokens和5个含text消息，达到40K停止扩展；最后为所有保留tool_results回找tool_use，并保留同message.id的assistant碎片",
+      "preserve": "未摘要尾部、tool调用/结果、同响应thinking拆分组",
+      "loss": "初始未摘要suffix已大于40K时并不会截掉它；配对回拉也可超过40K",
+      "default": "minTokens10,000/minText5/maxTokens40,000",
+      "gate": "SM config远端可覆盖；选完组合消息估计≥auto阈值则拒绝SM结果",
+      "evidence": [
+        {
+          "path": "src/services/compact/sessionMemoryCompact.ts",
+          "line": 57,
+          "end": 64,
+          "symbol": "export const DEFAULT_SM_COMPACT_CONFIG",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L57-L64"
+        },
+        {
+          "path": "src/services/compact/sessionMemoryCompact.ts",
+          "line": 324,
+          "end": 400,
+          "symbol": "export function calculateMessagesToKeepIndex",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L324-L400"
+        },
+        {
+          "path": "src/services/compact/sessionMemoryCompact.ts",
+          "line": 232,
+          "end": 315,
+          "symbol": "export function adjustIndexToPreserveAPIInvariants",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L232-L315"
+        }
+      ],
+      "certainty": "源码直接确认；只适用于该镜像快照"
+    },
+    {
+      "id": "CC15",
+      "title": "完整摘要是替换活动历史，不默认保留最近对话原文",
+      "condition": "SM不可用或手动/自动调用compactConversation",
+      "action": "PreCompact hook可补充指令；getCompactPrompt组织摘要要求；得到summary后创建boundary+summary+恢复附件+SessionStart hook结果；full返回值没有messagesToKeep",
+      "preserve": "摘要表达的事实、恢复文件/Skill/plan、发现的工具名metadata",
+      "loss": "最新用户原话不保证逐字保留；旧消息不是普通recent suffix继续全放进prompt",
+      "default": "full与partial/SM路径不可混同",
+      "gate": "自动调用suppressFollowUpQuestions=true；partial另有独立入口",
+      "evidence": [
+        {
+          "path": "src/services/compact/compact.ts",
+          "line": 387,
+          "end": 457,
+          "symbol": "export async function compactConversation",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L387-L457"
+        },
+        {
+          "path": "src/services/compact/compact.ts",
+          "line": 741,
+          "end": 750,
+          "symbol": "attachments: postCompactFileAttachments",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L741-L750"
+        },
+        {
+          "path": "src/services/compact/compact.ts",
+          "line": 330,
+          "end": 340,
+          "symbol": "export function buildPostCompactMessages",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L330-L340"
+        }
+      ],
+      "certainty": "源码直接确认；只适用于该镜像快照"
+    },
+    {
+      "id": "CC16",
+      "title": "摘要尽量共享原请求前缀，但不是工具型新agent随意执行",
+      "condition": "streamCompactSummary且cache-sharing gate启用",
+      "action": "runForkedAgent复用system/tools/model/messages前缀与thinking参数；maxTurns1、skipCacheWrite；createCompactCanUseTool拒绝全部工具执行，保留父工具schema仅为cache-key一致；不显式改maxOutputTokens避免thinking配置改变击穿cache",
+      "preserve": "相同prefix字节与已缓存推理前缀",
+      "loss": "仍需模型推理费用/时间；fork失败/无有效text降级普通stream",
+      "default": "tengu_compact_cache_prefix默认true；普通stream思考disabled、摘要system替换、图片与重复恢复附件剥离；fallback请求带FileRead（搜索开启另带deferred/MCP）schema，但不因此推断摘要fork有读权限",
+      "gate": "远端kill-switch；普通stream的可选重试gate默认false",
+      "evidence": [
+        {
+          "path": "src/services/compact/compact.ts",
+          "line": 1136,
+          "end": 1226,
+          "symbol": "async function streamCompactSummary",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L1136-L1226"
+        },
+        {
+          "path": "src/services/compact/compact.ts",
+          "line": 1125,
+          "end": 1145,
+          "symbol": "function createCompactCanUseTool",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L1125-L1145"
+        },
+        {
+          "path": "src/services/compact/compact.ts",
+          "line": 1250,
+          "end": 1348,
+          "symbol": "// Regular streaming path",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L1250-L1348"
+        }
+      ],
+      "certainty": "源码直接确认；只适用于该镜像快照"
+    },
+    {
+      "id": "CC17",
+      "title": "恢复重新读取有限文件，并恢复状态，不是只塞一段摘要",
+      "condition": "完整摘要生成成功",
+      "action": "保存readFileState快照后clear；按recency选最近最多5文件、每文件5K，FileRead重新读获取新鲜内容；文件附件累计粗估≤50K；追加后台agent、plan、plan_mode、已调用skills、deferred工具/agent/MCP delta、SessionStart结果",
+      "preserve": "当前权限/模式与schema发现状态、最近文件正文、已调用Skill作用域",
+      "loss": "未选文件和过预算内容不入模型；恢复附件本身重新占窗口",
+      "default": "文件5个×5K；文件附件总50K；并非整个postCompact窗口≤50K",
+      "gate": "按agent作用域；某些文件排除；保留suffix已有Read路径可跳过重读",
+      "evidence": [
+        {
+          "path": "src/services/compact/compact.ts",
+          "line": 518,
+          "end": 634,
+          "symbol": "const preCompactReadFileState",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L518-L634"
+        },
+        {
+          "path": "src/services/compact/compact.ts",
+          "line": 1415,
+          "end": 1475,
+          "symbol": "export async function createPostCompactFileAttachments",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L1415-L1475"
+        }
+      ],
+      "certainty": "源码直接确认；只适用于该镜像快照"
+    },
+    {
+      "id": "CC18",
+      "title": "已调用Skill正文独立恢复，清单不重复广播",
+      "condition": "compaction后getInvokedSkillsForAgent非空",
+      "action": "已调用skills按最近调用排序；每项保留头部约5K token，累计25K；清理不删除invokedSkills也不reset sentSkillNames；避免每次重新列全部skill名称",
+      "preserve": "该agent曾调用Skill的头部正文及可重载路径",
+      "loss": "超出Skill总预算条目不选，单项尾部截断；250字发现描述与正文完全不同",
+      "default": "每Skill5,000；总25,000",
+      "gate": "invokedSkills agent-scoped；缺Skill则无附件",
+      "evidence": [
+        {
+          "path": "src/services/compact/compact.ts",
+          "line": 1494,
+          "end": 1545,
+          "symbol": "export function createSkillAttachmentIfNeeded",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L1494-L1545"
+        },
+        {
+          "path": "src/services/compact/postCompactCleanup.ts",
+          "line": 31,
+          "end": 77,
+          "symbol": "export function runPostCompactCleanup",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/postCompactCleanup.ts#L31-L77"
+        }
+      ],
+      "certainty": "源码直接确认；只适用于该镜像快照"
+    },
+    {
+      "id": "CC19",
+      "title": "压缩指标不等于最终完整请求大小保证",
+      "condition": "完整摘要完成计算遥测",
+      "action": "postCompactTokenCount是摘要API请求的input/cache/output总usage；truePostCompactTokenCount才是boundary+summary+attachments+hooks负载估计；下一轮还要加system/tools/userContext",
+      "preserve": "指标语义明确便于诊断反复压缩",
+      "loss": "full compact仅计算willRetriggerNextTurn日志，所读函数未对完整重组请求进行强制低于阈值验收；SM另有负载阈值检查",
+      "default": "system/tools/userContext未算在truePostCompact负载估计中",
+      "gate": "第一次新请求usage将重新建立完整大小基准",
+      "evidence": [
+        {
+          "path": "src/services/compact/compact.ts",
+          "line": 626,
+          "end": 694,
+          "symbol": "// Previously \"postCompactTokenCount\"",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L626-L694"
+        },
+        {
+          "path": "src/services/compact/sessionMemoryCompact.ts",
+          "line": 602,
+          "end": 624,
+          "symbol": "const postCompactTokenCount = estimateMessageTokens",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L602-L624"
+        }
+      ],
+      "certainty": "源码直接确认；只适用于该镜像快照"
+    },
+    {
+      "id": "CC20",
+      "title": "摘要请求本身过长：以API round为单元丢最旧部分再试",
+      "condition": "summary文字以prompt-too-long标准前缀开头",
+      "action": "最多3次缩小重试；可解析tokenGap则累计丢头部API groups覆盖gap，不可解析则丢20% groups（至少1）；至少留1组；若第一条变assistant，补synthetic user marker",
+      "preserve": "剩余API round组与角色/工具配对合法性",
+      "loss": "被丢头部不进入摘要，信息真实丢失；不是保真压缩",
+      "default": "MAX_PTL_RETRIES3；需至少2组才能缩小",
+      "gate": "forkContextMessages与普通messages同步替换，避免fork继续用旧输入",
+      "evidence": [
+        {
+          "path": "src/services/compact/compact.ts",
+          "line": 227,
+          "end": 300,
+          "symbol": "const MAX_PTL_RETRIES",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L227-L300"
+        },
+        {
+          "path": "src/services/compact/compact.ts",
+          "line": 449,
+          "end": 495,
+          "symbol": "let ptlAttempts = 0",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L449-L495"
+        }
+      ],
+      "certainty": "源码直接确认；只适用于该镜像快照"
+    },
+    {
+      "id": "CC21",
+      "title": "局部重试与会话熔断是两层预算",
+      "condition": "完整压缩失败或用户取消；自动路径catch",
+      "action": "普通stream可在gate开启时最多2 attempts；summary PTL最多3次缩小；auto consecutiveFailures累加，达到3后后续auto不再尝试；成功归零",
+      "preserve": "旧上下文不会仅因失败被替换为假摘要；用户取消signal传给fork",
+      "loss": "自动失败通常不弹手动通知，下一轮可再试；最终可能需要用户缩小输入",
+      "default": "streamingRetry gate默认false；auto失败3次熔断",
+      "gate": "querySource递归保护；用户abort错误不打一般错误日志但仍计failure",
+      "evidence": [
+        {
+          "path": "src/services/compact/compact.ts",
+          "line": 131,
+          "end": 134,
+          "symbol": "const MAX_COMPACT_STREAMING_RETRIES",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L131-L134"
+        },
+        {
+          "path": "src/services/compact/autoCompact.ts",
+          "line": 257,
+          "end": 274,
+          "symbol": "// Circuit breaker: stop retrying",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L257-L274"
+        },
+        {
+          "path": "src/services/compact/autoCompact.ts",
+          "line": 334,
+          "end": 351,
+          "symbol": "} catch (error) {",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L334-L351"
+        }
+      ],
+      "certainty": "源码直接确认；只适用于该镜像快照"
+    },
+    {
+      "id": "CC22",
+      "title": "阻塞检查为手动压缩留空间，但有恢复机制例外",
+      "condition": "未刚成功compact；source非compact/session_memory；反应式/collapse不拥有压力处理",
+      "action": "按current估计−snipFreed与E−3K比较；达到阻塞线生成invalid_request并停止；不是一味继续调用API",
+      "preserve": "留出手动compact余量；避免摘要fork被自身阻塞",
+      "loss": "新工具结果仍可能越过provider窗口；上游注释说auto off，但实际if条件还检查恢复所有者，不能简化成单一if auto-off",
+      "default": "默认blocking E−3K，可测试override",
+      "gate": "reactive/collapse + 自动允许时跳过synthetic preempt，让真实API错误驱动恢复",
+      "evidence": [
+        {
+          "path": "src/query.ts",
+          "line": 592,
+          "end": 670,
+          "symbol": "// Block if we've hit the hard blocking limit",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/query.ts#L592-L670"
+        },
+        {
+          "path": "src/services/compact/autoCompact.ts",
+          "line": 123,
+          "end": 142,
+          "symbol": "const defaultBlockingLimit",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L123-L142"
+        }
+      ],
+      "certainty": "源码直接确认；只适用于该镜像快照"
+    },
+    {
+      "id": "CC23",
+      "title": "服务端context_management与客户端微压缩是独立机制",
+      "condition": "API参数组装调用getAPIContextManagement",
+      "action": "thinking有内容时可提交clear_thinking保留all或冷缓存仅最近1轮；tool清理策略只有USER_TYPE=ant且显式env启用，声明input trigger与clear_at_least",
+      "preserve": "API保留规则由声明策略表达",
+      "loss": "服务端执行内部不可从客户端复原；默认180K→40K不是cached MC缺失模块默认",
+      "default": "tool清理env未设则不加；thinking策略可能单独存在",
+      "gate": "USER_TYPE ant / USE_API_CLEAR_TOOL_RESULTS / USE_API_CLEAR_TOOL_USES",
+      "evidence": [
+        {
+          "path": "src/services/compact/apiMicrocompact.ts",
+          "line": 64,
+          "end": 153,
+          "symbol": "export function getAPIContextManagement",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/apiMicrocompact.ts#L64-L153"
+        }
+      ],
+      "certainty": "源码直接确认；只适用于该镜像快照"
+    },
+    {
+      "id": "CC24",
+      "title": "SM快速压缩背后有独立的增量记忆提取循环",
+      "condition": "主REPL来源严格等于repl_main_thread，tengu_session_memory开启；用户上下文增长满足阈值",
+      "action": "初始化至少10K当前窗口；之后至少增长5K，并且自上次至少3次工具调用或最后assistant轮无tool调用；在fork隔离上下文中更新session memory文件，成功后记录覆盖UUID与提取时token基线。该fork仅允许精确memoryPath上的Edit，和完整摘要的deny-all不是同一权限策略。",
+      "preserve": "memoryPath精确限制、覆盖UUID、当前状态与错误修正；不是每轮自动重总结",
+      "loss": "门控默认false，源码钩子是严格repl_main_thread匹配，其他带输出style后缀来源未由此条件匹配；不能宣称所有会话默认有预先记忆",
+      "default": "init10000、update增长5000、toolCalls3；门控默认false",
+      "gate": "tengu_session_memory；注册hook不等于gate开启",
+      "evidence": [
+        {
+          "path": "src/services/SessionMemory/sessionMemoryUtils.ts",
+          "line": 32,
+          "end": 39,
+          "symbol": "export const DEFAULT_SESSION_MEMORY_CONFIG",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/SessionMemory/sessionMemoryUtils.ts#L32-L39"
+        },
+        {
+          "path": "src/services/SessionMemory/sessionMemory.ts",
+          "line": 134,
+          "end": 178,
+          "symbol": "export function shouldExtractMemory",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/SessionMemory/sessionMemory.ts#L134-L178"
+        },
+        {
+          "path": "src/services/SessionMemory/sessionMemory.ts",
+          "line": 277,
+          "end": 352,
+          "symbol": "// Only run session memory on main REPL thread",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/SessionMemory/sessionMemory.ts#L277-L352"
+        },
+        {
+          "path": "src/services/SessionMemory/sessionMemory.ts",
+          "line": 460,
+          "end": 490,
+          "symbol": "function createMemoryFileCanUseTool",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/SessionMemory/sessionMemory.ts#L460-L490"
+        }
+      ],
+      "certainty": "源码直接确认；静态逻辑，不推断生产开启率"
+    },
+    {
+      "id": "CC25",
+      "title": "记忆摘要软预算、插入截断与长期AutoMem入口要分清",
+      "condition": "更新sessionMemory prompt；或用SM作为compact结果；或读取AutoMem/TeamMem入口文件",
+      "action": "sessionMemory更新prompt要求每节约2K、全文件12K，并在超预算时要求condense；compact插入时对每个#一级节实际按8000字符截断；AutoMem/TeamMem入口在claudemd parse时另用line/byte cap截断。",
+      "preserve": "被截断SM的完整memory文件路径；AutoMem入口可引导读其他文件",
+      "loss": "prompt的12K是指令性目标，不是统一总文件硬验证；按节截断也不能保证总summary≤12K；不要把所有memory混成一个预算",
+      "default": "section2000×4字符；sessionMemory提示总12000",
+      "gate": "AutoMem/TeamMem与SessionMemory是不同来源/生命周期；TEAMMEM另受构建门控",
+      "evidence": [
+        {
+          "path": "src/services/SessionMemory/prompts.ts",
+          "line": 8,
+          "end": 14,
+          "symbol": "const MAX_SECTION_LENGTH",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/SessionMemory/prompts.ts#L8-L14"
+        },
+        {
+          "path": "src/services/SessionMemory/prompts.ts",
+          "line": 256,
+          "end": 305,
+          "symbol": "export function truncateSessionMemoryForCompact",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/SessionMemory/prompts.ts#L256-L305"
+        },
+        {
+          "path": "src/utils/claudemd.ts",
+          "line": 381,
+          "end": 391,
+          "symbol": "// Truncate MEMORY.md entrypoints",
+          "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/claudemd.ts#L381-L391"
+        }
+      ],
+      "certainty": "源码直接确认"
+    }
+  ],
+  "pipeline": [
+    {
+      "phase": "准备稳定上下文",
+      "functions": [
+        "getUserContext",
+        "getMemoryFiles",
+        "getClaudeMds",
+        "getSystemContext",
+        "sessionMemoryExtractionHook（另一时间轴）"
+      ],
+      "inputs": [
+        "settingsSources",
+        "cwd",
+        "instruction files",
+        "environment"
+      ],
+      "outputs": [
+        "systemContext",
+        "userContext"
+      ],
+      "ruleIds": [
+        "CC01",
+        "CC02",
+        "CC03",
+        "CC24"
+      ]
+    },
+    {
+      "phase": "活动视图与结果入口控制",
+      "functions": [
+        "getMessagesAfterCompactBoundary",
+        "applyToolResultBudget",
+        "snipCompactIfNeeded"
+      ],
+      "inputs": [
+        "full transcript",
+        "contentReplacementState",
+        "feature gates"
+      ],
+      "outputs": [
+        "messagesForQuery",
+        "snipTokensFreed"
+      ],
+      "ruleIds": [
+        "CC07",
+        "CC08"
+      ]
+    },
+    {
+      "phase": "局部回收",
+      "functions": [
+        "microcompactMessages",
+        "evaluateTimeBasedTrigger",
+        "cachedMicrocompactPath",
+        "applyCollapsesIfNeeded"
+      ],
+      "inputs": [
+        "messages",
+        "timestamps",
+        "gates",
+        "tool IDs"
+      ],
+      "outputs": [
+        "possibly edited view or pendingCacheEdits"
+      ],
+      "ruleIds": [
+        "CC09",
+        "CC10",
+        "CC12"
+      ]
+    },
+    {
+      "phase": "压力计量与策略选择",
+      "functions": [
+        "tokenCountWithEstimation",
+        "shouldAutoCompact",
+        "autoCompactIfNeeded"
+      ],
+      "inputs": [
+        "last usage",
+        "delta messages",
+        "window/model output",
+        "tracking"
+      ],
+      "outputs": [
+        "no-op OR SM/full attempt"
+      ],
+      "ruleIds": [
+        "CC06",
+        "CC11",
+        "CC12",
+        "CC21"
+      ]
+    },
+    {
+      "phase": "SM快速路径",
+      "functions": [
+        "shouldUseSessionMemoryCompaction",
+        "waitForSessionMemoryExtraction",
+        "calculateMessagesToKeepIndex",
+        "adjustIndexToPreserveAPIInvariants"
+      ],
+      "inputs": [
+        "memory content",
+        "last covered UUID",
+        "active history"
+      ],
+      "outputs": [
+        "summary+kept suffix+plan+hooks OR null"
+      ],
+      "ruleIds": [
+        "CC13",
+        "CC14"
+      ]
+    },
+    {
+      "phase": "完整模型摘要路径",
+      "functions": [
+        "compactConversation",
+        "streamCompactSummary",
+        "runForkedAgent",
+        "truncateHeadForPTLRetry"
+      ],
+      "inputs": [
+        "history",
+        "PreCompact instructions",
+        "cacheSafeParams"
+      ],
+      "outputs": [
+        "valid text summary OR failure"
+      ],
+      "ruleIds": [
+        "CC15",
+        "CC16",
+        "CC20",
+        "CC21"
+      ]
+    },
+    {
+      "phase": "恢复与装配",
+      "functions": [
+        "createPostCompactFileAttachments",
+        "createSkillAttachmentIfNeeded",
+        "processSessionStartHooks",
+        "buildPostCompactMessages",
+        "runPostCompactCleanup"
+      ],
+      "inputs": [
+        "summary",
+        "readFileState",
+        "invoked skills",
+        "current platform state"
+      ],
+      "outputs": [
+        "new boundary+summary+kept?+attachments+hooks"
+      ],
+      "ruleIds": [
+        "CC17",
+        "CC18",
+        "CC19"
+      ]
+    },
+    {
+      "phase": "最终请求",
+      "functions": [
+        "calculateTokenWarningState",
+        "prependUserContext",
+        "appendSystemContext",
+        "queryModel",
+        "toolToAPISchema",
+        "normalizeMessagesForAPI"
+      ],
+      "inputs": [
+        "working view",
+        "system",
+        "user context",
+        "tools"
+      ],
+      "outputs": [
+        "API request and new actual usage"
+      ],
+      "ruleIds": [
+        "CC02",
+        "CC04",
+        "CC22",
+        "CC23"
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "normal",
+      "title": "普通自动完整压缩",
+      "quantities": "teaching-only",
+      "assumptions": [
+        "W200K",
+        "reserve20K",
+        "auto允许",
+        "micro gates不生效",
+        "SM不可用",
+        "无内部collapse/reactive管理权"
+      ],
+      "steps": [
+        {
+          "title": "把不同寿命的材料装成一次请求",
+          "description": "本场景数字均为教学示意，非真实压缩测量。W=200K，输出预留按20K；稳定材料24K，加历史/近期/新输入150K，总174K。",
+          "before": [],
+          "after": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "old",
+              "kind": "history",
+              "label": "旧对话与工具结果",
+              "tokens": 130000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "recent",
+              "kind": "recent",
+              "label": "近期上下文",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "new",
+              "kind": "user",
+              "label": "新用户要求",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "objects": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "old",
+              "kind": "history",
+              "label": "旧对话与工具结果",
+              "tokens": 130000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "recent",
+              "kind": "recent",
+              "label": "近期上下文",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "new",
+              "kind": "user",
+              "label": "新用户要求",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "ruleIds": [
+            "CC01",
+            "CC02",
+            "CC04",
+            "CC06"
+          ],
+          "functions": [],
+          "evidence": [
+            {
+              "path": "src/utils/claudemd.ts",
+              "line": 790,
+              "end": 945,
+              "symbol": "export const getMemoryFiles",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/claudemd.ts#L790-L945"
+            },
+            {
+              "path": "src/context.ts",
+              "line": 155,
+              "end": 189,
+              "symbol": "export const getUserContext",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/context.ts#L155-L189"
+            },
+            {
+              "path": "src/utils/api.ts",
+              "line": 437,
+              "end": 485,
+              "symbol": "export function appendSystemContext",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/api.ts#L437-L485"
+            },
+            {
+              "path": "src/query.ts",
+              "line": 660,
+              "end": 668,
+              "symbol": "messages: prependUserContext",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/query.ts#L660-L668"
+            },
+            {
+              "path": "src/services/api/claude.ts",
+              "line": 1155,
+              "end": 1182,
+              "symbol": "// Dynamic tool loading",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/api/claude.ts#L1155-L1182"
+            },
+            {
+              "path": "src/utils/api.ts",
+              "line": 119,
+              "end": 164,
+              "symbol": "export async function toolToAPISchema",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/api.ts#L119-L164"
+            },
+            {
+              "path": "src/utils/tokens.ts",
+              "line": 46,
+              "end": 56,
+              "symbol": "export function getTokenCountFromUsage",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/tokens.ts#L46-L56"
+            },
+            {
+              "path": "src/utils/tokens.ts",
+              "line": 226,
+              "end": 261,
+              "symbol": "export function tokenCountWithEstimation",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/tokens.ts#L226-L261"
+            }
+          ]
+        },
+        {
+          "title": "低成本步骤不一定执行",
+          "description": "time-based微压缩默认gate关闭；cached内部条件未证实；本场景均跳过，避免把条件机制演成必定回收。活动视图仍174K。",
+          "before": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "old",
+              "kind": "history",
+              "label": "旧对话与工具结果",
+              "tokens": 130000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "recent",
+              "kind": "recent",
+              "label": "近期上下文",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "new",
+              "kind": "user",
+              "label": "新用户要求",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "after": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "old",
+              "kind": "history",
+              "label": "旧对话与工具结果",
+              "tokens": 130000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "recent",
+              "kind": "recent",
+              "label": "近期上下文",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "new",
+              "kind": "user",
+              "label": "新用户要求",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "objects": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "old",
+              "kind": "history",
+              "label": "旧对话与工具结果",
+              "tokens": 130000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "recent",
+              "kind": "recent",
+              "label": "近期上下文",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "new",
+              "kind": "user",
+              "label": "新用户要求",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "ruleIds": [
+            "CC08",
+            "CC09",
+            "CC10"
+          ],
+          "functions": [],
+          "evidence": [
+            {
+              "path": "src/query.ts",
+              "line": 365,
+              "end": 455,
+              "symbol": "let messagesForQuery = [...getMessagesAfterCompactBoundary",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/query.ts#L365-L455"
+            },
+            {
+              "path": "src/services/compact/timeBasedMCConfig.ts",
+              "line": 30,
+              "end": 43,
+              "symbol": "const TIME_BASED_MC_CONFIG_DEFAULTS",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/timeBasedMCConfig.ts#L30-L43"
+            },
+            {
+              "path": "src/services/compact/microCompact.ts",
+              "line": 422,
+              "end": 505,
+              "symbol": "export function evaluateTimeBasedTrigger",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/microCompact.ts#L422-L505"
+            },
+            {
+              "path": "src/services/compact/microCompact.ts",
+              "line": 253,
+              "end": 301,
+              "symbol": "export async function microcompactMessages",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/microCompact.ts#L253-L301"
+            },
+            {
+              "path": "src/services/compact/microCompact.ts",
+              "line": 305,
+              "end": 397,
+              "symbol": "async function cachedMicrocompactPath",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/microCompact.ts#L305-L397"
+            }
+          ]
+        },
+        {
+          "title": "对照触发线而非等待200K满",
+          "description": "E=200K−20K=180K；自动触发线167K。174K≥167K，且未禁用、未递归、无collapse/反应式所有者。",
+          "before": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "old",
+              "kind": "history",
+              "label": "旧对话与工具结果",
+              "tokens": 130000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "recent",
+              "kind": "recent",
+              "label": "近期上下文",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "new",
+              "kind": "user",
+              "label": "新用户要求",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "after": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "old",
+              "kind": "history",
+              "label": "旧对话与工具结果",
+              "tokens": 130000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "recent",
+              "kind": "recent",
+              "label": "近期上下文",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "new",
+              "kind": "user",
+              "label": "新用户要求",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "objects": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "old",
+              "kind": "history",
+              "label": "旧对话与工具结果",
+              "tokens": 130000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "recent",
+              "kind": "recent",
+              "label": "近期上下文",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "new",
+              "kind": "user",
+              "label": "新用户要求",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "ruleIds": [
+            "CC11",
+            "CC12"
+          ],
+          "functions": [],
+          "evidence": [
+            {
+              "path": "src/services/compact/autoCompact.ts",
+              "line": 30,
+              "end": 95,
+              "symbol": "const MAX_OUTPUT_TOKENS_FOR_SUMMARY",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L30-L95"
+            },
+            {
+              "path": "src/services/compact/autoCompact.ts",
+              "line": 147,
+              "end": 248,
+              "symbol": "export function isAutoCompactEnabled",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L147-L248"
+            },
+            {
+              "path": "src/services/compact/autoCompact.ts",
+              "line": 160,
+              "end": 265,
+              "symbol": "export async function shouldAutoCompact",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L160-L265"
+            }
+          ]
+        },
+        {
+          "title": "尝试SM：此场景不可用",
+          "description": "SM两个远端gate默认false；本场景无可用SM摘要，因此返回null。不是固定先发一次SM模型请求。",
+          "before": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "old",
+              "kind": "history",
+              "label": "旧对话与工具结果",
+              "tokens": 130000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "recent",
+              "kind": "recent",
+              "label": "近期上下文",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "new",
+              "kind": "user",
+              "label": "新用户要求",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "after": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "old",
+              "kind": "history",
+              "label": "旧对话与工具结果",
+              "tokens": 130000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "recent",
+              "kind": "recent",
+              "label": "近期上下文",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "new",
+              "kind": "user",
+              "label": "新用户要求",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "objects": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "old",
+              "kind": "history",
+              "label": "旧对话与工具结果",
+              "tokens": 130000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "recent",
+              "kind": "recent",
+              "label": "近期上下文",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "new",
+              "kind": "user",
+              "label": "新用户要求",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "ruleIds": [
+            "CC13",
+            "CC14"
+          ],
+          "functions": [],
+          "evidence": [
+            {
+              "path": "src/services/compact/sessionMemoryCompact.ts",
+              "line": 403,
+              "end": 437,
+              "symbol": "export function shouldUseSessionMemoryCompaction",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L403-L437"
+            },
+            {
+              "path": "src/services/compact/sessionMemoryCompact.ts",
+              "line": 514,
+              "end": 627,
+              "symbol": "export async function trySessionMemoryCompaction",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L514-L627"
+            },
+            {
+              "path": "src/services/SessionMemory/sessionMemoryUtils.ts",
+              "line": 89,
+              "end": 108,
+              "symbol": "export async function waitForSessionMemoryExtraction",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/SessionMemory/sessionMemoryUtils.ts#L89-L108"
+            },
+            {
+              "path": "src/services/compact/sessionMemoryCompact.ts",
+              "line": 57,
+              "end": 64,
+              "symbol": "export const DEFAULT_SM_COMPACT_CONFIG",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L57-L64"
+            },
+            {
+              "path": "src/services/compact/sessionMemoryCompact.ts",
+              "line": 324,
+              "end": 400,
+              "symbol": "export function calculateMessagesToKeepIndex",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L324-L400"
+            },
+            {
+              "path": "src/services/compact/sessionMemoryCompact.ts",
+              "line": 232,
+              "end": 315,
+              "symbol": "export function adjustIndexToPreserveAPIInvariants",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L232-L315"
+            }
+          ]
+        },
+        {
+          "title": "发起一个受约束的摘要分叉",
+          "description": "共享主请求缓存前缀，追加摘要请求；拒绝全部工具执行、最多1 turn；保留工具schema仅为缓存key匹配；缓存命中只是省计算，174K内容仍需模型理解。",
+          "before": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "old",
+              "kind": "history",
+              "label": "旧对话与工具结果",
+              "tokens": 130000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "recent",
+              "kind": "recent",
+              "label": "近期上下文",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "new",
+              "kind": "user",
+              "label": "新用户要求",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "after": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "old",
+              "kind": "history",
+              "label": "旧对话与工具结果",
+              "tokens": 130000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "recent",
+              "kind": "recent",
+              "label": "近期上下文",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "new",
+              "kind": "user",
+              "label": "新用户要求",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "req",
+              "kind": "control",
+              "label": "摘要指令",
+              "tokens": 1000,
+              "where": "summarizer",
+              "status": "live"
+            }
+          ],
+          "objects": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "old",
+              "kind": "history",
+              "label": "旧对话与工具结果",
+              "tokens": 130000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "recent",
+              "kind": "recent",
+              "label": "近期上下文",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "new",
+              "kind": "user",
+              "label": "新用户要求",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "req",
+              "kind": "control",
+              "label": "摘要指令",
+              "tokens": 1000,
+              "where": "summarizer",
+              "status": "live"
+            }
+          ],
+          "ruleIds": [
+            "CC15",
+            "CC16"
+          ],
+          "functions": [],
+          "evidence": [
+            {
+              "path": "src/services/compact/compact.ts",
+              "line": 387,
+              "end": 457,
+              "symbol": "export async function compactConversation",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L387-L457"
+            },
+            {
+              "path": "src/services/compact/compact.ts",
+              "line": 741,
+              "end": 750,
+              "symbol": "attachments: postCompactFileAttachments",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L741-L750"
+            },
+            {
+              "path": "src/services/compact/compact.ts",
+              "line": 330,
+              "end": 340,
+              "symbol": "export function buildPostCompactMessages",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L330-L340"
+            },
+            {
+              "path": "src/services/compact/compact.ts",
+              "line": 1136,
+              "end": 1226,
+              "symbol": "async function streamCompactSummary",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L1136-L1226"
+            },
+            {
+              "path": "src/services/compact/compact.ts",
+              "line": 1125,
+              "end": 1145,
+              "symbol": "function createCompactCanUseTool",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L1125-L1145"
+            },
+            {
+              "path": "src/services/compact/compact.ts",
+              "line": 1250,
+              "end": 1348,
+              "symbol": "// Regular streaming path",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L1250-L1348"
+            }
+          ]
+        },
+        {
+          "title": "模型输出新的事实摘要",
+          "description": "示意生成7K摘要。原始文本不是无损编码；最新要求可能由摘要承载，full不附加普通recent suffix。",
+          "before": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "old",
+              "kind": "history",
+              "label": "旧对话与工具结果",
+              "tokens": 130000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "recent",
+              "kind": "recent",
+              "label": "近期上下文",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "new",
+              "kind": "user",
+              "label": "新用户要求",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "after": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "summary",
+              "kind": "summary",
+              "label": "模型生成工作摘要",
+              "tokens": 7000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "oldarchive",
+              "kind": "history",
+              "label": "旧历史不再作为活动prompt发送",
+              "tokens": 150000,
+              "where": "archive",
+              "status": "archived"
+            }
+          ],
+          "objects": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "summary",
+              "kind": "summary",
+              "label": "模型生成工作摘要",
+              "tokens": 7000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "oldarchive",
+              "kind": "history",
+              "label": "旧历史不再作为活动prompt发送",
+              "tokens": 150000,
+              "where": "archive",
+              "status": "archived"
+            }
+          ],
+          "ruleIds": [
+            "CC15"
+          ],
+          "functions": [],
+          "evidence": [
+            {
+              "path": "src/services/compact/compact.ts",
+              "line": 387,
+              "end": 457,
+              "symbol": "export async function compactConversation",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L387-L457"
+            },
+            {
+              "path": "src/services/compact/compact.ts",
+              "line": 741,
+              "end": 750,
+              "symbol": "attachments: postCompactFileAttachments",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L741-L750"
+            },
+            {
+              "path": "src/services/compact/compact.ts",
+              "line": 330,
+              "end": 340,
+              "symbol": "export function buildPostCompactMessages",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L330-L340"
+            }
+          ]
+        },
+        {
+          "title": "从权威状态恢复文件、Skill与计划",
+          "description": "先清FileState后经FileRead重读最近文件；按scope恢复已调用Skill正文，重建plan/mode、工具发现delta及hook结果。示意恢复18K。",
+          "before": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "summary",
+              "kind": "summary",
+              "label": "模型生成工作摘要",
+              "tokens": 7000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "after": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "summary",
+              "kind": "summary",
+              "label": "模型生成工作摘要",
+              "tokens": 7000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "files",
+              "kind": "restore",
+              "label": "重新读取2个最近文件",
+              "tokens": 10000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "skills",
+              "kind": "skill",
+              "label": "已调用Skill正文",
+              "tokens": 6000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "plan",
+              "kind": "state",
+              "label": "plan / mode",
+              "tokens": 1000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "hooks",
+              "kind": "state",
+              "label": "SessionStart结果",
+              "tokens": 1000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "objects": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "summary",
+              "kind": "summary",
+              "label": "模型生成工作摘要",
+              "tokens": 7000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "files",
+              "kind": "restore",
+              "label": "重新读取2个最近文件",
+              "tokens": 10000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "skills",
+              "kind": "skill",
+              "label": "已调用Skill正文",
+              "tokens": 6000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "plan",
+              "kind": "state",
+              "label": "plan / mode",
+              "tokens": 1000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "hooks",
+              "kind": "state",
+              "label": "SessionStart结果",
+              "tokens": 1000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "ruleIds": [
+            "CC17",
+            "CC18"
+          ],
+          "functions": [],
+          "evidence": [
+            {
+              "path": "src/services/compact/compact.ts",
+              "line": 518,
+              "end": 634,
+              "symbol": "const preCompactReadFileState",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L518-L634"
+            },
+            {
+              "path": "src/services/compact/compact.ts",
+              "line": 1415,
+              "end": 1475,
+              "symbol": "export async function createPostCompactFileAttachments",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L1415-L1475"
+            },
+            {
+              "path": "src/services/compact/compact.ts",
+              "line": 1494,
+              "end": 1545,
+              "symbol": "export function createSkillAttachmentIfNeeded",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L1494-L1545"
+            },
+            {
+              "path": "src/services/compact/postCompactCleanup.ts",
+              "line": 31,
+              "end": 77,
+              "symbol": "export function runPostCompactCleanup",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/postCompactCleanup.ts#L31-L77"
+            }
+          ]
+        },
+        {
+          "title": "安装边界并重新计量",
+          "description": "本场景最终示意49K。实际full路径只日志估算负载；system/tools/userContext必须下轮请求重组并以usage重新锚定，不能把负载数当精确总量保证。",
+          "before": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "summary",
+              "kind": "summary",
+              "label": "模型生成工作摘要",
+              "tokens": 7000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "files",
+              "kind": "restore",
+              "label": "重新读取2个最近文件",
+              "tokens": 10000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "skills",
+              "kind": "skill",
+              "label": "已调用Skill正文",
+              "tokens": 6000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "plan",
+              "kind": "state",
+              "label": "plan / mode",
+              "tokens": 1000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "hooks",
+              "kind": "state",
+              "label": "SessionStart结果",
+              "tokens": 1000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "after": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "summary",
+              "kind": "summary",
+              "label": "模型生成工作摘要",
+              "tokens": 7000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "files",
+              "kind": "restore",
+              "label": "重新读取2个最近文件",
+              "tokens": 10000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "skills",
+              "kind": "skill",
+              "label": "已调用Skill正文",
+              "tokens": 6000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "plan",
+              "kind": "state",
+              "label": "plan / mode",
+              "tokens": 1000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "hooks",
+              "kind": "state",
+              "label": "SessionStart结果",
+              "tokens": 1000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "objects": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "summary",
+              "kind": "summary",
+              "label": "模型生成工作摘要",
+              "tokens": 7000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "files",
+              "kind": "restore",
+              "label": "重新读取2个最近文件",
+              "tokens": 10000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "skills",
+              "kind": "skill",
+              "label": "已调用Skill正文",
+              "tokens": 6000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "plan",
+              "kind": "state",
+              "label": "plan / mode",
+              "tokens": 1000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "hooks",
+              "kind": "state",
+              "label": "SessionStart结果",
+              "tokens": 1000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "ruleIds": [
+            "CC19",
+            "CC02"
+          ],
+          "functions": [],
+          "evidence": [
+            {
+              "path": "src/utils/api.ts",
+              "line": 437,
+              "end": 485,
+              "symbol": "export function appendSystemContext",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/api.ts#L437-L485"
+            },
+            {
+              "path": "src/query.ts",
+              "line": 660,
+              "end": 668,
+              "symbol": "messages: prependUserContext",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/query.ts#L660-L668"
+            },
+            {
+              "path": "src/services/compact/compact.ts",
+              "line": 626,
+              "end": 694,
+              "symbol": "// Previously \"postCompactTokenCount\"",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L626-L694"
+            },
+            {
+              "path": "src/services/compact/sessionMemoryCompact.ts",
+              "line": 602,
+              "end": 624,
+              "symbol": "const postCompactTokenCount = estimateMessageTokens",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L602-L624"
+            }
+          ]
+        },
+        {
+          "title": "继续工具循环，不无限回填旧结果",
+          "description": "本轮以新的活动视图调用API，真实usage建立基准；外部旧文本只有主动读取才重新进入窗口。",
+          "before": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "summary",
+              "kind": "summary",
+              "label": "模型生成工作摘要",
+              "tokens": 7000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "files",
+              "kind": "restore",
+              "label": "重新读取2个最近文件",
+              "tokens": 10000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "skills",
+              "kind": "skill",
+              "label": "已调用Skill正文",
+              "tokens": 6000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "plan",
+              "kind": "state",
+              "label": "plan / mode",
+              "tokens": 1000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "hooks",
+              "kind": "state",
+              "label": "SessionStart结果",
+              "tokens": 1000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "after": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "summary",
+              "kind": "summary",
+              "label": "模型生成工作摘要",
+              "tokens": 7000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "files",
+              "kind": "restore",
+              "label": "重新读取2个最近文件",
+              "tokens": 10000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "skills",
+              "kind": "skill",
+              "label": "已调用Skill正文",
+              "tokens": 6000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "plan",
+              "kind": "state",
+              "label": "plan / mode",
+              "tokens": 1000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "hooks",
+              "kind": "state",
+              "label": "SessionStart结果",
+              "tokens": 1000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "reply",
+              "kind": "assistant",
+              "label": "新响应及工具调用",
+              "tokens": 2000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "objects": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "summary",
+              "kind": "summary",
+              "label": "模型生成工作摘要",
+              "tokens": 7000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "files",
+              "kind": "restore",
+              "label": "重新读取2个最近文件",
+              "tokens": 10000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "skills",
+              "kind": "skill",
+              "label": "已调用Skill正文",
+              "tokens": 6000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "plan",
+              "kind": "state",
+              "label": "plan / mode",
+              "tokens": 1000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "hooks",
+              "kind": "state",
+              "label": "SessionStart结果",
+              "tokens": 1000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "reply",
+              "kind": "assistant",
+              "label": "新响应及工具调用",
+              "tokens": 2000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "ruleIds": [
+            "CC06",
+            "CC07",
+            "CC22"
+          ],
+          "functions": [],
+          "evidence": [
+            {
+              "path": "src/utils/tokens.ts",
+              "line": 46,
+              "end": 56,
+              "symbol": "export function getTokenCountFromUsage",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/tokens.ts#L46-L56"
+            },
+            {
+              "path": "src/utils/tokens.ts",
+              "line": 226,
+              "end": 261,
+              "symbol": "export function tokenCountWithEstimation",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/tokens.ts#L226-L261"
+            },
+            {
+              "path": "src/constants/toolLimits.ts",
+              "line": 13,
+              "end": 55,
+              "symbol": "export const DEFAULT_MAX_RESULT_SIZE_CHARS",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/constants/toolLimits.ts#L13-L55"
+            },
+            {
+              "path": "src/utils/toolResultStorage.ts",
+              "line": 447,
+              "end": 471,
+              "symbol": "export function provisionContentReplacementState",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/toolResultStorage.ts#L447-L471"
+            },
+            {
+              "path": "src/utils/toolResultStorage.ts",
+              "line": 675,
+              "end": 697,
+              "symbol": "function selectFreshToReplace",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/toolResultStorage.ts#L675-L697"
+            },
+            {
+              "path": "src/query.ts",
+              "line": 369,
+              "end": 400,
+              "symbol": "// Enforce per-message budget",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/query.ts#L369-L400"
+            },
+            {
+              "path": "src/query.ts",
+              "line": 592,
+              "end": 670,
+              "symbol": "// Block if we've hit the hard blocking limit",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/query.ts#L592-L670"
+            },
+            {
+              "path": "src/services/compact/autoCompact.ts",
+              "line": 123,
+              "end": 142,
+              "symbol": "const defaultBlockingLimit",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L123-L142"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sm",
+      "title": "开启后的Session Memory快速路径",
+      "quantities": "teaching-only",
+      "assumptions": [
+        "SM已开启",
+        "memory有内容",
+        "coverageUUID可用"
+      ],
+      "steps": [
+        {
+          "title": "选择有条件SM路径",
+          "description": "假定已显式开启SM，文件有内容且覆盖UUID存在。复用已有记忆，不新增一次摘要LLM调用。",
+          "before": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "old",
+              "kind": "history",
+              "label": "旧对话与工具结果",
+              "tokens": 130000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "recent",
+              "kind": "recent",
+              "label": "近期上下文",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "new",
+              "kind": "user",
+              "label": "新用户要求",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "after": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "old",
+              "kind": "history",
+              "label": "旧对话与工具结果",
+              "tokens": 130000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "recent",
+              "kind": "recent",
+              "label": "近期上下文",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "new",
+              "kind": "user",
+              "label": "新用户要求",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "objects": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "old",
+              "kind": "history",
+              "label": "旧对话与工具结果",
+              "tokens": 130000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "recent",
+              "kind": "recent",
+              "label": "近期上下文",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "new",
+              "kind": "user",
+              "label": "新用户要求",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "ruleIds": [
+            "CC13"
+          ],
+          "functions": [],
+          "evidence": [
+            {
+              "path": "src/services/compact/sessionMemoryCompact.ts",
+              "line": 403,
+              "end": 437,
+              "symbol": "export function shouldUseSessionMemoryCompaction",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L403-L437"
+            },
+            {
+              "path": "src/services/compact/sessionMemoryCompact.ts",
+              "line": 514,
+              "end": 627,
+              "symbol": "export async function trySessionMemoryCompaction",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L514-L627"
+            },
+            {
+              "path": "src/services/SessionMemory/sessionMemoryUtils.ts",
+              "line": 89,
+              "end": 108,
+              "symbol": "export async function waitForSessionMemoryExtraction",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/SessionMemory/sessionMemoryUtils.ts#L89-L108"
+            }
+          ]
+        },
+        {
+          "title": "尾部选择而不是绝对40K裁剪",
+          "description": "从覆盖ID后取未摘要suffix；若只有6K/2text消息则向前扩到≥10K且≥5text，达到40K停止扩展；如果原始未摘要suffix已50K仍先保留50K。",
+          "before": [],
+          "after": [
+            {
+              "id": "mem",
+              "kind": "summary",
+              "label": "已提取session memory",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tail",
+              "kind": "recent",
+              "label": "选出的近期尾部",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "objects": [
+            {
+              "id": "mem",
+              "kind": "summary",
+              "label": "已提取session memory",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tail",
+              "kind": "recent",
+              "label": "选出的近期尾部",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "ruleIds": [
+            "CC14"
+          ],
+          "functions": [],
+          "evidence": [
+            {
+              "path": "src/services/compact/sessionMemoryCompact.ts",
+              "line": 57,
+              "end": 64,
+              "symbol": "export const DEFAULT_SM_COMPACT_CONFIG",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L57-L64"
+            },
+            {
+              "path": "src/services/compact/sessionMemoryCompact.ts",
+              "line": 324,
+              "end": 400,
+              "symbol": "export function calculateMessagesToKeepIndex",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L324-L400"
+            },
+            {
+              "path": "src/services/compact/sessionMemoryCompact.ts",
+              "line": 232,
+              "end": 315,
+              "symbol": "export function adjustIndexToPreserveAPIInvariants",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L232-L315"
+            }
+          ]
+        },
+        {
+          "title": "配对回拉可能越过预算目标",
+          "description": "扫描整个suffix所有tool_result，回找缺失tool_use；同message.id的thinking拆片也纳入。保留API合法性优先于粗略上限。",
+          "before": [],
+          "after": [
+            {
+              "id": "call",
+              "kind": "tool",
+              "label": "被回拉的调用/同响应片段",
+              "tokens": 3000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tail",
+              "kind": "recent",
+              "label": "近期尾部",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "objects": [
+            {
+              "id": "call",
+              "kind": "tool",
+              "label": "被回拉的调用/同响应片段",
+              "tokens": 3000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tail",
+              "kind": "recent",
+              "label": "近期尾部",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "ruleIds": [
+            "CC14"
+          ],
+          "functions": [],
+          "evidence": [
+            {
+              "path": "src/services/compact/sessionMemoryCompact.ts",
+              "line": 57,
+              "end": 64,
+              "symbol": "export const DEFAULT_SM_COMPACT_CONFIG",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L57-L64"
+            },
+            {
+              "path": "src/services/compact/sessionMemoryCompact.ts",
+              "line": 324,
+              "end": 400,
+              "symbol": "export function calculateMessagesToKeepIndex",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L324-L400"
+            },
+            {
+              "path": "src/services/compact/sessionMemoryCompact.ts",
+              "line": 232,
+              "end": 315,
+              "symbol": "export function adjustIndexToPreserveAPIInvariants",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L232-L315"
+            }
+          ]
+        },
+        {
+          "title": "组合摘要、尾部、plan与hooks再验收",
+          "description": "SM记忆每section可能截断并附完整路径；组合消息估计≥autoThreshold则拒绝该SM结果，转完整摘要。该检查仍不含完整system/schema重新计价。",
+          "before": [],
+          "after": [
+            {
+              "id": "mem",
+              "kind": "summary",
+              "label": "session memory摘要",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "call",
+              "kind": "tool",
+              "label": "原子配对",
+              "tokens": 3000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tail",
+              "kind": "recent",
+              "label": "原样保留近期",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "hooks",
+              "kind": "state",
+              "label": "plan / hooks",
+              "tokens": 1000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "objects": [
+            {
+              "id": "mem",
+              "kind": "summary",
+              "label": "session memory摘要",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "call",
+              "kind": "tool",
+              "label": "原子配对",
+              "tokens": 3000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tail",
+              "kind": "recent",
+              "label": "原样保留近期",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "hooks",
+              "kind": "state",
+              "label": "plan / hooks",
+              "tokens": 1000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "ruleIds": [
+            "CC13",
+            "CC14",
+            "CC19"
+          ],
+          "functions": [],
+          "evidence": [
+            {
+              "path": "src/services/compact/sessionMemoryCompact.ts",
+              "line": 403,
+              "end": 437,
+              "symbol": "export function shouldUseSessionMemoryCompaction",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L403-L437"
+            },
+            {
+              "path": "src/services/compact/sessionMemoryCompact.ts",
+              "line": 514,
+              "end": 627,
+              "symbol": "export async function trySessionMemoryCompaction",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L514-L627"
+            },
+            {
+              "path": "src/services/SessionMemory/sessionMemoryUtils.ts",
+              "line": 89,
+              "end": 108,
+              "symbol": "export async function waitForSessionMemoryExtraction",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/SessionMemory/sessionMemoryUtils.ts#L89-L108"
+            },
+            {
+              "path": "src/services/compact/sessionMemoryCompact.ts",
+              "line": 57,
+              "end": 64,
+              "symbol": "export const DEFAULT_SM_COMPACT_CONFIG",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L57-L64"
+            },
+            {
+              "path": "src/services/compact/sessionMemoryCompact.ts",
+              "line": 324,
+              "end": 400,
+              "symbol": "export function calculateMessagesToKeepIndex",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L324-L400"
+            },
+            {
+              "path": "src/services/compact/sessionMemoryCompact.ts",
+              "line": 232,
+              "end": 315,
+              "symbol": "export function adjustIndexToPreserveAPIInvariants",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L232-L315"
+            },
+            {
+              "path": "src/services/compact/compact.ts",
+              "line": 626,
+              "end": 694,
+              "symbol": "// Previously \"postCompactTokenCount\"",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L626-L694"
+            },
+            {
+              "path": "src/services/compact/sessionMemoryCompact.ts",
+              "line": 602,
+              "end": 624,
+              "symbol": "const postCompactTokenCount = estimateMessageTokens",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/sessionMemoryCompact.ts#L602-L624"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "overflow",
+      "title": "摘要也超限、缩减与熔断",
+      "quantities": "teaching-only",
+      "steps": [
+        {
+          "title": "大批新工具结果使上下文突然膨胀",
+          "description": "示意已观察usage180K再加入35K结果，超出200K；估算或工具突增使提前阈值也不能绝对防止超限。",
+          "before": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "old",
+              "kind": "history",
+              "label": "旧对话与工具结果",
+              "tokens": 130000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "recent",
+              "kind": "recent",
+              "label": "近期上下文",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "new",
+              "kind": "user",
+              "label": "新用户要求",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "after": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rounds",
+              "kind": "history",
+              "label": "多个API轮次组",
+              "tokens": 191000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "objects": [
+            {
+              "id": "sys",
+              "kind": "system",
+              "label": "系统与环境",
+              "tokens": 12000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "tools",
+              "kind": "schema",
+              "label": "已加载工具schema",
+              "tokens": 8000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rules",
+              "kind": "rules",
+              "label": "CLAUDE.md / 日期",
+              "tokens": 4000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "rounds",
+              "kind": "history",
+              "label": "多个API轮次组",
+              "tokens": 191000,
+              "where": "working",
+              "status": "live"
+            }
+          ],
+          "ruleIds": [
+            "CC06",
+            "CC07",
+            "CC11"
+          ],
+          "functions": [],
+          "evidence": [
+            {
+              "path": "src/utils/tokens.ts",
+              "line": 46,
+              "end": 56,
+              "symbol": "export function getTokenCountFromUsage",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/tokens.ts#L46-L56"
+            },
+            {
+              "path": "src/utils/tokens.ts",
+              "line": 226,
+              "end": 261,
+              "symbol": "export function tokenCountWithEstimation",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/tokens.ts#L226-L261"
+            },
+            {
+              "path": "src/constants/toolLimits.ts",
+              "line": 13,
+              "end": 55,
+              "symbol": "export const DEFAULT_MAX_RESULT_SIZE_CHARS",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/constants/toolLimits.ts#L13-L55"
+            },
+            {
+              "path": "src/utils/toolResultStorage.ts",
+              "line": 447,
+              "end": 471,
+              "symbol": "export function provisionContentReplacementState",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/toolResultStorage.ts#L447-L471"
+            },
+            {
+              "path": "src/utils/toolResultStorage.ts",
+              "line": 675,
+              "end": 697,
+              "symbol": "function selectFreshToReplace",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/utils/toolResultStorage.ts#L675-L697"
+            },
+            {
+              "path": "src/query.ts",
+              "line": 369,
+              "end": 400,
+              "symbol": "// Enforce per-message budget",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/query.ts#L369-L400"
+            },
+            {
+              "path": "src/services/compact/autoCompact.ts",
+              "line": 30,
+              "end": 95,
+              "symbol": "const MAX_OUTPUT_TOKENS_FOR_SUMMARY",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L30-L95"
+            },
+            {
+              "path": "src/services/compact/autoCompact.ts",
+              "line": 147,
+              "end": 248,
+              "symbol": "export function isAutoCompactEnabled",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L147-L248"
+            }
+          ]
+        },
+        {
+          "title": "压缩请求本身被provider拒绝",
+          "description": "如果摘要请求返回prompt-too-long标准错误，不能把错误文字安装成摘要；进入缩小摘要输入流程。",
+          "before": [],
+          "after": [
+            {
+              "id": "reject",
+              "kind": "error",
+              "label": "summary prompt-too-long",
+              "tokens": 0,
+              "where": "provider",
+              "status": "live"
+            }
+          ],
+          "objects": [
+            {
+              "id": "reject",
+              "kind": "error",
+              "label": "summary prompt-too-long",
+              "tokens": 0,
+              "where": "provider",
+              "status": "live"
+            }
+          ],
+          "ruleIds": [
+            "CC20",
+            "CC21"
+          ],
+          "functions": [],
+          "evidence": [
+            {
+              "path": "src/services/compact/compact.ts",
+              "line": 227,
+              "end": 300,
+              "symbol": "const MAX_PTL_RETRIES",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L227-L300"
+            },
+            {
+              "path": "src/services/compact/compact.ts",
+              "line": 449,
+              "end": 495,
+              "symbol": "let ptlAttempts = 0",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L449-L495"
+            },
+            {
+              "path": "src/services/compact/compact.ts",
+              "line": 131,
+              "end": 134,
+              "symbol": "const MAX_COMPACT_STREAMING_RETRIES",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L131-L134"
+            },
+            {
+              "path": "src/services/compact/autoCompact.ts",
+              "line": 257,
+              "end": 274,
+              "symbol": "// Circuit breaker: stop retrying",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L257-L274"
+            },
+            {
+              "path": "src/services/compact/autoCompact.ts",
+              "line": 334,
+              "end": 351,
+              "symbol": "} catch (error) {",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L334-L351"
+            }
+          ]
+        },
+        {
+          "title": "按API-round删除最旧组",
+          "description": "可解析超额gap就累计删除覆盖gap；否则删最旧20%组，至少1组，至少保留1组；补synthetic user起始并保持工具配对。缩小普通messages与forkContextMessages两份输入。",
+          "before": [],
+          "after": [
+            {
+              "id": "dropped",
+              "kind": "history",
+              "label": "最旧API组不再进入本次摘要",
+              "tokens": 40000,
+              "where": "omitted",
+              "status": "dropped"
+            },
+            {
+              "id": "remain",
+              "kind": "history",
+              "label": "剩余可摘要组",
+              "tokens": 151000,
+              "where": "summarizer",
+              "status": "live"
+            }
+          ],
+          "objects": [
+            {
+              "id": "dropped",
+              "kind": "history",
+              "label": "最旧API组不再进入本次摘要",
+              "tokens": 40000,
+              "where": "omitted",
+              "status": "dropped"
+            },
+            {
+              "id": "remain",
+              "kind": "history",
+              "label": "剩余可摘要组",
+              "tokens": 151000,
+              "where": "summarizer",
+              "status": "live"
+            }
+          ],
+          "ruleIds": [
+            "CC20"
+          ],
+          "functions": [],
+          "evidence": [
+            {
+              "path": "src/services/compact/compact.ts",
+              "line": 227,
+              "end": 300,
+              "symbol": "const MAX_PTL_RETRIES",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L227-L300"
+            },
+            {
+              "path": "src/services/compact/compact.ts",
+              "line": 449,
+              "end": 495,
+              "symbol": "let ptlAttempts = 0",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L449-L495"
+            }
+          ]
+        },
+        {
+          "title": "最多三次缩小，失败保持旧活动状态",
+          "description": "重试仍长或剩不到2组就抛ERROR_MESSAGE_PROMPT_TOO_LONG；没有成功result不会安装新的boundary。不要演成每次失败都丢掉持久原文。",
+          "before": [],
+          "after": [
+            {
+              "id": "oldlive",
+              "kind": "history",
+              "label": "未被成功替换的旧活动历史",
+              "tokens": 215000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "err",
+              "kind": "error",
+              "label": "一次auto compact失败",
+              "tokens": 0,
+              "where": "control",
+              "status": "live"
+            }
+          ],
+          "objects": [
+            {
+              "id": "oldlive",
+              "kind": "history",
+              "label": "未被成功替换的旧活动历史",
+              "tokens": 215000,
+              "where": "working",
+              "status": "live"
+            },
+            {
+              "id": "err",
+              "kind": "error",
+              "label": "一次auto compact失败",
+              "tokens": 0,
+              "where": "control",
+              "status": "live"
+            }
+          ],
+          "ruleIds": [
+            "CC20",
+            "CC21"
+          ],
+          "functions": [],
+          "evidence": [
+            {
+              "path": "src/services/compact/compact.ts",
+              "line": 227,
+              "end": 300,
+              "symbol": "const MAX_PTL_RETRIES",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L227-L300"
+            },
+            {
+              "path": "src/services/compact/compact.ts",
+              "line": 449,
+              "end": 495,
+              "symbol": "let ptlAttempts = 0",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L449-L495"
+            },
+            {
+              "path": "src/services/compact/compact.ts",
+              "line": 131,
+              "end": 134,
+              "symbol": "const MAX_COMPACT_STREAMING_RETRIES",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L131-L134"
+            },
+            {
+              "path": "src/services/compact/autoCompact.ts",
+              "line": 257,
+              "end": 274,
+              "symbol": "// Circuit breaker: stop retrying",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L257-L274"
+            },
+            {
+              "path": "src/services/compact/autoCompact.ts",
+              "line": 334,
+              "end": 351,
+              "symbol": "} catch (error) {",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L334-L351"
+            }
+          ]
+        },
+        {
+          "title": "跨query迭代的熔断",
+          "description": "自动路径consecutiveFailures+1；达到3后后续autoCompact跳过。成功才清零。普通stream重试（可选2次）与PTL缩小（3次）是局部预算，不能混作一次总共3次。",
+          "before": [],
+          "after": [
+            {
+              "id": "circuit",
+              "kind": "control",
+              "label": "auto失败计数3：熔断",
+              "tokens": 0,
+              "where": "control",
+              "status": "live"
+            }
+          ],
+          "objects": [
+            {
+              "id": "circuit",
+              "kind": "control",
+              "label": "auto失败计数3：熔断",
+              "tokens": 0,
+              "where": "control",
+              "status": "live"
+            }
+          ],
+          "ruleIds": [
+            "CC21"
+          ],
+          "functions": [],
+          "evidence": [
+            {
+              "path": "src/services/compact/compact.ts",
+              "line": 131,
+              "end": 134,
+              "symbol": "const MAX_COMPACT_STREAMING_RETRIES",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/compact.ts#L131-L134"
+            },
+            {
+              "path": "src/services/compact/autoCompact.ts",
+              "line": 257,
+              "end": 274,
+              "symbol": "// Circuit breaker: stop retrying",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L257-L274"
+            },
+            {
+              "path": "src/services/compact/autoCompact.ts",
+              "line": 334,
+              "end": 351,
+              "symbol": "} catch (error) {",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L334-L351"
+            }
+          ]
+        },
+        {
+          "title": "停止还是reactive接手取决于管理权",
+          "description": "通常E−3K阻塞线为177K；未刚压缩、非compact/session_memory且无reactive/collapse接手时返回blocking_limit。内部reactive/collapse可绕过此synthetic阻塞，让真实API错误恢复；其实现模块不在镜像，动画到此明确边界。",
+          "before": [],
+          "after": [
+            {
+              "id": "blocked",
+              "kind": "error",
+              "label": "blocking_limit / 需要缩小输入",
+              "tokens": 0,
+              "where": "control",
+              "status": "live"
+            }
+          ],
+          "objects": [
+            {
+              "id": "blocked",
+              "kind": "error",
+              "label": "blocking_limit / 需要缩小输入",
+              "tokens": 0,
+              "where": "control",
+              "status": "live"
+            }
+          ],
+          "ruleIds": [
+            "CC12",
+            "CC22"
+          ],
+          "functions": [],
+          "evidence": [
+            {
+              "path": "src/services/compact/autoCompact.ts",
+              "line": 160,
+              "end": 265,
+              "symbol": "export async function shouldAutoCompact",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L160-L265"
+            },
+            {
+              "path": "src/query.ts",
+              "line": 592,
+              "end": 670,
+              "symbol": "// Block if we've hit the hard blocking limit",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/query.ts#L592-L670"
+            },
+            {
+              "path": "src/services/compact/autoCompact.ts",
+              "line": 123,
+              "end": 142,
+              "symbol": "const defaultBlockingLimit",
+              "url": "https://github.com/alex000kim/claude-code/blob/6aa7e7f8789014d42247a0545ab4e9d4e531b0f2/src/services/compact/autoCompact.ts#L123-L142"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "corrections": [
+    "time-based默认关闭，不是每次闲置都必定运行；60分钟/keep5是gate开启后的配置默认。",
+    "镜像缺cachedMicrocompact.ts、reactiveCompact.ts、contextCollapse等模块，内部规则无法核验。",
+    "SM40K是停止反向扩展目标，初始suffix/配对可越界，不能画成硬裁剪到40K。",
+    "full compact默认没有recent messagesToKeep；摘要替代全部活动对话再恢复附件。",
+    "full truePostCompactTokenCount只计结果消息负载且不强制总量低于阈值，不是整个新请求的精确验收。",
+    "CLAUDE.md40000字符是警告筛选，并非统一硬截断；规则在API中属于首部meta user reminder。",
+    "tool result落盘与per-message聚合是单独入口层，聚合gate默认false；单结果50K字符/聚合200K字符，不是token。",
+    "Skill索引预算与正文恢复预算完全不同；1%窗口是索引字符目标，正文恢复每项5K/总25K。",
+    "摘要fork保留schema但createCompactCanUseTool拒绝全部工具执行；schema可见性与执行授权必须分开。",
+    "SM压缩不调用模型≠SM无模型成本：已有记忆来自独立增量fork提取，其自身默认10K初始化/5K增长/3工具或自然断点触发。"
+  ],
+  "unavailableModules": [
+    "src/services/compact/cachedMicrocompact.ts",
+    "src/services/compact/reactiveCompact.ts",
+    "src/services/contextCollapse/index.ts",
+    "src/services/compact/snipCompact.ts"
+  ],
+  "method": "静态追踪函数/分支/常量，未运行镜像（不完整且非官方开源），未调用真实模型；动画数量均教学示意。"
+}

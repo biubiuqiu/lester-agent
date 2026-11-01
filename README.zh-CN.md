@@ -4,7 +4,7 @@
 
 Lester 是一个开源、可自部署的 AI Agent 工作区。常驻的个人助理记住偏好、项目决策与工作脉络，把具体工作交给独立任务会话。任务 Agent 在你的专属 Computer 中处理文件、执行命令，产物可以直接预览并继续修改。
 
-[English](README.md) · [文档目录](docs/zh-CN/README.md) · [快速开始](#快速启动) · [操作演示](#操作演示) · [GitHub](https://github.com/biubiuqiu/lester-agent) · [问题反馈](https://github.com/biubiuqiu/lester-agent/issues)
+[English](README.md) · [文档目录](docs/zh-CN/README.md) · [研究目录](research/README.md) · [快速开始](#快速启动) · [操作演示](#操作演示) · [GitHub](https://github.com/biubiuqiu/lester-agent) · [问题反馈](https://github.com/biubiuqiu/lester-agent/issues)
 
 ## Lester 能做什么
 

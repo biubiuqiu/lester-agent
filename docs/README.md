@@ -38,7 +38,8 @@ These existing notes retain their own scope and language. They complement the ch
 - [Claude Code alignment](claude-code-alignment.md)
 - [Cloud Agent priorities](cloud-agent-priorities.md)
 - [Security audit, 2026-10-10](security-audit-2026-10-10.md)
-- [Context management research: from abstraction to implementation](research/agent-context-management.html)
+- [Research directory and GitHub Pages publishing](../research/README.md)
+- [Context management research: report, notes, data and offline build](../research/agent-context-management/README.md)
 - [Walkthrough recording and reproduction](media/README.md)
 - [iPhone/iPad build guide](../ios/README.md) · [Android build guide](../android/README.md)
 

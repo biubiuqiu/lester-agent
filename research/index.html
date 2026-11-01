@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Lester 的 Agent 研究：固定源码证据、可交互解释与可离线重建的研究资料。">
+  <title>Lester Research · Agent 研究</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root{color-scheme:light;--ink:#24343a;--muted:#596b6b;--accent:#126d60;--line:#dce5df}
+    *{box-sizing:border-box}body{margin:0;background:#fffefa;color:var(--ink);font:17px/1.85 system-ui,"Noto Sans CJK SC","Microsoft YaHei",sans-serif}
+    main{max-width:960px;margin:auto;padding:64px 28px 48px}a{color:var(--accent);text-underline-offset:4px}a:focus-visible{outline:3px solid #c78d35;outline-offset:5px}
+    .brand{font-size:15px;font-weight:650;color:var(--accent);letter-spacing:.04em}h1{font-size:clamp(32px,5vw,48px);line-height:1.35;margin:34px 0 20px}h2{font-size:26px;line-height:1.5;margin:8px 0 18px}
+    p{max-width:720px}.intro,.scope{color:var(--muted)}article{margin:42px 0;padding:30px 0;border-block:1px solid var(--line)}.label{font-size:13px;color:var(--accent)}
+    .actions{display:flex;flex-wrap:wrap;gap:16px 24px;align-items:center;margin-top:26px}.primary{background:var(--accent);color:white;text-decoration:none;padding:11px 18px;border-radius:3px}
+    .scope{font-size:14px;margin-top:26px}footer{color:var(--muted);font-size:14px}@media(max-width:600px){main{padding:28px 20px}h2{font-size:24px}.actions{align-items:flex-start;flex-direction:column;gap:18px}}
+  </style>
+</head>
+<body><main>
+  <div class="brand">Lester / Research</div>
+  <h1>理解 Agent 如何工作。</h1>
+  <p class="intro">从明确的问题出发，追踪源码里的规则与边界，再用图解和动画解释过程。研究笔记、结构化数据与生成脚本都保存在同一仓库中。</p>
+  <article>
+    <div class="label">01 · 上下文管理</div>
+    <h2>上下文快满时，Agent 怎样继续工作？</h2>
+    <p>比较 Claude Code、Codex、OpenCode、Hermes 与 Pi：模型本轮能看到什么，何时整理历史，摘要保留与省略什么，以及怎样恢复执行。</p>
+    <p>先看关系图，再看逐步动画，最后核对五个框架的规则与源码证据。</p>
+    <div class="actions"><a class="primary" href="agent-context-management/">阅读交互研究 →</a><a href="https://github.com/biubiuqiu/lester-agent/tree/main/research/agent-context-management">研究源、笔记与重建方法</a></div>
+    <p class="scope">116 条规则 · 320 处源码定位 · 21 个教学场景。源码快照：2026-10-22；教学数字不代表真实模型实测，Claude Code 镜像来源及缺失模块保留证据边界。</p>
+  </article>
+  <footer><a href="https://github.com/biubiuqiu/lester-agent">Lester GitHub 仓库</a> · <a href="https://github.com/biubiuqiu/lester-agent/blob/main/research/README.md">研究目录与维护说明</a><p>本网站发布静态研究材料，无需登录 Lester 或配置模型服务。</p></footer>
+</main></body></html>
+

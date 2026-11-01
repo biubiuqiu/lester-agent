@@ -1,0 +1,65 @@
+<figure class="tb-overview" aria-labelledby="tb-overview-title" aria-describedby="tb-overview-description">
+  <figcaption class="tb-overview-heading">
+    <p class="tb-overview-eyebrow">先看一次调用的全图</p>
+    <h3 id="tb-overview-title">原文留存，每轮重新组织。</h3>
+    <p id="tb-overview-description" class="tb-overview-lead">每次调用，都从留存内容中重建工作集，再与规则和新输入组成实际请求。</p>
+  </figcaption>
+
+  <div class="tb-flow" role="group" aria-label="一次模型调用中的内容流向">
+    <div class="tb-flow-node tb-flow-history">
+      <h4>持久原文与历史 <span class="tb-flow-symbol">H</span></h4>
+      <p>保存消息与工具结果等原文；并非每轮全部发送。</p>
+    </div>
+
+    <div class="tb-flow-arrow tb-flow-project" aria-label="从历史中选取、投影到本轮工作集">
+      <span>选取/投影</span>
+    </div>
+
+    <div class="tb-flow-inputs" role="group" aria-label="共同进入本轮组装的三类输入">
+      <div class="tb-flow-node tb-flow-workset">
+        <h4>本轮活动工作集 <span class="tb-flow-symbol">V</span></h4>
+        <p>按保留边界，从历史中重建本轮需要的材料。</p>
+      </div>
+      <div class="tb-flow-node tb-flow-rules">
+        <h4>规则与能力 <span class="tb-flow-symbol">P</span></h4>
+        <p>系统指令、仓库规则、工具定义等，与 V 一起组装。</p>
+      </div>
+      <div class="tb-flow-node tb-flow-new-input">
+        <h4>新的用户输入</h4>
+        <p>这一轮刚收到的任务、问题或补充。</p>
+      </div>
+    </div>
+
+    <div class="tb-flow-collect" aria-label="规则、工作集和新输入汇合，经组装与 provider 转换形成实际请求">
+      <span class="tb-flow-branch tb-flow-branch-top" aria-hidden="true"></span>
+      <span class="tb-flow-branch tb-flow-branch-middle" aria-hidden="true"></span>
+      <span class="tb-flow-branch tb-flow-branch-bottom" aria-hidden="true"></span>
+      <span class="tb-flow-assembly-copy">组装/转换</span>
+    </div>
+    <div class="tb-flow-mobile-turn" aria-hidden="true"><span>组装/转换</span></div>
+
+    <div class="tb-flow-node tb-flow-request">
+      <h4>实际发送包 <span class="tb-flow-symbol">R</span></h4>
+      <p>组装后经 provider 适配的请求；还可能包含 schema、媒体与输出预算。</p>
+    </div>
+
+    <div class="tb-flow-arrow tb-flow-send" aria-label="将实际请求发送到模型服务"><span>发送</span></div>
+
+    <div class="tb-flow-provider">
+      <div class="tb-flow-node tb-flow-model">
+        <h4>模型服务</h4>
+        <p>接收本轮请求并生成回复。</p>
+      </div>
+      <div class="tb-flow-cache">
+        <span class="tb-flow-cache-label">Provider 计算旁路</span>
+        <h4>前缀计算缓存 <span class="tb-flow-symbol">C</span></h4>
+        <p>复用前缀计算，减少重复处理；不扩充上下文窗口。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="tb-overview-footer">
+    <p class="tb-overview-reminder"><span aria-hidden="true">≠</span><strong>保存的内容 ≠ 本轮发送的内容</strong><span class="tb-overview-reminder-detail">H 保存、V 选取、R 组装；范围与内容都可能不同。</span></p>
+    <a class="tb-overview-next" href="#lab">看它怎样被装满，再腾出空间 <span aria-hidden="true">↓</span></a>
+  </div>
+</figure>

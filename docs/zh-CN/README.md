@@ -38,7 +38,8 @@
 - [Claude Code 对标](../claude-code-alignment.md)
 - [云端 Agent 优先方向](../cloud-agent-priorities.md)
 - [2026-10-10 安全审计](../security-audit-2026-10-10.md)
-- [上下文管理研究：从抽象到实现](../research/agent-context-management.html)
+- [研究目录与 GitHub Pages 发布](../../research/README.md)
+- [上下文管理研究：报告、笔记、数据与离线构建](../../research/agent-context-management/README.md)
 - [演示录制与复现](../media/README.md)
 - [iPhone/iPad 构建指南](../../ios/README.md) · [Android 构建指南](../../android/README.md)
 

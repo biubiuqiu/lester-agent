@@ -4,7 +4,7 @@
 
 An open-source, self-hostable AI agent workspace. Talk to one enduring Lester: it remembers preferences and project decisions, finds earlier work, and delegates concrete work to isolated task conversations. Task Agents use your personal Computer to work with files and commands; preview the results and keep refining them.
 
-[简体中文](README.zh-CN.md) · [Documentation](docs/README.md) · [Quick start](#quick-start) · [Walkthrough](#watch-the-walkthrough) · [GitHub](https://github.com/biubiuqiu/lester-agent) · [Issues](https://github.com/biubiuqiu/lester-agent/issues)
+[简体中文](README.zh-CN.md) · [Documentation](docs/README.md) · [Research](research/README.md) · [Quick start](#quick-start) · [Walkthrough](#watch-the-walkthrough) · [GitHub](https://github.com/biubiuqiu/lester-agent) · [Issues](https://github.com/biubiuqiu/lester-agent/issues)
 
 ## Features
 

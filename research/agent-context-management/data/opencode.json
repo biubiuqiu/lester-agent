@@ -1,0 +1,1187 @@
+{
+  "id": "opencode",
+  "name": "OpenCode",
+  "commit": "f7d5b6ffc48223e654b20043a500d315e4bc8053",
+  "repository": "anomalyco/opencode",
+  "overview": "持久事件与DB投影驱动、instruction epoch与活动checkpoint双时钟、usage anchor+delta估算、summary/native双路径；入口工具/图片边界先控制体积，超限时有界压缩请求退阶。",
+  "layers": [
+    {
+      "name": "权限允许的能力与稳定指令 baseline",
+      "source": "agent system + Instructions sources + tool snapshot",
+      "lifecycle": "每步选择，hash blobs建立epoch；更改变durable delta，压缩Ended推进epoch",
+      "budget": "计入请求；目录与schema无单独总量hard cap；稳定排序服务cache"
+    },
+    {
+      "name": "语义压缩checkpoint",
+      "source": "completed summary或native.messages",
+      "lifecycle": "最近可重放checkpoint作为active history边界；原DB记录保留",
+      "budget": "summary输出按window room适配；provider native本地不能精确定价"
+    },
+    {
+      "name": "近期精确/近似工作集",
+      "source": "keepID引用序列化recent + checkpoint后的新user/assistant/tool",
+      "lifecycle": "summary recent为文本重建；未压缩新消息仍canonical结构",
+      "budget": "默认keep15000但对齐会超；工具recent限1250codepoints"
+    },
+    {
+      "name": "外置完整工具结果",
+      "source": "tool-output/文件",
+      "lifecycle": "入口超2000行/50KiB保存全量，7天retention",
+      "budget": "文件不全量注入，提示outputPath按需read"
+    },
+    {
+      "name": "provider prompt cache/transport affinity",
+      "source": "promptCacheKey、稳定prefix、nativeprovider metadata",
+      "lifecycle": "跨请求复用；模型绑定原生proof受exact model约束",
+      "budget": "cached input仍计窗口；复用不是压缩"
+    }
+  ],
+  "rules": [
+    {
+      "id": "O01",
+      "title": "每个 Step 从持久状态重新装配，不维护第二份内存工具循环",
+      "condition": "一个 Step 完成或重试后继续执行",
+      "action": "select agent/instructions/tools，prepare instruction state，load DB active history，然后先 auto compaction 再 primary 请求",
+      "preserve": "有序持久历史、当前 agent/model/权限与指令状态",
+      "loss": "不把完整 DB 历史自动全部发送；active history 被最近可重放 checkpoint 截断",
+      "default": "每步执行",
+      "gate": "SessionRunner.runStep",
+      "evidence": [
+        {
+          "path": "packages/core/src/session/runner/llm.ts",
+          "line": 195,
+          "end": 240,
+          "symbol": "prepareContext/runStep",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/runner/llm.ts#L195-L240"
+        },
+        {
+          "path": "packages/core/src/session/context.ts",
+          "line": 126,
+          "end": 184,
+          "symbol": "select/load",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/context.ts#L126-L184"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "O02",
+      "title": "权限先影响可发现内容，再影响工具快照",
+      "condition": "选择当前 Session agent",
+      "action": "合并 agent.permissions 与 session.permissions；同一规则同时筛选 tool snapshot、skill catalogue、MCP instructions",
+      "preserve": "权限允许的工具和 Skill 描述；同请求广告工具与 execute 映射",
+      "loss": "被 deny 的工具/Skill 不出现在相应清单；清单不是完整 Skill 正文",
+      "default": "每次 select",
+      "gate": "Permission.merge、registry.snapshot",
+      "evidence": [
+        {
+          "path": "packages/core/src/session/context.ts",
+          "line": 132,
+          "end": 164,
+          "symbol": "select",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/context.ts#L132-L164"
+        },
+        {
+          "path": "packages/core/src/skill/instructions.ts",
+          "line": 79,
+          "end": 95,
+          "symbol": "SkillInstructions.load",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/skill/instructions.ts#L79-L95"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "O03",
+      "title": "指令按共享程度排序，稳定前缀与变化尾部相分离",
+      "condition": "准备 instruction sources",
+      "action": "合并 CodeMode、MCP、reference、skills、discovery、builtins、entries；AGENT 自定义 system 或默认系统 prompt 在 initial 前",
+      "preserve": "公共目录/规则的可复用 cache prefix",
+      "loss": "排序不减少 token；不是规则优先级的完整规范",
+      "default": "sources 固定合并顺序",
+      "gate": "agent.system 可覆盖默认系统 prompt",
+      "evidence": [
+        {
+          "path": "packages/core/src/session/context.ts",
+          "line": 152,
+          "end": 163,
+          "symbol": "Instructions.combine",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/context.ts#L152-L163"
+        },
+        {
+          "path": "packages/core/src/session/model-request.ts",
+          "line": 92,
+          "end": 111,
+          "symbol": "baseTranscript",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/model-request.ts#L92-L111"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "O04",
+      "title": "Instruction epoch：基线固定，变化以 delta 入历史",
+      "condition": "规则首次发现或之后发生新增/修改/移除",
+      "action": "首次存 initial_values/current_values 的 hash 引用；之后冻结 renderUpdate 到 durable event；文件内容变化用较短 diff 或全量 replacement；压缩完成提升 current 为新 epoch baseline",
+      "preserve": "最新规则值、历史规则变化事实、跨请求稳定初始前缀",
+      "loss": "摘要不负责保存规则；压缩后旧 delta 不需要重复带入",
+      "default": "每次 prepare observes；compaction ended advanceEpoch",
+      "gate": "initial initialization 可被不可用来源阻塞",
+      "evidence": [
+        {
+          "path": "packages/core/src/session/instruction-state.ts",
+          "line": 21,
+          "end": 60,
+          "symbol": "observe/commit",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/instruction-state.ts#L21-L60"
+        },
+        {
+          "path": "packages/core/src/session/instruction-state.ts",
+          "line": 139,
+          "end": 181,
+          "symbol": "advanceEpoch/initial",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/instruction-state.ts#L139-L181"
+        },
+        {
+          "path": "packages/core/src/session/projector.ts",
+          "line": 756,
+          "end": 760,
+          "symbol": "Compaction.Ended",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/projector.ts#L756-L760"
+        },
+        {
+          "path": "packages/core/src/instruction-discovery.ts",
+          "line": 127,
+          "end": 148,
+          "symbol": "renderUpdate",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/instruction-discovery.ts#L127-L148"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "O05",
+      "title": "仓库规则发现与按读懒加载是不同路径",
+      "condition": "启动 Location 或成功读取子目录文件",
+      "action": "配置插件读全局 config/AGENTS.md 和当前位置向上的项目 AGENTS；子目录 read 后向上发现 Location root 以下 AGENTS，作为 durable synthetic 注入",
+      "preserve": "当前可用规则正文、已注入路径 metadata",
+      "loss": "不预读所有子目录；synthetic 被压缩/revert 移出可见历史后会重新发现重注入",
+      "default": "global/project discovery 默认 true；显式配置 instructions 独立于发现开关",
+      "gate": "外部目录 read 不自动发现；发现失败不使 read 失败",
+      "evidence": [
+        {
+          "path": "packages/core/src/config/plugin/instruction.ts",
+          "line": 24,
+          "end": 56,
+          "symbol": "discovery candidates",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/config/plugin/instruction.ts#L24-L56"
+        },
+        {
+          "path": "packages/core/src/config/plugin/instruction.ts",
+          "line": 78,
+          "end": 109,
+          "symbol": "globalSource/projectSource",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/config/plugin/instruction.ts#L78-L109"
+        },
+        {
+          "path": "packages/core/src/tool/plugin/read.ts",
+          "line": 82,
+          "end": 106,
+          "symbol": "read instruction discovery",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/tool/plugin/read.ts#L82-L106"
+        },
+        {
+          "path": "packages/core/src/session/instructions.ts",
+          "line": 35,
+          "end": 43,
+          "symbol": "visible ledger",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/instructions.ts#L35-L43"
+        },
+        {
+          "path": "packages/core/src/session/instructions.ts",
+          "line": 99,
+          "end": 110,
+          "symbol": "previouslyInjected",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/instructions.ts#L99-L110"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "O06",
+      "title": "Skill 目录与正文分层",
+      "condition": "选择可用 Skills 或用户显式激活 Skill",
+      "action": "system baseline 放 id/name/description 目录；权限允许且 autoinvoke 不为 false 的条目可自动发现；用户激活正文附在 user content 前或独立 skill message",
+      "preserve": "被使用 Skill 的正文可进入会话；未使用 Skill 仅描述",
+      "loss": "不是所有 Skill 全文常驻；原生保留 real user 时主动去 skills",
+      "default": "目录按 ID 排序；未描述/禁自动 invoke 条目不列",
+      "gate": "Skill tool/用户引用触发正文加载",
+      "evidence": [
+        {
+          "path": "packages/core/src/skill/instructions.ts",
+          "line": 16,
+          "end": 33,
+          "symbol": "render",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/skill/instructions.ts#L16-L33"
+        },
+        {
+          "path": "packages/core/src/skill/instructions.ts",
+          "line": 79,
+          "end": 95,
+          "symbol": "load",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/skill/instructions.ts#L79-L95"
+        },
+        {
+          "path": "packages/core/src/session/runner/to-llm-message.ts",
+          "line": 256,
+          "end": 277,
+          "symbol": "user/skill",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/runner/to-llm-message.ts#L256-L277"
+        },
+        {
+          "path": "packages/core/src/session/compaction.ts",
+          "line": 799,
+          "end": 811,
+          "symbol": "recentUserMessages",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L799-L811"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "O07",
+      "title": "工具输出入口边界：先截断，再入持久消息",
+      "condition": "工具结果未自报 metadata.truncated，且文本超过 2,000 行或 50 KiB",
+      "action": "保留完整前缀行到双重上限；原全文保存 tool-output 文件，返回显示范围和 outputPath",
+      "preserve": "完整结果外置文件、头部文本、非文本 file 内容",
+      "loss": "中后段不进本轮 prompt；文件保留期默认 7 天，不是永久档案",
+      "default": "2,000 lines/50 KiB；7 days retention",
+      "gate": "结果已带 truncated metadata 时跳过通用裁剪",
+      "evidence": [
+        {
+          "path": "packages/core/src/tool-output.ts",
+          "line": 13,
+          "end": 15,
+          "symbol": "MAX_LINES/MAX_BYTES/RETENTION",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/tool-output.ts#L13-L15"
+        },
+        {
+          "path": "packages/core/src/tool-output.ts",
+          "line": 69,
+          "end": 119,
+          "symbol": "truncate",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/tool-output.ts#L69-L119"
+        },
+        {
+          "path": "packages/core/src/session/runner/step.ts",
+          "line": 123,
+          "end": 128,
+          "symbol": "toolOutput.truncate",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/runner/step.ts#L123-L128"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "O08",
+      "title": "图片是 byte 高低水位，而非 token compaction",
+      "condition": "inline image 累计 payload 超过 25 MiB",
+      "action": "按原顺序重放尺寸；每次超 trigger 丢最旧图到 15 MiB target，以明确不可见占位替换；远程/引用图不计 inline byte",
+      "preserve": "近期 inline images、明确的丢失标记、稳定切点以减少 cache prefix 改写",
+      "loss": "旧图片视觉信息丢失；不能凭记忆描述；与图像 token 预算是另一维度",
+      "default": "25 MiB trigger / 15 MiB target",
+      "gate": "boundImages 始终在请求 hook 后执行",
+      "evidence": [
+        {
+          "path": "packages/core/src/session/model-request.ts",
+          "line": 42,
+          "end": 45,
+          "symbol": "image bounds constants",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/model-request.ts#L42-L45"
+        },
+        {
+          "path": "packages/core/src/session/model-request.ts",
+          "line": 141,
+          "end": 145,
+          "symbol": "mediaBytes",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/model-request.ts#L141-L145"
+        },
+        {
+          "path": "packages/core/src/session/model-request.ts",
+          "line": 181,
+          "end": 208,
+          "symbol": "boundImages",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/model-request.ts#L181-L208"
+        },
+        {
+          "path": "packages/core/src/session/model-request.ts",
+          "line": 289,
+          "end": 291,
+          "symbol": "post-hook shaping",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/model-request.ts#L289-L291"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "O09",
+      "title": "usage anchor = 最近同 provider 成功请求的实测总量 + 未见新内容估算",
+      "condition": "已有 input/cache tokens 非零、无 error 的 assistant",
+      "action": "measured=input+cache.read+cache.write+output+reasoning；estimated 为 anchor 后 canonical 消息（排除 anchor assistant 自身，包含本地 tool results）；无 anchor 则全请求 system/tools/messages估算",
+      "preserve": "缓存输入计入窗口；本地尚未发给 provider 的 tool results 纳入 delta",
+      "loss": "4 chars/token 启发式非精确 tokenizer；同 provider 不同 model 的 usage 也可作 anchor；hook 修改的整体开销不保证精确覆盖",
+      "default": "估算 round(string.length/4)；image 1500、PDF 2000",
+      "gate": "hasMeasuredPrompt 只比较 providerID，不比较 model.id",
+      "evidence": [
+        {
+          "path": "packages/core/src/session/compaction.ts",
+          "line": 819,
+          "end": 843,
+          "symbol": "estimatePrompt",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L819-L843"
+        },
+        {
+          "path": "packages/core/src/session/compaction.ts",
+          "line": 868,
+          "end": 873,
+          "symbol": "hasMeasuredPrompt",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L868-L873"
+        },
+        {
+          "path": "packages/core/src/session/compaction.ts",
+          "line": 899,
+          "end": 936,
+          "symbol": "estimateRequest/estimatePart",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L899-L936"
+        },
+        {
+          "path": "packages/core/src/util/token.ts",
+          "line": 3,
+          "end": 5,
+          "symbol": "Token.estimate",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/util/token.ts#L3-L5"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "O10",
+      "title": "默认阈值保留 15%，中大窗口至少保留 16K",
+      "condition": "auto=true，最新不是刚完成 compaction，且 native window 后已有 usage evidence",
+      "action": "W=input limit || context；若 buffer 显式则 ceiling=W-buffer；否则 W-max(floor(.15W), W>=32000?16000:0)；estimateContext>=ceiling 触发",
+      "preserve": "为下一回复与摘要留余量",
+      "loss": "未知窗口 ceiling=Infinity 不会预触发；新工具输出跃迁仍可能超限",
+      "default": "auto=true，keep=15000；unknown compaction planning window=200000",
+      "gate": "auto=false 同时关闭 auto 和 overflow，只保留 manual；opaque native 等 usage latch",
+      "evidence": [
+        {
+          "path": "packages/core/src/session/compaction.ts",
+          "line": 93,
+          "end": 108,
+          "symbol": "constants",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L93-L108"
+        },
+        {
+          "path": "packages/core/src/session/compaction.ts",
+          "line": 197,
+          "end": 202,
+          "symbol": "state defaults",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L197-L202"
+        },
+        {
+          "path": "packages/core/src/session/compaction.ts",
+          "line": 210,
+          "end": 255,
+          "symbol": "compact/due",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L210-L255"
+        },
+        {
+          "path": "packages/core/src/session/compaction.ts",
+          "line": 851,
+          "end": 862,
+          "symbol": "calculateCeiling/summaryRoom",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L851-L862"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "O11",
+      "title": "输出请求上限动态适配剩余窗口",
+      "condition": "primary 或 compaction 默认请求准备",
+      "action": "requested=min(catalog.output 或 32000,256000)；room=context-measured-ceil(estimated*1.15)；maxTokens=min(requested,max(1024,room))；hook 可更改/移除此设置",
+      "preserve": "默认输出空间估算，估算部分额外 15% margin",
+      "loss": "1024 floor 在 auto off 极满时仍可能使总量过窗；未知 context 不适配",
+      "default": "输出 fallback 32000，max 256000，min 1024",
+      "gate": "主请求/压缩请求设默认，title/generate保留 provider 默认",
+      "evidence": [
+        {
+          "path": "packages/core/src/session/model-request.ts",
+          "line": 47,
+          "end": 54,
+          "symbol": "output constants",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/model-request.ts#L47-L54"
+        },
+        {
+          "path": "packages/core/src/session/model-request.ts",
+          "line": 84,
+          "end": 90,
+          "symbol": "outputLimit",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/model-request.ts#L84-L90"
+        },
+        {
+          "path": "packages/core/src/session/model-request.ts",
+          "line": 244,
+          "end": 255,
+          "symbol": "default hook options",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/model-request.ts#L244-L255"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "O12",
+      "title": "文本摘要不只是旧前缀：能装下时总结整个当前窗口",
+      "condition": "选中的模型不是 native compaction",
+      "action": "切 keepID，buildPrompt(update/legacy)，将当前请求尽可能保持原样 + summary prompt，重用 cache；不足时使用去掉 kept tail 的 prefix；输出写结构化 summary",
+      "preserve": "目标/要求/决策/进度/阻塞/Next Move/最多15文件/不可恢复关键值；较新历史优先于旧摘要",
+      "loss": "不能保证所有 template section：filled 实际只检查存在任一模板 heading；不保存细节保真",
+      "default": "默认 keep15000；新 prompt 明确不复述单独重发的规则/AGENTS/environment",
+      "gate": "可配置 compaction agent 的模型；resolve 失败 fallback 当前 model",
+      "evidence": [
+        {
+          "path": "packages/core/src/session/compaction.ts",
+          "line": 111,
+          "end": 181,
+          "symbol": "buildPrompt",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L111-L181"
+        },
+        {
+          "path": "packages/core/src/session/compaction.ts",
+          "line": 218,
+          "end": 238,
+          "symbol": "model selection",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L218-L238"
+        },
+        {
+          "path": "packages/core/src/session/compaction.ts",
+          "line": 278,
+          "end": 333,
+          "symbol": "summarize",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L278-L333"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "O13",
+      "title": "recent-context 是有损序列化快照，不是原消息 suffix",
+      "condition": "摘要 keepID 被选择并加载下一请求",
+      "action": "从 keepID 到 compaction seq 的记录即时 messageToText；包装单一 user conversation-checkpoint，summary 与 recent-context 两段；正文注明历史数据非新指令",
+      "preserve": "user原文、Skill正文、assistant text和reasoning文本、tool调用参数、工具结果前1250 code points、附件名称/MIME",
+      "loss": "原 tool role/配对被转换为文本；附件 bytes不保留；单结果超过1250被截断；不是原生tool消息重放",
+      "default": "keep是选择目标而非总请求 hard cap；附件仅 metadata",
+      "gate": "system/旧compaction不进 recent；messageToText 有多类过滤",
+      "evidence": [
+        {
+          "path": "packages/core/src/session/history.ts",
+          "line": 144,
+          "end": 181,
+          "symbol": "withRecentText",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/history.ts#L144-L181"
+        },
+        {
+          "path": "packages/core/src/session/recent-text.ts",
+          "line": 5,
+          "end": 81,
+          "symbol": "messageToText/truncateToolOutput",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/recent-text.ts#L5-L81"
+        },
+        {
+          "path": "packages/core/src/session/runner/to-llm-message.ts",
+          "line": 293,
+          "end": 312,
+          "symbol": "checkpoint lowering",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/runner/to-llm-message.ts#L293-L312"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "O14",
+      "title": "keep 切点守 user exchange，不保证严格 <= keep",
+      "condition": "消息文本可计算，准备 summary",
+      "action": "从尾部往前累计预算，再向前对齐真实 user 边界；总量全 fit也只保留最新 exchange；仅一个 exchange可全总结且不保留；旧摘要已有 recent 时可保留全部 recent",
+      "preserve": "tool calls/results 不切开；至少最新一条的选择机制",
+      "loss": "对齐可能超 budget；无条件“最新用户永远原样保留”不成立：单 exchange路径可keep-none",
+      "default": "keep=15000",
+      "gate": "previous+recent 是单exchange特殊分支",
+      "evidence": [
+        {
+          "path": "packages/core/src/session/compaction.ts",
+          "line": 716,
+          "end": 774,
+          "symbol": "splitConversation/recentStart/oldestToDrop",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L716-L774"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "O15",
+      "title": "原生压缩两机制拥有不同保留方",
+      "condition": "model.compaction.type===native",
+      "action": "优先 trigger 机制：调用 llm.compact 后客户端补最近 whole real user messages + assistant checkpoint；否则 endpoint 返回 replacement 原样保存为native.messages",
+      "preserve": "trigger补用户原文/附件整体；endpoint保留项由provider决定；native JSON与metadata",
+      "loss": "provider不透明算法不可从客户端证明；trigger recentUserMessages 去掉skills、不保半个附件，可能无用户项fit",
+      "default": "按 capability 检查 trigger 优先 endpoint 次之",
+      "gate": "canCompact 均不支持则失败，非静默变文本",
+      "evidence": [
+        {
+          "path": "packages/core/src/session/compaction.ts",
+          "line": 336,
+          "end": 385,
+          "symbol": "compactNatively",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L336-L385"
+        },
+        {
+          "path": "packages/core/src/session/compaction.ts",
+          "line": 799,
+          "end": 811,
+          "symbol": "recentUserMessages",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L799-L811"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "O16",
+      "title": "原生窗口是 model+provider 绑定，切换可展开原历史",
+      "condition": "选择 History boundary=target model",
+      "action": "只有同providerID同model.id且window可decode才重放；不兼容则递归回溯更早checkpoint/原记录；不可重放native条目不当成文本摘要",
+      "preserve": "原始DB transcript仍在；目标provider可接受的历史",
+      "loss": "展开后可能比旧usage大很多；不能复用不可解码加密块；模型 switch可触发新一轮预算压力",
+      "default": "Boundary latest对中立读者保留；local跳过native",
+      "gate": "exact model+provider replay 检查",
+      "evidence": [
+        {
+          "path": "packages/core/src/session/history.ts",
+          "line": 20,
+          "end": 46,
+          "symbol": "Boundary/replayable",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/history.ts#L20-L46"
+        },
+        {
+          "path": "packages/core/src/session/history.ts",
+          "line": 103,
+          "end": 141,
+          "symbol": "messageEntries",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/history.ts#L103-L141"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "O17",
+      "title": "压缩请求自身也要能发送：保留checkpoint与最新exchange",
+      "condition": "prepared request 不fit target，或provider证实too-long",
+      "action": "优先原样全请求，再原样去tail前缀，再flatten文本；保留前checkpoint，省reasoning/media/system updates、工具结果截1250；按whole exchange删最旧，标注 omitted",
+      "preserve": "前checkpoint、最新完整exchange不被进一步剪碎；system/tools仍计开销",
+      "loss": "被drop exchange既不在摘要输入也不在tail的风险由withoutTail路径避免；被丢的历史细节不再可靠进入新summary",
+      "default": "先估算，尚无provider拒绝时若无法fit仍尝试 whole；拒绝后不再硬送",
+      "gate": "hook可供结果绕过LLM；hook改旧checkpoint在flatten存在TODO局限",
+      "evidence": [
+        {
+          "path": "packages/core/src/session/compaction.ts",
+          "line": 388,
+          "end": 477,
+          "symbol": "deliver",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L388-L477"
+        },
+        {
+          "path": "packages/core/src/session/compaction.ts",
+          "line": 480,
+          "end": 526,
+          "symbol": "flattenAndDropOldest",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L480-L526"
+        },
+        {
+          "path": "packages/core/src/session/compaction.ts",
+          "line": 776,
+          "end": 796,
+          "symbol": "flattenMessage",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L776-L796"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "O18",
+      "title": "context overflow 与 byte overflow 的恢复不同",
+      "condition": "摘要/原生压缩请求被provider拒绝",
+      "action": "payload-too-large且还是原请求时只切asText去媒体，暂不记rejection；context overflow/文本payload拒绝则目标依次首个被拒请求估计的70%、50%、35%；再失败退出",
+      "preserve": "省略标记、最新exchange/checkpoint、每次尝试usage成本",
+      "loss": "最多缩三阶仍不保证fit；不能再缩时显式失败；内容不可用Failure不按网络重试",
+      "default": "SHRINK_STEPS=[.7,.5,.35]",
+      "gate": "其他AIError走session重试策略；Failure不重试",
+      "evidence": [
+        {
+          "path": "packages/core/src/session/compaction.ts",
+          "line": 93,
+          "end": 93,
+          "symbol": "SHRINK_STEPS",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L93-L93"
+        },
+        {
+          "path": "packages/core/src/session/compaction.ts",
+          "line": 419,
+          "end": 477,
+          "symbol": "deliver retry loop",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L419-L477"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "O19",
+      "title": "主请求超限只在无已持久输出时恢复一次",
+      "condition": "Step收到context overflow，publisher.outputStarted=false",
+      "action": "调用 reason overflow 压缩；成功则本logical Step重新load和发新assistant；设recoverOverflow=false",
+      "preserve": "已发生输出/工具副作用不被隐藏重放",
+      "loss": "有部分输出后不走此自动压缩恢复；第二次overflow不再compact循环",
+      "default": "每logical Step一次",
+      "gate": "auto=false会导致overflow compaction skipped",
+      "evidence": [
+        {
+          "path": "packages/core/src/session/runner/step.ts",
+          "line": 113,
+          "end": 120,
+          "symbol": "preoutput overflow capture",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/runner/step.ts#L113-L120"
+        },
+        {
+          "path": "packages/core/src/session/runner/step.ts",
+          "line": 155,
+          "end": 166,
+          "symbol": "recoverOverflow",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/runner/step.ts#L155-L166"
+        },
+        {
+          "path": "packages/core/src/session/runner/llm.ts",
+          "line": 208,
+          "end": 209,
+          "symbol": "recovery flags",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/runner/llm.ts#L208-L209"
+        },
+        {
+          "path": "packages/core/src/session/runner/llm.ts",
+          "line": 259,
+          "end": 264,
+          "symbol": "recoverOverflow callback",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/runner/llm.ts#L259-L264"
+        },
+        {
+          "path": "packages/core/src/session/runner/llm.ts",
+          "line": 314,
+          "end": 317,
+          "symbol": "Compacted outcome",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/runner/llm.ts#L314-L317"
+        }
+      ],
+      "certainty": "源码直接可见"
+    },
+    {
+      "id": "O20",
+      "title": "只有可用结果才建立压缩边界；失败也计费",
+      "condition": "摘要返回格式不符、空、length/content-filter/unknown结束，或取消",
+      "action": "模板可补一次NUDGE（注意是原prompt+NUDGE新请求，并未拼回失败assistant）；仍无heading失败；length等失败事件，不推进Completed boundary；usage每次完成立即累计",
+      "preserve": "旧历史、失败状态、实际花费；成功后才在Ended推进epoch",
+      "loss": "格式检查弱：仅任一heading；不是schema严格验证。失败摘要花费不回滚",
+      "default": "每个模板失败最多一次nudge；一个Session不并发compaction",
+      "gate": "hook result可以直接提供summary/native/metadata",
+      "evidence": [
+        {
+          "path": "packages/core/src/session/compaction.ts",
+          "line": 289,
+          "end": 317,
+          "symbol": "filled/send/NUDGE",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L289-L317"
+        },
+        {
+          "path": "packages/core/src/session/compaction.ts",
+          "line": 530,
+          "end": 585,
+          "symbol": "stream",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L530-L585"
+        },
+        {
+          "path": "packages/core/src/session/compaction.ts",
+          "line": 615,
+          "end": 675,
+          "symbol": "fromHook/spend/publish",
+          "url": "https://github.com/anomalyco/opencode/blob/f7d5b6ffc48223e654b20043a500d315e4bc8053/packages/core/src/session/compaction.ts#L615-L675"
+        }
+      ],
+      "certainty": "源码直接可见"
+    }
+  ],
+  "pipeline": [
+    {
+      "phase": "P1 发现与选择",
+      "functions": [
+        "SessionContext.select",
+        "registry.snapshot",
+        "SkillInstructions.load"
+      ],
+      "inputs": [
+        "session/agent permission",
+        "instruction sources"
+      ],
+      "outputs": [
+        "Selection.instructions",
+        "Tool.Snapshot"
+      ],
+      "ruleIds": [
+        "O02",
+        "O03",
+        "O05",
+        "O06"
+      ]
+    },
+    {
+      "phase": "P2 承认规则变化",
+      "functions": [
+        "InstructionState.prepare",
+        "observe/commit"
+      ],
+      "inputs": [
+        "previous current_values",
+        "new source values"
+      ],
+      "outputs": [
+        "frozen initial baseline / durable system delta"
+      ],
+      "ruleIds": [
+        "O04"
+      ]
+    },
+    {
+      "phase": "P3 重建活动历史",
+      "functions": [
+        "SessionContext.load",
+        "SessionHistory.entriesForRunner",
+        "messageEntries",
+        "withRecentText"
+      ],
+      "inputs": [
+        "target model",
+        "DB rows",
+        "keepID",
+        "instruction epoch"
+      ],
+      "outputs": [
+        "initial + active messages"
+      ],
+      "ruleIds": [
+        "O01",
+        "O13",
+        "O16"
+      ]
+    },
+    {
+      "phase": "P4 量化与压缩门",
+      "functions": [
+        "estimatePrompt",
+        "due",
+        "calculateCeiling",
+        "compact"
+      ],
+      "inputs": [
+        "provider usage anchor",
+        "estimated delta",
+        "model limit"
+      ],
+      "outputs": [
+        "skip / summary / native"
+      ],
+      "ruleIds": [
+        "O09",
+        "O10",
+        "O12",
+        "O15"
+      ]
+    },
+    {
+      "phase": "P5 准备并降规格请求",
+      "functions": [
+        "baseTranscript",
+        "SessionModelRequest.primary/compaction",
+        "outputLimit",
+        "unsupportedParts",
+        "boundImages"
+      ],
+      "inputs": [
+        "system",
+        "canonical messages",
+        "schemas",
+        "hooks"
+      ],
+      "outputs": [
+        "wire-ready LLMRequest"
+      ],
+      "ruleIds": [
+        "O03",
+        "O08",
+        "O11"
+      ]
+    },
+    {
+      "phase": "P6 provider与工具",
+      "functions": [
+        "SessionStep.attempt",
+        "toolOutput.truncate",
+        "publisher.toolExecution"
+      ],
+      "inputs": [
+        "stream events",
+        "tool calls/results"
+      ],
+      "outputs": [
+        "durable assistant/tool rows",
+        "usage"
+      ],
+      "ruleIds": [
+        "O07",
+        "O19"
+      ]
+    },
+    {
+      "phase": "P7 压缩交付与退阶",
+      "functions": [
+        "summarize/compactNatively",
+        "deliver",
+        "flattenAndDropOldest",
+        "stream"
+      ],
+      "inputs": [
+        "whole window",
+        "keepID",
+        "summary prompt/native capability"
+      ],
+      "outputs": [
+        "usable summary/native or Failed"
+      ],
+      "ruleIds": [
+        "O12",
+        "O14",
+        "O15",
+        "O17",
+        "O18",
+        "O20"
+      ]
+    },
+    {
+      "phase": "P8 提交边界并循环",
+      "functions": [
+        "publish Compaction.Ended",
+        "projector",
+        "InstructionState.advanceEpoch",
+        "runStep continue"
+      ],
+      "inputs": [
+        "result+usage+metadata"
+      ],
+      "outputs": [
+        "new active checkpoint + current rules baseline"
+      ],
+      "ruleIds": [
+        "O01",
+        "O04",
+        "O13",
+        "O20"
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "summary-happy",
+      "title": "200K窗口：一次正常文本压缩",
+      "kind": "conceptual replay; counts illustrative not tokenizer measurements",
+      "steps": [
+        {
+          "title": "装配基线",
+          "before": "DB存全量E1–E8",
+          "after": "工作集=[B0,E1…E8]；tools=T",
+          "action": "选择工具与permission-filtered目录；读取固定instruction epoch",
+          "ruleIds": [
+            "O01",
+            "O02",
+            "O03",
+            "O04"
+          ],
+          "objects": [
+            "B0稳定规则",
+            "T工具schema",
+            "E1-E8历史"
+          ],
+          "note": ""
+        },
+        {
+          "title": "观察usage与新结果",
+          "before": "anchor input/cache/output/reasoning=160K",
+          "after": "本地工具结果delta估计=12K；总估计172K",
+          "action": "工具输出先过入口2000行/50KiB边界；anchor的assistant output不再重复估算",
+          "ruleIds": [
+            "O07",
+            "O09"
+          ],
+          "objects": [
+            "usage160K实测",
+            "new tool result12K估算"
+          ],
+          "note": ""
+        },
+        {
+          "title": "比较触发线",
+          "before": "W=200K，无buffer",
+          "after": "ceiling=200K−max30K,16K=170K；172K≥170K",
+          "action": "进入summary路径；此步骤不是假定170K为模型hard window",
+          "ruleIds": [
+            "O10",
+            "O12"
+          ],
+          "objects": [
+            "170K阈值线",
+            "172K活动集"
+          ],
+          "note": ""
+        },
+        {
+          "title": "划keepID",
+          "before": "E1…E8",
+          "after": "最新完整exchange E8被keepID引用（约12K）",
+          "action": "倒数文本预算并向user boundary回退；工具result将在recent中截1250codepoints",
+          "ruleIds": [
+            "O13",
+            "O14"
+          ],
+          "objects": [
+            "E1-E7旧历史",
+            "E8近期文本",
+            "keepID=U8"
+          ],
+          "note": ""
+        },
+        {
+          "title": "生成summary",
+          "before": "B0,T,E1…E8",
+          "after": "summary S1",
+          "action": "能装时整个窗口原样+summary prompt发LLM以复用cache；格式至少一个heading才通过",
+          "ruleIds": [
+            "O12",
+            "O20"
+          ],
+          "objects": [
+            "LLM摘要请求",
+            "S1目标/决策/下一步"
+          ],
+          "note": ""
+        },
+        {
+          "title": "提交新边界",
+          "before": "DB旧记录仍在",
+          "after": "新活动=[B1, user{summary S1,recent E8},新增内容]",
+          "action": "Compaction.Ended -> advanceEpoch；B1取current规则；下一步DB重建recent",
+          "ruleIds": [
+            "O04",
+            "O13",
+            "O20"
+          ],
+          "objects": [
+            "B1新基线",
+            "S1摘要",
+            "E8序列化tail",
+            "DB原E1-E8保留"
+          ],
+          "note": "S1长度是假设结果，不能宣称压缩后固定token。"
+        }
+      ]
+    },
+    {
+      "id": "overflow-failure",
+      "title": "主请求拒绝→一次恢复→摘要请求继续被拒",
+      "kind": "failure branches, no tool re-execution",
+      "steps": [
+        {
+          "title": "估算未证明真实安全",
+          "before": "工作集估计低于threshold",
+          "after": "provider返回context overflow，尚无输出",
+          "action": "错误尚未产生durable assistant/tool output才可恢复",
+          "ruleIds": [
+            "O09",
+            "O19"
+          ],
+          "objects": [
+            "pending request",
+            "provider overflow"
+          ],
+          "note": ""
+        },
+        {
+          "title": "启动一次overflow compact",
+          "before": "recoverOverflow=true",
+          "after": "target=min(cap,estimatedContext×0.7)",
+          "action": "压缩请求立即更保守，而非再发同一主请求",
+          "ruleIds": [
+            "O18",
+            "O19"
+          ],
+          "objects": [
+            "recovery token",
+            "70%初始target"
+          ],
+          "note": ""
+        },
+        {
+          "title": "文本化与整exchange裁剪",
+          "before": "完整历史太大",
+          "after": "checkpoint + 扁平文本 + omitted marker",
+          "action": "去媒体/系统delta/reasoning，tool结果截1250；整组drop最早exchange",
+          "ruleIds": [
+            "O17",
+            "O18"
+          ],
+          "objects": [
+            "preserved checkpoint",
+            "drop E1 E2",
+            "retain latest exchange"
+          ],
+          "note": ""
+        },
+        {
+          "title": "提供者仍拒绝",
+          "before": "首个被拒压缩请求估计Q",
+          "after": "目标依次0.7Q→0.5Q→0.35Q",
+          "action": "注意梯度基于首个被拒压缩请求，而非每轮乘前一轮0.7",
+          "ruleIds": [
+            "O18"
+          ],
+          "objects": [
+            "fixed Q基准",
+            "three shrink steps"
+          ],
+          "note": ""
+        },
+        {
+          "title": "停止而非破坏保护项",
+          "before": "最新exchange/checkpoint仍放不下",
+          "after": "Compaction.Failed；原历史与失败可见，Step终止",
+          "action": "不能再缩时显式失败；summary length/empty亦失败；耗费usage仍记账",
+          "ruleIds": [
+            "O17",
+            "O20"
+          ],
+          "objects": [
+            "latest exchange保护",
+            "failed event",
+            "old DB transcript"
+          ],
+          "note": ""
+        },
+        {
+          "title": "若压缩成功的另一分支",
+          "before": "new checkpoint完成",
+          "after": "重试主请求；recoverOverflow=false",
+          "action": "若再次overflow不无限compact；部分输出后的overflow不走本恢复分支",
+          "ruleIds": [
+            "O19"
+          ],
+          "objects": [
+            "one retry",
+            "no second overflow compaction"
+          ],
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "native-switch",
+      "title": "原生压缩与切模型后的展开",
+      "kind": "capability-gated alternative",
+      "steps": [
+        {
+          "title": "选择原生能力",
+          "before": "model.compaction=native",
+          "after": "选择trigger或endpoint",
+          "action": "trigger优先；两者客户端保留语义不同",
+          "ruleIds": [
+            "O15"
+          ],
+          "objects": [
+            "provider-native gateway"
+          ],
+          "note": ""
+        },
+        {
+          "title": "保存不透明窗口",
+          "before": "原工作集",
+          "after": "native.messages=[whole users, encrypted checkpoint]（trigger示意）",
+          "action": "endpoint则完全采用provider replacement；不绘制内部摘要算法",
+          "ruleIds": [
+            "O15"
+          ],
+          "objects": [
+            "real user envelopes",
+            "opaque checkpoint"
+          ],
+          "note": ""
+        },
+        {
+          "title": "等待实测",
+          "before": "opaque checkpoint本地字符近零",
+          "after": "due先不触发，等后续成功response usage",
+          "action": "不得因为本地密文长度小而宣称省到零token",
+          "ruleIds": [
+            "O09",
+            "O10"
+          ],
+          "objects": [
+            "usage latch",
+            "opaque unmeasured"
+          ],
+          "note": ""
+        },
+        {
+          "title": "切到另一模型",
+          "before": "native绑定A/model1",
+          "after": "跳过不兼容native boundary，回溯原历史",
+          "action": "provider相同但model.id不同也不能重放native；展开后重估压力",
+          "ruleIds": [
+            "O16"
+          ],
+          "objects": [
+            "A/model1 native",
+            "B/model2 raw expansion",
+            "DB originals"
+          ],
+          "note": ""
+        }
+      ]
+    }
+  ],
+  "corrections": [
+    "recent-context虽注释称verbatim，实际不是原始message后缀：tool输出1250 codepoints、附件只metadata、包括可读reasoning，user与Skill正文可完整进入。",
+    "hasMeasuredPrompt只同providerID而非exact model，native重放才要求exact provider+model。两者不可混说。",
+    "instruction epoch持久initial/current hash baseline+chronological delta，压缩后advanceEpoch，规则不靠summary传承。",
+    "正常summary优先整个窗口总结以复用cache；仅room不足才排除kept tail，不是永远只总结旧前缀。",
+    "overflow主请求恢复仅未产生durable输出时，且每logical Step仅一次。",
+    "格式检查filled只任一模板heading，不能描述成严格结构验证。",
+    "工具入口2K行/50KiB与compaction recent 1250codepoints是两层；7天外置文件retention不等于永久历史。"
+  ],
+  "limitations": [
+    "固定2026-10-22源码快照，未运行真实provider模型或验证远端压缩内容",
+    "插件hooks可改system/messages/tools/options甚至直接提供压缩结果，默认规则不是所有部署的保证",
+    "native server内部筛选/编码算法不在客户端可见范围",
+    "仅静态跟踪，不提供性能/质量排名"
+  ]
+}

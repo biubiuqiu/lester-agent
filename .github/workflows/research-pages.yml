@@ -1,0 +1,69 @@
+name: Research Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "research/**"
+      - ".github/workflows/research-pages.yml"
+      - ".github/scripts/*research*.py"
+  pull_request:
+    paths:
+      - "research/**"
+      - ".github/workflows/research-pages.yml"
+      - ".github/scripts/*research*.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate research
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Stage checked reading pages
+        run: python3 .github/scripts/build_research_site.py --output "${{ runner.temp }}/research-site"
+      - name: Upload Pages artifact
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/research-site
+
+  deploy:
+    name: Deploy research
+    needs: validate
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Check Pages source and existing homepage
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 .github/scripts/check_research_pages.py preflight
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
+      - name: Verify published reading URLs
+        env:
+          PAGES_URL: ${{ steps.deployment.outputs.page_url }}
+        run: python3 .github/scripts/check_research_pages.py verify "$PAGES_URL"
