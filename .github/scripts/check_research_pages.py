@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -24,7 +25,14 @@ def preflight():
     repository = os.environ["GITHUB_REPOSITORY"]
     result = subprocess.run(["gh", "api", f"repos/{repository}/pages"], capture_output=True, text=True)
     if result.returncode:
-        raise RuntimeError(f"Pages settings could not be read. If Pages is not enabled, set Settings → Pages → Source to GitHub Actions, then rerun this workflow: https://github.com/{repository}/settings/pages")
+        status = re.search(r"HTTP (\d{3})", result.stderr)
+        try:
+            message = str(json.loads(result.stdout).get("message", "request rejected"))
+        except (ValueError, AttributeError):
+            message = "request rejected"
+        message = message.replace("\r", " ").replace("\n", " ").replace("%", "%25")[:200]
+        reason = f"HTTP {status[1]}: {message}" if status else message
+        raise RuntimeError(f"Pages settings could not be read ({reason}). If Pages is not enabled, set Settings → Pages → Source to GitHub Actions, then rerun this workflow: https://github.com/{repository}/settings/pages")
     settings = json.loads(result.stdout)
     if settings.get("build_type") != "workflow":
         raise RuntimeError("Pages is using a different publishing source; leave the existing site unchanged. Select GitHub Actions explicitly before rerunning.")
