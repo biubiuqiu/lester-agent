@@ -2177,5 +2177,18 @@
   "保留当前记忆": "Conserver le souvenir actuel",
   "编辑记忆": "Modifier le souvenir",
   "返回编辑": "Revenir à la modification",
-  "返回编辑不会撤销已经接受的操作。": "Revenir à la modification n’annule pas les opérations déjà acceptées."
+  "返回编辑不会撤销已经接受的操作。": "Revenir à la modification n’annule pas les opérations déjà acceptées.",
+  "添加补充": "Ajouter une précision",
+  "收起补充": "Masquer la précision",
+  "另外 {0} 条": "{0} de plus",
+  "更多授权": "Autres autorisations",
+  "仅允许这次操作": "Autoriser uniquement cette opération",
+  "以下授权仅用于当前任务。": "Ces autorisations s’appliquent uniquement à cette tâche.",
+  "另有 {0} 项待确认": "{0} autres à examiner",
+  "查看下一项": "Examiner la suite",
+  "批准后执行当前计划；操作仍遵循任务权限。": "L’approbation exécute ce plan ; les autorisations de la tâche restent applicables.",
+  "复杂任务由 Agent 进入 Plan，先只读检查并提出计划。“调整计划”按需展开意见；填写后主操作变为“提交调整”，不批准执行。没有意见时可“批准并执行”，只对应当前任务和计划版本，权限保持独立。": "Pour un travail complexe, l’Agent peut passer en mode Plan, examiner sans modifier et proposer un plan. Ajuster le plan ouvre un commentaire facultatif ; sa saisie remplace l’action principale par Soumettre les modifications, sans autoriser l’exécution. Sans commentaire, Approuver et exécuter ne concerne que cette tâche et cette version du plan. Les autorisations restent distinctes.",
+  "待答问题固定在聊天框上方，支持逐题单选、多选和提交前核对，推荐项不预选。“添加补充”按需展开；自由回答、无选项题和恢复已有文字时直接显示，收起也保留文字。问题卡内支持数字选择、方向键导航，Enter 在回答中换行；聊天草稿和停止键保持可用。": "Les questions restent au-dessus de la zone de saisie, avec choix unique ou multiple et vérification avant envoi. Les recommandations ne sont pas présélectionnées. Ajouter une précision ouvre le texte facultatif ; les réponses libres, questions sans choix et textes restaurés l’affichent directement. Le masquer conserve le texte. Dans la carte, les chiffres sélectionnent, les flèches naviguent et Entrée insère un saut de ligne dans la réponse. Le brouillon du chat et Arrêter restent accessibles.",
+  "队列贴在输入框上方，按受理顺序显示首条待处理输入，其余按数量展开。消息箭头可查看全文和受理时的权限；暂停项保留真实状态。取消、恢复或放回草稿仍需明确操作。": "La file reste au-dessus de la saisie et montre la première entrée en attente dans l’ordre de réception ; un compteur permet de déplier les autres. La flèche révèle le texte complet et les autorisations enregistrées ; les éléments en pause gardent leur état réel. Annuler, reprendre ou remettre en brouillon demandent toujours une action explicite.",
+  "审批先显示具体操作、“允许一次”和“拒绝”。“更多授权”按需展开当前任务可用的扩展范围；运行中权限变更只影响后续操作，排队任务保留受理时的权限。GitHub 发布始终单次确认。": "L’approbation montre d’abord l’opération exacte, Autoriser une fois et Refuser. Autres autorisations révèle les permissions élargies disponibles pour cette tâche. Les changements en cours ne concernent que les opérations suivantes ; les tâches en file conservent leurs autorisations enregistrées. Toute publication GitHub exige une confirmation propre à l’opération."
 }

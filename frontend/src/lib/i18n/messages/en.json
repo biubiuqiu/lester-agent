@@ -2177,5 +2177,18 @@
   "保留当前记忆": "Keep current memory",
   "编辑记忆": "Edit memory",
   "返回编辑": "Return to editing",
-  "返回编辑不会撤销已经接受的操作。": "Returning to editing does not undo operations already accepted."
+  "返回编辑不会撤销已经接受的操作。": "Returning to editing does not undo operations already accepted.",
+  "添加补充": "Add a note",
+  "收起补充": "Hide note",
+  "另外 {0} 条": "{0} more",
+  "更多授权": "More permissions",
+  "仅允许这次操作": "Allow this operation only",
+  "以下授权仅用于当前任务。": "These permissions apply only to this task.",
+  "另有 {0} 项待确认": "{0} more to review",
+  "查看下一项": "Review next",
+  "批准后执行当前计划；操作仍遵循任务权限。": "Approval runs this plan; task permissions still apply.",
+  "复杂任务由 Agent 进入 Plan，先只读检查并提出计划。“调整计划”按需展开意见；填写后主操作变为“提交调整”，不批准执行。没有意见时可“批准并执行”，只对应当前任务和计划版本，权限保持独立。": "For complex work, the Agent can enter Plan to inspect read-only and propose a plan. Adjust plan opens optional feedback; entering it changes the primary action to Submit changes, without approving execution. With no feedback, Approve and execute applies only to this task and plan version. Permissions remain separate.",
+  "待答问题固定在聊天框上方，支持逐题单选、多选和提交前核对，推荐项不预选。“添加补充”按需展开；自由回答、无选项题和恢复已有文字时直接显示，收起也保留文字。问题卡内支持数字选择、方向键导航，Enter 在回答中换行；聊天草稿和停止键保持可用。": "Pending questions stay above the composer, with single or multiple choices and review before submission. Recommendations are not preselected. Add a note opens optional text; free answers, questions without options and restored text show it directly. Hiding it preserves the text. Within the card, use numbers to select, arrow keys to navigate and Enter for new lines in answers. The chat draft and Stop remain available.",
+  "队列贴在输入框上方，按受理顺序显示首条待处理输入，其余按数量展开。消息箭头可查看全文和受理时的权限；暂停项保留真实状态。取消、恢复或放回草稿仍需明确操作。": "The queue stays above the composer, showing the first pending input in acceptance order and a count to expand the rest. The message arrow reveals its full text and captured permissions; paused entries retain their actual state. Cancel, resume and restore to draft still require explicit actions.",
+  "审批先显示具体操作、“允许一次”和“拒绝”。“更多授权”按需展开当前任务可用的扩展范围；运行中权限变更只影响后续操作，排队任务保留受理时的权限。GitHub 发布始终单次确认。": "Approval first shows the actual operation, Allow once and Reject. More permissions reveals the broader grants available for this task. Live permission changes affect only later operations; queued tasks retain their captured permissions. GitHub publishing always requires a single-operation confirmation."
 }

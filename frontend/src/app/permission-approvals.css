@@ -1,0 +1,28 @@
+/* The decision stays compact; broader authority is always an explicit choice. */
+.permission-approvals .permission-card { border-color: var(--line); background: #fbfcf9; }
+.permission-approvals .permission-card header { min-width: 0; }
+.permission-approvals .permission-remaining { margin-left: auto; color: var(--muted); font-size: 10px; font-weight: 400; }
+.permission-approvals .permission-card pre { margin: 10px 0 8px; }
+.permission-approvals .permission-review-reason { margin: 6px 0; }
+.permission-card .permission-operation-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 7px 0 11px; color: var(--muted); font-size: 10px; }
+.permission-card .permission-actions { display: flex; align-items: flex-start; gap: 7px; }
+.permission-approvals .permission-card .permission-actions > button.permission-primary { background: var(--dark); border-color: var(--dark); color: #fff; }
+.permission-approvals .permission-actions > button { min-height: 33px; padding-inline: 12px; }
+.permission-grants { margin-left: auto; min-width: 0; max-width: 100%; color: var(--muted); }
+.permission-grants > summary { display: flex; align-items: center; justify-content: flex-end; gap: 4px; min-height: 33px; padding: 5px 1px 5px 8px; list-style: none; font-size: 11px; cursor: pointer; }
+.permission-grants > summary::-webkit-details-marker { display: none; }
+.permission-grants > summary svg { transition: transform 120ms ease; }
+.permission-grants[open] > summary svg { transform: rotate(90deg); }
+.permission-grants > div { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; padding-top: 4px; }
+.permission-grants > div > p { margin: 0; }
+.permission-grants > div > button { max-width: 100%; text-align: right; }
+.permission-grants > summary:focus-visible,.permission-approvals button:focus-visible { outline: 2px solid #69866c; outline-offset: 2px; }
+.permission-next { display: flex; align-items: center; gap: 8px; padding: 10px 13px; border: 1px solid var(--line); border-radius: 12px; background: #fbfcf9; color: var(--muted); }
+.permission-next > span { flex: 1; min-width: 0; }
+.permission-next > button { display: inline-flex; align-items: center; gap: 5px; }
+@media (max-width: 600px) {
+  .permission-approvals .permission-actions > button,.permission-grants > summary { min-height: 38px; }
+  .permission-approvals .permission-actions { column-gap: 6px; }
+  .permission-remaining { max-width: 45%; text-align: right; }
+}
+@media (prefers-reduced-motion: reduce) { .permission-grants > summary svg { transition: none; } }

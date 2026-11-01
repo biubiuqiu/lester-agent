@@ -199,7 +199,7 @@ export function PersonalAssistant({ user, projects, deployments, revision, activ
       {pending && !busy ? <p className="personal-pending" role="status">{t("这条消息的回复状态待确认。")}<button type="button" disabled={checking} onClick={() => void check()}>{t("检查状态")}</button></p> : null}
       {!deployments.length ? <p className="personal-setup"><Link href="/app/settings/models?returnTo=%2Fapp">{t("配置第一个模型")}</Link></p> : null}
       <form className="personal-composer" onSubmit={submit}>
-        <textarea ref={input} rows={2} maxLength={12000} aria-label={t("个人助理消息")} placeholder={t("聊聊你的想法，或告诉我需要安排什么…")} value={text} onChange={event => draft(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
+        <textarea ref={input} rows={2} maxLength={12000} aria-label={t("个人助理消息")} placeholder={t("聊聊你的想法，或告诉我需要安排什么…")} value={text} onChange={event => draft(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (!event.repeat) event.currentTarget.form?.requestSubmit(); } }} />
         <SpeechComposer draftKey={key} inputRef={input} onText={draft} active={active} maxLength={12000} className="personal-composer-actions"><span className="personal-composer-hint">{t("记住重要的事，安排接下来的工作")}</span><span className="personal-composer-spacer" /><button className="send-button" aria-label={t("发送给个人助理")} disabled={!text.trim() || busy || !!pending || !state || !deployments.length}>{busy ? <LoaderCircle className="personal-spinner" /> : <ArrowUp />}</button></SpeechComposer>
       </form>
     </div>

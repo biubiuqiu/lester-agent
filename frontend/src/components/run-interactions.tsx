@@ -71,6 +71,7 @@ function InteractionCard({ item, conversationId, storageKey, onConfirmed }: { it
   const initial = readView(storageKey).interactionDrafts[item.id];
   const [answers, setAnswers] = useState<Record<string, Answer>>(initial?.answers || {});
   const [feedback, setFeedback] = useState(initial?.feedback || "");
+  const [planFeedbackOpen, setPlanFeedbackOpen] = useState(Boolean(initial?.feedback));
   const [pending, setPending] = useState(false), [error, setError] = useState("");
   const submitted = useRef(false);
   const save = (nextAnswers: Record<string, Answer>, nextFeedback: string) => {
@@ -80,6 +81,8 @@ function InteractionCard({ item, conversationId, storageKey, onConfirmed }: { it
   const changeAnswer = (id: string, answer: Answer) => { const next = { ...answers, [id]: answer }; setAnswers(next); save(next, feedback); };
   async function respond(response: Response) {
     if (submitted.current || item.status !== "pending") return;
+    const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const composer = focused?.closest(".workspace-shell")?.querySelector<HTMLTextAreaElement>('.composer textarea[aria-label]');
     submitted.current = true; setPending(true); setError("");
     try {
       let received: Interaction;
@@ -89,15 +92,21 @@ function InteractionCard({ item, conversationId, storageKey, onConfirmed }: { it
         received = await api<Interaction>(`/api/v1/conversations/${conversationId}/interactions/${item.id}`);
         if (received.status === "pending" || received.status === "cancelled" || !received.response || !sameInteractionResponse(received.response, response)) throw new Error("unconfirmed");
       }
+      // Disabling the submitted button can already have moved focus to body.
+      // A user who moved into another control keeps their own focus instead.
+      const keepFocus = focused === document.activeElement || document.activeElement === document.body;
       onConfirmed(received);
       const drafts = { ...readView(storageKey).interactionDrafts }; delete drafts[item.id]; updateView(storageKey, { interactionDrafts: drafts });
+      if (keepFocus) requestAnimationFrame(() => {
+        if (focused && !focused.isConnected && document.activeElement === document.body && composer?.isConnected) composer.focus({ preventScroll: true });
+      });
     } catch (reason) { setError(t(item.kind === "automation" && reason instanceof ApiError && reason.status === 409 ? "配置已变化或时间已过期，请暂不应用并重新提出配置。" : "提交结果未确认，回答已保留。请检查状态后重试。")); }
     finally { submitted.current = false; setPending(false); }
   }
   const schedule = item.kind === "automation" && item.request.schedule_preview && item.request.schedule;
  const status = item.kind === "automation" ? ({pending:"定时任务等待确认",answered:"已回答",approved:"定时任务配置已应用",rejected:"未应用定时任务",changes_requested:"请调整定时任务",cancelled:"已取消"})[item.status] : ({ pending: item.kind === "plan" ? "计划等待批准" : "等待你的回答", answered: "已回答", approved: "计划已批准", rejected: "计划已拒绝", changes_requested: "请调整计划", cancelled: "已取消" })[item.status];
   if (item.status !== "pending") return <details className={`interaction-receipt ${item.status}`}><summary>{t(status)}{item.request.title || item.request.schedule_preview?.name ? ` · ${item.request.title || item.request.schedule_preview?.name}` : ""}</summary><InteractionContent item={item} /></details>;
-  return <article className={`interaction-card ${item.kind==="question"?"question-card":item.kind==="automation"?"schedule-card":""}`} aria-busy={pending} aria-label={item.kind==="question"?t("等待你的回答"):item.kind==="automation"?t("定时任务等待确认"):undefined}>
+  return <article className={`interaction-card ${item.kind==="question"?"question-card":item.kind==="automation"?"schedule-card":"plan-card"}`} aria-busy={pending} aria-label={item.kind==="question"?t("等待你的回答"):item.kind==="automation"?t("定时任务等待确认"):undefined}>
     {item.kind==="plan"?<h3>{item.request.title}</h3>:null}
     {schedule ? <>
  <div className="schedule-card-body"><ScheduleReview preview={item.request.schedule_preview!} action={item.request.schedule!.action}/>
@@ -106,12 +115,14 @@ function InteractionCard({ item, conversationId, storageKey, onConfirmed }: { it
  <button type="button" disabled={pending} onClick={()=>void respond({request_digest:item.request_digest,decision:"reject"})}>{t("暂不应用")}</button></div>
  </> : item.kind === "plan" ? <>
       <ol>{item.request.steps?.map((step, index) => <li key={index}>{step}</li>)}</ol>
-      <p className="interaction-hint">{t("批准仅适用于本次任务和当前计划版本，随后可修改文件或执行命令。")}</p>
-      <label>{t("调整意见")}<textarea rows={2} maxLength={6000} value={feedback} disabled={pending} onChange={event => { setFeedback(event.target.value); save(answers, event.target.value); }} /></label>
+      <p className="interaction-hint">{t("批准后执行当前计划；操作仍遵循任务权限。")}</p>
+      <details className="plan-feedback" open={planFeedbackOpen} onToggle={event => { if (event.currentTarget.open !== planFeedbackOpen) setPlanFeedbackOpen(event.currentTarget.open); }}>
+        <summary>{t("调整计划")}</summary>
+        <label><span className="sr-only">{t("调整意见")}</span><textarea rows={2} maxLength={6000} value={feedback} disabled={pending} onChange={event => { setFeedback(event.target.value); save(answers, event.target.value); }} /></label>
+      </details>
       <div className="interaction-actions">
-        <button type="button" className="primary" disabled={pending} onClick={() => void respond({ request_digest: item.request_digest, decision: "approve", ...(feedback ? { feedback } : {}) })}>{t("批准并执行")}</button>
-        <button type="button" disabled={pending || !feedback.trim()} onClick={() => void respond({ request_digest: item.request_digest, decision: "request_changes", feedback })}>{t("调整计划")}</button>
-        <button type="button" disabled={pending} onClick={() => void respond({ request_digest: item.request_digest, decision: "reject", ...(feedback ? { feedback } : {}) })}>{t("暂不执行")}</button>
+        <button type="button" className="primary" disabled={pending} onClick={() => void respond(feedback.trim() ? { request_digest: item.request_digest, decision: "request_changes", feedback } : { request_digest: item.request_digest, decision: "approve" })}>{t(pending ? "正在提交…" : feedback.trim() ? "提交调整" : "批准并执行")}</button>
+        <button type="button" disabled={pending} onClick={() => void respond({ request_digest: item.request_digest, decision: "reject", ...(feedback.trim() ? { feedback } : {}) })}>{t("暂不执行")}</button>
       </div>
     </> : <StructuredQuestions id={item.id} questions={item.request.questions||[]} answers={answers} pending={pending} onChange={changeAnswer} onSubmit={()=>void respond({request_digest:item.request_digest,answers})}/>}
     {error ? <p role="alert">{error} <button type="button" disabled={pending} onClick={async () => { try { const current = await api<Interaction>(`/api/v1/conversations/${conversationId}/interactions/${item.id}`); onConfirmed(current); setError(""); } catch { setError(t("待答请求加载失败，请重试。")); } }}>{t("检查状态")}</button></p> : null}

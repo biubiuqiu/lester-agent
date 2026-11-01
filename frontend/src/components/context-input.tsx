@@ -136,6 +136,8 @@ export function ContextInput({ value, onText, references, onReferences, inputRef
     </FloatingPopover> : null}
     <textarea {...props} onFocus={event => { setPreviewReference(null); props.onFocus?.(event); }} aria-autocomplete="list" aria-controls={open ? listId : undefined} aria-activedescendant={open && matches[index] ? `${listId}-${index}` : undefined} ref={input} value={value} onChange={event => { onText(event.target.value); track(event.target.value, event.target.selectionStart); }} onClick={event => track(value, event.currentTarget.selectionStart)} onKeyDown={event => {
       if (event.nativeEvent.isComposing) return;
+      // A held confirmation key must not submit a restored composer draft.
+      if (event.key === "Enter" && !event.shiftKey && event.repeat) { event.preventDefault(); return; }
       if (event.key === "Backspace" && !value && references.length && !open) { event.preventDefault(); chips.current?.querySelectorAll<HTMLButtonElement>(".context-chip-preview").item(references.length - 1)?.focus(); return; }
       if (open) {
         if (event.key === "Escape") { event.preventDefault(); setQuery(null); return; }

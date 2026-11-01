@@ -28,6 +28,12 @@
 .interaction-receipt summary{cursor:pointer;font-size:12px;overflow-wrap:anywhere}
 .interaction-content{margin-top:12px;line-height:1.7;overflow-wrap:anywhere}
 .interaction-content p{white-space:pre-wrap}
+.interaction-card.plan-card{background:#fff}
+.plan-card .interaction-hint{margin:10px 0;color:var(--muted);font-size:11px}
+.plan-feedback{margin:10px 0 0;color:var(--muted);font-size:11px}
+.plan-feedback>summary{width:fit-content;cursor:pointer;padding:5px 0;line-height:1.5}
+.plan-feedback>summary:focus-visible{outline:2px solid #69866c;outline-offset:3px;border-radius:4px}
+.plan-feedback>label{margin-top:7px}
 @media(max-width:600px){.interaction-card{padding:14px}.interaction-card textarea{font-size:16px}.interaction-actions button{min-height:40px}.workspace-shell .execution-mode{padding-right:6px;padding-left:6px;font-size:10px}}
 .workspace-shell .execution-mode:has(svg){display:inline-flex;align-items:center;gap:5px}
 .run-input-receipts{margin:18px auto;max-width:780px;color:var(--muted);font-size:12px}

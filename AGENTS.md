@@ -21,6 +21,17 @@ Do not implement, simulate, or silently scaffold these capabilities without an e
 
 Implementation phase labels are internal planning terms. Do not expose labels such as `Phase 0–4` or `Phase 5+` in the user-facing UI or README.
 
+## Product design principle: do less, with care
+
+The owner's core design principle is **“做减法，让功能恰到好处，不多不少。”** Elegance comes from removing unnecessary choices, copy and steps while keeping each capability complete and understandable. Treat this as a product requirement for every future change.
+
+- Start with the user's immediate goal. Improve or consolidate an existing interaction before adding a new feature, setting, panel, toolbar or permanent explanation.
+- Give each state one clear primary action. Reveal broader scopes, optional input and technical detail when requested; keep the default view focused on what the user needs now.
+- Remove repeated labels, metadata and instructions. Reuse consistent controls and status language so the user does not need to learn the same behavior again.
+- Preserve the complete task: essential permission scope, failures, unknown results, cancellation, drafts, keyboard access and mobile discoverability must stay clear and reachable. Hiding necessary information is not simplification.
+- Respect attention. Arriving requests must not steal typing focus, replace the decision beneath a click, expand details the user closed, or push the composer out of reach.
+- Judge a change by whether users make fewer decisions and complete the same real task more clearly. A smaller default surface should still expose the right capability at the right time; do not equate more features with progress.
+
 ## Personal assistant and memory
 
 - The owner explicitly authorized personal memory and delegation. The independent assistant panel is one durable user/workspace dialogue; it never creates a Computer or exposes command/file/browser/Skill/permission tools. Keep it mounted when minimized or navigating. Desktop uses a non-modal dialog; mobile uses a viewport-aware modal sheet and minimizes when opening a task link. Task composers, native Home and existing task routes retain their task behavior. Model/project selection belongs in assistant settings, not a task-composer mode.

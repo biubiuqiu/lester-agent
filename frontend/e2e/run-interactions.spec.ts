@@ -64,6 +64,7 @@ test("a lost question response confirms by scoped receipt and never resubmits", 
   const input = await start(page, api);
   await input.fill("回答时保留的草稿");
   await page.getByRole("radio", { name: "网页 可直接预览" }).check();
+  await page.getByRole("button", { name: "添加补充", exact: true }).click();
   await page.getByRole("textbox", { name: "补充回答", exact: true }).fill("保留极简风格");
   await page.screenshot({ path: info.outputPath("pending-question-review.png") });
   await page.getByRole("button", { name: "提交回答", exact: true }).click();
@@ -84,10 +85,11 @@ test("plan revisions require explicit feedback and keep execution read-only", as
     return route.fulfill({ json: { ...planItem, status: "changes_requested", response: route.request().postDataJSON() } });
   });
   const input = await start(page, api);
-  await expect(page.getByRole("button", { name: "调整计划", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "提交调整", exact: true })).toHaveCount(0);
   await input.fill("保留聊天草稿");
+  await page.locator(".plan-feedback > summary").click();
   await page.getByRole("textbox", { name: "调整意见", exact: true }).fill("先保留旧文件，只生成新文件");
-  await page.getByRole("button", { name: "调整计划", exact: true }).click();
+  await page.getByRole("button", { name: "提交调整", exact: true }).click();
   await expect(page.locator(".interaction-receipt>summary")).toHaveText("请调整计划 · 先审阅再修改");
   await expect(page.getByText("Plan · 仅查看与规划", { exact: true })).toBeVisible();
   await expect(input).toHaveValue("保留聊天草稿");
@@ -98,6 +100,7 @@ test("pending answers survive refresh, then cancellation removes all decision co
   let cancelled = false;
   await context.route(`**${prefix}`, route => route.fulfill({ json: { interactions: [{ ...questionItem, status: cancelled ? "cancelled" : "pending" }], execution_mode: "execute" } }));
   await start(page, api);
+  await page.getByRole("button", { name: "添加补充", exact: true }).click();
   await page.getByRole("textbox", { name: "补充回答", exact: true }).fill("刷新后仍保留的回答");
   await page.reload();
   await expect(page.getByRole("textbox", { name: "补充回答", exact: true })).toHaveValue("刷新后仍保留的回答");
@@ -135,7 +138,7 @@ test("questions dock above the composer, keep multi-select notes across reload a
  const dock=page.locator(".question-dock");await expect(dock).toContainText("这次希望交付什么？");await expect(dock.locator("input:checked")).toHaveCount(0);await expect(dock.getByRole("button",{name:"下一题",exact:true})).toBeDisabled();
  await expect(input).toBeFocused();await input.pressSequentially("123");await expect(dock.getByRole("radio",{name:/网页.*推荐.*直接预览/})).not.toBeChecked();await input.fill("回答问题期间保留的聊天草稿");
  await dock.getByRole("radio",{name:/网页.*推荐.*直接预览/}).focus();await page.keyboard.press("1");await expect(dock.getByRole("radio",{name:/网页.*推荐.*直接预览/})).toBeChecked();expect(responses).toBe(0);
- await dock.getByRole("button",{name:"下一题",exact:true}).click();await dock.getByRole("checkbox",{name:"消息队列 工作中安排下一条任务"}).check();await dock.getByRole("checkbox",{name:"文件预览 在旁边查看成果"}).check();await dock.getByRole("textbox",{name:"补充回答",exact:true}).fill("保留额外要求\n不要丢掉我的文字");
+ await dock.getByRole("button",{name:"下一题",exact:true}).click();await dock.getByRole("checkbox",{name:"消息队列 工作中安排下一条任务"}).check();await dock.getByRole("checkbox",{name:"文件预览 在旁边查看成果"}).check();await dock.getByRole("button",{name:"添加补充",exact:true}).click();await dock.getByRole("textbox",{name:"补充回答",exact:true}).fill("保留额外要求\n不要丢掉我的文字");
  await page.screenshot({path:info.outputPath("question-multi-select.png")});
  await page.reload();await expect(dock).toContainText("还有哪些要求？");await dock.getByRole("tab",{name:"界面细节",exact:true}).click();await expect(dock.getByRole("checkbox",{name:"消息队列 工作中安排下一条任务"})).toBeChecked();await expect(dock.getByRole("checkbox",{name:"文件预览 在旁边查看成果"})).toBeChecked();await expect(dock.getByRole("textbox",{name:"补充回答",exact:true})).toHaveValue("保留额外要求\n不要丢掉我的文字");
  await dock.getByRole("tab",{name:"其他要求",exact:true}).click();await dock.getByRole("textbox",{name:"补充回答",exact:true}).fill("先解释清楚，等待我的下一步指令。");await dock.getByRole("button",{name:"核对回答",exact:true}).click();await expect(dock).toContainText("消息队列 · 文件预览");await expect(dock).toContainText("保留额外要求");expect(responses).toBe(0);

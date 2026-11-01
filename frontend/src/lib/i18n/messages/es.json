@@ -2177,5 +2177,18 @@
   "保留当前记忆": "Conservar el recuerdo actual",
   "编辑记忆": "Editar recuerdo",
   "返回编辑": "Volver a editar",
-  "返回编辑不会撤销已经接受的操作。": "Volver a editar no deshace las operaciones ya aceptadas."
+  "返回编辑不会撤销已经接受的操作。": "Volver a editar no deshace las operaciones ya aceptadas.",
+  "添加补充": "Añadir una nota",
+  "收起补充": "Ocultar nota",
+  "另外 {0} 条": "{0} más",
+  "更多授权": "Más permisos",
+  "仅允许这次操作": "Permitir solo esta operación",
+  "以下授权仅用于当前任务。": "Estos permisos solo se aplican a esta tarea.",
+  "另有 {0} 项待确认": "{0} más por revisar",
+  "查看下一项": "Revisar siguiente",
+  "批准后执行当前计划；操作仍遵循任务权限。": "La aprobación ejecuta este plan; siguen vigentes los permisos de la tarea.",
+  "复杂任务由 Agent 进入 Plan，先只读检查并提出计划。“调整计划”按需展开意见；填写后主操作变为“提交调整”，不批准执行。没有意见时可“批准并执行”，只对应当前任务和计划版本，权限保持独立。": "Para un trabajo complejo, el Agent puede entrar en Plan, revisar sin modificar y proponer un plan. Ajustar el plan abre comentarios opcionales; al escribirlos, la acción principal cambia a Enviar cambios, sin aprobar la ejecución. Sin comentarios, Aprobar y ejecutar solo se aplica a esta tarea y versión del plan. Los permisos siguen siendo independientes.",
+  "待答问题固定在聊天框上方，支持逐题单选、多选和提交前核对，推荐项不预选。“添加补充”按需展开；自由回答、无选项题和恢复已有文字时直接显示，收起也保留文字。问题卡内支持数字选择、方向键导航，Enter 在回答中换行；聊天草稿和停止键保持可用。": "Las preguntas pendientes permanecen encima del cuadro de mensaje, con selección única o múltiple y revisión antes del envío. Las recomendaciones no se seleccionan de antemano. Añadir una nota abre el texto opcional; las respuestas libres, preguntas sin opciones y textos restaurados lo muestran directamente. Ocultarlo conserva el texto. Dentro de la tarjeta, los números seleccionan, las flechas navegan y Enter añade una línea en la respuesta. El borrador del chat y Detener siguen disponibles.",
+  "队列贴在输入框上方，按受理顺序显示首条待处理输入，其余按数量展开。消息箭头可查看全文和受理时的权限；暂停项保留真实状态。取消、恢复或放回草稿仍需明确操作。": "La cola permanece encima del cuadro de mensaje y muestra la primera entrada pendiente por orden de aceptación; un contador permite desplegar las demás. La flecha revela el texto completo y los permisos guardados; los elementos pausados mantienen su estado real. Cancelar, reanudar o devolver al borrador requiere una acción explícita.",
+  "审批先显示具体操作、“允许一次”和“拒绝”。“更多授权”按需展开当前任务可用的扩展范围；运行中权限变更只影响后续操作，排队任务保留受理时的权限。GitHub 发布始终单次确认。": "La aprobación muestra primero la operación concreta, Permitir una vez y Rechazar. Más permisos revela las autorizaciones ampliadas disponibles para esta tarea. Los cambios durante la ejecución solo afectan a operaciones posteriores; las tareas en cola conservan sus permisos guardados. Publicar en GitHub siempre requiere confirmar cada operación."
 }

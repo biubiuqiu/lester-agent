@@ -1,0 +1,20 @@
+/* Keep the next accepted item readable; the rest stays one explicit disclosure. */
+.composer-queue .queue-message > summary { display: flex; align-items: start; gap: 5px; }
+.composer-queue .queue-message > summary > svg { flex: none; margin-top: 5px; color: var(--faint); transition: transform 120ms ease; }
+.composer-queue .queue-message > summary > span { flex: 1; min-width: 0; }
+.composer-queue .queue-message[open] > summary > svg { transform: rotate(90deg); }
+.composer-queue .queue-remainder { min-width: 0; }
+.composer-queue .queue-remainder > summary { display: flex; align-items: center; gap: 5px; width: fit-content; min-height: 26px; margin: 0 12px 0 36px; padding: 2px 0; color: var(--muted); font-size: 11px; cursor: pointer; list-style: none; }
+.composer-queue .queue-remainder > summary::-webkit-details-marker { display: none; }
+.composer-queue .queue-remainder > summary > svg { flex: none; transition: transform 120ms ease; }
+.composer-queue .queue-remainder[open] > summary > svg { transform: rotate(90deg); }
+.composer-queue .queue-remainder[open] > div { border-top: 1px solid var(--line); }
+.composer-queue .queue-remainder > summary:hover { color: var(--ink); }
+.composer-queue .queue-remainder > summary:focus-visible { outline: 2px solid #69866c; outline-offset: 2px; border-radius: 3px; }
+@media (max-width: 600px) {
+  .composer-queue .queue-message > summary > svg { margin-top: 10px; }
+  .composer-queue .queue-remainder > summary { min-height: 32px; margin-left: 28px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .composer-queue .queue-message > summary > svg,.composer-queue .queue-remainder > summary > svg { transition: none; }
+}

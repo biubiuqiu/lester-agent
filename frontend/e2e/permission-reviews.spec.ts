@@ -41,6 +41,7 @@ test("the command card grants full access for the active run and synchronizes it
     return route.fulfill({ json: { ...command, status: "approved", decision: "full", permission_revision: 1 } });
   });
   const input = await start(page, api); await input.fill("不要清空我的草稿");
+  await page.locator(".permission-grants > summary").click();
   await page.getByRole("button", { name: "本次任务完全访问", exact: true }).click();
   await expect(page.locator(".permission-card")).toHaveCount(0); await expect(page.getByRole("button", { name: "权限设置", exact: true })).toContainText("完全访问权限"); await expect(input).toHaveValue("不要清空我的草稿");
   await page.screenshot({ path: info.outputPath("full-access-from-approval.png") });

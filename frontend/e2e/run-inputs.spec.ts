@@ -200,6 +200,7 @@ test("queued messages attach to the composer immediately, survive scrolling, and
   };
   await attached();
   await page.screenshot({ path: info.outputPath("composer-queue-compact.png") });
+  await queue.locator(".queue-remainder > summary").click();
   await queue.locator("article").last().locator("summary").click();
   await attached(); // Long text scrolls in the queue rather than pushing input offscreen.
   await page.locator(".thread").evaluate(el => { el.scrollTop = 0; });
