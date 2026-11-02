@@ -90,7 +90,7 @@ export function ProjectWorkbench({ project, conversations, user, unread, onOpen 
       if (controller.signal.aborted) return;
       if (!files.some(file => file.path === path && !file.is_dir)) throw new Error("missing");
       if (modify) {
-        updateView(viewKey(user.user_id, user.workspace_id, item.conversation_id), { reference: path, selected: null });
+        updateView(viewKey(user.user_id, user.workspace_id, item.conversation_id), { reference: path, selected: null, workspacePanelOpen: false, workspacePanelIntent: true });
         onOpen(item.conversation_id);
       } else router.push(`/app/c/${item.conversation_id}?preview=${encodeURIComponent(path)}`);
     } catch { if (!controller.signal.aborted) setActionError(t("无法打开成果，请到来源会话检查文件或重试。")); }

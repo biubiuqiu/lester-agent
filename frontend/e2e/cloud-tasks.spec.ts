@@ -8,7 +8,7 @@ async function start(page:Page,api:WorkspaceApi){
  await page.goto("/app/new");await page.getByLabel("邮箱",{exact:true}).fill("browser@example.test");await page.getByLabel("密码",{exact:true}).fill("fixture-password-123");await page.getByRole("button",{name:"登录",exact:true}).click();const input=page.getByRole("textbox",{name:"消息输入框",exact:true});await input.fill(prompt);await input.press("Enter");await expect(page).toHaveURL(`/app/c/${conversationId}`);await expect.poll(()=>api.streamCount).toBeGreaterThan(0);api.finish();await expect(page.getByRole("button",{name:"发送消息",exact:true})).toBeVisible();
  // Completion and verified file inventory arrive independently. Settle and
  // dismiss the generated preview before typing or opening another panel.
- await expect(page.locator(".open-file-tabs [role=tab]")).toHaveCount(2);
+ await expect(page.locator(".workspace-tab-strip [role=tab]")).toHaveCount(2);
  await page.locator(".computer-panel .close-files-panel").click();
  return input;
 }
@@ -50,8 +50,7 @@ test("recent conversations and task status stay translated and fit the viewport 
   const t=translator(JSON.parse(readFileSync(join(process.cwd(),`src/lib/i18n/messages/${locale}.json`),"utf8")));
   await context.addCookies([{name:"lester_locale",value:locale,url:"http://127.0.0.1:13020"}]);await page.goto(`/app/c/${conversationId}`);
   await expect(page.getByRole("textbox",{name:t("消息输入框"),exact:true})).toBeVisible();
-  // Reload restores the verified file tabs and their selected preview.
-  await page.locator(".computer-panel .close-files-panel").click();
+  // Reload retains the dismissed panel as well as the verified file tabs.
   await expect(page.locator(".computer-panel")).toBeHidden();
   if(info.project.name==="mobile")await page.getByRole("button",{name:t("打开会话栏"),exact:true}).click();
   await page.getByRole("button",{name:t("最近会话"),exact:true}).click();

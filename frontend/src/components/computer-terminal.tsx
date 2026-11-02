@@ -2,7 +2,7 @@
 import { T, useT } from "@/components/i18n";
 
 
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import type { Terminal as XTerm } from "@xterm/xterm";
 import { API } from "@/lib/api";
 import { ensureSession, redirectToLogin, SessionExpired } from "@/lib/auth-client";
@@ -11,13 +11,14 @@ type Connection = "connecting" | "connected" | "disconnected" | "error";
 const labels: Record<Connection, string> = { connecting: "连接中…", connected: "已连接", disconnected: "已断开", error: "连接失败" };
 const keys = [{ label: "Tab", title: "Tab 补全", data: "\t" }, { label: "↑", title: "上一条历史命令", data: "\x1b[A" }, { label: "↓", title: "下一条历史命令", data: "\x1b[B" }, { label: "Esc", title: "发送 Escape", data: "\x1b" }, { label: "Ctrl+C", title: "中断当前命令", data: "\x03" }, { label: "Ctrl+D", title: "发送 EOF / 退出 Shell", data: "\x04" }];
 
-export function ComputerTerminal({ conversationId }: { conversationId: string }) {
+export function ComputerTerminal({ conversationId, autoConnect = true }: { conversationId: string; autoConnect?: boolean }) {
   const t = useT();
 
-  const [connection, setConnection] = useState<Connection>("connecting");
+  const [connection, setConnection] = useState<Connection>(autoConnect ? "connecting" : "disconnected");
   const [notice, setNotice] = useState("");
   const [selected, setSelected] = useState(false);
-  const [attempt, setAttempt] = useState(0);
+  const [attempt, setAttempt] = useState(autoConnect ? 0 : -1);
+  const helpId = useId();
   const mount = useRef<HTMLDivElement>(null);
   const terminal = useRef<XTerm | null>(null);
   const help = useRef<HTMLButtonElement>(null);
@@ -32,6 +33,7 @@ export function ComputerTerminal({ conversationId }: { conversationId: string })
   }
 
   useEffect(() => {
+    if (attempt < 0) return;
     let active = true;
     let socket: WebSocket | undefined;
     let instance: XTerm | undefined;
@@ -55,7 +57,7 @@ export function ComputerTerminal({ conversationId }: { conversationId: string })
       const fit = new FitAddon();
       current.loadAddon(fit); current.open(mount.current);
       current.textarea?.setAttribute("aria-label", terminalCopy("交互式终端输入"));
-      current.textarea?.setAttribute("aria-describedby", "terminal-help");
+      current.textarea?.setAttribute("aria-describedby", helpId);
       current.attachCustomKeyEventHandler(event => {
         if (event.type !== "keydown") return true;
         if (event.key === "Escape" && event.shiftKey) {
@@ -94,7 +96,7 @@ export function ComputerTerminal({ conversationId }: { conversationId: string })
       socket.onopen = () => {
         if (!active) return;
         clearTimeout(timeout); setConnection("connected"); setNotice(""); fitTerminal();
-        if (document.activeElement === originalFocus) current.focus();
+        if (document.activeElement === originalFocus && mount.current?.getClientRects().length && document.hasFocus()) current.focus();
         disposables.push(current.onData(data => { if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ Type: "input", Data: data })); }));
       };
       socket.onerror = () => { if (active) { setConnection("error"); setNotice("终端连接失败，请检查 Computer 状态或网络。"); } };
@@ -111,7 +113,7 @@ export function ComputerTerminal({ conversationId }: { conversationId: string })
       else setNotice("终端暂时无法连接，请检查网络或 Computer 状态后重试。");
     });
     return () => { active = false; cleanup(); };
-  }, [conversationId, attempt]);
+  }, [conversationId, attempt, helpId]);
 
   useEffect(() => { terminal.current?.textarea?.setAttribute("aria-label", t("交互式终端输入")); }, [t, connection]);
   return <section className="terminal-shell" aria-label={t("会话终端")} onKeyDown={event => event.stopPropagation()}>
@@ -119,11 +121,11 @@ export function ComputerTerminal({ conversationId }: { conversationId: string })
       <span className={`terminal-connection ${connection}`} role="status">{t(labels[connection])}</span>
       <button type="button" disabled={!selected} onClick={() => void copySelection()} title={t("复制选中内容（Ctrl+Shift+C / ⌘C）")}><T>{"复制"}</T></button>
       <button type="button" disabled={connection !== "connected"} onClick={() => { terminal.current?.clear(); terminal.current?.focus(); }} title={t("清除终端显示，保留 Shell 与命令历史")}><T>{"清屏"}</T></button>
-      {connection === "error" || connection === "disconnected" ? <button type="button" onClick={() => { setConnection("connecting"); setNotice(""); setSelected(false); setAttempt(value => value + 1); }}><T>{"重新连接"}</T></button> : null}
+      {connection === "error" || connection === "disconnected" ? <button type="button" onClick={() => { setConnection("connecting"); setNotice(""); setSelected(false); setAttempt(value => value + 1); }}>{t(attempt < 0 ? "连接终端" : "重新连接")}</button> : null}
       <button ref={help} type="button" aria-label={t("查看终端快捷键")} onClick={() => setNotice("Tab 补全 · ↑↓ 历史 · Ctrl+C 中断（选中内容时复制）· Ctrl+R 搜索历史 · Ctrl+L 清屏 · Shift+Esc 离开终端焦点")}><T>{"快捷键"}</T></button>
     </div>
-    <div className="terminal" ref={mount} />
+    <div className="terminal" ref={mount}>{attempt < 0 ? <p className="terminal-restore-note">{t("此终端尚未连接。重新连接会启动新的 Shell。")}</p> : null}</div>
     <div className="terminal-keybar" aria-label={t("终端辅助按键")}>{keys.map(key => <button key={key.label} type="button" title={t(key.title)} aria-label={t(key.title)} disabled={connection !== "connected"} onPointerDown={event => event.preventDefault()} onClick={() => { terminal.current?.input(key.data, true); terminal.current?.focus(); }}>{key.label}</button>)}</div>
-    <p id="terminal-help" className={notice ? "terminal-notice" : "sr-only"} role="status">{notice ? t(notice) : t("Tab 补全，方向键查看历史，Ctrl+C 中断。Shift+Esc 将焦点移至终端工具栏。")}</p>
+    <p id={helpId} className={notice ? "terminal-notice" : "sr-only"} role="status">{notice ? t(notice) : t("Tab 补全，方向键查看历史，Ctrl+C 中断。Shift+Esc 将焦点移至终端工具栏。")}</p>
   </section>;
 }

@@ -44,10 +44,10 @@ const languageByExtension: Record<string, SyntaxLanguage> = {
   yml: "yaml",
 };
 
-export function SourcePreview({ content, fileName, storageKey = "", filePath = fileName }: { content: string; fileName: string; storageKey?: string; filePath?: string }) {
+export function SourcePreview({ content, fileName, storageKey = "", filePath = fileName, active = true }: { content: string; fileName: string; storageKey?: string; filePath?: string; active?: boolean }) {
   const t = useT();
 
-  const scroll = usePreviewScroll(storageKey, `source:${filePath}`);
+  const scroll = usePreviewScroll(storageKey, `source:${filePath}`, active);
   const lines = useMemo(() => content.split("\n"), [content]);
   const source = useMemo(() => lines.slice(0, maxRenderedLines).join("\n"), [lines]);
   const fallbackLines = useMemo<ThemedToken[][]>(() => source.split("\n").map((line) => [{ content: line, offset: 0 }]), [source]);

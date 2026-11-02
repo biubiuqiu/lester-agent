@@ -160,7 +160,7 @@ test("terminal input, control keys, focus escape and reconnection work inside th
     await page.goto(source); const draft = page.getByRole("textbox", { name: "消息输入框", exact: true }); await draft.fill("终端操作时保留的聊天草稿");
     if (info.project.name === "mobile") await page.getByRole("button", { name: "成果", exact: true }).click();
     else await page.locator(".workspace-panel-button").click();
-    const panel = page.locator(".computer-panel"); await panel.locator(".workspace-tools>summary").click(); await panel.getByRole("button", { name: "终端", exact: true }).click();
+    const panel = page.locator(".computer-panel"); await panel.getByLabel("添加工作区标签", { exact: true }).first().click(); await panel.locator(".workspace-add-menu").getByRole("button", { name: "终端", exact: true }).click();
     await expect(panel.locator(".terminal-connection")).toHaveText("已连接");
     const terminal = panel.getByRole("textbox", { name: "交互式终端输入", exact: true }); await terminal.focus();
     await page.keyboard.type("pwd"); await page.keyboard.press("Enter"); await page.keyboard.press("Tab"); await page.keyboard.press("Control+c");
@@ -235,15 +235,15 @@ test("closing a file cancels its pending auto-open without losing explicit reope
     await page.goto(source);
     if (info.project.name === "mobile") await page.getByRole("button", { name: "成果", exact: true }).click();
     else await page.locator(".workspace-panel-button").click();
-    const panel = page.locator(".computer-panel"); await panel.locator(".computer-tabs").getByRole("button", { name: "文件", exact: true }).click();
-    await panel.getByRole("treeitem", { name: /notes.txt/ }).click(); await expect(panel.locator(".file-source-scroll")).toContainText("请人工验收");
+    const panel = page.locator(".computer-panel"); await panel.getByLabel("添加工作区标签", { exact: true }).first().click(); await panel.locator(".workspace-add-menu").getByRole("button", { name: "文件", exact: true }).click();
+    await panel.getByRole("treeitem", { name: /notes.txt/ }).click(); await expect(panel.locator(".file-source-scroll:visible")).toContainText("请人工验收");
     await expect.poll(() => api.streamCount).toBeGreaterThan(0);
     hold = true; api.writeFile("notes.txt", "这个更新会触发一次延迟的目录同步。"); await expect.poll(() => waiting).toBe(true);
     await panel.getByRole("button", { name: "关闭 notes.txt", exact: true }).click(); await expect(panel.getByRole("tab", { name: "notes.txt", exact: true })).toHaveCount(0);
     const response = page.waitForResponse(value => new URL(value.url()).pathname.endsWith("/files")); release(); await (await response).finished();
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     await expect(panel.getByRole("tab", { name: "notes.txt", exact: true })).toHaveCount(0);
-    await panel.getByRole("button", { name: "重新打开刚关闭的标签", exact: true }).click(); await expect(panel.locator(".file-source-scroll")).toContainText("这个更新会触发一次延迟的目录同步。");
+    await panel.getByLabel("添加工作区标签", { exact: true }).first().click(); await panel.getByRole("button", { name: "重新打开刚关闭的标签", exact: true }).click(); await expect(panel.locator(".file-source-scroll:visible")).toContainText("这个更新会触发一次延迟的目录同步。");
     expect(api.unexpected).toEqual([]); expect(api.mutations).toEqual([]);
   } finally { release(); await api.close(); }
 });

@@ -80,7 +80,7 @@ test("login, explicit first task, live file tabs and independent HTML preview", 
   expect(taskMutations[1].body).toEqual({ content: prompt, permission_mode: "standard", context_ids: [], attachment_ids: [], submission_id: expect.stringMatching(/^[0-9a-f-]{36}$/) });
   await expect.poll(() => api.streamCount).toBeGreaterThan(0);
   api.finish();
-  const tabs = page.getByRole("tablist", { name: "已打开文件" });
+  const tabs = page.getByRole("tablist", { name: "工作区标签" });
   await expect(tabs.getByRole("tab", { name: "index.html", exact: true })).toBeVisible();
   await expect(tabs.getByRole("tab", { name: "notes.txt", exact: true })).toBeVisible();
   await expect(page.frameLocator('iframe[title="index.html preview"]').getByRole("heading", { name: "浏览器回归产物" })).toBeVisible();

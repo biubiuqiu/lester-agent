@@ -154,8 +154,8 @@ test("installed Skill panel refreshes from a confirmed installation event", asyn
   const workspace = page.getByRole("button", { name: "工作区", exact: true });
   if (await workspace.isVisible()) await workspace.click();
   else await page.getByRole("button", { name: "成果", exact: true }).click();
-  await page.locator(".workspace-tools summary").click();
-  await page.locator(".workspace-tools-menu").getByRole("button", { name: "技能", exact: true }).click();
+  await page.getByLabel("添加工作区标签", { exact: true }).first().click();
+  await page.locator(".workspace-add-menu").getByRole("button", { name: "技能", exact: true }).click();
   const skill = page.locator(".conversation-skill").filter({ hasText: "Conversation Reader" });
   await expect(skill.getByRole("button", { name: "安装", exact: true })).toBeVisible();
   // This fixture event tests UI refresh only; PostgreSQL/tool tests verify real installation.

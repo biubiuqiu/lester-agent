@@ -51,17 +51,17 @@ test("command bookkeeping leaves the panel closed and actual outputs still open 
     // Even an explicit notification must not turn runtime files into outputs.
     api.writeFile(".lester/tasks/t3/state.json", '{"status":"running"}');
     api.writeFile("state.json", '{"user_document":true}');
-    const panel = page.locator(".computer-panel"), tabs = panel.getByRole("tablist", { name: "已打开文件", exact: true });
+    const panel = page.locator(".computer-panel"), tabs = panel.getByRole("tablist", { name: "工作区标签", exact: true });
     await expect(tabs.getByRole("tab", { name: "state.json", exact: true })).toBeVisible();
     await expect(tabs.getByRole("tab")).toHaveCount(1);
-    await expect(panel.locator(".file-source-scroll")).toContainText('"user_document":true');
+    await expect(panel.locator(".file-source-scroll:visible")).toContainText('"user_document":true');
     api.writeFile("index.html", "<!doctype html><html><body><h1>实际输出</h1></body></html>");
     await expect(tabs.getByRole("tab")).toHaveCount(2);
     await tabs.getByRole("tab", { name: "index.html", exact: true }).click();
     await expect(panel.locator('iframe[title="index.html preview"]')).toBeVisible();
     api.writeFile("state.json", '{"user_document":"updated"}');
     await tabs.getByRole("tab", { name: "state.json", exact: true }).click();
-    await expect(panel.locator(".file-source-scroll")).toContainText('"user_document":"updated"');
+    await expect(panel.locator(".file-source-scroll:visible")).toContainText('"user_document":"updated"');
     await expect(tabs.getByRole("tab")).toHaveCount(2);
     expect(reads.some(path => path.split("/").includes(".lester"))).toBe(false);
     await page.screenshot({ path: info.outputPath("only-actual-output-tabs.png") });
@@ -85,13 +85,16 @@ test("reopening a conversation clears stale runtime tabs and watches while keepi
     if (info.project.name === "mobile") await page.getByRole("button", { name: "成果", exact: true }).click();
     else await page.locator(".workspace-panel-button").click();
     const panel = page.locator(".computer-panel");
-    await panel.locator(".computer-tabs").getByRole("button", { name: "文件", exact: true }).click();
-    const tabs = panel.getByRole("tablist", { name: "已打开文件", exact: true });
-    await expect(tabs.getByRole("tab")).toHaveCount(1);
+    await panel.getByLabel("添加工作区标签", { exact: true }).first().click();
+    await panel.locator(".workspace-add-menu").getByRole("button", { name: "文件", exact: true }).click();
+    const tabs = panel.getByRole("tablist", { name: "工作区标签", exact: true });
+    await expect(tabs.getByRole("tab", { name: "state.json", exact: true })).toHaveCount(1);
     await tabs.getByRole("tab", { name: "state.json", exact: true }).click();
-    await expect(panel.locator(".file-source-scroll")).toBeVisible();
+    await expect(panel.locator(".file-source-scroll:visible")).toBeVisible();
     expect(reads.some(path => path.split("/").includes(".lester"))).toBe(false);
-    await expect(panel.getByRole("button", { name: "重新打开刚关闭的标签", exact: true })).toBeDisabled();
+    await panel.getByLabel("添加工作区标签", { exact: true }).first().click();
+    await expect(panel.getByRole("button", { name: "重新打开刚关闭的标签", exact: true })).toHaveCount(0);
+    await page.keyboard.press("Escape");
     await page.screenshot({ path: info.outputPath("restored-user-file-only.png") });
     expect(api.unexpected).toEqual([]); expect(api.mutations).toEqual([]);
   } finally { await api.close(); }

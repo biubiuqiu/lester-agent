@@ -49,7 +49,7 @@ for (const locale of ["zh-CN", "en", "ja", "ko", "fr", "es"] as Locale[]) {
         if (!compact) await composer.fill("阅读时保留的草稿");
         api.finish();
         const panel = page.locator(".computer-panel");
-        const tabs = panel.getByRole("tablist", { name: t("已打开文件") });
+        const tabs = panel.getByRole("tablist", { name: t("工作区标签") });
         await expect(tabs.getByRole("tab", { name: "index.html", exact: true })).toBeVisible();
         await expect(panel.locator('iframe[title="index.html preview"]')).toBeVisible();
         await expect(panel.locator(".file-tree-pane")).toBeHidden();
@@ -62,10 +62,16 @@ for (const locale of ["zh-CN", "en", "ja", "ko", "fr", "es"] as Locale[]) {
         } else {
           await expect(panel).toHaveAttribute("aria-modal", "true");
           expect(await panel.evaluate(element => element.matches(":modal"))).toBe(true);
+          let browserChrome = false;
           for (let i = 0; i < 14; i++) {
             await page.keyboard.press("Tab");
-            expect(await page.evaluate(() => !!document.activeElement?.closest(".computer-panel"))).toBe(true);
+            const focus = await page.evaluate(() => ({ inside: !!document.activeElement?.closest(".computer-panel"), browserChrome: !document.hasFocus() && document.activeElement === document.body }));
+            expect(focus.inside || focus.browserChrome).toBe(true);
+            if (browserChrome) expect(focus.inside).toBe(true);
+            browserChrome = focus.browserChrome;
           }
+          // Native modal focus may visit browser chrome, but never the covered app.
+          if (browserChrome) { await page.keyboard.press("Tab"); expect(await page.evaluate(() => !!document.activeElement?.closest(".computer-panel"))).toBe(true); }
         }
         const viewport = page.viewportSize()!;
         await page.setViewportSize({ width: compact ? 320 : 1100, height: viewport.height });
@@ -76,7 +82,7 @@ for (const locale of ["zh-CN", "en", "ja", "ko", "fr", "es"] as Locale[]) {
             const frame = nav.getBoundingClientRect(), selected = tab.getBoundingClientRect();
             return selected.x >= frame.x - 1 && selected.right <= frame.right + 1;
           })).toBe(true);
-          const controls = panel.locator(".computer-panel-header button, .workspace-tools > summary");
+          const controls = panel.locator(".computer-panel-header > button, #workspace-tab-add");
           for (const control of await controls.all()) {
             if (!await control.isVisible()) continue;
             const bounds = await control.boundingBox();
@@ -95,15 +101,15 @@ for (const locale of ["zh-CN", "en", "ja", "ko", "fr", "es"] as Locale[]) {
           expect(await panel.evaluate(element => element.matches(":modal"))).toBe(false);
         }
         await page.setViewportSize(viewport);
-        await panel.locator(".workspace-tools > summary").click();
-        await expect(panel.locator(".workspace-tools-menu").getByRole("button", { name: t("终端"), exact: true })).toBeVisible();
-        await panel.locator(".workspace-tools > summary").press("Escape");
-        await expect(panel.locator(".workspace-tools-menu")).toBeHidden();
+        await panel.getByLabel(t("添加工作区标签"), { exact: true }).first().click();
+        await expect(panel.locator(".workspace-add-menu").getByRole("button", { name: t("终端"), exact: true })).toBeVisible();
+        await panel.getByLabel(t("添加工作区标签"), { exact: true }).first().press("Escape");
+        await expect(panel.locator(".workspace-add-menu")).toBeHidden();
         await expect(panel).toBeVisible();
-        await panel.locator(".workspace-tools > summary").click();
-        await panel.locator(".workspace-tools-menu").getByRole("button", { name: t("技能"), exact: true }).click();
+        await panel.getByLabel(t("添加工作区标签"), { exact: true }).first().click();
+        await panel.locator(".workspace-add-menu").getByRole("button", { name: t("技能"), exact: true }).click();
         await expect(panel.locator(".conversation-skills")).toBeVisible();
-        await panel.locator(".computer-panel-header").getByRole("button", { name: t("文件"), exact: true }).click();
+        await tabs.getByRole("tab", { name: "index.html", exact: true }).click();
         await expect(page.frameLocator('iframe[title="index.html preview"]').getByRole("heading", { name: "浏览器回归产物", exact: true })).toBeVisible();
         await page.screenshot({ path: testInfo.outputPath("artifact-preview.png") });
         await panel.getByRole("button", { name: t("部署 HTML 站点"), exact: true }).click();
@@ -121,12 +127,14 @@ for (const locale of ["zh-CN", "en", "ja", "ko", "fr", "es"] as Locale[]) {
         await expect(panel.getByLabel(t("{0} 源代码", ["example.ts"]), { exact: true })).toContainText("answer = 42");
         await tabs.getByRole("tab", { name: "notes.txt", exact: true }).click();
         await expect(panel.getByLabel(t("{0} 源代码", ["notes.txt"]), { exact: true })).toContainText("请人工验收");
-        await panel.locator(".computer-panel-header").getByRole("button", { name: t("成果"), exact: true }).click();
+        await panel.getByLabel(t("添加工作区标签"), { exact: true }).first().click();
+        await panel.locator(".workspace-add-menu").getByRole("button", { name: t("成果"), exact: true }).click();
         await expect(panel.locator(".deliverable-card")).toHaveCount(1);
         await expect(panel.locator(".deliverable-entry")).toHaveText("index.html");
         await panel.getByRole("button", { name: t("预览成果 {0}", ["index.html"]), exact: true }).click();
         await expect(panel.locator('iframe[title="index.html preview"]')).toBeVisible();
-        await panel.locator(".computer-panel-header").getByRole("button", { name: t("成果"), exact: true }).click();
+        await panel.getByLabel(t("添加工作区标签"), { exact: true }).first().click();
+        await panel.locator(".workspace-add-menu").getByRole("button", { name: t("成果"), exact: true }).click();
         await page.screenshot({ path: testInfo.outputPath("results-panel.png") });
         const more = panel.locator(".deliverable-more > summary");
         await more.click();

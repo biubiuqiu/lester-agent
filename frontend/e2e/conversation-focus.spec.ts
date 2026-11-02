@@ -31,7 +31,7 @@ test("completed conversations keep the answer and output primary, with one histo
   api.finish();
   api.messages.at(-1)!.content = "已整理需求评审文档。\n\n- 目标：覆盖核心业务目标与衡量指标。\n- 功能范围：区分当前版本和后续迭代。\n- 验收标准：整理可核对的验收用例。\n\n文档已保存，请预览并确认业务细节。";
   for (let i = 0; i < 11; i++) api.writeFile(`support-${i}.txt`, "这是浏览器测试资料，不是真实模型输出。");
-  await expect(page.locator(".open-file-tabs [role=tab]")).toHaveCount(8);
+  await expect(page.locator(".workspace-tab-strip [role=tab]")).toHaveCount(8);
   const close = page.locator(".computer-panel .close-files-panel");
   if (await close.isVisible()) await close.click();
   await expect(page.locator(".delivery-receipt")).toBeVisible();

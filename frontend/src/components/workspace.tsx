@@ -10,7 +10,7 @@ import { ContextInput, useContextReferences } from "./context-input";
 import { CSSProperties, FormEvent, ReactNode, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Bot, Check, ChevronDown, FileText, Folder, GripVertical, Maximize2, Menu, Minimize2, PanelLeftClose, PanelLeftOpen, PanelRight, Plus, Send, Square, TerminalSquare, Wrench, X } from "lucide-react";
+import { ArrowLeft, Bot, Check, ChevronDown, FileText, GripVertical, Maximize2, Menu, Minimize2, PanelLeftClose, PanelLeftOpen, PanelRight, Plus, Send, Square, Wrench, X } from "lucide-react";
 import { readView, updateView, viewKey, resumeViewState } from "@/lib/conversation-view-state";
 import { useConversationScroll } from "./use-conversation-scroll";
 import { useConversationRead } from "./use-conversation-read";
@@ -26,6 +26,8 @@ import { Deliverables } from "./deliverables";
 import { WorkspaceSurface, useWorkspaceDialog } from "./workspace-layout";
 import { ConversationTimeline } from "./conversation-timeline";
 import { FileExplorer } from "./file-explorer";
+import { WorkspaceTabBar, workspacePaneId, workspaceTabId } from "./workspace-tab-bar";
+import type { WorkspaceTab } from "@/lib/workspace-tabs";
 import { isNativeShell, NativeRunFeedback, nativeWorkspaceSnapshot, postNative, nativeShellSnapshot, nativeShellServerSnapshot, subscribeNativeShell } from "@/lib/native-shell";
 import { ComputerTerminal } from "./computer-terminal";
 import { AgentConfiguration } from "./agent-configuration";
@@ -733,15 +735,17 @@ function OpenAgentButton() {
 function ComputerPanel({ conversationId, createdAgentId, agentRevision, skillRevision, width, maxWidth, resizing, onResizeStart, onWidthChange }: { conversationId: string; createdAgentId?: string; agentRevision: number; skillRevision: number; width: number; maxWidth: number; resizing: boolean; onResizeStart: (clientX: number) => void; onWidthChange: (width: number) => void }) {
   const t = useT();
 
-  const { panelTab: tab, setPanelTab: setTab, expanded, setExpanded, panelOpen, setPanelOpen } = useFileWorkspace();
-  const previousAgentId = useRef<string | undefined>(undefined);
+  const { workspaceTabs, activeWorkspaceTab, setPanelTab: setTab, freshTerminalIds, expanded, setExpanded, panelOpen, setPanelOpen } = useFileWorkspace();
+  const native = useSyncExternalStore(subscribeNativeShell, nativeShellSnapshot, nativeShellServerSnapshot);
+  const availableTabs = workspaceTabs.filter(tab => (!native || (tab.kind !== "terminal" && tab.kind !== "skills")) && (tab.kind !== "agent" || createdAgentId));
+  const activeTab = availableTabs.find(tab => tab.id === activeWorkspaceTab) ?? availableTabs[0];
+  const previousAgentId = useRef(createdAgentId);
   useEffect(() => {
     if (createdAgentId === previousAgentId.current) return;
     previousAgentId.current = createdAgentId;
     if (new URLSearchParams(window.location.search).has("preview")) return;
-    if (createdAgentId) { setTab("agent"); setPanelOpen(true); }
-    else { setTab("files"); setPanelOpen(false); }
-  }, [createdAgentId, setTab, setPanelOpen]);
+    if (createdAgentId && !native) { setTab("agent"); setPanelOpen(true); }
+  }, [createdAgentId, native, setTab, setPanelOpen]);
   const { dialog, overlay } = useWorkspaceDialog(panelOpen || expanded, expanded);
   const [state, setState] = useState<ComputerState | null>(null);
   useEffect(() => {
@@ -754,16 +758,25 @@ function ComputerPanel({ conversationId, createdAgentId, agentRevision, skillRev
   const status = state?.status || "not_created";
   const providerLabel = state?.provider === "acs" ? "Alibaba Cloud ACS" : state?.provider === "docker" ? "Docker" : "Computer";
   return <dialog id="conversation-workspace-panel" ref={dialog} role={overlay ? "dialog" : "complementary"} aria-modal={overlay && panelOpen ? true : undefined} aria-label={t("工作区功能")} onCancel={event => { if (event.target !== event.currentTarget) return; event.preventDefault(); setExpanded(false); setPanelOpen(false); }} className={`computer-panel ${expanded ? "preview-expanded" : ""} ${panelOpen ? "files-open" : ""}`}><button type="button" className={`panel-resizer ${resizing ? "active" : ""}`} onPointerDown={(event) => { event.preventDefault(); onResizeStart(event.clientX); }} onKeyDown={(event) => { if (event.key === "ArrowLeft") onWidthChange(width + 24); if (event.key === "ArrowRight") onWidthChange(width - 24); }} role="separator" aria-label={t("调整 Computer 面板宽度")} aria-orientation="vertical" aria-valuemin={minPanelWidth} aria-valuemax={Math.round(maxWidth)} aria-valuenow={Math.round(width)} title={t("拖动调整面板宽度")}><GripVertical /></button><header className="computer-panel-header">
-      <nav className="computer-tabs" aria-label={t("工作区功能")}>
-        <button aria-pressed={tab === "results"} className={tab === "results" ? "active" : ""} onClick={() => setTab("results")}><ArtifactIcon size={15} /><T>{"成果"}</T></button>
-        <button aria-pressed={tab === "files"} className={tab === "files" ? "active" : ""} onClick={() => setTab("files")}><Folder /><T>{"文件"}</T></button>
-        <WorkspaceTools createdAgentId={createdAgentId} />
-      </nav>
-      <GuideLauncher label={t("功能教学")} />
+      <WorkspaceTabBar native={native} createdAgentId={createdAgentId} />
       <span className="sandbox-state" title={t("{0} · 用户级工作区 · {1}{2}", [providerLabel, t(computerStatusLabel[status]), state?.last_error ? `：${state.last_error}` : ""])} aria-label={t("工作区{0}", [t(computerStatusLabel[status])])}><i className={`computer-status ${status}`} /></span>
-      {tab === "agent" && createdAgentId ? <button type="button" className="designer-expand-button" onClick={() => setExpanded(!expanded)} aria-label={expanded ? t("收起智能体配置") : t("放大智能体配置")} title={expanded ? t("收起配置") : t("放大编辑提示词")}>{expanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button> : null}
+      <button type="button" className="workspace-expand-button" onClick={() => setExpanded(!expanded)} aria-label={expanded ? t("还原布局") : t("专注预览")} title={expanded ? t("还原布局") : t("专注预览")}>{expanded ? <Minimize2 /> : <Maximize2 />}</button>
       <button type="button" className="close-files-panel" onClick={() => { setExpanded(false); setPanelOpen(false); }} aria-label={overlay ? t("返回对话") : t("关闭工作区面板")}>{overlay ? <ArrowLeft /> : <X />}<span><T>{"返回对话"}</T></span></button>
-    </header>{tab === "results" ? <Deliverables key={conversationId} panel /> : null}{tab === "files" ? <FileExplorer key={conversationId} conversationId={conversationId} /> : null}{tab === "terminal" && !nativeShellSnapshot() ? <ComputerTerminal key={conversationId} conversationId={conversationId} /> : null}{tab === "skills" ? <ConversationSkills conversationId={conversationId} revision={skillRevision} /> : null}{tab === "agent" && createdAgentId ? <AgentConfiguration agentId={createdAgentId} revision={agentRevision} /> : null}</dialog>;
+    </header>
+    {!activeTab ? <div className="workspace-tabs-empty"><PanelRight size={26} /><strong>{t("尚未打开标签")}</strong>{!native ? <p>{t("打开文件、预览成果或启动终端。")}</p> : null}<button type="button" onClick={() => { const trigger = document.getElementById("workspace-tab-add"); trigger?.focus({ preventScroll: true }); trigger?.click(); }}><Plus size={16} />{t("添加标签")}</button></div> : null}
+    {availableTabs.map(tab => <WorkspaceTabContent key={tab.id} tab={tab} active={tab.id === activeTab?.id} conversationId={conversationId} createdAgentId={createdAgentId} agentRevision={agentRevision} skillRevision={skillRevision} autoConnect={freshTerminalIds.includes(tab.id)} />)}
+  </dialog>;
+}
+
+function WorkspaceTabContent({ tab, active, conversationId, createdAgentId, agentRevision, skillRevision, autoConnect }: { tab: WorkspaceTab; active: boolean; conversationId: string; createdAgentId?: string; agentRevision: number; skillRevision: number; autoConnect: boolean }) {
+  const [opened, setOpened] = useState(active);
+  // Mount each surface only on first selection. Hiding it keeps local editor,
+  // iframe and Shell state; closing its tab is what releases those resources.
+  if (active && !opened) setOpened(true);
+  return <section id={workspacePaneId(tab.id)} role="tabpanel" aria-labelledby={workspaceTabId(tab.id)} className="workspace-tab-content" hidden={!active}>
+    {opened || active ? tab.kind === "file" ? <FileExplorer conversationId={conversationId} filePath={tab.path} active={active} /> : tab.kind === "files" ? <FileExplorer conversationId={conversationId} view="browser" active={active} /> : tab.kind === "results" ? <Deliverables panel /> : tab.kind === "terminal" ? <ComputerTerminal conversationId={conversationId} autoConnect={autoConnect} /> : tab.kind === "skills" ? <ConversationSkills conversationId={conversationId} revision={skillRevision} /> : createdAgentId ? <AgentConfiguration agentId={createdAgentId} revision={agentRevision} /> : null : null}
+  </section>;
+
 }
 
 function ConversationSkills({ conversationId, revision }: { conversationId: string; revision: number }) {
@@ -793,38 +806,4 @@ function ConversationSkills({ conversationId, revision }: { conversationId: stri
     finally { setBusy(""); }
   }
   return <div className="conversation-skills"><div className="skills-intro"><strong><T>{"会话级 Skills"}</T></strong><span><T>{"安装到 .agent/skills"}</T></span></div>{error ? <p className="skills-error">{t(error)}</p> : null}{catalog.map((skill) => { const active = installedSlugs.has(skill.slug); return <article className="conversation-skill" key={skill.id}><span className="skill-mini-icon">{active ? <Check /> : <Wrench />}</span><div><strong>{skill.name}</strong><p>{skill.description}</p><small>v{skill.version}</small></div><button className={active ? "installed" : ""} disabled={busy === skill.slug} onClick={() => toggle(skill)}>{busy === skill.slug ? t("处理中") : active ? t("卸载") : t("安装")}</button></article>; })}</div>;
-}
-
-function WorkspaceTools({ createdAgentId }: { createdAgentId?: string }) {
-  const t = useT();
-  const { panelTab, setPanelTab } = useFileWorkspace();
-  const menu = useRef<HTMLDetailsElement>(null);
-  useEffect(() => {
-    const closeOutside = (event: PointerEvent) => {
-      if (menu.current && !menu.current.contains(event.target as Node)) menu.current.open = false;
-    };
-    document.addEventListener("pointerdown", closeOutside);
-    return () => document.removeEventListener("pointerdown", closeOutside);
-  }, []);
-  const active = panelTab !== "files" && panelTab !== "results";
-  const native = useSyncExternalStore(subscribeNativeShell, nativeShellSnapshot, nativeShellServerSnapshot);
-  const label = panelTab === "terminal" ? t("终端") : panelTab === "skills" ? t("技能") : panelTab === "agent" ? t("智能体") : t("工具");
-  const choose = (tab: "terminal" | "skills" | "agent") => {
-    setPanelTab(tab);
-    if (menu.current) menu.current.open = false;
-  };
-  if (native) return null;
-  return <details ref={menu} className={`workspace-tools ${active ? "active" : ""}`} onKeyDown={event => {
-    if (event.key === "Escape" && event.currentTarget.open) {
-      event.preventDefault(); event.stopPropagation(); event.currentTarget.open = false;
-      event.currentTarget.querySelector("summary")?.focus();
-    }
-  }}>
-    <summary title={t("工作区功能")}><Wrench size={15} /><span>{label}</span><ChevronDown size={12} /></summary>
-    <div className="workspace-tools-menu">
-      <button type="button" aria-pressed={panelTab === "terminal"} onClick={() => choose("terminal")}><TerminalSquare /><T>{"终端"}</T></button>
-      <button type="button" aria-pressed={panelTab === "skills"} onClick={() => choose("skills")}><Wrench /><T>{"技能"}</T></button>
-      {createdAgentId ? <button type="button" aria-pressed={panelTab === "agent"} onClick={() => choose("agent")}><Bot /><T>{"智能体"}</T></button> : null}
-    </div>
-  </details>;
 }

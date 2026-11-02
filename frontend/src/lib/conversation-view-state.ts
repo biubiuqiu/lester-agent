@@ -5,6 +5,7 @@ import { clearMessageSubmissions } from "./message-submission";
 import type { QuestionAnswer } from "./user-question";
 import { clearProjectViews, resumeProjectViews } from "./project-view-state";
 import { isInternalRuntimePath } from "./file-path-policy";
+import { fileWorkspaceTabId, restoreWorkspaceTabs, type WorkspaceTab } from "./workspace-tabs";
 
 // View layout remains tab-local; account-scoped drafts survive closing tabs/windows.
 export type ViewState = {
@@ -27,6 +28,10 @@ export type ViewState = {
   closedTabs: string[];
   unreadFiles: string[];
   selected: string | null;
+  workspaceTabs: WorkspaceTab[];
+  activeWorkspaceTab: string | null;
+  workspacePanelOpen: boolean;
+  workspacePanelIntent: boolean;
   treeOpen: boolean;
   directories: string[];
   modes: Record<string, "preview" | "source">;
@@ -46,7 +51,7 @@ export function resumeViewState(scope: string, expectedEpoch = epoch) {
   if (expectedEpoch !== epoch) return false;
   writeScope = scope; resumeProjectViews(scope); return true;
 }
-const defaults = (): ViewState => ({ personalPending: "", personalProject: "", personalModel: "", recap: { enabled: true, seenAt: 0, eventId: 0, messageId: "" }, detailedProcess: false, contexts: [], agentSlug: "lester", executionMode: "execute", permissionMode: "standard", interactionDrafts: {}, sendNotice: "", text: "", files: [], missingFiles: [], reference: null, tabs: [], closedTabs: [], unreadFiles: [], selected: null, treeOpen: true, directories: [""], modes: {}, positions: {}, thread: { top: 0, following: true } });
+const defaults = (): ViewState => ({ personalPending: "", personalProject: "", personalModel: "", recap: { enabled: true, seenAt: 0, eventId: 0, messageId: "" }, detailedProcess: false, contexts: [], agentSlug: "lester", executionMode: "execute", permissionMode: "standard", interactionDrafts: {}, sendNotice: "", text: "", files: [], missingFiles: [], reference: null, tabs: [], closedTabs: [], unreadFiles: [], selected: null, workspaceTabs: [], activeWorkspaceTab: null, workspacePanelOpen: false, workspacePanelIntent: false, treeOpen: true, directories: [""], modes: {}, positions: {}, thread: { top: 0, following: true } });
 export const viewKey = (userId: string, workspaceId: string, conversationId: string) => `${userId}.${workspaceId}.${conversationId}`;
 
 function persistDraft(key: string, value: ViewState) {
@@ -100,6 +105,12 @@ export function readView(key: string): ViewState {
       value.closedTabs = Array.isArray(saved.closedTabs) ? saved.closedTabs.filter((p: unknown) => typeof p === "string" && !isInternalRuntimePath(p)).slice(-8) : [];
       value.unreadFiles = Array.isArray(saved.unreadFiles) ? saved.unreadFiles.filter((p: unknown) => typeof p === "string" && !isInternalRuntimePath(p)).slice(-200) : [];
       value.selected = value.tabs.includes(saved.selected) ? saved.selected : null;
+      value.workspaceTabs = restoreWorkspaceTabs(saved.workspaceTabs, value.tabs);
+      const migratedActive = value.selected ? fileWorkspaceTabId(value.selected) : null;
+      const active = Object.hasOwn(saved, "activeWorkspaceTab") ? saved.activeWorkspaceTab : migratedActive;
+      value.activeWorkspaceTab = typeof active === "string" && value.workspaceTabs.some(tab => tab.id === active) ? active : null;
+      value.workspacePanelOpen = typeof saved.workspacePanelOpen === "boolean" ? saved.workspacePanelOpen : Boolean(value.selected);
+      value.workspacePanelIntent = saved.workspacePanelIntent === true || Boolean(value.selected);
       value.treeOpen = saved.treeOpen !== false;
       value.directories = Array.isArray(saved.directories) ? saved.directories.filter((p: unknown) => typeof p === "string" && !isInternalRuntimePath(p)).slice(-64) : [""];
       value.missingFiles = Array.isArray(saved.attachmentNames) ? saved.attachmentNames.filter((p: unknown) => typeof p === "string").slice(0, 100) : [];

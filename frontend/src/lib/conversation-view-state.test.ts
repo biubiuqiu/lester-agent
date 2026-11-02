@@ -136,3 +136,44 @@ test("personal pending receipts survive closure and logout rejects their late re
   resumeViewState("different-user.workspace.");
   assert.equal(readView(key).personalPending, "");
 });
+
+test("mixed workspace layout remains session-local and cannot overwrite a newer shared draft", () => {
+  clearViewState(); resumeViewState("u.w.");
+  const key = "u.w.mixed-tabs";
+  updateView(key, { text: "original draft", tabs: ["index.html"], selected: "index.html" });
+  const shared = JSON.parse(values["lester.draft.v1." + key]);
+  values["lester.draft.v1." + key] = JSON.stringify({ ...shared, text: "newer draft from another window" });
+  const workspaceTabs = [{ id: "terminal:one", kind: "terminal" as const, serial: 1 }, { id: "file:index.html", kind: "file" as const, path: "index.html" }];
+  updateView(key, { workspaceTabs, activeWorkspaceTab: "terminal:one", workspacePanelOpen: false, workspacePanelIntent: true });
+  const durable = JSON.parse(values["lester.draft.v1." + key]);
+  assert.equal(durable.text, "newer draft from another window");
+  assert.equal(durable.workspaceTabs, undefined);
+  assert.equal(durable.activeWorkspaceTab, undefined);
+  assert.equal(durable.workspacePanelOpen, undefined);
+  values["lester.view.v1.u.w.reloaded-tabs"] = values["lester.view.v1." + key];
+  const reloaded = readView("u.w.reloaded-tabs");
+  assert.deepEqual(reloaded.workspaceTabs, workspaceTabs);
+  assert.equal(reloaded.activeWorkspaceTab, "terminal:one");
+  assert.equal(reloaded.workspacePanelOpen, false);
+  assert.equal(reloaded.workspacePanelIntent, true);
+  assert.deepEqual(readView("u.w.other-conversation").workspaceTabs, []);
+  clearViewState();
+  updateView(key, { workspaceTabs });
+  assert.equal(values["lester.view.v1." + key], undefined);
+});
+
+test("legacy file layouts migrate without restoring removed internal tabs or reviving closed layouts", () => {
+  clearViewState(); resumeViewState("");
+  values["lester.view.v1.legacy-workspace"] = JSON.stringify({ version: 1, tabs: ["index.html", ".lester/tasks/one/state.json"], selected: "index.html" });
+  const legacy = readView("legacy-workspace");
+  assert.deepEqual(legacy.workspaceTabs, [{ id: "file:index.html", kind: "file", path: "index.html" }]);
+  assert.equal(legacy.activeWorkspaceTab, "file:index.html");
+  assert.equal(legacy.workspacePanelOpen, true);
+  values["lester.view.v1.closed-workspace"] = JSON.stringify({ version: 1, tabs: [], workspaceTabs: [], activeWorkspaceTab: null, workspacePanelOpen: false, workspacePanelIntent: true });
+  const closed = readView("closed-workspace");
+  assert.deepEqual(closed.workspaceTabs, []);
+  assert.equal(closed.activeWorkspaceTab, null);
+  assert.equal(closed.workspacePanelOpen, false);
+  assert.equal(closed.workspacePanelIntent, true);
+  clearViewState();
+});

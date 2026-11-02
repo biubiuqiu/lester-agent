@@ -32,7 +32,7 @@ async function finish(page: Page, api: WorkspaceApi) {
   // File inventory is a separate asynchronous receipt from run completion.
   // Wait for the actual auto-open before closing it, so a late mobile modal
   // cannot cover the next model-menu interaction.
-  await expect(page.locator(".open-file-tabs [role=tab]")).toHaveCount(2);
+  await expect(page.locator(".workspace-tab-strip [role=tab]")).toHaveCount(2);
   const close = page.locator(".computer-panel .close-files-panel");
   await expect(close).toBeVisible();
   await close.click();
@@ -217,7 +217,7 @@ test("file completion events replay after a disconnected conversation stream", a
     api.writeFile("replay.html", "<!doctype html><h1>事件回放产物</h1>");
     release();
     await expect.poll(() => api.streamCount).toBeGreaterThan(0);
-    const tabs = page.getByRole("tablist", { name: "已打开文件", exact: true });
+    const tabs = page.getByRole("tablist", { name: "工作区标签", exact: true });
     await expect(tabs.getByRole("tab", { name: "replay.html", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "停止生成", exact: true })).toHaveCount(0);
     await expect(page.getByRole("textbox", { name: "消息输入框", exact: true })).toHaveValue("事件回放期间保留的草稿");

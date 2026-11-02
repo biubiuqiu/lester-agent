@@ -163,12 +163,13 @@ test("file updates preserve selection; reopening restores source reading positio
   await expect(page.getByRole("tab", { name: "index.html", exact: true })).toBeVisible();
   api.writeFile("notes.txt", Array.from({ length: 180 }, (_, i) => `说明 ${i + 1}`).join("\n"));
   await page.getByRole("tab", { name: "notes.txt", exact: true }).click();
-  const source = page.locator(".file-source-scroll");
+  const source = page.locator(".file-source-scroll:visible");
   await expect(source).toContainText("说明 180");
   await source.evaluate(node => { node.scrollTop = 420; });
   await page.getByRole("button", { name: "关闭 notes.txt", exact: true }).click();
   await page.reload();
   await expect(page.getByRole("tab", { name: "index.html", exact: true })).toBeVisible();
+  await page.getByLabel("添加工作区标签", { exact: true }).first().click();
   await page.getByRole("button", { name: "重新打开刚关闭的标签", exact: true }).click();
   await expect(page.getByRole("tab", { name: "notes.txt", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect.poll(() => source.evaluate(node => node.scrollTop)).toBe(420);
@@ -177,6 +178,7 @@ test("file updates preserve selection; reopening restores source reading positio
   api.writeFile("index.html", "<html><body>更新后的网页</body></html>");
   const htmlTab = page.getByRole("tab", { name: "index.html", exact: true });
   await expect(htmlTab.locator(".file-unread-dot")).toBeVisible();
+  expect((await htmlTab.locator(".file-unread-dot").boundingBox())!.width).toBeGreaterThan(0);
   await expect(page.getByRole("tab", { name: "notes.txt", exact: true })).toHaveAttribute("aria-selected", "true");
   await page.screenshot({ path: info.outputPath("file-update-dot.png") });
   await htmlTab.click();

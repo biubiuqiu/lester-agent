@@ -26,7 +26,7 @@ test("actual review is lazy, exports original records and restores only after co
   await expect(page.getByRole("button", { name: "撤回此文件修改", exact: true })).toBeDisabled();
   const download = page.waitForEvent("download"); await page.getByRole("button", { name: "导出审阅记录", exact: true }).click(); expect((await download).suggestedFilename()).toBe(`lester-file-review-${changeId}.json`);
   api.finish(); await expect(page.getByRole("button", { name: "撤回此文件修改", exact: true })).toBeEnabled();
-  await expect(page.locator(".open-file-tabs [role=tab]").filter({ hasText: "index.html" })).toHaveCount(1);
+  await expect(page.locator(".workspace-tab-strip [role=tab]").filter({ hasText: "index.html" })).toHaveCount(1);
   if (info.project.name === "mobile") await expect(page.locator("#conversation-workspace-panel")).not.toHaveAttribute("open");
   await input.fill("审阅时保留的草稿"); await page.getByRole("button", { name: "撤回此文件修改", exact: true }).click(); expect(writes).toBe(0);
   await expect(page.locator(".composer-motion-ghost")).toHaveCount(0); await page.screenshot({ path: info.outputPath("file-review-confirm.png") });
@@ -52,7 +52,7 @@ test("project rules preserve stale editor drafts and expose accepted source/vers
   if (info.project.name === "mobile") await page.getByRole("button", { name: "打开会话栏", exact: true }).click();
   await page.getByRole("button", { name: "项目 个人项目 的操作", exact: true }).click(); await page.getByRole("button", { name: "项目规则", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "项目规则", exact: true }); const editor = dialog.getByRole("textbox", { name: "项目规则内容", exact: true });
-  await expect(editor).toHaveValue(rules.content); api.finish(); await expect(page.locator(".open-file-tabs [role=tab]").filter({ hasText: "index.html" })).toHaveCount(1); await expect(page.locator("#conversation-workspace-panel")).not.toHaveAttribute("open"); await editor.fill("Keep spacing consistent"); await dialog.getByRole("button", { name: "保存", exact: true }).click(); await expect(dialog.getByRole("alert")).toContainText("草稿保留"); await expect(editor).toHaveValue("Keep spacing consistent");
+  await expect(editor).toHaveValue(rules.content); api.finish(); await expect(page.locator(".workspace-tab-strip [role=tab]").filter({ hasText: "index.html" })).toHaveCount(1); await expect(page.locator("#conversation-workspace-panel")).not.toHaveAttribute("open"); await editor.fill("Keep spacing consistent"); await dialog.getByRole("button", { name: "保存", exact: true }).click(); await expect(dialog.getByRole("alert")).toContainText("草稿保留"); await expect(editor).toHaveValue("Keep spacing consistent");
   stale = false; await dialog.getByRole("button", { name: "保存", exact: true }).click(); await expect(dialog).toContainText("v3"); await page.screenshot({ path: info.outputPath("project-rules-editor.png") });
   await dialog.getByRole("button", { name: "关闭", exact: true }).click();
   if (info.project.name === "mobile") await page.locator(".mobile-close").click();

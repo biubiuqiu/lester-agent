@@ -54,7 +54,9 @@ test("native phone and tablet keep task, results and drafts with desktop tools r
   }
   await expect(page.getByRole("tab", { name: "index.html", exact: true })).toBeVisible();
   await expect(page.frameLocator('iframe[title="index.html preview"]').getByRole("heading", { name: "浏览器回归产物" })).toBeVisible();
-  await expect(page.locator(".workspace-tools")).toHaveCount(0);
+  await page.getByLabel("添加工作区标签", { exact: true }).first().click();
+  await expect(page.locator(".workspace-add-menu").getByRole("button", { name: "终端", exact: true })).toHaveCount(0);
+  await page.keyboard.press("Escape");
   await page.screenshot({ path: info.outputPath("native-workspace.png") });
   if (info.project.name === "mobile") await page.getByRole("button", { name: "返回对话", exact: true }).click();
   await composer.fill("还没发送的修改");

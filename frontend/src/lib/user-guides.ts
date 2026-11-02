@@ -24,7 +24,7 @@ export const guides: Guide[] = [
     { title: "把重要工作放在手边", body: "项目和会话的更多菜单支持置顶。会话菜单还可以把任务移动到另一个项目；任务的消息和文件仍然保留。", target: ".project-rail" },
   ] },
   { topic: "files", title: "文件与成果", description: "多标签预览、查看代码和下载", steps: [
-    { title: "生成的文件，会自己打开", body: "Agent 写入、编辑或登记文件后，确认文件存在，再自动打开预览。手机顶部点「成果」打开面板，再切换「文件」；也可从更多菜单查看会话文件。", target: ".open-deliverables-button", hint: "还没有会话或生成文件时，可以先了解操作，实际预览会在任务中出现。" },
+    { title: "生成的文件，会自己打开", body: "Agent 写入、编辑或登记文件后，确认文件存在，再自动打开预览。手机顶部点「成果」打开面板，再用「＋」添加文件标签；也可从更多菜单查看会话文件。", target: ".open-deliverables-button", hint: "还没有会话或生成文件时，可以先了解操作，实际预览会在任务中出现。" },
     { title: "一份文件，一个标签", body: "右侧最多同时保留 8 个文件标签。点击切换，点 × 关闭；再次修改同一文件会刷新它的标签。HTML 默认以隔离的 iframe 预览，也可以切换源码。", target: ".computer-panel", visual: "files", hint: "文件标签支持方向键、Home / End 切换，Delete 关闭。" },
     { title: "看完，继续把成果做好", body: "点击成果卡片预览，展开详情下载文件，或点击「继续修改」补充要求。关闭预览面板后可以继续对话。需要公开网址时，再明确选择发布。", target: ".computer-panel", hint: "工作区内的文件预览需要登录；公开发布是单独的操作。" },
   ] },

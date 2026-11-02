@@ -4,7 +4,7 @@ import { T, useT } from "@/components/i18n";
 
 /* eslint-disable @next/next/no-img-element -- Workspace images use authenticated runtime URLs and unknown dimensions. */
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import {
   ChevronDown,
@@ -21,7 +21,7 @@ import {
   FolderOpen,
   LoaderCircle,
   RefreshCw,
-  Maximize2, Minimize2, X, MessageSquare, RotateCcw,
+  MessageSquare,
 } from "lucide-react";
 import {
   conversationFilePreviewURL,
@@ -70,22 +70,10 @@ const SourcePreview = dynamic(
   },
 );
 
-export function FileExplorer({ conversationId }: { conversationId: string }) {
+export function FileExplorer({ conversationId, view = "preview", filePath, active = true }: { conversationId: string; view?: "browser" | "preview"; filePath?: string; active?: boolean }) {
   const t = useT();
-
-  const { storageKey, directories, signature, selected, tabs, changes, files, loading, error, limited, open, close, unreadFiles, markFileRead, canReopenClosed, reopenClosed, panelOpen, panelTab, refresh, loadDirectory, treeOpen, setTreeOpen, expanded: enlarged, setExpanded, setReference, setPanelOpen, modes, fileRevisions, setPreviewMode: setWorkspacePreviewMode } = useFileWorkspace();
-  const tabPrefix = useId();
-  const tabId = (path: string) => `${tabPrefix}-${encodeURIComponent(path)}`;
-  const tabList = useRef<HTMLElement>(null);
-  useEffect(() => {
-    const node = tabList.current;
-    if (!node) return;
-    const reveal = () => node.querySelector('[aria-selected="true"]')?.parentElement?.scrollIntoView({ block: "nearest", inline: "nearest" });
-    const observer = new ResizeObserver(reveal);
-    observer.observe(node);
-    reveal();
-    return () => observer.disconnect();
-  }, [selected?.path, tabs.length]);
+  const { storageKey, directories, signature, selected: lastSelected, changes, files, loading, error, limited, open, markFileRead, panelOpen, refresh, loadDirectory, setExpanded, setReference, setPanelOpen, modes, fileRevisions, setPreviewMode: setWorkspacePreviewMode } = useFileWorkspace();
+  const selected = view === "browser" ? null : filePath ? files.find(file => file.path === filePath) ?? Object.values(directories).flatMap(directory => directory.entries).find(file => !file.is_dir && file.path === filePath) ?? null : lastSelected;
   const [expanded, setTreeExpanded] = useState<Set<string>>(() => new Set(readView(storageKey).directories));
   const changesMenu = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
@@ -116,11 +104,11 @@ export function FileExplorer({ conversationId }: { conversationId: string }) {
       : { key: previewKey, content: preview.identity === identity ? preview.content : "", error: "", loading: needsTextContent };
 
   useEffect(() => {
-    const viewed = () => { if (selectedPath && panelOpen && panelTab === "files" && !activePreview.loading && !activePreview.error && !document.hidden) markFileRead(selectedPath); };
+    const viewed = () => { if (selectedPath && panelOpen && active && !activePreview.loading && !activePreview.error && !document.hidden) markFileRead(selectedPath); };
     viewed();
     document.addEventListener("visibilitychange", viewed);
     return () => document.removeEventListener("visibilitychange", viewed);
-  }, [selectedPath, panelOpen, panelTab, activePreview.loading, activePreview.error, activePreview.key, markFileRead]);
+  }, [selectedPath, panelOpen, active, activePreview.loading, activePreview.error, activePreview.key, markFileRead]);
 
   useEffect(() => {
     if (!selectedPath || !needsTextContent || previewTooLarge) return;
@@ -151,33 +139,23 @@ export function FileExplorer({ conversationId }: { conversationId: string }) {
     open(file);
   }, [open]);
 
-  return <div className={`file-explorer ${selected && !treeOpen ? "preview-focused" : ""}`}>
-    <section className={`file-tree-pane ${treeOpen ? "" : "collapsed"} ${selected ? "has-preview" : ""}`} aria-label={t("会话文件资源管理器")}>
+  return <div className={`file-explorer ${view === "browser" ? "workspace-file-browser" : "workspace-file-preview preview-focused"}`}>
+    {view === "browser" ? <section className="file-tree-pane" aria-label={t("会话文件资源管理器")}>
       <header className="file-explorer-toolbar">
-        <button type="button" onClick={() => setTreeOpen(!treeOpen)} aria-expanded={treeOpen}>{treeOpen ? <ChevronDown /> : <ChevronRight />}<strong><T>{"目录"}</T></strong></button>
+        <span className="file-browser-heading"><Folder /><strong><T>{"目录"}</T></strong></span>
         {changes.length || limited ? <details ref={changesMenu} className="file-changes" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }}><summary aria-label={t("查看文件变化")}><T>{"变化"}</T>{changes.length ? ` · ${changes.length}` : ""}</summary>
       <div className="file-changes-popover"><strong><T>{"文件变化"}</T></strong><p><T>{"包含本轮文件操作及本次打开期间检测到的变化；不是完整历史或回滚快照。"}</T>{limited ? t("目录较大或部分读取失败，仅展示已同步范围。") : ""}</p>
       <div>{changes.map((change) => <button key={change.path} type="button" disabled={change.kind === "deleted" || !files.some((file) => file.path === change.path)} onClick={() => { const file = files.find((file) => file.path === change.path); if (file) selectFile(file); if (changesMenu.current) changesMenu.current.open = false; }}><span data-kind={change.kind}>{change.kind === "added" ? t("新增") : change.kind === "deleted" ? t("删除") : t("更新")}</span><span>{change.path}</span></button>)}</div>
     </div></details> : null}
         <span className="file-sync-label" title={t("工具执行后同步；运行时每 5 秒、空闲时每 15 秒检查")}><T>{"自动同步"}</T></span>
         <button type="button" onClick={refresh} title={t("刷新文件")} aria-label={t("刷新文件")}><RefreshCw /></button>
-        <button type="button" onClick={() => { setExpanded(!enlarged); if (!enlarged) setTreeOpen(false); }} title={enlarged ? t("还原布局") : t("专注预览")} aria-label={enlarged ? t("还原布局") : t("专注预览")}>{enlarged ? <Minimize2 /> : <Maximize2 />}</button>
       </header>
-      {treeOpen ? <div className="file-tree-scroll" role="tree" aria-label="Files">
-        {loading ? <div className="file-tree-status"><T>{"正在同步文件…"}</T></div> : <FileTreeItems directoryPath="" depth={0} directories={directories} expanded={expanded} selectedPath={selected?.path || ""} onToggle={toggleDirectory} onSelect={selectFile} />}
-      </div> : null}
-    </section>
+      <div className="file-tree-scroll" role="tree" aria-label="Files">
+        {loading ? <div className="file-tree-status"><T>{"正在同步文件…"}</T></div> : <FileTreeItems directoryPath="" depth={0} directories={directories} expanded={expanded} selectedPath={lastSelected?.path || ""} onToggle={toggleDirectory} onSelect={selectFile} />}
+      </div>
+    </section> : null}
     {error ? <FileError detail={t(error)} onRetry={refresh} /> : null}
-    {tabs.length || canReopenClosed ? <div className="file-tab-strip"><button type="button" className="file-directory-toggle" aria-label={t("目录")} title={t("目录")} aria-expanded={treeOpen} onClick={() => setTreeOpen(!treeOpen)}><Folder /></button><nav ref={tabList} className="open-file-tabs" role="tablist" aria-label={t("已打开文件")}>{tabs.map((file, index) => <div key={file.path} className={selected?.path === file.path ? "active" : ""}><button id={tabId(file.path)} role="tab" type="button" onClick={() => selectFile(file)} title={file.path} aria-describedby={unreadFiles.includes(file.path) ? `${tabId(file.path)}-update` : undefined} aria-selected={selected?.path === file.path} aria-controls={`${tabPrefix}-panel`} tabIndex={selected?.path === file.path || (!selected && index === 0) ? 0 : -1} onKeyDown={(event) => {
-      let next: FileEntry | undefined;
-      if (event.key === "ArrowRight") next = tabs[(index + 1) % tabs.length];
-      if (event.key === "ArrowLeft") next = tabs[(index - 1 + tabs.length) % tabs.length];
-      if (event.key === "Home") next = tabs[0];
-      if (event.key === "End") next = tabs.at(-1);
-      if (next) { event.preventDefault(); selectFile(next); document.getElementById(tabId(next.path))?.focus(); }
-      if (event.key === "Delete") { event.preventDefault(); close(file.path); const neighbor = tabs[index + 1] ?? tabs[index - 1]; if (neighbor) document.getElementById(tabId(neighbor.path))?.focus(); }
-    }}><span className="file-tab-glyph" aria-hidden="true"><FileGlyph file={file} /></span><span className="file-tab-name">{file.name}</span>{unreadFiles.includes(file.path) ? <span className="file-unread-dot" aria-hidden="true" /> : null}</button><button type="button" onClick={() => close(file.path)} aria-label={t("关闭 {0}", [file.name])}><X /></button>{unreadFiles.includes(file.path) ? <span id={`${tabId(file.path)}-update`} hidden>{t("有未查看的更新")}</span> : null}</div>)}</nav><button type="button" className="file-reopen-button" disabled={!canReopenClosed} aria-label={t("重新打开刚关闭的标签")} title={t("重新打开刚关闭的标签")} onClick={() => { reopenClosed(); requestAnimationFrame(() => tabList.current?.querySelector<HTMLButtonElement>('[aria-selected="true"]')?.focus()); }}><RotateCcw size={15} /></button><button type="button" className="file-focus-toggle" onClick={() => { setExpanded(!enlarged); if (!enlarged) setTreeOpen(false); }} aria-label={enlarged ? t("还原布局") : t("专注预览")} title={enlarged ? t("还原布局") : t("专注预览")}>{enlarged ? <Minimize2 /> : <Maximize2 />}</button></div> : null}
-    <div id={`${tabPrefix}-panel`} className="file-tab-panel" role={selected ? "tabpanel" : undefined} aria-labelledby={selected ? tabId(selected.path) : undefined}><FilePreview key={`${selected?.path ?? "empty"}:${previewMode}`} onRetry={() => { setPreview((value) => ({ ...value, key: "", error: "" })); setPreviewAttempt((value) => value + 1); }} storageKey={storageKey} conversationId={conversationId} file={selected} kind={selectedKind} mode={previewMode} preview={activePreview} onModeChange={setPreviewMode} onReference={() => { if (selected) setReference(selected.path); setExpanded(false); setPanelOpen(false); }} /></div>
+    {view === "preview" ? <div className="file-tab-panel">{filePath && !selected && !loading && !error ? <FileError detail={t("文件不存在或已删除")} onRetry={refresh} /> : <FilePreview active={active && panelOpen} key={`${selected?.path ?? "empty"}:${previewMode}`} onRetry={() => { setPreview((value) => ({ ...value, key: "", error: "" })); setPreviewAttempt((value) => value + 1); }} storageKey={storageKey} conversationId={conversationId} file={selected} kind={selectedKind} mode={previewMode} preview={activePreview} onModeChange={setPreviewMode} onReference={() => { if (selected) setReference(selected.path); setExpanded(false); setPanelOpen(false); }} />}</div> : null}
   </div>;
 }
 
@@ -236,6 +214,7 @@ function FileTreeItems({
 }
 
 function FilePreview({
+  active,
   onRetry,
   storageKey,
   conversationId,
@@ -246,6 +225,7 @@ function FilePreview({
   onModeChange,
   onReference,
 }: {
+  active: boolean;
   onRetry: () => void;
   storageKey: string;
   conversationId: string;
@@ -258,19 +238,19 @@ function FilePreview({
 }) {
   const t = useT();
 
-  const markdownScroll = usePreviewScroll(storageKey, `markdown:${file?.path}`);
+  const markdownScroll = usePreviewScroll(storageKey, `markdown:${file?.path}`, active && !preview.loading && !preview.error);
   const iframe = useRef<HTMLIFrameElement>(null);
   const { files, open } = useFileWorkspace();
   useEffect(() => {
-    if (kind !== "html" || mode !== "preview") return;
+    if (!active || kind !== "html" || mode !== "preview") return;
     const navigate = (event: MessageEvent) => {
-      if (!iframe.current || event.source !== iframe.current.contentWindow || event.data?.type !== "lester:preview:navigate" || typeof event.data.path !== "string") return;
+      if (document.hidden || !iframe.current?.getClientRects().length || event.source !== iframe.current.contentWindow || event.data?.type !== "lester:preview:navigate" || typeof event.data.path !== "string") return;
       const target = files.find((item) => !item.is_dir && item.path === event.data.path);
       if (target) open(target, "preview");
     };
     window.addEventListener("message", navigate);
     return () => window.removeEventListener("message", navigate);
-  }, [files, open, kind, mode]);
+  }, [files, open, kind, mode, active]);
   if (!file) return <section className="file-preview empty"><Eye /><strong><T>{"选择文件进行预览"}</T></strong><p><T>{"支持代码、文本、图片、PDF 和 HTML 页面。"}</T></p></section>;
   const url = `${conversationFilePreviewURL(conversationId, file.path)}?v=${encodeURIComponent(file.modified_at + ":" + file.size)}`;
   return <section className="file-preview">
@@ -288,14 +268,14 @@ function FilePreview({
       {(!preview.loading || Boolean(preview.content)) && !preview.error && kind === "html" && mode === "preview" ? <iframe ref={iframe} title={`${file.name} preview`} srcDoc={preview.content} sandbox="allow-scripts" /> : null}
       {(!preview.loading || Boolean(preview.content)) && !preview.error && kind === "image" ? <img src={url} alt={file.name} /> : null}
       {(!preview.loading || Boolean(preview.content)) && !preview.error && kind === "pdf" ? <iframe title={`${file.name} PDF preview`} src={url} /> : null}
-      {(!preview.loading || Boolean(preview.content)) && !preview.error && (kind === "text" || ((kind === "html" || kind === "markdown") && mode === "source")) ? <SourcePreview key={file.path} content={preview.content} fileName={file.name} filePath={file.path} storageKey={storageKey} /> : null}
+      {(!preview.loading || Boolean(preview.content)) && !preview.error && (kind === "text" || ((kind === "html" || kind === "markdown") && mode === "source")) ? <SourcePreview active={active} key={file.path} content={preview.content} fileName={file.name} filePath={file.path} storageKey={storageKey} /> : null}
       {(!preview.loading || Boolean(preview.content)) && !preview.error && kind === "markdown" && mode === "preview" ? <div className="file-markdown"><MessageContent content={preview.content} quoteSource={file.path} /></div> : null}
       {(!preview.loading || Boolean(preview.content)) && !preview.error && kind === "unsupported" ? <div className="file-preview-state"><FileIcon /><strong><T>{"暂不支持预览"}</T></strong><span>{formatBytes(file.size)} <T>{"· 可在 Terminal 中打开"}</T></span></div> : null}
     </div>
   </section>;
 }
 
-function FileGlyph({ file, open = false }: { file: Pick<FileEntry, "name" | "is_dir">; open?: boolean }) {
+export function FileGlyph({ file, open = false }: { file: Pick<FileEntry, "name" | "is_dir">; open?: boolean }) {
   if (file.is_dir) return open ? <FolderOpen className="file-kind folder" /> : <Folder className="file-kind folder" />;
   const extension = fileExtension(file.name);
   if (imageExtensions.has(extension)) return <FileImage className="file-kind image" />;
