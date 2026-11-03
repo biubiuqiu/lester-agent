@@ -3,6 +3,7 @@ import { T, useT } from "@/components/i18n";
 
 
 import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
+import { ArrowDown, ArrowUp } from "lucide-react";
 import type { Terminal as XTerm } from "@xterm/xterm";
 import { API } from "@/lib/api";
 import { ensureSession, redirectToLogin, SessionExpired } from "@/lib/auth-client";
@@ -125,7 +126,7 @@ export function ComputerTerminal({ conversationId, autoConnect = true }: { conve
       <button ref={help} type="button" aria-label={t("查看终端快捷键")} onClick={() => setNotice("Tab 补全 · ↑↓ 历史 · Ctrl+C 中断（选中内容时复制）· Ctrl+R 搜索历史 · Ctrl+L 清屏 · Shift+Esc 离开终端焦点")}><T>{"快捷键"}</T></button>
     </div>
     <div className="terminal" ref={mount}>{attempt < 0 ? <p className="terminal-restore-note">{t("此终端尚未连接。重新连接会启动新的 Shell。")}</p> : null}</div>
-    <div className="terminal-keybar" aria-label={t("终端辅助按键")}>{keys.map(key => <button key={key.label} type="button" title={t(key.title)} aria-label={t(key.title)} disabled={connection !== "connected"} onPointerDown={event => event.preventDefault()} onClick={() => { terminal.current?.input(key.data, true); terminal.current?.focus(); }}>{key.label}</button>)}</div>
+    <div className="terminal-keybar" aria-label={t("终端辅助按键")}>{keys.map(key => <button key={key.label} type="button" title={t(key.title)} aria-label={t(key.title)} disabled={connection !== "connected"} onPointerDown={event => event.preventDefault()} onClick={() => { terminal.current?.input(key.data, true); terminal.current?.focus(); }}>{key.label === "↑" ? <ArrowUp size={14} aria-hidden="true" /> : key.label === "↓" ? <ArrowDown size={14} aria-hidden="true" /> : key.label}</button>)}</div>
     <p id={helpId} className={notice ? "terminal-notice" : "sr-only"} role="status">{notice ? t(notice) : t("Tab 补全，方向键查看历史，Ctrl+C 中断。Shift+Esc 将焦点移至终端工具栏。")}</p>
   </section>;
 }

@@ -1,0 +1,15 @@
+/* Give each capability a stable mark; installation state stays a separate cue. */
+.agent-card-icon.catalog-agent-mark,
+.agent-landing-icon.catalog-agent-mark,
+.skill-market-card .card-icon.catalog-skill-mark { background: transparent; }
+.agent-card-icon.catalog-agent-mark > :is(svg,img) { width: 32px; height: 32px; }
+.agent-landing-icon.catalog-agent-mark > :is(svg,img) { width: 48px; height: 48px; }
+.skill-market-card .card-icon.catalog-skill-mark > svg { width: 32px; height: 32px; }
+.skill-market-empty-mark { display: grid; width: 28px; height: 28px; place-items: center; }
+.skill-market-empty-mark > svg { width: 28px; height: 28px; }
+.agent-avatar.catalog-agent-avatar { background: transparent; border: 0; }
+.agent-avatar.catalog-agent-avatar > :is(svg,img) { width: 34px; height: 34px; }
+.skill-mini-icon.skill-catalog-mark { position: relative; background: transparent; }
+.skill-mini-icon.skill-catalog-mark > svg { width: 27px; height: 27px; }
+.skill-mini-icon .skill-installed-badge { position: absolute; right: -3px; bottom: -3px; display: grid; width: 13px; height: 13px; place-items: center; border: 1px solid #fff; border-radius: 50%; background: #3d7152; color: #fff; }
+.skill-mini-icon .skill-installed-badge > svg { width: 9px; height: 9px; stroke-width: 2; }

@@ -3,11 +3,12 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Clock3, Copy, MoreHorizontal, Plus, RefreshCw, Webhook, X } from "lucide-react";
+import { Copy, MoreHorizontal, Plus, RefreshCw, X } from "lucide-react";
 import { api, API, ApiError, type Agent, type Deployment, type Project } from "@/lib/api";
 import { automations, type Automation, type AutomationConfig, type AutomationDelivery } from "@/lib/automation";
 import { useI18n, useT } from "./i18n";
 import { SettingsShell } from "./settings-shell";
+import { ProductGlyph } from "./product-glyph";
 
 function mergeVersions(current:Automation[],incoming:Automation[]){return incoming.map(item=>current.find(old=>old.id===item.id&&old.revision>item.revision)||item);}
 
@@ -48,9 +49,9 @@ export function AutomationSettings() {
   {error?<p className="settings-error" role="alert">{t(error)} <button type="button" className="text-button" onClick={()=>{setLoading(true);setAttempt(value=>value+1);}}>{t("刷新")}</button></p>:null}
   {notice?<p className="automation-notice" role="status">{t(notice)}</p>:null}
   {loading?<p role="status">{t("正在加载…")}</p>:null}
-  {!loading&&!error&&!items.length?<section className="automation-empty"><Clock3 size={26}/><h2>{t("把下一次工作安排好")}</h2><p>{t("设置定时任务，或让外部系统通过 Webhook 触发。每次执行都会创建独立会话。")}</p></section>:null}
+  {!loading&&!error&&!items.length?<section className="automation-empty"><ProductGlyph kind="automation" size={42}/><h2>{t("把下一次工作安排好")}</h2><p>{t("设置定时任务，或让外部系统通过 Webhook 触发。每次执行都会创建独立会话。")}</p></section>:null}
   <div className="automation-list">{items.map(item=><article key={item.id} className="automation-card">
-   <header><span className="automation-icon">{item.kind==="schedule"?<Clock3 size={18}/>:<Webhook size={18}/>}</span><div><h2>{item.name}</h2><p>{t(item.kind==="schedule"?"定时触发":"Webhook 触发")}{item.kind==="schedule"?` · ${item.timezone}`:""}</p></div><button type="button" className={`automation-status ${item.enabled?"enabled":""}`} aria-label={t(item.enabled?"暂停自动任务：{0}":"启用自动任务：{0}",[item.name])} aria-pressed={item.enabled} disabled={Boolean(busy)} onClick={()=>void toggle(item)}>{t(item.enabled?"已启用":"已暂停")}</button></header>
+   <header><span className="automation-icon"><ProductGlyph kind={item.kind === "schedule" ? "automation" : "connections"} size={28}/></span><div><h2>{item.name}</h2><p>{t(item.kind==="schedule"?"定时触发":"Webhook 触发")}{item.kind==="schedule"?` · ${item.timezone}`:""}</p></div><button type="button" className={`automation-status ${item.enabled?"enabled":""}`} aria-label={t(item.enabled?"暂停自动任务：{0}":"启用自动任务：{0}",[item.name])} aria-pressed={item.enabled} disabled={Boolean(busy)} onClick={()=>void toggle(item)}>{t(item.enabled?"已启用":"已暂停")}</button></header>
    <p className="automation-prompt">{item.prompt}</p>
    <footer><span>{item.kind==="schedule"?(item.next_run_at?t("下次：{0}",[stamp(item.next_run_at,item.timezone)]):item.run_at?`${t("单次")} · ${stamp(item.run_at,item.timezone)}`:item.cron):t("凭证验证后接收 JSON 事件")}</span><div><button type="button" onClick={()=>setHistory(value=>value===item.id?null:item.id)} aria-expanded={history===item.id}>{t("触发记录")}</button><button type="button" disabled={Boolean(busy)} onClick={()=>void run(item)}>{t(busy===item.id?"正在处理…":"立即运行")}</button><details className="automation-more" onKeyDown={event=>{if(event.key==="Escape"){event.preventDefault();event.stopPropagation();event.currentTarget.open=false;event.currentTarget.querySelector<HTMLElement>("summary")?.focus();}}}><summary aria-label={t("更多操作：{0}",[item.name])}><MoreHorizontal size={17}/></summary><div><button type="button" disabled={Boolean(busy)} onClick={event=>{const menu=event.currentTarget.closest("details");menu?.removeAttribute("open");menu?.querySelector<HTMLElement>("summary")?.focus({preventScroll:true});setEditor(item);}}>{t("编辑")}</button><button type="button" disabled={Boolean(busy)} onClick={event=>{const menu=event.currentTarget.closest("details");menu?.removeAttribute("open");menu?.querySelector<HTMLElement>("summary")?.focus({preventScroll:true});setRemoving(item);}}>{t("删除")}</button></div></details></div></footer>
    {history===item.id?<TriggerHistory id={item.id} revision={historyRevision}/>:null}

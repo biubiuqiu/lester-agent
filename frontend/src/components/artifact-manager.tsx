@@ -2,6 +2,7 @@
 import { T, useI18n, useT } from "@/components/i18n";
 
 
+import { ProductGlyph } from "./product-glyph";
 import { ArtifactIcon } from "./workspace-icons";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -393,7 +394,7 @@ export function ArtifactManager({
           <T>{"正在载入产物…"}</T></div>
       ) : !filtered.length ? (
         <div className="artifact-empty">
-          <ArtifactIcon size={38} />
+          <ProductGlyph kind="publish" size={42} />
           <h2>{scopedItems.length ? t("没有匹配的站点") : t("让成果拥有自己的链接")}</h2>
           <p>
             <T>{"在对话中生成 HTML 后，点击文件工具栏的“部署”，或让 Lester 帮你发布。"}</T></p>

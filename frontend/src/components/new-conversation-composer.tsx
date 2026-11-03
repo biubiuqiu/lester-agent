@@ -7,7 +7,7 @@ import { FloatingPopover } from "./floating-popover";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, BarChart3, Bot, ChevronDown, FileText, Globe, Send } from "lucide-react";
+import { ArrowRight, Bot, ChevronDown, Send } from "lucide-react";
 import { api, type Agent, type Conversation, type Deployment, type UserProfile } from "@/lib/api";
 import { pastedImageFiles } from "@/lib/clipboard";
 import { appendAttachments } from "@/lib/attachments";
@@ -17,6 +17,7 @@ import { mentionPayload } from "@/lib/mentions";
 import { startConversation } from "@/lib/start-conversation";
 import { useComposerDock, useComposerMotion } from "./composer-motion";
 import { PermissionMode } from "./permission-mode";
+import { ProductGlyph } from "./product-glyph";
 
 export function NewConversationComposer({ deployments, user, projectId, projectName, initialAgentSlug }: { deployments: Deployment[]; user: UserProfile; projectId?:string; projectName?:string; initialAgentSlug?: string }) {
   const t = useT();
@@ -68,9 +69,9 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
   }
   const hasDraft = Boolean(text.trim() || files.length || contexts.length || missing.length);
   const examples = [
-    { title: t("整理需求文档"), label: t("文档"), prompt: t("帮我整理产品需求，生成一份包含目标、功能范围和验收标准的评审文档。"), icon: FileText },
-    { title: t("分析一份表格"), label: t("表格"), prompt: t("分析我上传的表格，找出主要趋势和异常，并整理成简明报告。"), icon: BarChart3 },
-    { title: t("制作一个网页"), label: t("网页"), prompt: t("帮我制作一个产品介绍网页，先和我确认目标用户、内容和视觉风格。"), icon: Globe },
+    { title: t("整理需求文档"), label: t("文档"), prompt: t("帮我整理产品需求，生成一份包含目标、功能范围和验收标准的评审文档。"), icon: "document" as const },
+    { title: t("分析一份表格"), label: t("表格"), prompt: t("分析我上传的表格，找出主要趋势和异常，并整理成简明报告。"), icon: "analysis" as const },
+    { title: t("制作一个网页"), label: t("网页"), prompt: t("帮我制作一个产品介绍网页，先和我确认目标用户、内容和视觉风格。"), icon: "web" as const },
   ];
   const changeFiles = (next: File[]) => { setFiles(next); updateView(storageKey, { files: next }); };
   const addFiles = (incoming: File[]) => {
@@ -153,7 +154,7 @@ export function NewConversationComposer({ deployments, user, projectId, projectN
         event.currentTarget.open = false;
         event.currentTarget.querySelector("summary")?.focus();
       }
-    }}><summary><T>{"试试一个任务"}</T><ChevronDown size={15} aria-hidden="true" /></summary><div aria-label={t("任务示例")}>{examples.map(({ title, prompt }) => <button type="button" key={title} disabled={busy} onClick={() => chooseExample(prompt)}>{title}</button>)}</div></details> : <div className="task-suggestions" role="group" aria-label={t("任务示例")}>{examples.map(({ title, label, prompt, icon: Icon }) => <button type="button" key={title} disabled={busy} aria-label={title} title={title} onClick={() => chooseExample(prompt)}><Icon size={15} aria-hidden="true" />{label}</button>)}</div>}</div>
+    }}><summary><T>{"试试一个任务"}</T><ChevronDown size={15} aria-hidden="true" /></summary><div aria-label={t("任务示例")}>{examples.map(({ title, prompt }) => <button type="button" key={title} disabled={busy} onClick={() => chooseExample(prompt)}>{title}</button>)}</div></details> : <div className="task-suggestions" role="group" aria-label={t("任务示例")}>{examples.map(({ title, label, prompt, icon }) => <button type="button" key={title} disabled={busy} aria-label={title} title={title} onClick={() => chooseExample(prompt)}><ProductGlyph kind={icon} size={18} />{label}</button>)}</div>}</div>
   </div></div>;
 }
 

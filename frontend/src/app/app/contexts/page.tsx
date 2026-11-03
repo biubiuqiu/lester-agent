@@ -6,7 +6,8 @@ import { GuideLauncher } from "@/components/user-guide";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, BookOpen, Plus, Search } from "lucide-react";
+import { ArrowLeft, Plus, Search } from "lucide-react";
+import { ProductGlyph } from "@/components/product-glyph";
 import { api, type ContextEntry } from "@/lib/api";
 
 export default function ContextLibrary() {
@@ -68,7 +69,7 @@ export default function ContextLibrary() {
   const selected = editing && editing !== "new" ? editing : null;
   const visible = entries.filter((e) => `${e.title} ${e.description}`.toLowerCase().includes(query.trim().toLowerCase()));
   return <main className="context-library">
-    <header className="context-library-header"><Link href="/app" onClick={(e) => { if (busy || !canLeave()) e.preventDefault(); }}><ArrowLeft size={16} /><T>{"返回工作区"}</T></Link><span><BookOpen size={17} /><T>{"个人上下文库"}</T></span><AssistantLauncherSlot /><GuideLauncher /></header>
+    <header className="context-library-header"><Link href="/app" onClick={(e) => { if (busy || !canLeave()) e.preventDefault(); }}><ArrowLeft size={16} /><T>{"返回工作区"}</T></Link><span><ProductGlyph kind="context" size={20} /><T>{"个人上下文库"}</T></span><AssistantLauncherSlot /><GuideLauncher /></header>
     <section className="context-library-main">
       <div className="settings-heading"><div><p className="eyebrow">Context library</p><h1><T>{"把常用背景，留在手边"}</T></h1><p><T>{"维护术语、项目背景与写作要求。在聊天中输入 @，按需引用。"}</T></p></div><button className="primary-button" disabled={busy} onClick={() => { if (!canLeave()) return; setDirty(false); request.current++; setLoading(false); setEditing("new"); setConfirmDelete(false); setError(""); setNotice(""); }}><Plus size={16} /><T>{"新建词条"}</T></button></div>
       {error && <p className="settings-error" role="alert">{t(error)}</p>}{notice && <p className="success-banner" role="status">{t(notice)}</p>}
@@ -87,7 +88,7 @@ export default function ContextLibrary() {
             <p className="admin-help"><T>{"发送消息时会保存词条的完整快照。每条正文最多 20,000 字，每次最多引用 8 条，合计最多 40,000 字。"}</T></p>
             <footer>{selected && <button type="button" disabled={busy} className="context-delete" onClick={() => setConfirmDelete(true)}><T>{"删除词条"}</T></button>}<button className="primary-button" disabled={busy}>{busy ? t("保存中…") : t("保存词条")}</button></footer>
             {confirmDelete && <div className="context-delete-confirm" role="alert"><p><T>{"删除“"}</T>{selected?.title}<T>{"”？此操作无法撤销，历史消息快照会保留。"}</T></p><button type="button" disabled={busy} onClick={() => setConfirmDelete(false)}><T>{"取消"}</T></button><button type="button" disabled={busy} onClick={() => void remove()}><T>{"确认删除"}</T></button></div>}
-          </form> : <div className="context-library-empty"><BookOpen size={32} /><h2>{loading ? t("正在加载…") : t("选择一个词条，或新建上下文")}</h2><p><T>{"只在聊天中主动引用的词条，才会提供给 Agent。"}</T></p></div>}
+          </form> : <div className="context-library-empty"><ProductGlyph kind="context" size={42} /><h2>{loading ? t("正在加载…") : t("选择一个词条，或新建上下文")}</h2><p><T>{"只在聊天中主动引用的词条，才会提供给 Agent。"}</T></p></div>}
         </section>
       </div>
     </section>

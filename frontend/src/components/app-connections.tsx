@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { BookOpen, Check, ExternalLink, LoaderCircle, RefreshCw, X } from "lucide-react";
+import { BookOpen, Check, ChevronRight, ExternalLink, LoaderCircle, RefreshCw, X } from "lucide-react";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import { appAuthorizationURL, appProviders, parseAppConnections, type AppConnection, type AppProvider } from "@/lib/app-connections";
@@ -150,12 +150,12 @@ export function AppConnections() {
           {linked && item.account_name ? <p className="app-connection-account" title={item.account_name}>{item.account_name}</p> : null}
           <footer><button type="button" className={ready ? "text-button" : "secondary-button"} disabled={!!busy || invalid || !item.configured || native} onClick={() => void connect(item)}>{busy === provider ? <LoaderCircle size={14} className="spin" /> : <ExternalLink size={14} />}{t(busy === provider ? "正在处理…" : linked ? "重新连接" : "连接")}</button>{linked ? <button type="button" className="text-button" disabled={!!busy || invalid} onClick={event => { trigger.current = event.currentTarget; setDialogError(""); setSelected(item); }}>{t("断开")}</button> : null}</footer>
           {provider === "github" ? <details className="app-github-code">
-            <summary>{t("代码任务")}{ready && item.github_code_enabled ? <span><Check size={12} />{t("已开启")}</span> : null}</summary>
+            <summary><ChevronRight className="app-disclosure-icon" size={13} aria-hidden="true" />{t("代码任务")}{ready && item.github_code_enabled ? <span><Check size={12} />{t("已开启")}</span> : null}</summary>
             <p>{t("在已授权仓库中修改代码、运行测试并推送分支或创建 PR。")}</p>
             <p>{t("代码任务需要 GitHub App 的仓库内容和 PR 读写权限；实际可用范围以安装授权和仓库权限为准。")}</p>
             <div><button type="button" className="secondary-button" disabled={!!busy || invalid || !item.configured || native} onClick={() => void connect(item, true)}>{t(item.github_code_enabled ? "重新授权代码任务" : "授权代码任务")}</button><Link href="/docs/usage#github-code" target="_blank" rel="noopener noreferrer">{t("使用帮助")}</Link></div>
           </details> : null}
-          {linked && item.scopes.length ? <details className="app-connection-scopes"><summary>{t("查看授权范围")}</summary><p>{item.scopes.join(" · ")}</p></details> : null}
+          {linked && item.scopes.length ? <details className="app-connection-scopes"><summary><ChevronRight className="app-disclosure-icon" size={13} aria-hidden="true" />{t("查看授权范围")}</summary><p>{item.scopes.join(" · ")}</p></details> : null}
         </article>;
       })}
     </div> : null}

@@ -1,5 +1,6 @@
 "use client";
 
+import { ProductGlyph } from "./product-glyph";
 import { useEffect, useRef, useState } from "react";
 import { Check, LoaderCircle, Pencil, Plus, Trash2, Undo2, X } from "lucide-react";
 import { api, ApiError, type Project } from "@/lib/api";
@@ -126,7 +127,7 @@ export function PersonalMemoryManager({ open, memories, projects, automatic, loc
   const observedMatches = !!pending && !!observed && (pending.kind === "forget" ? observed.deleted && observed.revision > pending.revision : !!pending.input && !observed.deleted && sameInput(observed, pending.input) && observed.revision > pending.revision);
 
   return <dialog className="personal-memory-dialog" ref={dialog} aria-labelledby="personal-memory-title" onCancel={event => { event.preventDefault(); close(); }} onClick={event => { if (event.target === event.currentTarget) { const rect = event.currentTarget.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) close(); } }}>
-    <header><div><h2 id="personal-memory-title">{t("Lester 的记忆")}</h2><p>{t("记忆仅供你使用。项目记忆只带入对应项目的任务。")}</p></div><button type="button" className="icon-button" aria-label={t("关闭记忆")} disabled={!!busy} onClick={close}><X size={18} /></button></header>
+    <header><div><h2 id="personal-memory-title"><ProductGlyph kind="memory" size={24} />{t("Lester 的记忆")}</h2><p>{t("记忆仅供你使用。项目记忆只带入对应项目的任务。")}</p></div><button type="button" className="icon-button" aria-label={t("关闭记忆")} disabled={!!busy} onClick={close}><X size={18} /></button></header>
     <label className="personal-auto-memory"><input type="checkbox" checked={automaticValue} disabled={!!busy || !!pending} onChange={event => { const enabled = event.target.checked; setAutomaticOverride(enabled); void operation("settings", async () => { try { await onAutomatic(enabled); } catch (reason) { if (mounted.current) setAutomaticOverride(null); throw reason; } if (mounted.current) { await refresh(); setAutomaticOverride(null); } }); }} /><span>{t("自动记住重要信息")}<small>{t("关闭后仍可明确说“记住这个”。")}</small></span></label>
     <div className="personal-memory-tools"><input className="personal-memory-search" type="search" aria-label={t("搜索记忆")} placeholder={t("搜索记忆")} value={query} onChange={event => setQuery(event.target.value)} /><button className="personal-memory-add" type="button" disabled={!!busy || !!pending} onClick={() => start()}><Plus size={15} />{t("新增记忆")}</button></div>
     <div className="personal-memory-filters"><select aria-label={t("筛选记忆范围")} value={scope} onChange={event => setScope(event.target.value)}><option value="all">{t("全部范围")}</option><option value="personal">{t("个人记忆")}</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select><select aria-label={t("筛选记忆分类")} value={kind} onChange={event => setKind(event.target.value)}><option value="all">{t("全部分类")}</option><option value="preference">{t("个人偏好")}</option><option value="project">{t("项目事实")}</option><option value="work">{t("工作脉络")}</option></select></div>

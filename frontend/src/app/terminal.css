@@ -11,6 +11,8 @@
 .terminal-shell .terminal { flex: 1; min-height: 0; height: auto; padding: 10px 8px; overflow: hidden; }
 .terminal-shell .xterm { height: 100%; }
 .terminal-notice { flex: 0 0 auto; margin: 0; border-top: 1px solid #303931; padding: 8px; color: #bed0c0; font-size: 11px; line-height: 1.5; }
+.terminal-keybar button { display: inline-flex; align-items: center; justify-content: center; }
+.terminal-keybar svg { flex: none; }
 .terminal-keybar { display: none; flex: 0 0 auto; flex-wrap: wrap; justify-content: space-between; gap: 5px; border-top: 1px solid #303931; padding: 8px; }
 @media (max-width: 800px), (pointer: coarse) {
   .terminal-keybar { display: flex; }

@@ -4,7 +4,8 @@ import { T, useT } from "@/components/i18n";
 
 
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, Bot, Boxes, Clock3, Cpu, House, LogOut, MonitorCog, MoreHorizontal, ShieldCheck, UserRound, Link2 } from "lucide-react";
+import { LogOut, MoreHorizontal, ShieldCheck } from "lucide-react";
+import { ProductGlyph } from "./product-glyph";
 import { useRouter } from "next/navigation";
 import { api, UserProfile } from "@/lib/api";
 import { UserAvatar } from "./user-avatar";
@@ -13,17 +14,17 @@ import { useGuide } from "./user-guide";
 import { workspaceReturnPath } from "@/lib/workspace-return";
 
 const menuItems = [
-  { label: "Agent 管理", path: "/app/agents", icon: Bot },
-  { label: "上下文库", path: "/app/contexts", icon: BookOpen },
-  { label: "自动任务", path: "/app/settings/automations", icon: Clock3 },
-  { label: "个人资料", path: "/app/settings/profile", icon: UserRound },
-  { label: "模型", path: "/app/settings/models", icon: Cpu },
-  { label: "应用连接", path: "/app/settings/connectors", icon: Link2 },
-  { label: "Computer", path: "/app/settings/sandbox", icon: MonitorCog },
-  { label: "Skill 广场", path: "/app/settings/skills", icon: Boxes },
-  { label: "项目官网", path: "/", icon: House },
-  { label: "帮助文档", path: "/docs", icon: BookOpen },
-];
+  { label: "Agent 管理", path: "/app/agents", kind: "agent" },
+  { label: "上下文库", path: "/app/contexts", kind: "context" },
+  { label: "自动任务", path: "/app/settings/automations", kind: "automation" },
+  { label: "个人资料", path: "/app/settings/profile", kind: "profile" },
+  { label: "模型", path: "/app/settings/models", kind: "model" },
+  { label: "应用连接", path: "/app/settings/connectors", kind: "connections" },
+  { label: "Computer", path: "/app/settings/sandbox", kind: "computer" },
+  { label: "Skill 广场", path: "/app/settings/skills", kind: "skill" },
+  { label: "项目官网", path: "/", kind: "web" },
+  { label: "帮助文档", path: "/docs", kind: "onboarding" },
+] as const;
 
 export function UserMenu({ user }: { user: UserProfile | null }) {
   const t = useT();
@@ -91,9 +92,9 @@ export function UserMenu({ user }: { user: UserProfile | null }) {
     {open ? <div className="user-menu-popover" role="menu" aria-label={t("账户与设置")}>
       <header><UserAvatar displayName={name} avatarKey={user?.avatar_key} avatarURL={user?.avatar_url} /><span><strong>{name}</strong><small>{user?.email || t("正在加载账户…")}</small></span></header>
       <LanguageSelect /><div className="user-menu-items">
-        {guide && <button type="button" role="menuitem" onClick={() => { setOpen(false); guide.open(); }}><BookOpen /><span><T>{"新手引导"}</T></span></button>}
+        {guide && <button type="button" role="menuitem" onClick={() => { setOpen(false); guide.open(); }}><ProductGlyph kind="onboarding" size={19} /><span><T>{"新手引导"}</T></span></button>}
         {user?.role === "admin" && <button type="button" role="menuitem" onClick={() => navigate("/admin/users")}><ShieldCheck /><span><T>{"管理后台"}</T></span></button>}
-        {menuItems.map((item) => <button key={item.path} type="button" role="menuitem" onClick={() => navigate(item.path)}><item.icon /><span>{t(item.label)}</span></button>)}
+        {menuItems.map((item) => <button key={item.path} type="button" role="menuitem" onClick={() => navigate(item.path)}><ProductGlyph kind={item.kind} size={19} /><span>{t(item.label)}</span></button>)}
       </div>
       {error ? <p className="settings-error" role="alert">{t(error)}</p> : null}
       <button type="button" className="user-menu-logout" role="menuitem" onClick={logout} disabled={loggingOut}><LogOut /><span>{loggingOut ? t("正在退出…") : t("退出登录")}</span></button>

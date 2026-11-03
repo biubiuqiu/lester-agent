@@ -3,9 +3,10 @@ import { T, useT } from "@/components/i18n";
 
 
 import { useEffect, useState } from "react";
-import { Box, CheckCircle2 } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 import { SettingsShell } from "@/components/settings-shell";
 import { api, Skill } from "@/lib/api";
+import { ProductGlyph, SkillGlyph } from "@/components/product-glyph";
 
 export default function SkillMarketplace() {
   const t = useT();
@@ -30,10 +31,10 @@ export default function SkillMarketplace() {
 
     </header>
     {error ? <p className="settings-error" role="alert"><T>{"加载失败："}</T>{t(error)} <button type="button" className="text-button" onClick={() => { setError(""); setLoading(true); setAttempt(value => value + 1); }}>{t("重试")}</button></p> : null}
-    {loading ? <p className="skill-market-notice" role="status">{t("正在加载 Skill")}</p> : !error && !skills.length ? <section className="skill-market-empty"><Box aria-hidden="true" /><h2>{t("还没有可用的 Skill")}</h2><p>{t("这里会展示工作区中可用的技能包。")}</p></section> : null}
+    {loading ? <p className="skill-market-notice" role="status">{t("正在加载 Skill")}</p> : !error && !skills.length ? <section className="skill-market-empty"><span className="skill-market-empty-mark" aria-hidden="true"><ProductGlyph kind="skill" size={28} /></span><h2>{t("还没有可用的 Skill")}</h2><p>{t("这里会展示工作区中可用的技能包。")}</p></section> : null}
     <section className="skill-market-grid" aria-busy={loading}>
       {skills.map((skill) => <article className="skill-market-card" key={skill.id}>
-        <span className="card-icon"><Box /></span>
+        <span className="card-icon catalog-skill-mark"><SkillGlyph slug={skill.slug} size={32} /></span>
         <div className="skill-card-copy"><span className="skill-source">{skill.source === "builtin" ? t("官方内置") : t("工作区")}</span><h2>{skill.name}</h2><p>{skill.description}</p></div>
         <footer><span>v{skill.version}</span><span><CheckCircle2 /><T>{"会话级安装"}</T></span></footer>
       </article>)}

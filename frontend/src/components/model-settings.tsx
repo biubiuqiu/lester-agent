@@ -4,7 +4,8 @@ import { T, useT } from "@/components/i18n";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Check, Plus, Server, ShieldCheck, Cpu } from "lucide-react";
+import { ArrowRight, Check, Plus, ShieldCheck } from "lucide-react";
+import { ProductGlyph } from "./product-glyph";
 import { ModelEditor } from "@/components/model-editor";
 import { ModelDeploymentControls } from "@/components/model-deployment-controls";
 import { api, Deployment } from "@/lib/api";
@@ -230,7 +231,7 @@ export function ModelSettings({ admin = false, requestedReturn = "/app" }: { adm
         <form className="settings-card" onSubmit={addConnection} hidden={loading || (!admin && step !== "connection")} aria-label={t("服务商连接")} aria-busy={busy === "connection"}>
           <header>
             <span className="card-icon">
-              <Server />
+              <ProductGlyph kind="connections" size={28} />
             </span>
             <div>
               <h2><T>{"服务商连接"}</T></h2>
@@ -267,7 +268,7 @@ export function ModelSettings({ admin = false, requestedReturn = "/app" }: { adm
         <form className="settings-card" onSubmit={addDeployment} hidden={loading || (!admin && step !== "model")} aria-label={t("添加模型")} aria-busy={busy === "deployment"}>
           <header>
             <span className="card-icon">
-              <Cpu />
+              <ProductGlyph kind="model" size={28} />
             </span>
             <div>
               <h2><T>{"添加模型"}</T></h2>

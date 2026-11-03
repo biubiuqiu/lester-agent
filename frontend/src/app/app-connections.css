@@ -16,7 +16,7 @@
 .app-connection-card .secondary-button { min-height: 35px; font-size: 12px; }
 .app-connection-card button:disabled { opacity: .45; cursor: not-allowed; }
 .app-connection-scopes { margin-top: 16px; color: var(--muted); font-size: 11px; }
-.app-connection-scopes summary { width: fit-content; cursor: pointer; }
+.app-connection-scopes summary { display: inline-flex; align-items: center; gap: 6px; width: fit-content; cursor: pointer; list-style: none; }
 .app-connection-scopes p { margin: 10px 0 0; overflow-wrap: anywhere; line-height: 1.8; }
 .app-connections-hint { margin: 22px 0; color: var(--muted); font-size: 12px; line-height: 1.8; }
 .app-connection-notice { display: flex; align-items: center; gap: 7px; padding: 12px 0; color: #4a7048; font-size: 13px; }
@@ -30,9 +30,11 @@
 @media(max-width:700px) { .app-connections-grid { grid-template-columns: minmax(0,1fr); gap: 14px; } .app-connection-card { padding: 20px; } .app-connections-intro { gap: 10px; } }
 
 .app-github-code { margin-top: 18px; padding-top: 15px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
-.app-github-code summary { display: flex; align-items: center; gap: 9px; width: fit-content; cursor: pointer; }
-.app-github-code summary::before { content: "▸"; font-size: 10px; }
-.app-github-code[open] summary::before { content: "▾"; }
+.app-github-code summary { display: flex; align-items: center; gap: 9px; width: fit-content; cursor: pointer; list-style: none; }
+.app-github-code summary::-webkit-details-marker,.app-connection-scopes summary::-webkit-details-marker { display: none; }
+.app-disclosure-icon { flex: none; transition: transform 140ms ease; }
+.app-github-code[open] > summary > .app-disclosure-icon,.app-connection-scopes[open] > summary > .app-disclosure-icon { transform: rotate(90deg); }
+@media(prefers-reduced-motion:reduce) { .app-disclosure-icon { transition: none; } }
 .app-github-code summary span { display: inline-flex; align-items: center; gap: 4px; color: #4a7048; font-size: 11px; }
 .app-github-code p { margin: 12px 0; line-height: 1.8; }
 .app-github-code > div { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 15px; }

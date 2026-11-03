@@ -4,9 +4,15 @@ import { T, useT } from "@/components/i18n";
 
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, Code, FileText, Play, Sparkles, X } from "lucide-react";
+import { ArrowLeft, ArrowLeftRight, ArrowRight, BookOpen, Check, ChevronRight, Code, FileText, X } from "lucide-react";
 import { api } from "@/lib/api";
+import { ProductGlyph } from "./product-glyph";
 import { guideFor, guides, pageGuide, resumeGuide, type GuideProgress, type GuideStep, type GuideTopic } from "@/lib/user-guides";
+
+const guideGlyphs = {
+  welcome: "onboarding", models: "model", projects: "project", files: "document", agents: "agent",
+  contexts: "context", computer: "computer", skills: "skill", profile: "profile", publishing: "publish",
+} as const;
 
 type GuideContextValue = { open: () => void };
 const GuideContext = createContext<GuideContextValue | null>(null);
@@ -111,25 +117,25 @@ export function GuideProvider({ children }: { children: ReactNode }) {
   return <GuideContext.Provider value={{ open: () => { if (!pending.current) { setSaveError(""); setTopic(null); setHub(true); } } }}>
     {children}
     {showHint && <aside className="guide-feature-hint" aria-label={t("功能教学提示")}>
-      <BookOpen size={19} /><div><strong>{featureRecord ? t("继续了解") : t("第一次使用")}{t(guideFor(featureTopic).title)}<T>{"？"}</T></strong><p>{t(guideFor(featureTopic).description)}</p><button type="button" disabled={busy} onClick={() => start(featureTopic)}>{featureRecord ? t("继续教学") : t("看看操作步骤")}<ChevronRight size={14} /></button>{saveError && <p role="alert">{t(saveError)}</p>}</div>
+      <ProductGlyph kind={guideGlyphs[featureTopic]} size={24} /><div><strong>{featureRecord ? t("继续了解") : t("第一次使用")}{t(guideFor(featureTopic).title)}<T>{"？"}</T></strong><p>{t(guideFor(featureTopic).description)}</p><button type="button" disabled={busy} onClick={() => start(featureTopic)}>{featureRecord ? t("继续教学") : t("看看操作步骤")}<ChevronRight size={14} /></button>{saveError && <p role="alert">{t(saveError)}</p>}</div>
       <button className="guide-icon-button" type="button" disabled={busy} aria-label={t("暂时关闭功能教学提示")} onClick={() => { void save({ topic: featureTopic, step: featureRecord?.step || 0, status: "skipped" }, () => setHiddenHint(featureTopic)); }}><X size={16} /></button>
     </aside>}
     {(hub || (currentGuide && currentStep)) && <GuideDialog step={currentStep} title={hub ? t("随用随学，认识你的工作区") : t(currentStep!.title)} onClose={close} busy={busy}>
       {hub ? <>
-        <div className="guide-heading-icon"><BookOpen size={24} /></div>
+        <div className="guide-heading-icon"><ProductGlyph kind="onboarding" size={28} /></div>
         <p className="guide-eyebrow">LESTER GUIDE</p><h2 id="guide-title" tabIndex={-1}><T>{"随用随学，认识你的工作区"}</T></h2>
         <p className="guide-description"><T>{"每个功能都有逐步教学。可以继续上次的进度，也可以重新看一遍。"}</T></p>
         {loadError ? <div className="guide-error" role="alert"><p>{t(loadError)}</p><button type="button" onClick={() => { setLoadError(""); setLoaded(false); setAttempt(value => value + 1); }}><T>{"重新加载"}</T></button></div> : !loaded ? <p role="status"><T>{"正在加载进度…"}</T></p> : <div className="guide-topic-grid">{guides.map(item => {
           const record = records.find(progress => progress.topic === item.topic);
-          return <button key={item.topic} type="button" disabled={busy} onClick={() => start(item.topic)}><span><strong>{t(item.title)}</strong><small>{t(item.description)}</small></span><span className={`guide-topic-status ${record?.status || ""}`}>{record?.status === "completed" ? <><Check size={13} /><T>{"再看一遍"}</T></> : record ? t("继续 {0}/{1}", [Math.min(record.step + 1, item.steps.length), item.steps.length]) : t("{0} 步", [item.steps.length])}<ChevronRight size={14} /></span></button>;
+          return <button key={item.topic} type="button" disabled={busy} onClick={() => start(item.topic)}><ProductGlyph kind={guideGlyphs[item.topic]} size={24} className="guide-topic-glyph" /><span className="guide-topic-copy"><strong>{t(item.title)}</strong><small>{t(item.description)}</small></span><span className={`guide-topic-status ${record?.status || ""}`}>{record?.status === "completed" ? <><Check size={13} /><T>{"再看一遍"}</T></> : record ? t("继续 {0}/{1}", [Math.min(record.step + 1, item.steps.length), item.steps.length]) : t("{0} 步", [item.steps.length])}<ChevronRight size={14} /></span></button>;
         })}</div>}
         <footer className="guide-hub-footer"><a href="/docs/usage" target="_blank" rel="noopener noreferrer"><T>{"阅读帮助文档"}</T></a><button type="button" className="primary-button" disabled={busy} onClick={close}><T>{"返回工作区"}</T></button></footer>
       </> : <>
         <p className="guide-eyebrow">{t(currentGuide!.title)} <span>{step + 1} / {currentGuide!.steps.length}</span></p>
         <h2 id="guide-title" tabIndex={-1} aria-live="polite">{t(currentStep!.title)}</h2>
         <p className="guide-description">{t(currentStep!.body)}</p>
-        {currentStep!.visual === "journey" && <div className="guide-journey" aria-label={t("从目标到成果")}><span><Sparkles size={20} /><T>{"描述目标"}</T></span><ArrowRight size={17} /><span><Play size={20} /><T>{"交给 Agent"}</T></span><ArrowRight size={17} /><span><FileText size={20} /><T>{"查看成果"}</T></span></div>}
-        {currentStep!.visual === "files" && <div className="guide-file-example" aria-label={t("文件标签示意")}><div><span><Code size={14} />index.html</span><span><FileText size={14} />report.md</span></div><p><T>{"网页预览"}</T><span>⇄</span> <T>{"源码"}</T></p><small><T>{"操作示意 · 实际文件在任务中生成"}</T></small></div>}
+        {currentStep!.visual === "journey" && <div className="guide-journey" aria-label={t("从目标到成果")}><span><ProductGlyph kind="onboarding" size={22} /><T>{"描述目标"}</T></span><ArrowRight size={17} /><span><ProductGlyph kind="agent" size={22} /><T>{"交给 Agent"}</T></span><ArrowRight size={17} /><span><ProductGlyph kind="publish" size={22} /><T>{"查看成果"}</T></span></div>}
+        {currentStep!.visual === "files" && <div className="guide-file-example" aria-label={t("文件标签示意")}><div><span><Code size={14} />index.html</span><span><FileText size={14} />report.md</span></div><p><T>{"网页预览"}</T><ArrowLeftRight size={16} aria-hidden="true" /> <T>{"源码"}</T></p><small><T>{"操作示意 · 实际文件在任务中生成"}</T></small></div>}
         {currentStep!.hint && <p className="guide-hint">{t(currentStep!.hint)}</p>}
         {currentGuide!.path && pathname !== currentGuide!.path && <button className="guide-page-link" type="button" disabled={busy} onClick={openPage}>{t("打开 {0} 页面，稍后继续", [t(currentGuide!.title)])}<ArrowRight size={15} /></button>}
         <div className="guide-progress" role="progressbar" aria-label={t("教学进度")} aria-valuemin={0} aria-valuemax={currentGuide!.steps.length} aria-valuenow={step + 1}>{currentGuide!.steps.map((_, index) => <i key={index} className={index <= step ? "done" : ""} />)}</div>

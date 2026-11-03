@@ -25,6 +25,8 @@ import "./workspace-controls.css";
 import "./workspace-tabs.css";
 import "./interface-polish.css";
 import "./brand.css";
+import "./product-glyph.css";
+import "./catalog-icons.css";
 import "./session-awareness.css";
 import "./composer-controls.css";
 import "./cloud-tasks.css";
