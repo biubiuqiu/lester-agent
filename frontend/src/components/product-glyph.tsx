@@ -2,37 +2,38 @@ import { BrandMark } from "./brand";
 
 export type ProductGlyphKind = "document" | "analysis" | "web" | "code" | "review" | "project" | "conversation" | "skill" | "agent" | "designer" | "compass" | "strategy" | "bolt" | "model" | "computer" | "context" | "profile" | "automation" | "connections" | "publish" | "memory" | "onboarding";
 
-const jade = "#438F7C", mint = "#E4F3ED", violet = "#8872BC", lilac = "#EEE8F8", gold = "#C9954B", cream = "#FAEDD6";
+const tint = "var(--lester-icon-fill, transparent)";
 
-/** Quiet, two-tone category artwork. Action and status icons stay monochrome. */
+/** A shared 24px grid; compact sizes omit secondary detail and gain optical weight. */
 export function ProductGlyph({ kind, size = 24, className = "" }: { kind: ProductGlyphKind; size?: number; className?: string }) {
-  return <svg className={`product-glyph ${className}`.trim()} data-product-glyph={kind} width={size} height={size} viewBox="0 0 32 32" fill="none" stroke="#425F59" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><Shapes kind={kind} /></svg>;
+  const compact = size <= 20;
+  return <svg className={`product-glyph ${className}`.trim()} data-product-glyph={kind} data-optical-size={compact ? "compact" : "regular"} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="var(--lester-icon-stroke, currentColor)" style={{ strokeWidth: compact ? "var(--lester-icon-stroke-width-small, 1.8)" : "var(--lester-icon-stroke-width, 1.7)" }} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><Shapes kind={kind} compact={compact} /></svg>;
 }
 
-function Shapes({ kind }: { kind: ProductGlyphKind }) {
+function Shapes({ kind, compact }: { kind: ProductGlyphKind; compact: boolean }) {
   switch (kind) {
-    case "document": return <><path d="M8 4h11l6 6v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" fill={mint} /><path d="M19 4v6h6" fill={lilac} stroke={violet} /><path d="M11 15h9m-9 5h7m-7 4h4" stroke={jade} /><path d="m20 22 2 2 4-5" stroke={gold} strokeWidth="2" /></>;
-    case "analysis": return <><rect x="4" y="5" width="24" height="23" rx="4" fill={lilac} stroke={violet} /><path d="M9 22v-5m7 5V11m7 11v-8" stroke={jade} strokeWidth="3.2" /><path d="m8 11 6-3 7 1 5-5" stroke={gold} /><circle cx="26" cy="4" r="1.5" fill={gold} stroke="none" /></>;
-    case "web": return <><rect x="3" y="5" width="26" height="22" rx="4" fill={mint} /><path d="M3 11h26" /><circle cx="7" cy="8" r=".85" fill={gold} stroke="none" /><circle cx="10" cy="8" r=".85" fill={violet} stroke="none" /><rect x="7" y="15" width="8" height="8" rx="2" fill={lilac} stroke={violet} /><path d="M19 16h6m-6 4h4m-4 3h5" stroke={jade} /></>;
-    case "code": return <><rect x="3" y="5" width="26" height="22" rx="4" fill={lilac} stroke={violet} /><path d="m11 12-5 4 5 4m10-8 5 4-5 4m-3-10-4 13" stroke={jade} /><path d="M7 8h.01m3 0h.01" stroke={gold} strokeWidth="2" /></>;
-    case "review": return <><path d="M7 4h12l6 6v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" fill={mint} /><path d="M19 4v6h6m-14 4-3 3 3 3m5-6 3 3-3 3" stroke={jade} /><circle cx="25" cy="24" r="6" fill={lilac} stroke={violet} /><path d="m22 24 2 2 4-4" stroke={violet} /></>;
-    case "project": return <><path d="M4 8a3 3 0 0 1 3-3h6l3 4h10a2 2 0 0 1 2 2v13a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V10" fill={mint} /><path d="M4 12h24" stroke={jade} /><rect x="9" y="16" width="15" height="8" rx="2" fill={lilac} stroke={violet} /><path d="m13 20 2 2 5-5" stroke={violet} /></>;
-    case "conversation": return <><path d="M10 6h15a4 4 0 0 1 4 4v11l-5-3H10a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3Z" fill={lilac} stroke={violet} /><path d="M7 11h13a4 4 0 0 1 4 4v7a3 3 0 0 1-3 3H9l-6 4V15a4 4 0 0 1 4-4Z" fill={mint} /><path d="M8 16h11m-11 5h7" stroke={jade} /></>;
-    case "skill": return <><path d="m16 3 12 7v13l-12 7-12-7V10L16 3Z" fill={mint} /><path d="m4 10 12 7 12-7m-12 7v13" stroke={jade} /><path d="m10 6 12 7v6l-5 3v-6L6 10" fill={lilac} stroke={violet} /><circle cx="24" cy="5" r="3" fill={cream} stroke={gold} /></>;
-    case "agent": return <><path d="M6 11a5 5 0 0 1 5-5h10a5 5 0 0 1 5 5v12a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V11Z" fill={mint} /><rect x="9" y="12" width="14" height="9" rx="4" fill={lilac} stroke={violet} /><path d="M12 16h.01m8 0h.01" stroke={violet} strokeWidth="2.5" /><path d="M13 24h6M3 14v6m26-6v6m-13-17v3" stroke={jade} /><circle cx="16" cy="3" r="2" fill={cream} stroke={gold} /></>;
-    case "designer": return <><rect x="4" y="6" width="22" height="22" rx="4" fill={lilac} stroke={violet} /><path d="m11 21 2-6L24 4l4 4-11 11-6 2Z" fill={mint} stroke={jade} /><path d="m21 7 4 4m-12 4 4 4M9 25h11" stroke={jade} /><circle cx="7" cy="9" r="1.5" fill={gold} stroke="none" /></>;
-    case "compass": return <><circle cx="16" cy="16" r="12" fill={mint} /><path d="m22 9-4 10-10 4 5-10 9-4Z" fill={lilac} stroke={violet} /><path d="m13 13 5 6M16 4V2m0 28v-2M4 16H2m28 0h-2" stroke={jade} /><circle cx="16" cy="16" r="2" fill={cream} stroke={gold} /></>;
-    case "strategy": return <><path d="m16 3 13 7-13 7-13-7L16 3Z" fill={lilac} stroke={violet} /><path d="m4 16 12 7 12-7m-24 7 12 7 12-7" stroke={jade} /><path d="m11 10 4 2 6-4" stroke={gold} /></>;
-    case "bolt": return <><path d="M11 4h13l-7 9h9L12 29l3-13H7l4-12Z" fill={cream} stroke={gold} /><path d="M6 7 3 10m25 12 2-3" stroke={violet} /><path d="m15 16 3-7" stroke={jade} /></>;
-    case "model": return <><rect x="7" y="7" width="18" height="18" rx="5" fill={lilac} stroke={violet} /><path d="M12 3v4m8-4v4m-8 18v4m8-4v4M3 12h4m-4 8h4m18-8h4m-4 8h4" stroke={jade} /><path d="m16 11 5 5-5 5-5-5 5-5Z" fill={mint} stroke={jade} /><circle cx="23" cy="9" r="2" fill={cream} stroke={gold} /></>;
-    case "computer": return <><rect x="3" y="4" width="26" height="20" rx="4" fill={mint} /><path d="M3 19h26m-16 5-1 5m9-5 1 5m-13 0h14" stroke={jade} /><rect x="8" y="8" width="16" height="7" rx="2" fill={lilac} stroke={violet} /><path d="M11 11.5h.01m4 0h.01" stroke={gold} strokeWidth="2" /></>;
-    case "context": return <><path d="M5 6c5-2 8-1 11 1 3-2 6-3 11-1v21c-5-2-8-1-11 1-3-2-6-3-11-1V6Z" fill={mint} /><path d="M16 7v21m-7-17h3m-3 5h3m8-5h3m-3 5h3" stroke={jade} /><path d="M22 3h5v10l-2.5-2-2.5 2V3Z" fill={lilac} stroke={violet} /></>;
-    case "profile": return <><rect x="4" y="3" width="24" height="26" rx="6" fill={lilac} stroke={violet} /><circle cx="16" cy="12" r="4.5" fill={mint} stroke={jade} /><path d="M8 26v-2a8 8 0 0 1 16 0v2" fill={mint} stroke={jade} /><circle cx="26" cy="5" r="3" fill={cream} stroke={gold} /></>;
-    case "automation": return <><circle cx="14" cy="15" r="11" fill={mint} /><path d="M14 8v7l5 3" stroke={jade} strokeWidth="2" /><path d="M10 2h8m-4 0v2" stroke={violet} /><path d="m24 19 6 4-6 4v-8Z" fill={lilac} stroke={violet} /><path d="M17 27h4" stroke={gold} /></>;
-    case "connections": return <><path d="m12 6 4 4-6 6-4-4a4 4 0 0 1 6-6Zm14 14-4-4-6 6 4 4a4 4 0 0 0 6-6Z" fill={mint} stroke={jade} /><path d="m12 12 8 8m-8-3-3 3m6-11 3-3m-5 20-3 3m15-16 3-3" stroke={violet} /><circle cx="25" cy="6" r="3" fill={cream} stroke={gold} /></>;
-    case "publish": return <><rect x="3" y="8" width="26" height="20" rx="4" fill={mint} /><path d="M3 14h10m-6-3h.01m3 0h.01" stroke={jade} /><path d="M10 20h7m-7 4h4" stroke={violet} /><path d="M23 20V3m-6 6 6-6 6 6" stroke={violet} strokeWidth="2" /><circle cx="23" cy="3" r="2" fill={cream} stroke={gold} /></>;
-    case "memory": return <><rect x="5" y="5" width="22" height="23" rx="5" fill={lilac} stroke={violet} /><path d="M10 13h12m-12 5h8m-8 5h5" stroke={jade} /><path d="M11 3v5m10-5v5" stroke={violet} /><path d="m22 20 2 3 4-6" stroke={gold} strokeWidth="2" /></>;
-    case "onboarding": return <><path d="M6 28V5m0 0h18l-3 5 3 5H6" fill={mint} stroke={jade} /><path d="M15 15v9l4-2 4 2v-9" fill={lilac} stroke={violet} /><path d="M3 28h7" stroke={jade} /><circle cx="27" cy="5" r="2.5" fill={cream} stroke={gold} /></>;
+    case "document": return <><path d="M6 3h8l4 4v13H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" fill={tint} /><path d="M14 3v5h4M8 12h6m-6 4h6" />{!compact && <path d="M8 8h2" />}</>;
+    case "analysis": return <><rect x="3" y="3" width="18" height="18" rx="3" fill={tint} /><path d="M7 16v-4m5 4V7m5 9v-6" />{!compact && <path d="M7 18h10" />}</>;
+    case "web": return <><rect x="2.5" y="4" width="19" height="16" rx="2.5" fill={tint} /><path d="M2.5 9h19M6 6.5h.01" /><rect x="6" y="12" width="5" height="5" rx="1" />{!compact && <path d="M14 12h4m-4 4h3" />}</>;
+    case "code": return <><rect x="2.5" y="4" width="19" height="16" rx="2.5" fill={tint} /><path d="m8 9-3 3 3 3m8-6 3 3-3 3m-3-7-2 9" /></>;
+    case "review": return <><path d="M5 3h9l4 4v5M14 3v5h4M5 3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6" fill={tint} /><path d="m8 10-2 2 2 2m3-4 2 2-2 2" /><circle cx="16.5" cy="16.5" r="3.5" fill={tint} /><path d="m19 19 3 3" /></>;
+    case "project": return <><path d="M3 7V5a2 2 0 0 1 2-2h5l3 4h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" fill={tint} /><path d="M3 9h18" />{!compact && <path d="M7 14h5m-5 3h9" />}</>;
+    case "conversation": return <><path d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-7 4V6a2 2 0 0 1 2-2Z" fill={tint} /><path d="M7 9h10m-10 4h6" /></>;
+    case "skill": return <><path d="m12 2 9 5v10l-9 5-9-5V7l9-5Z" fill={tint} /><path d="m3 7 9 5 9-5m-9 5v10" />{!compact && <path d="m8 4 9 5v4" />}</>;
+    case "agent": return <><rect x="4" y="6" width="16" height="15" rx="4" fill={tint} /><path d="M12 3v3M2 11v5m20-5v5M8 12h.01m8 0h.01m-7 5h6" />{!compact && <path d="M10 3h4" />}</>;
+    case "designer": return <><path d="M11 4H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-6" fill={tint} /><path d="m9 15 1-4 9-9 3 3-9 9-4 1Zm7-10 3 3" />{!compact && <path d="M7 18h7" />}</>;
+    case "compass": return <><circle cx="12" cy="12" r="9.5" fill={tint} /><path d="m16.5 7.5-3 6-6 3 3-6 6-3Z" />{!compact && <path d="m10.5 10.5 3 3" />}</>;
+    case "strategy": return <><path d="m12 2 10 5-10 5L2 7l10-5Z" fill={tint} /><path d="m3 12 9 5 9-5m-18 5 9 5 9-5" /></>;
+    case "bolt": return <path d="m13 2-9 12h7l-1 8 10-13h-7l1-7Z" fill={tint} />;
+    case "model": return <><rect x="6" y="6" width="12" height="12" rx="3" fill={tint} /><path d="M9 2v4m6-4v4M9 18v4m6-4v4M2 9h4m-4 6h4m12-6h4m-4 6h4" />{!compact && <path d="m12 9 3 3-3 3-3-3 3-3Z" />}</>;
+    case "computer": return <><rect x="2" y="3" width="20" height="14" rx="2.5" fill={tint} /><path d="M9 17v4m6-4v4m-8 0h10" />{!compact && <path d="M2 13h20m-15-6h4" />}</>;
+    case "context": return <><path d="M3 4c4-1 6 0 9 2 3-2 5-3 9-2v16c-4-1-6 0-9 2-3-2-5-3-9-2V4Z" fill={tint} /><path d="M12 6v16" />{!compact && <path d="M6 9h3m-3 4h3m6-4h3m-3 4h3" />}</>;
+    case "profile": return <><circle cx="12" cy="8" r="4" fill={tint} /><path d="M4 22v-2a8 8 0 0 1 16 0v2" fill={tint} /></>;
+    case "automation": return <><circle cx="11" cy="12" r="9" fill={tint} /><path d="M11 7v5l3 2m4 1 5 3-5 3v-6Z" fill={tint} />{!compact && <path d="M8 1h6" />}</>;
+    case "connections": return <><path d="m9 6-2-2a3.5 3.5 0 0 0-5 5l3 3a3.5 3.5 0 0 0 5 0m5 6 2 2a3.5 3.5 0 0 0 5-5l-3-3a3.5 3.5 0 0 0-5 0" fill={tint} /><path d="m8 16 8-8" /></>;
+    case "publish": return <><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7" fill={tint} /><path d="M12 16V2m-5 5 5-5 5 5" /></>;
+    case "memory": return <><rect x="4" y="3" width="16" height="18" rx="2" fill={tint} /><path d="M14 3v7l2-1.5 2 1.5V3M8 13h8m-8 4h5" />{!compact && <path d="M8 7h2" />}</>;
+    case "onboarding": return <><path d="M5 22V3m0 1h15l-3 5 3 5H5" fill={tint} />{!compact && <path d="M2 22h6" />}</>;
   }
 }
 

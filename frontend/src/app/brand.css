@@ -1,5 +1,5 @@
-/* Color belongs to the mark; the surrounding workspace stays quiet. */
-.brand-mark { object-fit: contain; }
+/* The mark shares token roles with the interface; paint IDs stay instance-local. */
+.brand-mark { display: inline-block; flex: none; vertical-align: middle; }
 .personal-identity-mark,.personal-monogram { background: transparent; }
 .personal-identity-mark .brand-mark { width: 32px; height: 32px; }
 .personal-monogram .brand-mark { width: 42px; height: 42px; }

@@ -19,6 +19,7 @@
 | [部署与升级](deployment.md) | 升级检查、统一网关、Docker/ACS 与 Kubernetes/Helm。 |
 | [账号、管理与安全](accounts-and-security.md) | 注册、单点登录、令牌、头像、管理员与安全配置。 |
 | [开发与 CI](development.md) | 仓库结构、本地检查与 GitHub Actions。 |
+| [设计规范与 Token](design-system.md) | 品牌、SVG 规则、共享 Token 与离线 HTML 规范页。 |
 | [移动客户端](mobile.md) | iPhone、iPad、Android 的安装入口与支持范围。 |
 | [操作演示](walkthrough.md) | 演示视频、时间章节、示例边界与录制方法。 |
 

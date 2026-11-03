@@ -74,6 +74,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --buil
 | [部署与升级](docs/zh-CN/deployment.md) | 网关、Docker/ACS、Kubernetes/Helm 与升级 |
 | [账号与安全](docs/zh-CN/accounts-and-security.md) | 单点登录、双令牌、头像、管理与安全配置 |
 | [开发与 CI](docs/zh-CN/development.md) | 仓库结构、本地检查与 GitHub Actions |
+| [设计规范](docs/zh-CN/design-system.md) | Token、SVG 规则与离线 HTML 规范页 |
 | [移动客户端](docs/zh-CN/mobile.md) | iPhone、iPad 与 Android 的构建和安装入口 |
 
 ## 系统结构

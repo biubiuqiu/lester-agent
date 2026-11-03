@@ -1,6 +1,7 @@
 import { getI18n } from "@/lib/i18n/server";
 import { I18nProvider } from "@/components/i18n";
 import type { Metadata } from "next";
+import "./design-tokens.css";
 import "./globals.css";
 import "./native-shell.css";
 import "./personal-assistant.css";

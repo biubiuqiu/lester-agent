@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 cpSync(join(root, ".next/static"), join(root, ".next/standalone/.next/static"), { recursive: true });
+cpSync(join(root, "public"), join(root, ".next/standalone/public"), { recursive: true });
 const server = spawn(process.execPath, [join(root, ".next/standalone/server.js")], {
   cwd: root,
   env: { ...process.env, HOSTNAME: "127.0.0.1", PORT: "13020" },

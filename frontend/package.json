@@ -4,12 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/build-design-system.mjs && next build",
     "start": "next start",
-    "test": "node scripts/check-i18n.mjs && node scripts/test.mjs",
+    "test": "node scripts/build-design-system.mjs --check && node --test scripts/design-token-core.test.mjs && node scripts/check-i18n.mjs && node scripts/test.mjs",
     "test:e2e": "playwright test",
     "lint": "eslint .",
-    "check:i18n": "node scripts/check-i18n.mjs"
+    "check:i18n": "node scripts/check-i18n.mjs",
+    "design:build": "node scripts/build-design-system.mjs",
+    "design:check": "node scripts/build-design-system.mjs --check"
   },
   "dependencies": {
     "@shikijs/core": "^4.4.3",

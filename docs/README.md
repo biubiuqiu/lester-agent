@@ -19,6 +19,7 @@ Start with installation, then choose a chapter for the work you want to do. Comm
 | [Deployment and upgrades](deployment.md) | Upgrade checklist, gateway, Docker/ACS and Kubernetes/Helm. |
 | [Accounts, administration and security](accounts-and-security.md) | Registration, OAuth, tokens, avatars, admin access and security. |
 | [Development and CI](development.md) | Repository layout, local validation and GitHub Actions. |
+| [Design system and tokens](design-system.md) | Brand, SVG rules, shared tokens and the offline HTML reference. |
 | [Mobile clients](mobile.md) | iPhone, iPad and Android setup and support boundaries. |
 | [Walkthrough](walkthrough.md) | The video, timestamps, sample-data limits and recording source. |
 

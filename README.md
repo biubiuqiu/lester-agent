@@ -74,6 +74,7 @@ Start with the [documentation index](docs/README.md), or open a chapter:
 | [Deployment](docs/deployment.md) | Upgrades, gateway, Docker/ACS and Kubernetes/Helm |
 | [Accounts and security](docs/accounts-and-security.md) | OAuth, rotating tokens, avatars and administration |
 | [Development and CI](docs/development.md) | Repository layout, local checks and GitHub Actions |
+| [Design system](docs/design-system.md) | Tokens, SVG rules and the offline HTML reference |
 | [Mobile clients](docs/mobile.md) | iPhone, iPad and Android build/install guides |
 
 ## Architecture
