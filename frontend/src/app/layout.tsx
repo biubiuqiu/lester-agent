@@ -24,6 +24,7 @@ import "./mentions.css";
 import "./workspace-controls.css";
 import "./workspace-tabs.css";
 import "./interface-polish.css";
+import "./brand.css";
 import "./session-awareness.css";
 import "./composer-controls.css";
 import "./cloud-tasks.css";

@@ -5,7 +5,7 @@ import { T, useT } from "@/components/i18n";
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Code2, Eye, FileText, Folder, Globe, MessageSquare, Pencil, Terminal } from "lucide-react";
-import { Brand } from "@/components/brand";
+import { Brand, BrandMark } from "@/components/brand";
 
 type Example = "website" | "document";
 
@@ -36,7 +36,7 @@ export function ProductDemo() {
     <div className="site-demo-toolbar"><Brand /><span><T>{"示例工作区"}</T></span><div aria-hidden="true"><Terminal size={16} /><Folder size={16} /></div></div>
     <div className="site-demo-workspace">
       <div className="site-demo-sidebar" aria-hidden="true"><strong><T>{"产品发布"}</T></strong><span className="active"><MessageSquare size={13} /><T>{"制作产品介绍"}</T></span><span><MessageSquare size={13} /><T>{"改进文档"}</T></span><span><MessageSquare size={13} /><T>{"生成演示页面"}</T></span></div>
-      <div className="site-demo-conversation"><div className="site-demo-speaker"><span><T>{"我"}</T></span><T>{"我"}</T></div><p className="site-demo-message"><T>{"做一个简洁的产品介绍网站。"}</T></p><div className="site-demo-speaker agent"><span>L</span>Lester</div><p className="site-demo-message"><T>{"页面已生成，可以预览或继续修改。"}</T></p><div className="site-demo-file"><Code2 size={18} /><div><strong>index.html</strong><small><T>{"网页文件"}</T></small></div></div><div className="site-demo-file"><FileText size={18} /><div><strong>report.md</strong><small><T>{"文档文件"}</T></small></div></div></div>
+      <div className="site-demo-conversation"><div className="site-demo-speaker"><span><T>{"我"}</T></span><T>{"我"}</T></div><p className="site-demo-message"><T>{"做一个简洁的产品介绍网站。"}</T></p><div className="site-demo-speaker agent"><span><BrandMark /></span>Lester</div><p className="site-demo-message"><T>{"页面已生成，可以预览或继续修改。"}</T></p><div className="site-demo-file"><Code2 size={18} /><div><strong>index.html</strong><small><T>{"网页文件"}</T></small></div></div><div className="site-demo-file"><FileText size={18} /><div><strong>report.md</strong><small><T>{"文档文件"}</T></small></div></div></div>
       <div className="site-demo-preview"><div className="site-demo-preview-label"><Eye size={14} aria-hidden="true" />{selected === "website" ? t("网页预览") : t("文档预览")}</div><div id="hero-example-output" role="tabpanel" aria-labelledby={`hero-example-${selected}`}>{selected === "website" ? <WebsiteExample /> : <DocumentExample />}</div></div>
     </div>
     <div className="site-demo-bottom"><span><T>{"示例任务"}</T></span><div role="tablist" aria-label={t("示例成果类型")}>{(["website", "document"] as const).map((value) => <button key={value} id={`hero-example-${value}`} type="button" role="tab" aria-controls="hero-example-output" aria-selected={selected === value} tabIndex={selected === value ? 0 : -1} onClick={() => setSelected(value)} onKeyDown={(event) => { if (event.key === "ArrowRight" || event.key === "ArrowLeft") { event.preventDefault(); const next = selected === "website" ? "document" : "website"; setSelected(next); document.getElementById(`hero-example-${next}`)?.focus(); } }}>{value === "website" ? t("网页") : t("文档")}</button>)}</div></div>

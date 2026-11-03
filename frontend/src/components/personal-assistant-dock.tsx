@@ -2,12 +2,13 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { LoaderCircle, MessageCircle, X } from "lucide-react";
+import { LoaderCircle, X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { api, type Deployment, type Project, type UserProfile } from "@/lib/api";
 import { resumeViewState, viewStateEpoch } from "@/lib/conversation-view-state";
 import { useT } from "./i18n";
 import { PersonalAssistant } from "./personal-assistant";
+import { BrandMark } from "./brand";
 
 type Resources = { user: UserProfile; projects: Project[]; deployments: Deployment[] };
 type DockContext = {
@@ -130,8 +131,8 @@ export function PersonalAssistantDock({ children }: { children: React.ReactNode 
 
 
   const entry = <button ref={launcher} type="button" className={`personal-dock-launcher${working ? " is-working" : ""}`} title={t("个人助理")} aria-label={t(open ? "收起个人助理" : "打开个人助理")} aria-expanded={open} aria-controls="personal-assistant-panel" onClick={() => open ? close() : show()}>
-      {open ? <X size={18} /> : working ? <LoaderCircle size={18} className="personal-spinner" /> : <MessageCircle size={18} />}
-      <span>Lester</span><span className="personal-mobile-mark" aria-hidden="true">L</span>{unread ? <i aria-label={t("有更新")} /> : null}
+      {open ? <X size={18} /> : working ? <LoaderCircle size={18} className="personal-spinner" /> : <BrandMark />}
+      <span>Lester</span><span className="personal-mobile-mark" aria-hidden="true"><BrandMark /></span>{unread ? <i aria-label={t("有更新")} /> : null}
     </button>;
   return <Context.Provider value={context}>
     <div className={`personal-app-surface${open ? " personal-companion-open" : ""}`}>{children}</div>

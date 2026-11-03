@@ -12,6 +12,7 @@ import { MessageContent } from "./message-content";
 import { SpeechComposer } from "./speech-input";
 import { PersonalInbox } from "./personal-inbox";
 import { PersonalMemoryManager } from "./personal-memory-manager";
+import { BrandMark } from "./brand";
 
 export function PersonalAssistant({ user, projects, deployments, revision, active, onClose, onActivity, onDelegated }: { user: UserProfile; projects: Project[]; deployments: Deployment[]; revision: number; active: boolean; onClose: () => void; onActivity: (busy: boolean) => void; onDelegated: () => void }) {
   const { t, locale } = useI18n();
@@ -171,7 +172,7 @@ export function PersonalAssistant({ user, projects, deployments, revision, activ
     input.current?.focus({ preventScroll: true });
   }
   return <div className="personal-assistant" onClick={event => { if (event.target instanceof Element && event.target.closest('a[href^="/app/"]') && window.matchMedia("(max-width: 1279px)").matches) onClose(); }}>
-    <div className="personal-toolbar"><div className="personal-identity"><span className="personal-identity-mark" aria-hidden="true">L</span><span><strong>Lester</strong><small>{t("个人助理")}</small></span></div><div className="personal-header-actions"><button type="button" onClick={() => setMemoryOpen(true)} disabled={!state} aria-label={t("管理记忆")}><Brain size={16} />{t("记忆")}{state?.memories.length ? <small>{state.memories.length}</small> : null}</button>
+    <div className="personal-toolbar"><div className="personal-identity"><span className="personal-identity-mark" aria-hidden="true"><BrandMark /></span><span><strong>Lester</strong><small>{t("个人助理")}</small></span></div><div className="personal-header-actions"><button type="button" onClick={() => setMemoryOpen(true)} disabled={!state} aria-label={t("管理记忆")}><Brain size={16} />{t("记忆")}{state?.memories.length ? <small>{state.memories.length}</small> : null}</button>
       <details className="personal-options" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) event.currentTarget.open = false; }} onKeyDown={event => { if (event.key === "Escape" && event.currentTarget.open) { event.stopPropagation(); event.preventDefault(); event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }}><summary aria-label={t("助理设置")} title={t("助理设置")}><SlidersHorizontal size={16} /></summary><div>
         <label>{t("任务项目")}<select aria-label={t("对话项目范围")} value={selectedProject} onChange={event => { setProject(event.target.value); updateView(key, { personalProject: event.target.value }); }} disabled={busy}><option value="">{t("由 Lester 选择")}</option>{projects.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         <label>{t("个人助理模型")}<select aria-label={t("个人助理模型")} value={selectedModel} disabled={busy || !deployments.length} onChange={event => { setModel(event.target.value); updateView(key, { personalModel: event.target.value }); }}>{deployments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
@@ -181,7 +182,7 @@ export function PersonalAssistant({ user, projects, deployments, revision, activ
       <div className="personal-transcript" aria-busy={busy}>
         {state?.has_more ? <button type="button" className="personal-history" disabled={historyBusy} onClick={() => void older()}>{t(historyBusy ? "正在载入…" : "查看更早的对话")}</button> : null}
         {!state && !error ? <p role="status">{t("正在载入…")}</p> : null}
-        {state && !state.turns.length ? <div className="personal-welcome"><span className="personal-monogram" aria-hidden="true">L</span><h2>{t("随时接着聊。")}</h2><p>{t("我会记住重要的事，帮你安排接下来的工作。")}</p><div className="personal-suggestions"><button type="button" disabled={busy || !!pending} onClick={() => prepare("帮我新建一个任务会话，完成：")}>{t("安排新任务")}</button><button type="button" disabled={busy || !!pending} onClick={() => prepare("帮我看看哪些会话有新回复，但我还没看。")}>{t("查看未读回复")}</button></div></div> : null}
+        {state && !state.turns.length ? <div className="personal-welcome"><span className="personal-monogram" aria-hidden="true"><BrandMark /></span><h2>{t("随时接着聊。")}</h2><p>{t("我会记住重要的事，帮你安排接下来的工作。")}</p><div className="personal-suggestions"><button type="button" disabled={busy || !!pending} onClick={() => prepare("帮我新建一个任务会话，完成：")}>{t("安排新任务")}</button><button type="button" disabled={busy || !!pending} onClick={() => prepare("帮我看看哪些会话有新回复，但我还没看。")}>{t("查看未读回复")}</button></div></div> : null}
         {state?.turns.map(turn => <article className="personal-turn" id={`personal-${turn.id}`} key={turn.id}>
           <div className="personal-user">{turn.content}</div>
           {turn.reply ? <div className="personal-reply"><MessageContent content={turn.reply} /></div> : null}

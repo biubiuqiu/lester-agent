@@ -239,6 +239,7 @@ Preserve these behaviors when changing the implementation:
 ## Frontend conventions
 
 - Use TypeScript and the existing Next.js App Router structure.
+- Keep the colorful Lester mark in `frontend/src/app/icon.svg` as the canonical SVG artwork. Reuse `BrandMark` for product identity and favicon consistency; standalone image documents isolate gradient IDs across repeated logos. Keep decorative marks out of accessible names, retain small-size legibility, and preserve custom Agent avatars and launcher loading/close states.
 - Keep API access in `frontend/src/lib/api.ts` or a focused module under `frontend/src/lib/`.
 - Preserve the conversation-first interaction model and the three-panel desktop layout unless a product change explicitly replaces it.
 - Keep the conversation rail fixed-width but collapsible, and keep the desktop Computer panel user-resizable with bounded, persisted sizing.

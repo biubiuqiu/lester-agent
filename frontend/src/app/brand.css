@@ -1,0 +1,16 @@
+/* Color belongs to the mark; the surrounding workspace stays quiet. */
+.brand-mark { object-fit: contain; }
+.personal-identity-mark,.personal-monogram { background: transparent; }
+.personal-identity-mark .brand-mark { width: 32px; height: 32px; }
+.personal-monogram .brand-mark { width: 42px; height: 42px; }
+.personal-dock-launcher > .brand-mark { width: 24px; height: 24px; }
+.agent-avatar.lester-agent-avatar { background: transparent; border: 0; }
+.agent-avatar.lester-agent-avatar .brand-mark { width: 34px; height: 34px; }
+.site-demo-speaker.agent > span { background: transparent; }
+.site-demo-speaker.agent .brand-mark { width: 23px; height: 23px; }
+@media (max-width: 1000px) {
+  .personal-launcher-slot .personal-dock-launcher > .brand-mark { display: none; }
+  .personal-launcher-slot .personal-dock-launcher > .personal-mobile-mark { display: inline-flex; }
+  .personal-mobile-mark .brand-mark { width: 24px; height: 24px; }
+  .personal-launcher-slot .personal-dock-launcher.is-working > .personal-mobile-mark { display: none; }
+}
