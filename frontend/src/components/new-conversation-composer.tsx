@@ -7,7 +7,7 @@ import { FloatingPopover } from "./floating-popover";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, Bot, ChevronDown, Send } from "lucide-react";
+import { ArrowRight, ChevronDown, Send } from "lucide-react";
 import { api, type Agent, type Conversation, type Deployment, type UserProfile } from "@/lib/api";
 import { pastedImageFiles } from "@/lib/clipboard";
 import { appendAttachments } from "@/lib/attachments";
@@ -164,7 +164,7 @@ function AgentPicker({ agents, selected, disabled, onSelect }: { agents: Agent[]
   const anchor = useRef<HTMLButtonElement>(null);
   const id = useId();
   const agent = agents.find(item => item.slug === selected);
-  return <><button type="button" ref={anchor} className="composer-agent-picker" disabled={disabled || !agents.length} aria-label={t("选择 Agent")} aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(value => !value)}><Bot size={17} />{agent?.builtin ? t(agent.name) : agent?.name || "Lester"}<ChevronDown size={13} /></button>
+  return <><button type="button" ref={anchor} className="composer-agent-picker" disabled={disabled || !agents.length} aria-label={t("选择 Agent")} aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(value => !value)}><ProductGlyph kind="agent" size={17} />{agent?.builtin ? t(agent.name) : agent?.name || "Lester"}<ChevronDown size={13} /></button>
     {open ? <FloatingPopover anchor={anchor} className="composer-agent-popover" onClose={reason => { setOpen(false); if (reason === "escape") anchor.current?.focus(); }}>
       <div id={id}><label className="field"><T>{"选择 Agent"}</T><select autoFocus aria-label={t("选择 Agent")} value={selected} onChange={event => { onSelect(event.target.value); setOpen(false); anchor.current?.focus(); }}>{agents.map(item => <option key={item.id} value={item.slug}>{item.builtin ? t(item.name) : item.name}</option>)}</select></label>
         <Link href={`/app/agents/${encodeURIComponent(selected)}`}><T>{"了解这个 Agent"}</T></Link><Link href="/app/agents"><T>{"管理 Agent"}</T></Link>

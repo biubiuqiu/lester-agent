@@ -3,7 +3,7 @@ import { T, useI18n, useT } from "@/components/i18n";
 
 
 import { ProductGlyph } from "./product-glyph";
-import { ArtifactIcon } from "./workspace-icons";
+import { ArtifactIcon, ProjectIcon } from "./workspace-icons";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -13,7 +13,6 @@ import {
   LoaderCircle,
   MoreHorizontal,
   Eye,
-  Folder,
   Plus,
   RefreshCw,
   X,
@@ -401,7 +400,9 @@ export function ArtifactManager({
         </div>
       ) : (
         <div className="artifact-grid">
-          {filtered.map((a) => (
+          {filtered.map((a) => {
+            const ownerProject = projects.find(p => p.id === a.project_id);
+            return (
             <article className="published-site-card" key={a.id}>
               <div className={`artifact-cover ${a.status}`}>
                 <span className="artifact-cover-icon"><ArtifactIcon size={30} /></span>
@@ -409,7 +410,7 @@ export function ArtifactManager({
                 {a.status === "published" ? <button className="artifact-preview-button" onClick={() => setPreview(a)} aria-label={t("预览 {0}", [a.name])}><Eye size={15} /><T>{"预览页面"}</T></button> : <span className="artifact-offline-note"><T>{"站点已下线"}</T></span>}
               </div>
               <div className="artifact-card-body">
-              <p className="artifact-project"><Folder size={13} />{projects.find(p => p.id === a.project_id)?.name || t("项目")}</p>
+              <p className="artifact-project"><ProjectIcon size={13} personal={ownerProject?.is_default} />{ownerProject?.name || t("项目")}</p>
               <h2>{a.name}</h2>
               <p className="artifact-date"><T>{"更新于"}</T>{new Date(a.updated_at).toLocaleDateString(locale)}</p>
               <div className="artifact-actions">
@@ -464,7 +465,8 @@ export function ArtifactManager({
               </div>
               </div>
             </article>
-          ))}
+            );
+          })}
         </div>
       )}
       {preview ? <ArtifactPreview artifact={preview} onClose={() => setPreview(null)} /> : null}

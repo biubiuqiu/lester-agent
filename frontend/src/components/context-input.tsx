@@ -2,7 +2,8 @@
 
 import { useEffect, useId, useRef, useState, type ReactNode, type RefObject, type TextareaHTMLAttributes } from "react";
 import Link from "next/link";
-import { AtSign, Plus, Paperclip, FileText, MessageSquare, Puzzle, X } from "lucide-react";
+import { AtSign, Plus, Paperclip, X } from "lucide-react";
+import { ProductGlyph } from "./product-glyph";
 import { useT } from "./i18n";
 import { FloatingPopover } from "./floating-popover";
 import { useComposerSize } from "./use-composer-size";
@@ -24,8 +25,7 @@ type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "onChange" | "val
 const kinds = ["all", "context", "conversation", "skill"] as const;
 const kindLabels = { all: "全部", context: "上下文", conversation: "会话", skill: "Skill" };
 function ReferenceIcon({ kind }: { kind: ReferenceType }) {
-  const Icon = kind === "conversation" ? MessageSquare : kind === "skill" ? Puzzle : FileText;
-  return <Icon size={13} aria-hidden="true" />;
+  return <ProductGlyph kind={kind === "conversation" ? "conversation" : kind === "skill" ? "skill" : "context"} size={13} />;
 }
 
 export function ContextInput({ value, onText, references, onReferences, inputRef, onKeyDown, tools, menuTools, onUpload, conversationId, draftKey, ...props }: Props) {

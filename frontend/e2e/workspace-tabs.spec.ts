@@ -166,9 +166,22 @@ test("background files leave the terminal selected and preserve the draft and it
   await expect(tabs(page).getByRole("tab", { name: "other.txt", exact: true })).toHaveCount(0); await expect(focus).toBeFocused();
   await tabs(page).getByRole("tab", { name: "report.html", exact: true }).click();
   await page.locator('iframe[title="report.html preview"]').focus();
-  await report.evaluate(() => parent.postMessage({ type: "lester:preview:navigate", path: "other.txt" }, "*"));
-  await expect(tabs(page).getByRole("tab", { name: "other.txt", exact: true })).toHaveAttribute("aria-selected", "true");
-  await expect(tabs(page).getByRole("tab", { name: "other.txt", exact: true })).toBeFocused();
+  // Reproduce a frame arriving before React commits the selected pane. Focus
+  // recovery must depend on the committed DOM, not the timing of that frame.
+  const restoreFrame = await page.evaluateHandle(() => {
+    const nativeFrame = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = callback => {
+      window.requestAnimationFrame = nativeFrame;
+      queueMicrotask(() => callback(performance.now()));
+      return 0;
+    };
+    return () => { window.requestAnimationFrame = nativeFrame; };
+  });
+  try {
+    await report.evaluate(() => parent.postMessage({ type: "lester:preview:navigate", path: "other.txt" }, "*"));
+    await expect(tabs(page).getByRole("tab", { name: "other.txt", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(tabs(page).getByRole("tab", { name: "other.txt", exact: true })).toBeFocused();
+  } finally { await restoreFrame.evaluate(restore => restore()); await restoreFrame.dispose(); }
 });
 
 test("reload restores chosen layout but terminal reconnection remains explicit", async ({ page, context }) => {

@@ -4,7 +4,8 @@ import { T, useT } from "@/components/i18n";
 
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Download, FileText, FolderOpen, X } from "lucide-react";
+import { Download, FolderOpen, X } from "lucide-react";
+import { ProductGlyph } from "./product-glyph";
 import { api, type Deliverable, type FileEntry, readConversationFileBytes } from "@/lib/api";
 import { listDirectory, relativeFilePath, scanFiles, wasPathCovered, type FileState } from "@/lib/file-inventory";
 import { readView, updateView } from "@/lib/conversation-view-state";
@@ -95,9 +96,11 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, live
     return { tabs: restored, active: requestedPreview ? fileWorkspaceTabId(requestedPreview) : saved.activeWorkspaceTab };
   });
   const workspaceRef = useRef(workspace);
+  const pendingFileFocus = useRef<{ storageKey: string; origin: HTMLElement; target: string } | null>(null);
   const [freshTerminalIds, setFreshTerminalIds] = useState<string[]>([]);
   const terminalSerial = useRef(Math.max(0, ...workspace.tabs.filter(tab => tab.kind === "terminal").map(tab => tab.serial)));
   const commitWorkspace = useCallback((next: { tabs: WorkspaceTab[]; active: string | null }) => {
+    if (pendingFileFocus.current?.target !== next.active) pendingFileFocus.current = null;
     workspaceRef.current = next;
     setWorkspace(next);
     updateView(storageKey, { workspaceTabs: next.tabs, activeWorkspaceTab: next.active });
@@ -197,6 +200,7 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, live
     const current = selectedPathRef.current;
     const selected = automatic && current ? files.find(file => file.path === current) ?? tabsRef.current.find(file => file.path === current) : files.at(-1);
     if (!selected) return;
+    if (!automatic && originalFocus instanceof HTMLElement) pendingFileFocus.current = { storageKey, origin: originalFocus, target: fileWorkspaceTabId(selected.path) };
     const next = mergeFileTabs(tabsRef.current, files, selected.path);
     tabsRef.current = next;
     const currentWorkspace = workspaceRef.current;
@@ -220,18 +224,25 @@ export function FileWorkspaceProvider({ conversationId, storageKey, events, live
       setPanelOpenState(true); updateView(storageKey, { workspacePanelOpen: true, ...(!automatic ? { workspacePanelIntent: true } : {}) });
       if (automatic) setTreeOpen(false);
     }
-    if (!automatic && originalFocus instanceof HTMLElement) requestAnimationFrame(() => {
-      const targetId = fileWorkspaceTabId(selected.path);
-      const target = document.getElementById(workspaceTabElementId(targetId));
-      // A directory row, result card or iframe can stay mounted but become
-      // hidden when its file opens. Restore only that lost explicit focus.
-      if ((!originalFocus.isConnected || !originalFocus.getClientRects().length) &&
-          (document.activeElement === originalFocus || document.activeElement === document.body) &&
-          workspaceRef.current.active === targetId && target?.getClientRects().length && document.hasFocus()) {
-        target.focus({ preventScroll: true });
-      }
-    });
   }, [storageKey, watchDirectory, setTreeOpen, commitWorkspace]);
+
+  useEffect(() => {
+    const pending = pendingFileFocus.current;
+    if (!pending || workspaceRef.current !== workspace) return;
+    if (pending.storageKey !== storageKey || !panelOpen) { pendingFileFocus.current = null; return; }
+    if (workspace.active !== pending.target) return;
+    pendingFileFocus.current = null;
+    const { origin } = pending;
+    const target = document.getElementById(workspaceTabElementId(pending.target));
+    // Pane visibility and native modal effects must commit before checking the
+    // old focus. A frame callback can run before React's concurrent commit.
+    // Restore only lost explicit focus, never background arrivals or user moves.
+    if ((!origin.isConnected || !origin.getClientRects().length) &&
+        (document.activeElement === origin || document.activeElement === document.body) &&
+        workspaceRef.current.active === pending.target && target?.getClientRects().length && document.hasFocus()) {
+      target.focus({ preventScroll: true });
+    }
+  }, [workspace, storageKey, panelOpen]);
 
   useEffect(() => {
     const paths = autoOpen.current!.receive(liveFileEvents);
@@ -429,7 +440,7 @@ export function FileReferenceChip() {
   const t = useT();
 
   const { reference, setReference } = useFileWorkspace();
-  return reference ? <div className="file-reference"><FileText /><span title={reference}>{reference}</span><button type="button" onClick={() => setReference(null)} aria-label={t("移除文件引用")}><X /></button></div> : null;
+  return reference ? <div className="file-reference"><ProductGlyph kind="document" size={15} /><span title={reference}>{reference}</span><button type="button" onClick={() => setReference(null)} aria-label={t("移除文件引用")}><X /></button></div> : null;
 }
 
 export function ArtifactCards() {
@@ -440,7 +451,7 @@ export function ArtifactCards() {
   const verified = artifactFiles(files.filter((file) => !deliverableKind(file) && !registeredPaths.has(file.path)), changes, running);
   if (!verified.length) return null;
   return <ConversationRecord slot="files"><details className="related-files"><summary><T>{"其他相关文件 ·"}</T>{verified.length}</summary><section className="artifact-cards" aria-label={t("任务文件")}>{verified.map((file) => <div className="artifact-card" key={file.path}>
-    <button type="button" onClick={() => open(file)} title={file.path} aria-label={t("查看 {0}", [file.name])}><FileText /><span><strong>{file.name}</strong><small>{file.name.includes(".") ? file.name.split(".").at(-1)?.toUpperCase() : t("文件")} · {file.size < 1024 ? `${file.size} B` : file.size < 1048576 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / 1048576).toFixed(1)} MB`}</small></span><span><T>{"查看"}</T></span></button>
+    <button type="button" onClick={() => open(file)} title={file.path} aria-label={t("查看 {0}", [file.name])}><ProductGlyph kind="document" size={18} /><span><strong>{file.name}</strong><small>{file.name.includes(".") ? file.name.split(".").at(-1)?.toUpperCase() : t("文件")} · {file.size < 1024 ? `${file.size} B` : file.size < 1048576 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / 1048576).toFixed(1)} MB`}</small></span><span><T>{"查看"}</T></span></button>
     <FileDownload conversationId={conversationId} file={file} />
   </div>)}</section></details></ConversationRecord>;
 }

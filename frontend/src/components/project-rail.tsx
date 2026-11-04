@@ -3,9 +3,10 @@ import { T, useT } from "@/components/i18n";
 
 
 import { useId, useRef, useState, type ReactNode } from "react";
-import { Bot, ChevronRight, MoreHorizontal, Pin, Plus, Search, X } from "lucide-react";
+import { ChevronRight, MoreHorizontal, Pin, Plus, Search, X } from "lucide-react";
 import { ProjectRulesEditor } from "./project-rules";
 import { ProjectIcon, ConversationIcon } from "./workspace-icons";
+import { ProductGlyph } from "./product-glyph";
 import { api, type Conversation, type Project } from "@/lib/api";
 import { ConversationRunMark, type UnreadRunResult } from "./run-awareness";
 
@@ -172,7 +173,7 @@ export function ProjectRail({
                   <ChevronRight className={opened ? "tree-chevron expanded" : "tree-chevron"} size={12} />
                 </button>
                 <button type="button" className="tree-project-link" aria-label={t("打开项目 {0}", [project.name])} aria-current={projectPage && selectedProject === project.id ? "page" : undefined} onClick={() => onProject(project.id)}>
-                  <span className="tree-project-icon"><ProjectIcon size={17} /></span>
+                  <span className="tree-project-icon"><ProjectIcon size={17} personal={project.is_default} /></span>
                   <span className="tree-project-name" title={project.name}>{project.name}</span>
                   {project.pinned ? <Pin size={11} /> : null}
                   <small>{items.length}</small>
@@ -187,7 +188,7 @@ export function ProjectRail({
               {opened ? <ul className="tree-conversations" aria-label={t("{0}中的会话", [project.name])}>
                 {items.slice(0, limit).map(c => <li key={c.id} className={`tree-conversation ${c.id === currentId ? "active" : ""} ${c.agent_slug === "agent-designer" ? "is-designer" : ""}`}>
                   <button className="tree-conversation-link" title={c.title} aria-current={c.id === currentId ? "page" : undefined} onClick={() => onOpen(c.id)}>
-                    {c.agent_slug === "agent-designer" ? <Bot size={14} /> : <ConversationIcon size={14} />}<span>{c.title}</span>{c.pinned ? <Pin size={10} /> : null}<ConversationRunMark status={c.run_status} unread={unread[c.id]} />
+                    {c.agent_slug === "agent-designer" ? <ProductGlyph kind="designer" size={14} /> : <ConversationIcon size={14} />}<span>{c.title}</span>{c.pinned ? <Pin size={10} /> : null}<ConversationRunMark status={c.run_status} unread={unread[c.id]} />
                   </button>
                   <RailActions label={t("会话 {0} 的操作", [c.title])}>
                     <button disabled={!!busy} onClick={() => void organize(c, { pinned: !c.pinned })}>{c.pinned ? t("取消会话置顶") : t("置顶会话")}</button>

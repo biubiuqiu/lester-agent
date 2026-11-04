@@ -36,7 +36,7 @@ test("the public workbench renders and responds without API, font or asset reque
   await expect(page).toHaveTitle("Lester · Design system");
   await expect(page.locator("main")).toBeVisible();
   await expect(page.locator(".logo-primary svg")).toBeVisible();
-  await expect(page.locator(".glyph-tile")).toHaveCount(32);
+  await expect(page.locator(".glyph-tile")).toHaveCount(34);
   await expect(page.locator(".shadow-specimens figure")).toHaveCount(3);
   await page.locator("#motion-preview").click();
   await expect(page.locator("#motion-preview")).toHaveAttribute("aria-pressed", "true");

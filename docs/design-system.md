@@ -56,6 +56,7 @@ For a design change:
 ## Icon and brand rules
 
 - Use a 24-unit icon grid and a 1.7-unit reference stroke, with consistent rounded caps and joins. Simplify secondary detail at 16/20px instead of scaling a detailed illustration indefinitely.
+- Personal projects, ordinary projects, conversations and results use shared SVGs. A person outline inside the folder identifies the actual default project; filesystem directories retain their file-type symbols. Menus, references and project pages reuse the same geometry, and the public demo uses the real brand mark.
 - Keep category artwork neutral: a document or model icon does not imply that a task passed validation. Installation and approval indicators remain separate, driven by real state.
 - Use the shared graphite ink and quiet surface layer for category artwork. Keep ordinary action and status controls legible; preserve the established third-party provider marks and user-authored identity.
 - Preserve the folded **L** and terminal arrow in the Logo. Use warm stone/ivory layers on the deep graphite tile, with champagne confined to the small arrow. Its colors come from the same brand tokens as the interface; status colors retain their independent meanings.

@@ -3,11 +3,12 @@ import { T, useT } from "@/components/i18n";
 
 
 import { FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Check, Link2, LockKeyhole } from "lucide-react";
+import { Check, LockKeyhole } from "lucide-react";
 import { api, AuthIdentity, AuthOptions, UserProfile } from "@/lib/api";
 import { nativeShellSnapshot, nativeShellServerSnapshot, subscribeNativeShell } from "@/lib/native-shell";
 import { oauthErrors } from "@/lib/auth-ui";
 import { AuthProviderIcon } from "./auth-provider-icon";
+import { ProductGlyph } from "./product-glyph";
 
 export function AccountSecurity({ profile, unsaved, onPasswordSet, onProviderAvatar }: { profile: UserProfile | null; unsaved: boolean; onPasswordSet: () => void; onProviderAvatar: (provider: "google" | "github") => Promise<void> }) {
   const t = useT();
@@ -55,7 +56,7 @@ export function AccountSecurity({ profile, unsaved, onPasswordSet, onProviderAva
   }
   return <div className="account-security">
     <section className="settings-card profile-card">
-      <header><span className="card-icon"><Link2 /></span><div><h2><T>{"登录方式"}</T></h2><p><T>{"将 Google 或 GitHub 绑定到当前账号，使用任一已绑定方式登录。"}</T></p></div></header>
+      <header><span className="card-icon"><ProductGlyph kind="connections" size={28} /></span><div><h2><T>{"登录方式"}</T></h2><p><T>{"将 Google 或 GitHub 绑定到当前账号，使用任一已绑定方式登录。"}</T></p></div></header>
       {options ? <div className="identity-list">{(["google", "github"] as const).map(provider => {
         const identity = identities.find(item => item.provider === provider);
         const configured = options.providers.includes(provider);

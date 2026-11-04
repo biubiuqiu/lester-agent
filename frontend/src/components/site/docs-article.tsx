@@ -2,18 +2,19 @@
 import { T, useT } from "@/components/i18n";
 
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, ArrowUpRight, BookOpen, FileText, Github, HelpCircle, MessageSquare, Package, Settings } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUpRight, Github, HelpCircle, MessageSquare } from "lucide-react";
 import { docURL, siteDocs, type SiteDoc } from "@/lib/site-docs";
 import { issuesURL, repositoryURL } from "@/lib/site";
+import { ProductGlyph, type ProductGlyphKind } from "../product-glyph";
 
-const docIcons = [BookOpen, FileText, Settings, Package, HelpCircle];
+const docGlyphs: (ProductGlyphKind | null)[] = ["onboarding", "context", "model", "computer", null];
 
 function DocNavigation({ slug }: { slug: string }) {
   const t = useT();
 
   return <nav className="site-docs-nav" aria-label={t("文档章节")}>{siteDocs.map((doc, index) => {
-    const Icon = docIcons[index];
-    return <Link href={docURL(doc.slug)} key={doc.slug} aria-current={doc.slug === slug ? "page" : undefined}><Icon size={19} aria-hidden="true" />{t(doc.navTitle)}</Link>;
+    const kind = docGlyphs[index];
+    return <Link href={docURL(doc.slug)} key={doc.slug} aria-current={doc.slug === slug ? "page" : undefined}>{kind ? <ProductGlyph kind={kind} size={19} /> : <HelpCircle size={19} aria-hidden="true" />}{t(doc.navTitle)}</Link>;
   })}</nav>;
 }
 

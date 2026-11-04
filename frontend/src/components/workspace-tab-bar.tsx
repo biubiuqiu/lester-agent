@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Bot, FileText, Folder, Plus, RotateCcw, TerminalSquare, Wrench, X } from "lucide-react";
+import { Folder, Plus, RotateCcw, TerminalSquare, X } from "lucide-react";
+import { ProductGlyph } from "./product-glyph";
+import { ArtifactIcon } from "./workspace-icons";
 import { useT } from "./i18n";
 import { useFileWorkspace } from "./file-workspace";
 import { FileGlyph } from "./file-explorer";
@@ -81,7 +83,7 @@ export function WorkspaceTabBar({ native, createdAgentId }: { native: boolean; c
             if (next) { event.preventDefault(); selectWorkspaceTab(next.id); focusTab(next.id); }
             if (event.key === "Delete") { event.preventDefault(); close(tab, index); }
           }}>
-            <span className="workspace-tab-icon" aria-hidden="true">{tab.kind === "file" ? <FileGlyph file={{ name, is_dir: false }} /> : tab.kind === "terminal" ? <TerminalSquare /> : tab.kind === "files" ? <Folder /> : tab.kind === "results" ? <FileText /> : tab.kind === "skills" ? <Wrench /> : <Bot />}</span>
+            <span className="workspace-tab-icon" aria-hidden="true">{tab.kind === "file" ? <FileGlyph file={{ name, is_dir: false }} /> : tab.kind === "terminal" ? <TerminalSquare /> : tab.kind === "files" ? <Folder /> : tab.kind === "results" ? <ArtifactIcon size={15} /> : tab.kind === "skills" ? <ProductGlyph kind="skill" size={15} /> : <ProductGlyph kind="agent" size={15} />}</span>
             <span className="workspace-tab-name">{name}</span>{unread ? <i className="file-unread-dot" aria-hidden="true" /> : null}
           </button>
           <button type="button" className="workspace-tab-close" aria-label={t("关闭 {0}", [name])} title={tab.kind === "terminal" ? t("关闭终端标签会结束此 Shell。") : t("关闭 {0}", [name])} onClick={() => close(tab, index)}><X /></button>
@@ -105,11 +107,11 @@ export function WorkspaceTabBar({ native, createdAgentId }: { native: boolean; c
       <summary id="workspace-tab-add" aria-label={t("添加工作区标签")} title={t("添加工作区标签")}><Plus /></summary>
       <div className="workspace-add-menu" role="group" aria-label={t("选择标签内容")}>
         <button type="button" disabled={atCapacity && !workspaceTabs.some(tab => tab.kind === "files")} onClick={() => add("files")}><Folder />{t("文件")}</button>
-        <button type="button" disabled={atCapacity && !workspaceTabs.some(tab => tab.kind === "results")} onClick={() => add("results")}><FileText />{t("成果")}</button>
+        <button type="button" disabled={atCapacity && !workspaceTabs.some(tab => tab.kind === "results")} onClick={() => add("results")}><ArtifactIcon size={16} />{t("成果")}</button>
         {!native ? <><button type="button" disabled={count >= MAX_TERMINAL_TABS || atCapacity} title={count >= MAX_TERMINAL_TABS ? t("最多同时打开 {0} 个终端", [MAX_TERMINAL_TABS]) : undefined} onClick={() => add("terminal")}><TerminalSquare />{t("终端")}</button>
-          <button type="button" disabled={atCapacity && !workspaceTabs.some(tab => tab.kind === "skills")} onClick={() => add("skills")}><Wrench />{t("技能")}</button>
+          <button type="button" disabled={atCapacity && !workspaceTabs.some(tab => tab.kind === "skills")} onClick={() => add("skills")}><ProductGlyph kind="skill" size={16} />{t("技能")}</button>
         </> : null}
-        {createdAgentId ? <button type="button" disabled={atCapacity && !workspaceTabs.some(tab => tab.kind === "agent")} onClick={() => add("agent")}><Bot />{t("智能体")}</button> : null}
+        {createdAgentId ? <button type="button" disabled={atCapacity && !workspaceTabs.some(tab => tab.kind === "agent")} onClick={() => add("agent")}><ProductGlyph kind="agent" size={16} />{t("智能体")}</button> : null}
         {canReopenClosed ? <button type="button" className="workspace-reopen" onClick={() => { reopenClosed(); if (menu.current) menu.current.open = false; document.getElementById("workspace-tab-add")?.focus({ preventScroll: true }); }}><RotateCcw />{t("重新打开刚关闭的标签")}</button> : null}
       </div>
     </details>

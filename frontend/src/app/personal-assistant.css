@@ -58,8 +58,9 @@
 .personal-task-card details p { margin: 10px 0 0; font-size: 12px; line-height: 1.7; white-space: pre-wrap; }
 .personal-recent { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--line); }
 .personal-recent summary { display: flex; align-items: center; gap: 8px; width: fit-content; color: var(--muted); font-size: 12px; cursor: pointer; }
-.personal-recent summary::before { content: '›'; transition: transform .15s; }
-.personal-recent[open] summary::before { transform: rotate(90deg); }
+.personal-recent summary > svg { flex: none; transition: transform var(--lester-duration-standard); }
+.personal-recent summary::-webkit-details-marker { display: none; }
+.personal-recent[open] summary > svg { transform: rotate(90deg); }
 .personal-recent summary span { color: var(--faint); font-size: 10px; }
 .personal-recent ul { padding: 0; list-style: none; }
 .personal-recent li a { display: flex; justify-content: space-between; gap: 16px; padding: 11px 0; text-decoration: none; color: var(--ink); }
@@ -124,7 +125,7 @@
   .personal-welcome { min-height: 32dvh; }
   .personal-memory-dialog { max-height: calc(100dvh - 24px); }
 }
-@media (prefers-reduced-motion: reduce) { .personal-spinner { animation: none; } .personal-recent summary::before,.personal-inbox-toggle > svg:last-child { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .personal-spinner { animation: none; } .personal-recent summary > svg,.personal-inbox-toggle > svg:last-child { transition: none; } }
 
 .personal-task-inspect { flex-shrink: 0; padding: 5px 7px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--muted); font-size: 11px; }
 .personal-task-card > [role=alert] { color: #9d4334; font-size: 11px; }

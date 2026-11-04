@@ -4,14 +4,15 @@ import { T, useT } from "@/components/i18n";
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Code2, Eye, FileText, Folder, Globe, MessageSquare, Pencil, Terminal } from "lucide-react";
+import { ArrowRight, Eye, Pencil, Terminal } from "lucide-react";
 import { Brand, BrandMark } from "@/components/brand";
+import { ProductGlyph } from "../product-glyph";
 
 type Example = "website" | "document";
 
 function WebsiteExample({ miniature = false }: { miniature?: boolean }) {
   return <div className={`site-example-website ${miniature ? "miniature" : ""}`}>
-    <div className="site-example-brand"><span className="site-example-mark" aria-hidden="true" /><strong>Lester Agent</strong></div>
+    <div className="site-example-brand"><BrandMark className="site-example-mark" /><strong>Lester Agent</strong></div>
     <div className="site-example-website-copy"><h3><T>{"让灵感"}</T><span><T>{"落地。"}</T></span></h3><p><T>{"在你的 Computer 中，和 AI Agent 一起"}</T><br /><T>{"把想法变成真实可用的网页、文档与代码。"}</T></p>{miniature ? <span className="site-example-cta"><T>{"开始使用"}</T><ArrowRight size={13} aria-hidden="true" /></span> : <Link href="/docs" className="site-example-cta"><T>{"开始使用"}</T><ArrowRight size={13} aria-hidden="true" /></Link>}</div>
     <div className="site-example-sheet" aria-hidden="true"><div><i /><i /><i /></div><section><span /><p><i /><i /><i /></p></section></div>
   </div>;
@@ -33,10 +34,10 @@ export function ProductDemo() {
   const [selected, setSelected] = useState<Example>("website");
   return <section className="site-product-demo" aria-label={t("Lester 工作区示例")}>
     <div className="site-demo-window-bar" aria-hidden="true"><i /><i /><i /></div>
-    <div className="site-demo-toolbar"><Brand /><span><T>{"示例工作区"}</T></span><div aria-hidden="true"><Terminal size={16} /><Folder size={16} /></div></div>
+    <div className="site-demo-toolbar"><Brand /><span><T>{"示例工作区"}</T></span><div aria-hidden="true"><Terminal size={16} /><ProductGlyph kind="project" size={16} /></div></div>
     <div className="site-demo-workspace">
-      <div className="site-demo-sidebar" aria-hidden="true"><strong><T>{"产品发布"}</T></strong><span className="active"><MessageSquare size={13} /><T>{"制作产品介绍"}</T></span><span><MessageSquare size={13} /><T>{"改进文档"}</T></span><span><MessageSquare size={13} /><T>{"生成演示页面"}</T></span></div>
-      <div className="site-demo-conversation"><div className="site-demo-speaker"><span><T>{"我"}</T></span><T>{"我"}</T></div><p className="site-demo-message"><T>{"做一个简洁的产品介绍网站。"}</T></p><div className="site-demo-speaker agent"><span><BrandMark /></span>Lester</div><p className="site-demo-message"><T>{"页面已生成，可以预览或继续修改。"}</T></p><div className="site-demo-file"><Code2 size={18} /><div><strong>index.html</strong><small><T>{"网页文件"}</T></small></div></div><div className="site-demo-file"><FileText size={18} /><div><strong>report.md</strong><small><T>{"文档文件"}</T></small></div></div></div>
+      <div className="site-demo-sidebar" aria-hidden="true"><strong><T>{"产品发布"}</T></strong><span className="active"><ProductGlyph kind="conversation" size={13} /><T>{"制作产品介绍"}</T></span><span><ProductGlyph kind="conversation" size={13} /><T>{"改进文档"}</T></span><span><ProductGlyph kind="conversation" size={13} /><T>{"生成演示页面"}</T></span></div>
+      <div className="site-demo-conversation"><div className="site-demo-speaker"><span aria-hidden="true"><ProductGlyph kind="profile" size={16} stroke="currentColor" /></span><T>{"我"}</T></div><p className="site-demo-message"><T>{"做一个简洁的产品介绍网站。"}</T></p><div className="site-demo-speaker agent"><span><BrandMark /></span>Lester</div><p className="site-demo-message"><T>{"页面已生成，可以预览或继续修改。"}</T></p><div className="site-demo-file"><ProductGlyph kind="web" size={18} /><div><strong>index.html</strong><small><T>{"网页文件"}</T></small></div></div><div className="site-demo-file"><ProductGlyph kind="document" size={18} /><div><strong>report.md</strong><small><T>{"文档文件"}</T></small></div></div></div>
       <div className="site-demo-preview"><div className="site-demo-preview-label"><Eye size={14} aria-hidden="true" />{selected === "website" ? t("网页预览") : t("文档预览")}</div><div id="hero-example-output" role="tabpanel" aria-labelledby={`hero-example-${selected}`}>{selected === "website" ? <WebsiteExample /> : <DocumentExample />}</div></div>
     </div>
     <div className="site-demo-bottom"><span><T>{"示例任务"}</T></span><div role="tablist" aria-label={t("示例成果类型")}>{(["website", "document"] as const).map((value) => <button key={value} id={`hero-example-${value}`} type="button" role="tab" aria-controls="hero-example-output" aria-selected={selected === value} tabIndex={selected === value ? 0 : -1} onClick={() => setSelected(value)} onKeyDown={(event) => { if (event.key === "ArrowRight" || event.key === "ArrowLeft") { event.preventDefault(); const next = selected === "website" ? "document" : "website"; setSelected(next); document.getElementById(`hero-example-${next}`)?.focus(); } }}>{value === "website" ? t("网页") : t("文档")}</button>)}</div></div>
@@ -55,12 +56,12 @@ export function ResultsExample() {
     <div className="site-result-cards">{(["website", "document"] as const).map((kind) => {
       const website = kind === "website";
       return <article key={kind}>
-        <header>{website ? <Globe size={23} aria-hidden="true" /> : <FileText size={23} aria-hidden="true" />}<div><h4>{website ? t("产品介绍网站") : t("产品需求报告")}</h4><p>{website ? "index.html" : "report.md"}</p></div></header>
+        <header>{website ? <ProductGlyph kind="web" size={23} /> : <ProductGlyph kind="document" size={23} />}<div><h4>{website ? t("产品介绍网站") : t("产品需求报告")}</h4><p>{website ? "index.html" : "report.md"}</p></div></header>
         <button className="site-result-thumbnail" type="button" onClick={() => setPreview(kind)} aria-label={t("预览示例 {0}", [website ? "index.html" : "report.md"])}><div inert>{website ? <WebsiteExample miniature /> : <DocumentExample miniature />}</div></button>
         <div className="site-result-actions"><button type="button" onClick={() => setPreview(kind)}><Eye size={15} aria-hidden="true" /><T>{"预览"}</T></button><button type="button" onClick={() => { setReference(website ? "index.html" : "report.md"); input.current?.focus(); }}><Pencil size={15} aria-hidden="true" /><T>{"继续修改"}</T></button></div>
       </article>;
     })}</div>
     {preview ? <div className="site-result-open-preview"><div><strong>{preview === "website" ? "index.html" : "report.md"} <T>{"· 示例预览"}</T></strong><button type="button" onClick={() => setPreview(null)}><T>{"收起预览"}</T></button></div>{preview === "website" ? <WebsiteExample /> : <DocumentExample />}</div> : null}
-    <div className="site-example-draft"><div><FileText size={15} aria-hidden="true" /><span><T>{"引用文件："}</T><strong>{reference}</strong></span><small><T>{"示例草稿"}</T></small></div><textarea ref={input} value={draft} onChange={(event) => setDraft(event.target.value)} aria-label={t("示例修改草稿")} rows={2} /></div>
+    <div className="site-example-draft"><div><ProductGlyph kind="document" size={15} /><span><T>{"引用文件："}</T><strong>{reference}</strong></span><small><T>{"示例草稿"}</T></small></div><textarea ref={input} value={draft} onChange={(event) => setDraft(event.target.value)} aria-label={t("示例修改草稿")} rows={2} /></div>
   </section>;
 }

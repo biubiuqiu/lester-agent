@@ -3,7 +3,9 @@ import { T, useT } from "@/components/i18n";
 
 
 import { useMemo, useState } from "react";
-import { ArrowUpRight, Eye, FileText, Globe, MessageSquare, MoreHorizontal, RefreshCw } from "lucide-react";
+import { ArrowUpRight, Eye, MessageSquare, MoreHorizontal, RefreshCw } from "lucide-react";
+import { ProductGlyph } from "./product-glyph";
+import { ArtifactIcon } from "./workspace-icons";
 import { deliverableKind } from "@/lib/deliverables";
 import { FileDownload, useFileWorkspace } from "./file-workspace";
 import { PublishFileButton } from "./artifact-manager";
@@ -18,7 +20,7 @@ export function Deliverables({ panel = false }: { panel?: boolean }) {
   if (!panel && (running || loading || !results.length)) return null;
   const updated = new Set(changes.filter((change) => change.kind !== "deleted").map((change) => change.path));
   if (!panel) return <section className="delivery-receipt" aria-label={t("任务成果")}>
-    <div className="delivery-receipt-heading"><FileText size={16} /><strong><T>{"会话成果"}</T><span>{results.length}</span></strong><small><T>{"待验收"}</T></small>
+    <div className="delivery-receipt-heading"><ArtifactIcon size={16} /><strong><T>{"会话成果"}</T><span>{results.length}</span></strong><small><T>{"待验收"}</T></small>
       <button type="button" onClick={() => { setPanelTab("results"); setPanelOpen(true); }}><T>{"查看会话成果"}</T><ArrowUpRight size={14} /></button>
     </div>
     <div className="delivery-receipt-files">{results.slice(0, 3).map(file => <button type="button" key={file.path} title={file.path} aria-label={t("查看 {0}", [file.name])} onClick={() => open(file, "preview")}>{registered.get(file.path)?.title || file.name}</button>)}</div>
@@ -33,12 +35,12 @@ export function Deliverables({ panel = false }: { panel?: boolean }) {
     {limited ? <p className="deliverables-notice"><T>{"目录较大或部分读取失败，仅展示已同步范围；其他文件可在文件面板查找。"}</T></p> : null}
     {running ? <p className="deliverables-empty" role="status"><T>{"任务进行中，结束后整理成果。可在文件面板查看正在生成的文件。"}</T></p> : loading ? <p className="deliverables-empty" role="status"><T>{"正在同步成果…"}</T></p> : <>
       {runOutcome ? <p className="deliverables-notice">{runOutcome === "failed" ? t("上次任务执行失败") : t("上次任务已停止")}<T>{"。已有文件可查看，完整性与内容仍需检查。"}</T></p> : null}
-      {!results.length ? <div className="deliverables-empty"><FileText size={24} /><strong><T>{"还没有网页或文档成果"}</T></strong><span><T>{"生成 HTML 网页或 Markdown 文档后，会在这里集中展示。"}</T></span></div> : <div className="deliverables-grid">{results.slice(0, count).map((file) => {
+      {!results.length ? <div className="deliverables-empty"><ArtifactIcon size={24} /><strong><T>{"还没有网页或文档成果"}</T></strong><span><T>{"生成 HTML 网页或 Markdown 文档后，会在这里集中展示。"}</T></span></div> : <div className="deliverables-grid">{results.slice(0, count).map((file) => {
         const record = registered.get(file.path);
         const kind = record?.kind ?? deliverableKind(file);
         return <article className={`deliverable-card ${kind}`} key={record?.id ?? file.path}>
           <div className="deliverable-heading">
-            <span className="deliverable-cover" aria-hidden="true">{kind === "html" ? <Globe /> : <FileText />}</span>
+            <span className="deliverable-cover" aria-hidden="true"><ProductGlyph kind={kind === "html" ? "web" : "document"} size={20} stroke="currentColor" /></span>
             <span className="deliverable-info"><strong>{record?.title || file.name}</strong>{(record?.title || file.name) !== file.path ? <code className="deliverable-entry">{file.path}</code> : null}{record?.summary ? <span className="deliverable-summary">{record.summary}</span> : null}<span className="deliverable-status"><span>{kind === "html" ? t("网页") : t("文档")}</span><span className="deliverable-review"><T>{"待验收"}</T></span>{updated.has(file.path) ? <span><T>{"本轮更新"}</T></span> : null}</span></span>
           </div>
           <div className="deliverable-actions">

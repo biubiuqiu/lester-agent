@@ -5,7 +5,8 @@ import Link from "next/link";
 import { ProjectRulesReceipt } from "./project-rules";
 import { MessageContent } from "./message-content";
 import { RunEvent, RunNarrative } from "./tool-timeline";
-import { FileText, MessageSquare, Puzzle } from "lucide-react";
+import { ProductGlyph, SkillGlyph } from "./product-glyph";
+import { ConversationIcon } from "./workspace-icons";
 import { withoutPersistedModelText } from "@/lib/model-text-events";
 import { orderedMessages, runSegments, segmentOrder } from "@/lib/timeline-order";
 import { useMemo } from "react";
@@ -30,14 +31,14 @@ function ChatMessage({ message }: { message: Message }) {
   const isUser = message.role === "user";
   return (
     <article className={`chat-message ${isUser ? "user" : "assistant"}`} data-message-id={message.id} data-message-seq={message.seq}>
-      {isUser && <span className="message-avatar">W</span>}
+      {isUser && <span className="message-avatar" aria-hidden="true"><ProductGlyph kind="profile" size={16} stroke="currentColor" /></span>}
       <div className="chat-message-content">
         <MessageContent content={message.content} linkFiles={!isUser} actions={!isUser} quoteSource={!isUser ? t("引用回答") : undefined} />
-        {message.metadata?.attachments?.length ? <div className="message-attachments">{message.metadata.attachments.map((attachment) => <span key={attachment.id}><FileText /><span><strong>{attachment.original_name}</strong><small>{formatBytes(attachment.size_bytes)} · .agent/upload</small></span></span>)}</div> : null}
+        {message.metadata?.attachments?.length ? <div className="message-attachments">{message.metadata.attachments.map((attachment) => <span key={attachment.id}><ProductGlyph kind="document" size={16} /><span><strong>{attachment.original_name}</strong><small>{formatBytes(attachment.size_bytes)} · .agent/upload</small></span></span>)}</div> : null}
         {message.metadata?.contexts?.map((entry) => <details className="message-context" key={entry.id}><summary>@{entry.title} · v{entry.version}</summary><pre>{entry.content}</pre></details>)}
         {message.metadata?.conversations?.length || message.metadata?.skills?.length ? <div className="message-reference-list">
-          {message.metadata.conversations?.map(entry => <Link key={`conversation:${entry.id}`} href={`/app/c/${encodeURIComponent(entry.id)}`} target="_blank" rel="noopener noreferrer" title={t("会话引用 · 截至消息序号 {0}", [entry.max_seq])}><MessageSquare size={13} aria-hidden="true" /><span>@{entry.title}</span><small>{t("会话")}</small></Link>)}
-          {message.metadata.skills?.map(entry => <span key={`skill:${entry.id}`} title={`${entry.slug} · v${entry.version}`}><Puzzle size={13} aria-hidden="true" /><span>@{entry.name}</span><small>Skill</small></span>)}
+          {message.metadata.conversations?.map(entry => <Link key={`conversation:${entry.id}`} href={`/app/c/${encodeURIComponent(entry.id)}`} target="_blank" rel="noopener noreferrer" title={t("会话引用 · 截至消息序号 {0}", [entry.max_seq])}><ConversationIcon size={13} /><span>@{entry.title}</span><small>{t("会话")}</small></Link>)}
+          {message.metadata.skills?.map(entry => <span key={`skill:${entry.id}`} title={`${entry.slug} · v${entry.version}`}><SkillGlyph slug={entry.slug} size={13} /><span>@{entry.name}</span><small>Skill</small></span>)}
         </div> : null}
         <ProjectRulesReceipt rules={message.metadata?.project_rules} />
         <time>{new Date(message.created_at).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}</time>

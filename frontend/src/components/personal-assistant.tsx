@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { ArrowUp, ArrowUpRight, Brain, LoaderCircle, Undo2, SlidersHorizontal, Minus } from "lucide-react";
+import { ChevronRight, ArrowUp, ArrowUpRight, Brain, LoaderCircle, Undo2, SlidersHorizontal, Minus } from "lucide-react";
 import { api, ApiError, type Deployment, type Project, type UserProfile } from "@/lib/api";
 import { readView, updateView, viewKey } from "@/lib/conversation-view-state";
 import { mergePersonalTurns, readPersonal, type PersonalInbox as InboxSnapshot, type PersonalState, type PersonalTask, type PersonalTurn } from "@/lib/personal";
@@ -192,7 +192,7 @@ export function PersonalAssistant({ user, projects, deployments, revision, activ
           {turn.task ? <TaskCard delegation={turn.task} live={state.tasks.find(task => task.id === turn.task!.conversation_id)} projectName={projects.find(item => item.id === turn.task!.project_id)?.name} onInspect={async () => { const receipt = await api<PersonalTurn>(`/api/v1/personal/messages/${turn.id}`); accept(receipt); await refresh(); if (mounted.current && receipt.task) onDelegated(); }} /> : null}
         </article>)}
         {busy ? <p className="personal-working" role="status"><LoaderCircle size={15} />{t("Lester 正在回复…")}</p> : null}
-        {state?.tasks.length ? <details className="personal-recent"><summary>{t("最近的工作")}<span>{state.tasks.length}</span></summary><ul>{state.tasks.slice(0, 8).map(task => <li key={task.id}><Link href={`/app/c/${task.id}`}><span><strong>{task.title}</strong><small>{task.project_name}</small></span><span>{t(taskStatus(task.status))}<ArrowUpRight size={14} /></span></Link></li>)}</ul></details> : null}
+        {state?.tasks.length ? <details className="personal-recent"><summary><ChevronRight size={14} aria-hidden="true" />{t("最近的工作")}<span>{state.tasks.length}</span></summary><ul>{state.tasks.slice(0, 8).map(task => <li key={task.id}><Link href={`/app/c/${task.id}`}><span><strong>{task.title}</strong><small>{task.project_name}</small></span><span>{t(taskStatus(task.status))}<ArrowUpRight size={14} /></span></Link></li>)}</ul></details> : null}
       </div>
     </div>
     <div className="personal-composer-wrap">

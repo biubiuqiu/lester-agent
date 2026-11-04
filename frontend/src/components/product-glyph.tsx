@@ -1,18 +1,21 @@
+import type { SVGProps } from "react";
 import { BrandMark } from "./brand";
 
-export type ProductGlyphKind = "document" | "analysis" | "web" | "code" | "review" | "project" | "conversation" | "skill" | "agent" | "designer" | "compass" | "strategy" | "bolt" | "model" | "computer" | "context" | "profile" | "automation" | "connections" | "publish" | "memory" | "onboarding";
+export type ProductGlyphKind = "personal-project" | "artifact" | "document" | "analysis" | "web" | "code" | "review" | "project" | "conversation" | "skill" | "agent" | "designer" | "compass" | "strategy" | "bolt" | "model" | "computer" | "context" | "profile" | "automation" | "connections" | "publish" | "memory" | "onboarding";
 
 const tint = "var(--lester-icon-fill, transparent)";
 
 /** A shared 24px grid; compact sizes omit secondary detail and gain optical weight. */
-export function ProductGlyph({ kind, size = 24, className = "" }: { kind: ProductGlyphKind; size?: number; className?: string }) {
+export function ProductGlyph({ kind, size = 24, className = "", style, strokeWidth, ...props }: Omit<SVGProps<SVGSVGElement>, "children"> & { kind: ProductGlyphKind; size?: number }) {
   const compact = size <= 20;
-  return <svg className={`product-glyph ${className}`.trim()} data-product-glyph={kind} data-optical-size={compact ? "compact" : "regular"} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="var(--lester-icon-stroke, currentColor)" style={{ strokeWidth: compact ? "var(--lester-icon-stroke-width-small, 1.8)" : "var(--lester-icon-stroke-width, 1.7)" }} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><Shapes kind={kind} compact={compact} /></svg>;
+  return <svg className={`product-glyph ${className}`.trim()} data-product-glyph={kind} data-optical-size={compact ? "compact" : "regular"} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="var(--lester-icon-stroke, currentColor)" style={{ strokeWidth: strokeWidth ?? (compact ? "var(--lester-icon-stroke-width-small, 1.8)" : "var(--lester-icon-stroke-width, 1.7)"), ...style }} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" {...props}><Shapes kind={kind} compact={compact} /></svg>;
 }
 
 function Shapes({ kind, compact }: { kind: ProductGlyphKind; compact: boolean }) {
   switch (kind) {
-    case "document": return <><path d="M6 3h8l4 4v13H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" fill={tint} /><path d="M14 3v5h4M8 12h6m-6 4h6" />{!compact && <path d="M8 8h2" />}</>;
+    case "personal-project": return <><path d="M3 7V5a2 2 0 0 1 2-2h5l3 4h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" fill={tint} /><path d="M3 9h18" /><circle cx="12" cy="13" r="1.75" /><path d={compact ? "M9 18.5a3 3 0 0 1 6 0" : "M8.5 19v-.5a3.5 3.5 0 0 1 7 0v.5"} /></>;
+    case "artifact": return <><path d="M7 3h12a2 2 0 0 1 2 2v12" /><rect x="3" y="6" width="15" height="15" rx="2.5" fill={tint} /><path d="M7 11h7m-7 4h4" />{!compact && <path d="M7 18h6" />}</>;
+    case "document": return <><path d="M7 3h8l4 4v13H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" fill={tint} /><path d="M15 3v5h4M9 12h6m-6 4h6" />{!compact && <path d="M9 8h2" />}</>;
     case "analysis": return <><rect x="3" y="3" width="18" height="18" rx="3" fill={tint} /><path d="M7 16v-4m5 4V7m5 9v-6" />{!compact && <path d="M7 18h10" />}</>;
     case "web": return <><rect x="2.5" y="4" width="19" height="16" rx="2.5" fill={tint} /><path d="M2.5 9h19M6 6.5h.01" /><rect x="6" y="12" width="5" height="5" rx="1" />{!compact && <path d="M14 12h4m-4 4h3" />}</>;
     case "code": return <><rect x="2.5" y="4" width="19" height="16" rx="2.5" fill={tint} /><path d="m8 9-3 3 3 3m8-6 3 3-3 3m-3-7-2 9" /></>;
