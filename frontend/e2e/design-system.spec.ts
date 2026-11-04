@@ -3,6 +3,11 @@ import { readFile } from "node:fs/promises";
 
 const path = "/design-system.html";
 
+async function paletteMetadata(page: Page) {
+  const data = JSON.parse((await page.locator("#token-data").textContent())!) as { defaultTheme: string; themes: Record<string, unknown> };
+  return { defaultTheme: data.defaultTheme, themes: Object.keys(data.themes) };
+}
+
 async function openWorkbench(page: Page) {
   const unexpected: string[] = [], errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
@@ -50,34 +55,38 @@ test("the public workbench renders and responds without API, font or asset reque
 
 test("local palettes recolor real artwork and controls while contrast follows actual colors", async ({ page }) => {
   const observed = await openWorkbench(page);
-  const jade = await artworkColors(page);
-  expect(jade.logo.length).toBeGreaterThan(0);
+  const { defaultTheme, themes } = await paletteMetadata(page);
+  const alternatives = themes.filter(theme => theme !== defaultTheme);
+  expect(alternatives.length).toBeGreaterThanOrEqual(2);
+  await expect(page.locator("html")).toHaveAttribute("data-design-theme", defaultTheme);
+  await expect(page.locator(`input[name="design-theme"][value="${defaultTheme}"]`)).toBeChecked();
+  const baseline = await artworkColors(page);
+  expect(baseline.logo.length).toBeGreaterThan(0);
   await expect(page.locator('.contrast-item[data-foreground="color-on-brand"] .contrast-result')).toHaveAttribute("data-pass", "true");
-  await page.locator('input[name="design-theme"][value="indigo"]').check();
-  await expect(page.locator("html")).toHaveAttribute("data-design-theme", "indigo");
-  const indigo = await artworkColors(page);
-  expect(indigo.button).not.toEqual(jade.button);
-  expect(indigo.icon).not.toEqual(jade.icon);
-  expect(indigo.logo).not.toEqual(jade.logo);
-  expect(indigo.danger).toEqual(jade.danger);
-  await page.locator('input[name="design-theme"][value="graphite"]').check();
-  const graphite = await artworkColors(page);
-  expect(graphite.button).not.toEqual(indigo.button);
-  expect(graphite.icon).not.toEqual(indigo.icon);
-  expect(graphite.logo).not.toEqual(indigo.logo);
-  expect(graphite.danger).toEqual(jade.danger);
+  let previous = baseline;
+  for (const theme of alternatives) {
+    await page.locator(`input[name="design-theme"][value="${theme}"]`).check();
+    await expect(page.locator("html")).toHaveAttribute("data-design-theme", theme);
+    const preview = await artworkColors(page);
+    expect(preview.button).not.toEqual(previous.button);
+    expect(preview.icon).not.toEqual(previous.icon);
+    expect(preview.logo).not.toEqual(previous.logo);
+    expect(preview.danger).toEqual(baseline.danger);
+    previous = preview;
+  }
 
   // Override the actual foreground, then trigger recalculation: a static AA badge must fail here.
-  await page.evaluate(() => document.documentElement.style.setProperty("--lester-color-text", "#FFFFFF"));
-  await page.locator('input[name="design-theme"][value="jade"]').check();
+  await page.evaluate(() => document.documentElement.style.setProperty("--lester-color-text", "var(--lester-color-surface)"));
+  await page.locator(`input[name="design-theme"][value="${defaultTheme}"]`).check();
   const contrast = page.locator('.contrast-item[data-foreground="color-text"] .contrast-result');
   await expect(contrast).toHaveAttribute("data-pass", "false");
   await expect(contrast).toContainText("1.00:1");
   await page.evaluate(() => document.documentElement.style.removeProperty("--lester-color-text"));
-  await page.locator('input[name="design-theme"][value="indigo"]').check();
+  await page.locator(`input[name="design-theme"][value="${alternatives[0]}"]`).check();
   await expect(contrast).toHaveAttribute("data-pass", "true");
   await page.reload();
-  await expect(page.locator("html")).toHaveAttribute("data-design-theme", "jade");
+  await expect(page.locator("html")).toHaveAttribute("data-design-theme", defaultTheme);
+  expect(await artworkColors(page)).toEqual(baseline);
   expect(await page.context().cookies()).toEqual([]);
   expect(await page.evaluate(() => ({ local: localStorage.length, session: sessionStorage.length }))).toEqual({ local: 0, session: 0 });
   expect(observed.unexpected).toEqual([]);
@@ -98,7 +107,9 @@ test("icons and tokens can be found, sized and exported without unresolved SVG c
   await page.locator('input[name="icon-size"][value="16"]').check();
   await expect(documentTile.locator('svg[data-size="16"]')).toBeVisible();
   await expect(documentTile.locator('svg[data-size="24"]')).toBeHidden();
-  await page.locator('input[name="design-theme"][value="indigo"]').check();
+  const { defaultTheme, themes } = await paletteMetadata(page);
+  const exportTheme = themes.find(theme => theme !== defaultTheme)!;
+  await page.locator(`input[name="design-theme"][value="${exportTheme}"]`).check();
   await documentTile.click();
   await expect(page.locator("#page-status")).toContainText("SVG");
   const svg = await page.evaluate(() => (window as Window & { __designClipboard?: string[] }).__designClipboard!.at(-1)!);
@@ -116,7 +127,7 @@ test("icons and tokens can be found, sized and exported without unresolved SVG c
   await page.locator("#copy-css").click();
   await expect(page.locator("#page-status")).toContainText("已复制当前主题 CSS");
   const css = await page.evaluate(() => (window as Window & { __designClipboard?: string[] }).__designClipboard!.at(-1)!);
-  expect(css).toContain("/* Lester · indigo */");
+  expect(css).toContain(`/* Lester · ${exportTheme} */`);
   expect(css).toContain("--lester-color-brand:");
   expect(css).toContain("--lester-logo-tile:");
   const downloaded = page.waitForEvent("download");
@@ -125,7 +136,8 @@ test("icons and tokens can be found, sized and exported without unresolved SVG c
   expect(download.suggestedFilename()).toBe("lester-design-tokens.json");
   const data = JSON.parse(await readFile((await download.path())!, "utf8"));
   expect(data.version).toBe(1);
-  expect(Object.keys(data.themes)).toEqual(["jade", "indigo", "graphite"]);
+  expect(Object.keys(data.themes)).toEqual(themes);
+  expect(data.defaultTheme).toBe(defaultTheme);
   expect(data.tokens["icon-grid"].value).toBe(24);
 
   await page.locator("#icon-search").fill('<img src=x onerror="window.designXss=true">');
@@ -165,6 +177,9 @@ test.describe("without JavaScript", () => {
   test("the complete default reference stays readable and interactive previews stay disabled", async ({ page }, info) => {
     await page.goto(path);
     await expect(page).toHaveTitle("Lester · Design system");
+    const { defaultTheme } = await paletteMetadata(page);
+    await expect(page.locator("html")).toHaveAttribute("data-design-theme", defaultTheme);
+    await expect(page.locator(`input[name="design-theme"][value="${defaultTheme}"]`)).toBeChecked();
     await expect(page.locator(".logo-primary svg")).toBeVisible();
     await expect(page.locator('.glyph-tile[data-kind="document"] svg[data-size="24"]')).toBeVisible();
     await expect(page.locator("#token-rows tr")).not.toHaveCount(0);

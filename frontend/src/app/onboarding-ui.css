@@ -1,5 +1,5 @@
 /* First-task guidance and responsive refinements within the existing palette. */
-.field-help { display: block; color: #5c6b60; font-size: 12px; font-weight: 400; line-height: 1.65; }
+.field-help { display: block; color: var(--lester-color-text-muted); font-size: 12px; font-weight: 400; line-height: 1.65; }
 .login-page { padding: 24px 0; }
 .login-card .field { font-size: 13px; gap: 8px; }
 .login-card .field input { min-height: 46px; font-size: 16px; }
@@ -8,28 +8,29 @@
 .login-card .form-error { font-size: 13px; line-height: 1.6; }
 .password-field { position: relative; }
 .password-field input { padding-right: 48px; }
-.password-field button { position: absolute; top: 1px; right: 1px; display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; color: #5c6b60; }
+.password-field button { position: absolute; top: 1px; right: 1px; display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; color: var(--lester-color-brand-text); }
 .password-field svg { width: 18px; height: 18px; }
-.login-card :is(button, input):focus-visible, .model-setup-steps button:focus-visible, .model-advanced summary:focus-visible { outline: 2px solid #506c57; outline-offset: 3px; }
-.model-setup-prompt, .model-ready { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-top: 18px; padding: 20px; border: 1px solid #d8e3d4; border-radius: 14px; background: #f1f5ee; }
+.login-card :is(button, input):focus-visible, .model-setup-steps button:focus-visible, .model-advanced summary:focus-visible { outline: 2px solid var(--lester-color-focus); outline-offset: 3px; }
+.model-setup-prompt, .model-ready { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-top: 18px; padding: 20px; border: 1px solid var(--lester-color-border-strong); border-radius: 14px; background: var(--lester-color-surface-subtle); }
 .model-setup-prompt strong, .model-ready strong { font-size: 15px; }
-.model-setup-prompt p, .model-ready p { margin: 6px 0 0; color: #5c6b60; font-size: 13px; line-height: 1.7; }
+.model-setup-prompt p, .model-ready p { margin: 6px 0 0; color: var(--lester-color-text-muted); font-size: 13px; line-height: 1.7; }
 .model-setup-prompt .primary-button, .model-ready .primary-button { flex-shrink: 0; min-height: 44px; text-decoration: none; font-size: 13px; }
-.agent-options { margin-top: 12px; font-size: 13px; color: #5c6b60; }
+.agent-options { margin-top: 12px; font-size: 13px; color: var(--lester-color-text-muted); }
 .agent-options summary { width: fit-content; padding: 8px 0; cursor: pointer; }
-.agent-options summary span { margin-left: 8px; color: #40694d; font-size: 12px; }
+.agent-options summary span { margin-left: 8px; color: var(--lester-color-brand-text); font-size: 12px; }
 .task-examples { margin-top: 24px; text-align: center; }
-.task-examples > p { margin: 0 0 10px; color: #5c6b60; font-size: 13px; }
+.task-examples > p { margin: 0 0 10px; color: var(--lester-color-text-muted); font-size: 13px; }
 .task-examples > div { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
-.task-examples button { display: inline-flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 44px; padding: 10px 14px; border: 1px solid #dce4d7; border-radius: 10px; background: #fff; color: #344c38; font-size: 13px; }
-.task-examples button:hover { background: #f1f5ee; border-color: #a6baa0; }
+.task-examples button { display: inline-flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 44px; padding: 10px 14px; border: 1px solid var(--lester-color-border-strong); border-radius: 10px; background: var(--lester-color-surface); color: var(--lester-color-brand-text); font-size: 13px; }
+.task-examples button:hover { background: var(--lester-color-surface-subtle); border-color: var(--lester-color-border-strong); }
 .model-setup-steps { display: flex; gap: 20px; align-items: center; list-style: none; padding: 0; margin: 0 0 24px; }
-.model-setup-steps li, .model-setup-steps button { display: flex; align-items: center; gap: 8px; color: #5c6b60; font-size: 13px; }
+.model-setup-steps li, .model-setup-steps button { display: flex; align-items: center; gap: 8px; color: var(--lester-color-brand-text); font-size: 13px; }
 .model-setup-steps button { min-height: 44px; border: 0; border-radius: 9px; padding: 5px 8px; background: transparent; cursor: pointer; }
 .model-setup-steps button:disabled { cursor: default; }
-.model-setup-steps span { display: grid; place-items: center; width: 26px; height: 26px; flex-shrink: 0; border: 1px solid #d5ded0; border-radius: 50%; font-size: 12px; }
-.model-setup-steps [aria-current="step"] { color: #253d2b; font-weight: 650; background: #e9f0e5; }
+.model-setup-steps span { display: grid; place-items: center; width: 26px; height: 26px; flex-shrink: 0; border: 1px solid var(--lester-color-border-strong); border-radius: 50%; font-size: 12px; }
+.model-setup-steps [aria-current="step"] { color: var(--lester-color-brand-text); font-weight: 650; background: var(--lester-color-brand-soft); }
 .model-setup-steps [aria-current="step"] span, .model-setup-steps .complete span { border-color: #506c57; background: #506c57; color: #fff; }
+.model-setup-steps [aria-current="step"] span { border-color: var(--lester-color-brand); background: var(--lester-color-brand); }
 .model-ready { margin: 0 0 24px; }
 .model-setup-grid { grid-template-columns: minmax(0, 1fr); }
 .model-setup-grid .settings-card { max-width: 680px; }
@@ -44,8 +45,8 @@
 .personal-model-list .deployment-list article > div:first-child { min-width: 0; overflow-wrap: anywhere; }
 .personal-model-list .deployment-list strong { font-size: 15px; }
 .personal-model-list .deployment-list small { font-size: 13px; }
-.personal-model-list .saved-connections { border-top: 1px solid #e1e7dc; padding-top: 12px; }
-.saved-connections > summary { padding: 8px 0; color: #526657; font-size: 13px; cursor: pointer; }
+.personal-model-list .saved-connections { border-top: 1px solid var(--lester-color-border-strong); padding-top: 12px; }
+.saved-connections > summary { padding: 8px 0; color: var(--lester-color-brand-text); font-size: 13px; cursor: pointer; }
 .saved-connections > .text-button { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin-top: 8px; }
 .saved-section:not(.personal-model-list) .saved-connections > summary { display: none; }
 .new-chat-composer .new-chat-hint { visibility: hidden; }
@@ -54,14 +55,14 @@
 .settings-card .field { font-size: 13px; font-weight: 550; }
 .settings-card .field :is(input, select) { min-height: 44px; font-size: 14px; }
 .settings-card .field textarea { font-size: 14px; line-height: 1.6; }
-.settings-card header p, .check-field, .provider-list small, .deployment-list small { color: #5c6b60; font-size: 12px; line-height: 1.5; }
+.settings-card header p, .check-field, .provider-list small, .deployment-list small { color: var(--lester-color-text-muted); font-size: 12px; line-height: 1.5; }
 .settings-card .primary-button { min-height: 44px; }
-.model-advanced { border-top: 1px solid #e5e9e0; padding-top: 12px; }
-.model-advanced summary { cursor: pointer; padding: 4px 0; color: #344c38; font-size: 13px; }
-.model-advanced summary span { margin-left: 10px; color: #5c6b60; font-size: 12px; }
+.model-advanced { border-top: 1px solid var(--lester-color-border); padding-top: 12px; }
+.model-advanced summary { cursor: pointer; padding: 4px 0; color: var(--lester-color-brand-text); font-size: 13px; }
+.model-advanced summary span { margin-left: 10px; color: var(--lester-color-brand-text); font-size: 12px; }
 .model-advanced > .field { margin-top: 14px; }
-.message-file-link { border: 0; border-radius: 4px; padding: 0; background: transparent; color: #36573e; font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
-.message-file-link:focus-visible { outline: 2px solid #506c57; outline-offset: 3px; }
+.message-file-link { border: 0; border-radius: 4px; padding: 0; background: transparent; color: var(--lester-color-brand-text); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.message-file-link:focus-visible { outline: 2px solid var(--lester-color-focus); outline-offset: 3px; }
 @media (max-width: 700px) {
   .login-card { padding: 28px 24px; }
   .login-copy { margin: 28px 0 24px; }

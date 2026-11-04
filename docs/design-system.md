@@ -4,7 +4,7 @@
 
 Lester's design reference collects its brand, semantic colors, typography, spacing, radii, motion, icon family and shared control states in one browsable HTML file. Use it to review a style change before changing individual screens.
 
-The default direction is **Jade**: a mist-white surface with a deep teal brand color. Indigo and Graphite are local comparison palettes in the reference page. They do not add application theme preferences or change a user's task, draft, permissions or model configuration.
+The default direction is **Graphite**, selected on November 4, 2026 from the first round's fourth color study: warm-white surfaces (`#FAF9F6`), graphite actions (`#373735`), a warm stone/ivory folded L and a small champagne terminal arrow (`#D9BC78`). Jade and Indigo remain local comparison palettes in the reference page. They do not add application theme preferences or change a user's task, draft, permissions or model configuration.
 
 ## Open the reference
 
@@ -57,8 +57,8 @@ For a design change:
 
 - Use a 24-unit icon grid and a 1.7-unit reference stroke, with consistent rounded caps and joins. Simplify secondary detail at 16/20px instead of scaling a detailed illustration indefinitely.
 - Keep category artwork neutral: a document or model icon does not imply that a task passed validation. Installation and approval indicators remain separate, driven by real state.
-- Use one brand hue and a low-opacity background layer for category artwork. Keep ordinary action and status controls legible; preserve the established third-party provider marks and user-authored identity.
-- Preserve the folded **L** and terminal arrow in the Logo. Its color comes from the same brand tokens as the interface, with fewer competing hues.
+- Use the shared graphite ink and quiet surface layer for category artwork. Keep ordinary action and status controls legible; preserve the established third-party provider marks and user-authored identity.
+- Preserve the folded **L** and terminal arrow in the Logo. Use warm stone/ivory layers on the deep graphite tile, with champagne confined to the small arrow. Its colors come from the same brand tokens as the interface; status colors retain their independent meanings.
 - Decorative icons remain hidden from assistive technologies beside their real text labels. Icons must not introduce remote asset requests, task actions or permissions.
 
 ## Current coverage

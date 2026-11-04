@@ -34,8 +34,8 @@
   padding: 10px 16px;
   border: 1px solid var(--line);
   border-radius: 9px;
-  color: #426039;
-  background: #f8faf6;
+  color: var(--lester-color-brand-text);
+  background: var(--lester-color-surface-subtle);
   text-decoration: none;
   font-size: 12px;
 }
