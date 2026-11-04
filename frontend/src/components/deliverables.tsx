@@ -40,7 +40,7 @@ export function Deliverables({ panel = false }: { panel?: boolean }) {
         const kind = record?.kind ?? deliverableKind(file);
         return <article className={`deliverable-card ${kind}`} key={record?.id ?? file.path}>
           <div className="deliverable-heading">
-            <span className="deliverable-cover" aria-hidden="true"><ProductGlyph kind={kind === "html" ? "web" : "document"} size={20} stroke="currentColor" /></span>
+            <span className="deliverable-cover" aria-hidden="true"><ProductGlyph kind={kind === "html" ? "web" : "document"} size={20} /></span>
             <span className="deliverable-info"><strong>{record?.title || file.name}</strong>{(record?.title || file.name) !== file.path ? <code className="deliverable-entry">{file.path}</code> : null}{record?.summary ? <span className="deliverable-summary">{record.summary}</span> : null}<span className="deliverable-status"><span>{kind === "html" ? t("网页") : t("文档")}</span><span className="deliverable-review"><T>{"待验收"}</T></span>{updated.has(file.path) ? <span><T>{"本轮更新"}</T></span> : null}</span></span>
           </div>
           <div className="deliverable-actions">

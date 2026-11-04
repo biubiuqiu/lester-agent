@@ -4,7 +4,7 @@
 
 Lester's design reference collects its brand, semantic colors, typography, spacing, radii, motion, icon family and shared control states in one browsable HTML file. Use it to review a style change before changing individual screens.
 
-The default direction is **Graphite**, selected on November 4, 2026 from the first round's fourth color study: warm-white surfaces (`#FAF9F6`), graphite actions (`#373735`), a warm stone/ivory folded L and a small champagne terminal arrow (`#D9BC78`). Jade and Indigo remain local comparison palettes in the reference page. They do not add application theme preferences or change a user's task, draft, permissions or model configuration.
+The default direction is **Graphite**, selected on November 4, 2026 from the first round's fourth color study: warm-white surfaces (`#FAF9F6`), graphite actions (`#373735`), a warm stone/ivory folded L and a small champagne terminal arrow (now `#E9B85B`). Jade and Indigo remain local comparison palettes in the reference page. They do not add application theme preferences or change a user's task, draft, permissions or model configuration.
 
 ## Open the reference
 
@@ -55,11 +55,11 @@ For a design change:
 
 ## Icon and brand rules
 
-- Use a 24-unit icon grid and a 1.7-unit reference stroke, with consistent rounded caps and joins. Simplify secondary detail at 16/20px instead of scaling a detailed illustration indefinitely.
+- Category artwork uses a 24-unit grid and layered filled shapes; action icons retain a 1.7-unit reference stroke with rounded caps and joins. Simplify secondary detail at 16/20px instead of scaling a detailed illustration indefinitely.
 - Personal projects, ordinary projects, conversations and results use shared SVGs. A person outline inside the folder identifies the actual default project; filesystem directories retain their file-type symbols. Menus, references and project pages reuse the same geometry, and the public demo uses the real brand mark.
-- Keep category artwork neutral: a document or model icon does not imply that a task passed validation. Installation and approval indicators remain separate, driven by real state.
-- Use the shared graphite ink and quiet surface layer for category artwork. Keep ordinary action and status controls legible; preserve the established third-party provider marks and user-authored identity.
-- Preserve the folded **L** and terminal arrow in the Logo. Use warm stone/ivory layers on the deep graphite tile, with champagne confined to the small arrow. Its colors come from the same brand tokens as the interface; status colors retain their independent meanings.
+- Category colors identify objects; they do not encode task results: a document or model icon does not imply that a task passed validation. Installation and approval indicators remain separate, driven by real state.
+- Treat category identity as P0: use filled silhouettes, deliberate analogous gradients and individual object palettes (amber projects, blue conversation/documents, violet results/Skills, teal analysis/web, coral memory/profile). Keep these object palettes independent of the Graphite application theme. Keep ordinary action and status controls legible; preserve the established third-party provider marks and user-authored identity.
+- Preserve the folded **L** and terminal arrow in the Logo. Use an ivory stem and richer champagne fold/arrow on the deep graphite tile. Its colors come from the same brand tokens as the interface; status colors retain their independent meanings.
 - Decorative icons remain hidden from assistive technologies beside their real text labels. Icons must not introduce remote asset requests, task actions or permissions.
 
 ## Current coverage
@@ -73,3 +73,5 @@ The deployment URL is a design reference, not a new workspace route or a product
 ## Research
 
 The design rules draw on verified official sources from Lucide, Phosphor, Fluent System Icons, Radix Colors and IBM Carbon. Fixed revisions, observed rules, the previous Lester baseline and evidence limits are recorded in [the research notes](../research/lester-design-system/README.md). The notes distinguish a source's documented behavior from Lester's own design decisions; external libraries are references, not a claim that their complete systems have been adopted.
+
+The colored artwork is maintained under `frontend/src/components/glyph-art/`; all paints resolve to `glyph-*` tokens in the same source JSON. Compact geometry removes secondary detail rather than relying on a scaled-down line drawing. SVG gradient IDs remain unique per instance; copying resolves paint tokens and keeps gradient references local to the exported SVG.

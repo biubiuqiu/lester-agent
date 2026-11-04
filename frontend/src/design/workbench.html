@@ -55,7 +55,7 @@
       <div class="section-heading"><div><span class="section-number">01 / PRINCIPLES</span><h2 id="overview-title">一套规则，少一点决定。<small>Overview</small></h2></div><span class="pill">Single source</span></div>
       <div class="overview-grid">
         <article class="principle panel"><span>PRIMITIVE → SEMANTIC</span><h3>按角色选色</h3><p>背景、文字、交互、品牌与状态各有职责。一个色值不代替多个语义。</p></article>
-        <article class="principle panel"><span>ENTITY → ACTION → STATE</span><h3>让图形说明对象</h3><p>类别图标轻量呈现；操作保持清晰轮廓；成功、风险与等待由真实状态表达。</p></article>
+        <article class="principle panel"><span>ENTITY → ACTION → STATE</span><h3>让图形说明对象</h3><p>类别图标用彩色形体建立识别；操作保持清晰轮廓；成功、风险与等待由真实状态表达。</p></article>
         <article class="principle panel"><span>SOURCE → CSS → HTML</span><h3>规范跟随实现</h3><p>本页由相同的 Token 与 SVG 源生成。预览与导出不用重新维护一套颜色。</p></article>
       </div>
     </section>
@@ -115,7 +115,7 @@
       </div>
     </section>
     <section class="section" id="icons" aria-labelledby="icons-title">
-      <div class="section-heading"><div><span class="section-number">07 / ICONOGRAPHY</span><h2 id="icons-title">让每个入口表达同一种语言。<small>Icons</small></h2><p class="section-description">统一网格、笔画和端点；小尺寸减少细节。普通实体不自带“已完成”勾号或状态点，安装与运行状态另行表达。</p></div><span class="pill">SVG source</span></div>
+      <div class="section-heading"><div><span class="section-number">07 / ICONOGRAPHY</span><h2 id="icons-title">让每个入口表达同一种语言。<small>Icons</small></h2><p class="section-description">统一网格与光学尺寸，用填充色面和层次建立识别。16/20px 简化细节。图标颜色代表对象类别，安装与运行状态另行表达。</p></div><span class="pill">SVG source</span></div>
       <div class="icon-toolbar"><div class="search-wrap"><label for="icon-search">搜索名称 / 用途 · Search icons</label><input type="search" id="icon-search" placeholder="例如：文档 / document" autocomplete="off" data-enhance disabled></div><fieldset class="size-controls" aria-label="图标预览尺寸"><legend class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)">Size</legend><label><input type="radio" name="icon-size" value="16" data-enhance disabled><span>16</span></label><label><input type="radio" name="icon-size" value="20" data-enhance disabled><span>20</span></label><label><input type="radio" name="icon-size" value="24" checked data-enhance disabled><span>24</span></label><label><input type="radio" name="icon-size" value="32" data-enhance disabled><span>32</span></label></fieldset></div>
       <div class="glyph-grid" id="icon-gallery">__ICON_GALLERY__</div><p class="empty-search" id="icon-empty" hidden>没有匹配图标，试试名称或用途。</p><div class="icon-summary"><span id="icon-count">完整图标目录</span><span>点按图标，复制当前配色的 SVG。</span></div>
     </section>
@@ -225,11 +225,19 @@
     const source = Array.from(tile.querySelectorAll('.glyph-stage svg')).find(svg => svg.dataset.size === root.dataset.iconSize) || tile.querySelector('svg');
     if (!source) return;
     const clone = source.cloneNode(true), originals = [source, ...source.querySelectorAll('*')], copies = [clone, ...clone.querySelectorAll('*')];
+    const localIds = new Set(Array.from(source.querySelectorAll('[id]'), node => node.id));
+    function localPaint(input) {
+      if (!input.startsWith('url(')) return input;
+      const hash = input.lastIndexOf('#'), end = input.lastIndexOf(')');
+      if (hash < 0 || end < hash) return input;
+      const id = input.slice(hash + 1, end).replaceAll('"', '').replaceAll("'", '').trim();
+      return localIds.has(id) ? 'url(#' + id + ')' : input;
+    }
     originals.forEach((element, index) => {
       const computed = getComputedStyle(element);
       const target = copies[index];
       ['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'fill-rule', 'clip-rule', 'stroke-dasharray', 'stroke-dashoffset', 'fill-opacity', 'stroke-opacity', 'opacity', 'stop-color', 'stop-opacity'].forEach(attribute => {
-        const resolved = computed.getPropertyValue(attribute).trim();
+        const resolved = localPaint(computed.getPropertyValue(attribute).trim());
         if (resolved) target.setAttribute(attribute, resolved);
       });
       target.removeAttribute('style');

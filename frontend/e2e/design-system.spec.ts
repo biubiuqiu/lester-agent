@@ -25,7 +25,10 @@ async function openWorkbench(page: Page) {
 async function artworkColors(page: Page) {
   return page.evaluate(() => ({
     button: getComputedStyle(document.querySelector("#controls .primary-button")!).backgroundColor,
-    icon: getComputedStyle(document.querySelector('.glyph-tile[data-kind="document"] svg[data-size="24"]')!).stroke,
+    icon: [...new Set(Array.from(document.querySelectorAll('.glyph-tile[data-kind="document"] svg[data-size="24"] :is(path,rect,circle,ellipse,polygon,polyline,line,stop)')).flatMap(node => {
+      const computed = getComputedStyle(node);
+      return node.tagName.toLowerCase() === "stop" ? [computed.stopColor] : [computed.fill, computed.stroke];
+    }).filter(color => color !== "none" && !color.startsWith("url(")).sort())],
     logo: Array.from(document.querySelectorAll(".logo-primary svg stop")).map(stop => getComputedStyle(stop).stopColor),
     danger: getComputedStyle(document.querySelector('[data-state="danger"]')!).color,
   }));
@@ -53,7 +56,7 @@ test("the public workbench renders and responds without API, font or asset reque
   expect(observed.errors).toEqual([]);
 });
 
-test("local palettes recolor real artwork and controls while contrast follows actual colors", async ({ page }) => {
+test("local palettes recolor brand controls while entity identities and state colors stay stable", async ({ page }) => {
   const observed = await openWorkbench(page);
   const { defaultTheme, themes } = await paletteMetadata(page);
   const alternatives = themes.filter(theme => theme !== defaultTheme);
@@ -69,7 +72,7 @@ test("local palettes recolor real artwork and controls while contrast follows ac
     await expect(page.locator("html")).toHaveAttribute("data-design-theme", theme);
     const preview = await artworkColors(page);
     expect(preview.button).not.toEqual(previous.button);
-    expect(preview.icon).not.toEqual(previous.icon);
+    expect(preview.icon).toEqual(baseline.icon);
     expect(preview.logo).not.toEqual(previous.logo);
     expect(preview.danger).toEqual(baseline.danger);
     previous = preview;
@@ -89,6 +92,62 @@ test("local palettes recolor real artwork and controls while contrast follows ac
   expect(await artworkColors(page)).toEqual(baseline);
   expect(await page.context().cookies()).toEqual([]);
   expect(await page.evaluate(() => ({ local: localStorage.length, session: sessionStorage.length }))).toEqual({ local: 0, session: 0 });
+  expect(observed.unexpected).toEqual([]);
+  expect(observed.errors).toEqual([]);
+});
+
+test("colored entity art keeps filled silhouettes, local gradients and compact geometry", async ({ page }, info) => {
+  const observed = await openWorkbench(page);
+  const ids = await page.locator("svg [id]").evaluateAll(nodes => nodes.map(node => node.id));
+  expect(ids.length).toBeGreaterThan(0);
+  expect(new Set(ids).size).toBe(ids.length);
+  for (const size of [16, 20, 24, 32]) {
+    await page.locator(`input[name="icon-size"][value="${size}"]`).check();
+    const art = await page.locator(`.glyph-tile .product-glyph[data-size="${size}"]`).evaluateAll(nodes => nodes.map(node => {
+      const svg = node as SVGSVGElement, ownIds = new Set(Array.from(svg.querySelectorAll("[id]"), item => item.id));
+      const shapes = Array.from(svg.querySelectorAll<SVGGraphicsElement>("path,rect,circle,ellipse,polygon,polyline,line")).filter(shape => !shape.closest("defs"));
+      const colors = new Set<string>(), missingReferences: string[] = [];
+      let filledShapes = 0, broadStrokes = 0;
+      const color = (value: string) => {
+        if (value === "none" || value === "transparent") return;
+        const reference = value.match(/^url\(["']?(?:[^#)]*#)([^"')\s]+)["']?\)$/);
+        if (reference) {
+          if (!ownIds.has(reference[1])) { missingReferences.push(reference[1]); return; }
+          const gradient = Array.from(svg.querySelectorAll("[id]")).find(item => item.id === reference[1]);
+          gradient?.querySelectorAll("stop").forEach(stop => color(getComputedStyle(stop).stopColor));
+          return;
+        }
+        const channels = value.match(/^rgba?\(([^)]+)\)$/)?.[1].replaceAll(",", " ").split(/[\s/]+/).filter(Boolean).slice(0, 3).map(Number);
+        if (channels?.length === 3 && Math.max(...channels) - Math.min(...channels) >= 20) colors.add(channels.join(","));
+      };
+      for (const shape of shapes) {
+        const computed = getComputedStyle(shape);
+        if (Number(computed.opacity) === 0) continue;
+        if (computed.fill !== "none" && Number(computed.fillOpacity) > 0) { filledShapes++; color(computed.fill); }
+        if (computed.stroke !== "none" && Number(computed.strokeOpacity) > 0) { color(computed.stroke); if (parseFloat(computed.strokeWidth) >= 2.5) broadStrokes++; }
+      }
+      const box = svg.getBBox(), screen = svg.getBoundingClientRect();
+      return { kind: svg.dataset.productGlyph, appearance: svg.dataset.glyphAppearance, optical: svg.dataset.opticalSize, colors: colors.size, filledShapes, broadStrokes, missingReferences, bounds: { x: box.x, y: box.y, right: box.x + box.width, bottom: box.y + box.height }, size: { width: screen.width, height: screen.height } };
+    }));
+    expect(art).toHaveLength(24);
+    for (const glyph of art) {
+      expect(glyph.appearance, glyph.kind).toBe("color");
+      expect(glyph.optical, glyph.kind).toBe(size <= 20 ? "compact" : "regular");
+      expect(glyph.colors, `${glyph.kind} must use actual chromatic paints, not unused colored defs`).toBeGreaterThanOrEqual(2);
+      expect(glyph.filledShapes + glyph.broadStrokes, `${glyph.kind} must have a clear body rather than hairline-only art`).toBeGreaterThan(0);
+      expect(glyph.missingReferences, glyph.kind).toEqual([]);
+      expect(glyph.bounds.x, glyph.kind).toBeGreaterThanOrEqual(0);
+      expect(glyph.bounds.y, glyph.kind).toBeGreaterThanOrEqual(0);
+      expect(glyph.bounds.right, glyph.kind).toBeLessThanOrEqual(24);
+      expect(glyph.bounds.bottom, glyph.kind).toBeLessThanOrEqual(24);
+      expect(glyph.size.width, glyph.kind).toBeCloseTo(size, 1);
+      expect(glyph.size.height, glyph.kind).toBeCloseTo(size, 1);
+    }
+    if (size === 16 || size === 24) {
+      await page.locator("#icons").scrollIntoViewIfNeeded();
+      await page.screenshot({ path: info.outputPath(`colored-entity-icons-${size}.png`) });
+    }
+  }
   expect(observed.unexpected).toEqual([]);
   expect(observed.errors).toEqual([]);
 });
@@ -118,12 +177,29 @@ test("icons and tokens can be found, sized and exported without unresolved SVG c
   expect(svg).not.toContain("var(");
   expect(svg).not.toContain("currentColor");
   expect(svg).not.toContain("aria-hidden");
-  const exported = await page.evaluate(text => {
-    const svg = new DOMParser().parseFromString(text, "image/svg+xml");
-    return { error: !!svg.querySelector("parsererror"), stroke: svg.documentElement.getAttribute("stroke") };
+  const exported = await page.evaluate(async text => {
+    const document = new DOMParser().parseFromString(text, "image/svg+xml");
+    const ids = new Set(Array.from(document.querySelectorAll("[id]"), node => node.id));
+    const references = Array.from(text.matchAll(/url\(([^)]+)\)/g), match => match[1].replace(/["']/g, "").trim());
+    const image = new Image();
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Exported SVG did not load as an independent image"));
+      image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(text)}`;
+    });
+    const canvas = window.document.createElement("canvas"); canvas.width = 16; canvas.height = 16;
+    const context = canvas.getContext("2d")!; context.drawImage(image, 0, 0, 16, 16);
+    const pixels = context.getImageData(0, 0, 16, 16).data;
+    let coloredPixels = 0;
+    for (let index = 0; index < pixels.length; index += 4) {
+      if (pixels[index + 3] >= 128 && Math.max(pixels[index], pixels[index + 1], pixels[index + 2]) - Math.min(pixels[index], pixels[index + 1], pixels[index + 2]) >= 20) coloredPixels++;
+    }
+    return { error: !!document.querySelector("parsererror"), gradientCount: document.querySelectorAll("linearGradient,radialGradient").length, referencesLocal: references.length > 0 && references.every(reference => reference.startsWith("#") && ids.has(reference.slice(1))), coloredPixels };
   }, svg);
   expect(exported.error).toBe(false);
-  expect(exported.stroke).toMatch(/rgb|#/);
+  expect(exported.gradientCount).toBeGreaterThan(0);
+  expect(exported.referencesLocal).toBe(true);
+  expect(exported.coloredPixels).toBeGreaterThanOrEqual(8);
   await page.locator("#copy-css").click();
   await expect(page.locator("#page-status")).toContainText("已复制当前主题 CSS");
   const css = await page.evaluate(() => (window as Window & { __designClipboard?: string[] }).__designClipboard!.at(-1)!);

@@ -120,3 +120,12 @@
 - 操作与范围说明：[English](../../docs/design-system.md) / [中文](../../docs/zh-CN/design-system.md)。
 
 规范页中的色板切换和组件示例只用于本地设计评审，不为产品增加主题设置，也不调用任务、权限或模型 API。本轮覆盖基础样式、共享控件和 SVG，不能把它描述为所有领域 CSS、终端/代码高亮、布局尺寸或第三方标识都已迁移完成。
+
+
+## 6. 彩色标识的 P0 质量修订（2026-11-04）
+
+用户明确指出全灰线条不足以表达产品身份；当前采用填充形体、层次色面和按类别稳定的彩色 SVG，界面保留已选暖石墨。主 Logo 的折叠面与箭头加强香槟金层次。此条取代此前“类别图标使用品牌单色”的表现约定，真实状态依然独立显示。
+
+补充核实了 Fluent 固定版本 `9bfae3d782fda4c8764f2128cec4d0dda160b283` 的 [Document Color](https://github.com/microsoft/fluentui-system-icons/blob/9bfae3d782fda4c8764f2128cec4d0dda160b283/assets/Document/SVG/ic_fluent_document_24_color.svg)、[Chat Color](https://github.com/microsoft/fluentui-system-icons/blob/9bfae3d782fda4c8764f2128cec4d0dda160b283/assets/Chat/SVG/ic_fluent_chat_24_color.svg)、[Bot Color](https://github.com/microsoft/fluentui-system-icons/blob/9bfae3d782fda4c8764f2128cec4d0dda160b283/assets/Bot/SVG/ic_fluent_bot_24_color.svg)、[Book Color](https://github.com/microsoft/fluentui-system-icons/blob/9bfae3d782fda4c8764f2128cec4d0dda160b283/assets/Book/SVG/ic_fluent_book_24_color.svg)。它们使用填充轮廓、少量主色／浅色材质层和局部阴影；Document／Chat 的16/20/24px几何分别设计。该版本未提供彩色 Folder，不能据此宣称参考了其彩色文件夹。
+
+Lester 使用自行绘制的路径，借鉴层次和光学校正原则，不复制第三方 SVG 路径。实际侧栏16/20px与图标目录24/32px都需验收，不能只凭大尺寸图标墙或构建成功判断完成。

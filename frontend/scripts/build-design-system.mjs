@@ -14,12 +14,14 @@ const postcss = createRequire(require.resolve("next/package.json"))("postcss");
 const modules = new Map();
 // Render the production TSX components, so the reference cannot drift into a second icon set.
 function loadTSX(path) {
-  const absolute = resolve(root, path);
+  const requested = resolve(root, path);
+  const absolute = [requested, `${requested}.tsx`, `${requested}.ts`].find(candidate => existsSync(candidate));
+  if (!absolute) throw new Error(`Missing design component: ${path}`);
   if (modules.has(absolute)) return modules.get(absolute).exports;
   const compiledModule = { exports: {} };
   modules.set(absolute, compiledModule);
   const code = ts.transpileModule(readFileSync(absolute, "utf8"), { compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-  const localRequire = name => name.startsWith(".") ? loadTSX(resolve(dirname(absolute), `${name}.tsx`)) : require(name);
+  const localRequire = name => name.startsWith(".") ? loadTSX(resolve(dirname(absolute), name)) : require(name);
   new Function("require", "module", "exports", code)(localRequire, compiledModule, compiledModule.exports);
   return compiledModule.exports;
 }
@@ -40,7 +42,7 @@ const glyphs = [
   ["personal-project", "Personal project · 个人项目", "个人工作项目"], ["artifact", "Results · 成果", "会话交付与成果集合"],
   ["document", "Document · 文档", "文件 / 内容"], ["analysis", "Analysis · 分析", "图表 / 数据"], ["web", "Web · 网页", "站点 / 页面"], ["code", "Code · 代码", "源代码"], ["review", "Review · 审查", "检查，不代表已通过"], ["project", "Project · 项目", "文件夹 / 项目"], ["conversation", "Conversation · 会话", "消息 / 对话"], ["skill", "Skill · 能力", "可复用能力"], ["agent", "Agent · 助理", "自定义 Agent"], ["designer", "Designer · 设计", "编辑 / 创作"], ["compass", "Compass · 探索", "方向 / 探索"], ["strategy", "Strategy · 策略", "层次 / 规划"], ["bolt", "Bolt · 执行", "动作 / 活力"], ["model", "Model · 模型", "模型 / 芯片"], ["computer", "Computer · 计算机", "计算环境"], ["context", "Context · 上下文", "参考资料"], ["profile", "Profile · 个人资料", "身份，无在线状态"], ["automation", "Automation · 自动任务", "时钟 / 触发"], ["connections", "Connections · 连接", "应用授权"], ["publish", "Publish · 发布", "显式发布动作"], ["memory", "Memory · 记忆", "笔记 / 书签"], ["onboarding", "Guide · 引导", "入门 / 路标"],
 ];
-const categories = glyphs.map(([kind, name, usage]) => `<button type="button" class="glyph-tile" data-kind="${kind}" data-name="${escape(name)}" disabled aria-label="复制 ${escape(name)} SVG"><span class="glyph-stage">${[16, 20, 24, 32].map(size => renderToStaticMarkup(createElement(ProductGlyph, { kind, size })).replace("<svg ", `<svg data-size="${size}" `)).join("")}</span><strong>${escape(name)}</strong><small>${escape(usage)}</small></button>`).join("\n");
+const categories = glyphs.map(([kind, name, usage]) => `<button type="button" class="glyph-tile" data-kind="${kind}" data-name="${escape(name)}" disabled aria-label="复制 ${escape(name)} SVG"><span class="glyph-stage">${[16, 20, 24, 32].map(size => renderToStaticMarkup(createElement(ProductGlyph, { kind, size }), { identifierPrefix: `reference-${kind}-${size}-` }).replace("<svg ", `<svg data-size="${size}" `)).join("")}</span><strong>${escape(name)}</strong><small>${escape(usage)}</small></button>`).join("\n");
 const actions = [["add", "Add · 添加", Plus], ["send", "Send · 发送", Send], ["stop", "Stop · 停止", Square], ["mention", "Mention · 引用", AtSign], ["attach", "Attach · 附件", Paperclip], ["terminal", "Terminal · 终端", TerminalSquare], ["folder", "Folder · 文件夹", Folder], ["workspace", "Workspace · 工作区", PanelRight], ["more", "More · 更多", Ellipsis], ["search", "Search · 搜索", Search]];
 const actionGallery = actions.map(([kind, name, Icon]) => `<button type="button" class="glyph-tile" data-kind="action-${kind}" data-name="${escape(name)}" disabled aria-label="复制 ${escape(name)} SVG"><span class="glyph-stage">${[16,20,24,32].map(size => renderToStaticMarkup(createElement(Icon, { size, "data-size": size, "aria-hidden": true, focusable: false, style: { strokeWidth: size <= 20 ? "var(--lester-icon-stroke-width-small)" : "var(--lester-icon-stroke-width)" } }))).join("")}</span><strong>${escape(name)}</strong><small>Action · Lucide / 保持单色</small></button>`).join("\n");
 const gallery = categories + "\n" + actionGallery;

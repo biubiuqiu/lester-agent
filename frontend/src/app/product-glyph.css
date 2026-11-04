@@ -1,4 +1,4 @@
-/* Category art adds recognition without changing action or status semantics. */
+/* Filled category identities are deliberately colored; action and state semantics stay separate. */
 .product-glyph { display: inline-block; flex: none; vertical-align: middle; }
 .product-agent-mark { display: inline-flex; flex: none; align-items: center; justify-content: center; vertical-align: middle; }
 .product-agent-mark .brand-mark { width: 100%; height: 100%; }
@@ -15,5 +15,5 @@
 .workspace-shell .task-suggestions .product-glyph { width: 18px; height: 18px; }
 @media (forced-colors: active) {
   .product-glyph { stroke: CanvasText; }
-  .product-glyph :is(path,rect,circle) { stroke: CanvasText; fill: Canvas; }
+  .product-glyph :is(path,rect,circle,ellipse,line,polygon,polyline) { stroke: CanvasText; fill: Canvas; }
 }
