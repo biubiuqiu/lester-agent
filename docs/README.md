@@ -46,4 +46,6 @@ These existing notes retain their own scope and language. They complement the ch
 
 ## Maintaining these docs
 
+The in-app help at `/docs` groups 12 short articles into getting started, everyday use, and deployment/maintenance. Article bodies live under `frontend/src/lib/site-docs/`; navigation metadata stays separate in `site-doc-navigation.ts`. Preserve existing section IDs and the compatibility links from the former long usage page when moving topics.
+
 Keep the root READMEs concise. Update the chapter that owns a behavior or configuration, both language indexes and the matching language chapter when applicable. Update the authored in-app help alongside product changes. Keep relative links, media paths and heading anchors valid; do not put complete feature specifications or historical migration blocks back in the project overview.

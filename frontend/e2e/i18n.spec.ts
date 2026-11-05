@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { test, expect } from "@playwright/test";
 import { translator, type Locale } from "../src/lib/i18n";
 import { startCommand } from "../src/lib/site";
+import { docURL, siteDocNavigation, siteDocGroups } from "../src/lib/site-doc-navigation";
 import { WorkspaceApi, conversationId, prompt } from "./workspace-api";
 
 const languages: Locale[] = ["zh-CN", "en", "ja", "ko", "fr", "es"];
@@ -24,16 +25,25 @@ for (const locale of languages) {
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)).toBe(false);
       await page.screenshot({ path: testInfo.outputPath(`${locale}-homepage.png`) });
-      for (const chapter of ["", "/usage", "/models", "/deployment", "/troubleshooting"]) {
-        await page.goto(`/docs${chapter}`);
-        await expect(page.locator(".site-docs-article h1")).toBeVisible();
+      for (const chapter of siteDocNavigation) {
+        await page.goto(docURL(chapter.slug));
+        await expect(page.locator(".site-docs-article h1")).toHaveText(t(chapter.title));
+        await expect(page.locator(".site-docs-article > header p")).toHaveText(t(chapter.description));
         await expect(page.locator("html")).toHaveAttribute("lang", locale);
         if (!["zh-CN", "ja"].includes(locale)) {
-          const copy = await page.locator(".site-docs-article p, .site-docs-article li, .site-docs-article h1, .site-docs-article h2, .site-doc-note").allTextContents();
+          const copy = await page.locator(".site-docs-article p, .site-docs-article li, .site-docs-article h1, .site-docs-article h2, .site-doc-note, .site-docs-nav").allTextContents();
           expect(copy.join("\n")).not.toMatch(/[\u3400-\u9fff]/);
         }
+        const compact = page.locator(".site-docs-mobile-nav");
+        const mobileNavigation = await compact.isVisible();
+        if (mobileNavigation) await compact.locator("summary").click();
+        const navigation = mobileNavigation ? compact.locator(".site-docs-nav") : page.locator(".site-docs-sidebar .site-docs-nav");
+        for (const group of siteDocGroups) {
+          await expect(navigation.getByRole("group", { name: t(group.title), exact: true })).toHaveCount(1);
+        }
+        if (mobileNavigation) await compact.locator("summary").click();
         expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)).toBe(false);
-        if (!chapter) await expect(page.locator("pre").filter({ hasText: startCommand })).toContainText(startCommand);
+        if (!chapter.slug) await expect(page.locator("pre").filter({ hasText: startCommand })).toContainText(startCommand);
       }
       await page.screenshot({ path: testInfo.outputPath(`${locale}-help.png`) });
       expect(apiCalls).toEqual([]);
@@ -110,7 +120,7 @@ test("English auth and guides stay translated while task content stays as author
     await expect(page).toHaveURL(`/app/c/${conversationId}`);
     await expect.poll(() => api.streamCount).toBeGreaterThan(0);
     api.finish();
-    const tabs = page.getByRole("tablist", { name: "Open files" });
+    const tabs = page.getByRole("tablist", { name: "Workspace tabs", exact: true });
     await expect(tabs.getByRole("tab", { name: "index.html", exact: true })).toBeVisible();
     await expect(page.frameLocator('iframe[title="index.html preview"]').getByRole("heading", { name: "浏览器回归产物" })).toBeVisible();
     await page.getByRole("button", { name: "Source", exact: true }).click();

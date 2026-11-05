@@ -90,7 +90,7 @@ for (const locale of ["zh-CN", "en", "ja", "ko", "fr", "es"]) {
     await page.locator(".app-github-code > summary").click();
     await expect(page.getByRole("button", { name: dictionary["重新授权代码任务"], exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.goto("/docs/usage#github-code");
+    await page.goto("/docs/connections#github-code");
     await expect(page.locator('section[aria-labelledby="github-code"]')).toContainText(dictionary["GitHub 代码任务"]);
     running(api); await context.route(`**${prefix}`, route => route.fulfill({ json: { permissions: [permission] } }));
     await page.goto(`/app/c/${conversationId}`);

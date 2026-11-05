@@ -135,7 +135,7 @@ export function AppConnections() {
   }
   return <div className="app-connections-page">
     <header className="settings-heading"><div><h1>{t("应用连接")}</h1><p>{t("连接工作应用，按授权读取资料或开展 GitHub 代码任务。")}</p></div><button type="button" className="icon-button" aria-label={t("刷新连接状态")} title={t("刷新连接状态")} disabled={loading || !!busy} onClick={() => void refresh()}><RefreshCw size={17} /></button></header>
-    <div className="app-connections-intro"><span className="app-readonly"><Check size={13} />{t("资料读取")}</span><Link href="/docs/usage#app-connections" target="_blank" rel="noopener noreferrer"><BookOpen size={14} />{t("连接帮助")}</Link></div>
+    <div className="app-connections-intro"><span className="app-readonly"><Check size={13} />{t("资料读取")}</span><Link href="/docs/connections#app-connections" target="_blank" rel="noopener noreferrer"><BookOpen size={14} />{t("连接帮助")}</Link></div>
     {visibleError ? <p className="settings-error" role="alert">{t(visibleError)} <button type="button" className="text-button" disabled={loading || !!busy} onClick={() => void refresh()}>{t("刷新状态")}</button></p> : null}
     {notice ? <p className="app-connection-notice" role="status"><Check size={15} />{t(notice.kind === "connected" ? "{0} 已连接" : "已断开 {0}", [t(names[notice.provider])])}</p> : null}
     {native ? <p className="app-connections-hint">{t("请在浏览器版中授权应用，完成后 App 会同步连接。")}</p> : null}
@@ -153,7 +153,7 @@ export function AppConnections() {
             <summary><ChevronRight className="app-disclosure-icon" size={13} aria-hidden="true" />{t("代码任务")}{ready && item.github_code_enabled ? <span><Check size={12} />{t("已开启")}</span> : null}</summary>
             <p>{t("在已授权仓库中修改代码、运行测试并推送分支或创建 PR。")}</p>
             <p>{t("代码任务需要 GitHub App 的仓库内容和 PR 读写权限；实际可用范围以安装授权和仓库权限为准。")}</p>
-            <div><button type="button" className="secondary-button" disabled={!!busy || invalid || !item.configured || native} onClick={() => void connect(item, true)}>{t(item.github_code_enabled ? "重新授权代码任务" : "授权代码任务")}</button><Link href="/docs/usage#github-code" target="_blank" rel="noopener noreferrer">{t("使用帮助")}</Link></div>
+            <div><button type="button" className="secondary-button" disabled={!!busy || invalid || !item.configured || native} onClick={() => void connect(item, true)}>{t(item.github_code_enabled ? "重新授权代码任务" : "授权代码任务")}</button><Link href="/docs/connections#github-code" target="_blank" rel="noopener noreferrer">{t("使用帮助")}</Link></div>
           </details> : null}
           {linked && item.scopes.length ? <details className="app-connection-scopes"><summary><ChevronRight className="app-disclosure-icon" size={13} aria-hidden="true" />{t("查看授权范围")}</summary><p>{item.scopes.join(" · ")}</p></details> : null}
         </article>;

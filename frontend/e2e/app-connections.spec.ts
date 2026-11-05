@@ -24,7 +24,7 @@ test("cards have logos, honest availability and keyboard-friendly scope disclosu
   await expect(scopes).not.toHaveAttribute("open", "");
   await scopes.locator("summary").focus(); await page.keyboard.press("Enter");
   await expect(cards.first().getByText("contents:read · issues:read")).toBeVisible();
-  await expect(page.getByRole("link", { name: "连接帮助" })).toHaveAttribute("href", "/docs/usage#app-connections");
+  await expect(page.getByRole("link", { name: "连接帮助" })).toHaveAttribute("href", "/docs/connections#app-connections");
   await page.screenshot({ path: info.outputPath("connections.png"), fullPage: true });
 });
 
@@ -227,7 +227,7 @@ for (const locale of ["zh-CN", "en", "ja", "ko", "fr", "es"]) {
     await expect(page.locator(".app-connection-card")).toHaveCount(5);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath(`${locale}-connections-narrow.png`), fullPage: true });
-    await page.goto("/docs/usage#app-connections");
+    await page.goto("/docs/connections#app-connections");
     await expect(page.locator("#app-connections")).toContainText(dictionary["应用连接"]);
     if (locale !== "zh-CN" && locale !== "ja") await expect(page.locator("#app-connections")).not.toContainText("管理员需");
     await context.clearCookies({ name: "lester_access_token" });

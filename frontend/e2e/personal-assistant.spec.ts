@@ -434,9 +434,9 @@ test("assistant and full memory help render in six languages without translating
     await page.locator(".personal-toolbar button").first().click();
     await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
-    await page.goto("/docs/usage#personal-assistant");
+    await page.goto("/docs/personal-assistant#personal-assistant");
     await expect(page.locator("#personal-assistant")).toBeVisible();
-    expect((await page.locator("#personal-assistant").innerText()).length).toBeGreaterThan(5);
+    expect((await page.locator('section[aria-labelledby="memory"]').innerText()).length).toBeGreaterThan(100);
   }
   expect(api.unexpected).toEqual([]);
 });
