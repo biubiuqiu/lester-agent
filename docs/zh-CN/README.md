@@ -16,6 +16,7 @@
 | [GitHub 代码任务](github-code-tasks.md) | 授权仓库、源码导入、沙箱测试、发布预览与 PR。 |
 | [语音输入](speech-input.md) | 配置语音转写服务，将录音加入可编辑草稿。 |
 | [架构与 Computer](architecture.md) | 服务边界、沙箱、存储、事件与模型上下文。 |
+| [OpenTelemetry](observability.md) | OTLP 追踪与指标、日志关联、隐私与 Collector 配置。 |
 | [部署与升级](deployment.md) | 升级检查、统一网关、Docker/ACS 与 Kubernetes/Helm。 |
 | [账号、管理与安全](accounts-and-security.md) | 注册、单点登录、令牌、头像、管理员与安全配置。 |
 | [开发与 CI](development.md) | 仓库结构、本地检查与 GitHub Actions。 |

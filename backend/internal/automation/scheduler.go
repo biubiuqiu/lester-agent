@@ -9,6 +9,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Run polls persisted intent, not browser state. PostgreSQL row/session guards
@@ -127,7 +131,18 @@ func (s *Service) enqueueDue(ctx context.Context, now time.Time) error {
 	return tx.Commit(ctx)
 }
 
-func (s *Service) dispatch(ctx context.Context, id uuid.UUID) error {
+func (s *Service) dispatch(ctx context.Context, id uuid.UUID) (dispatchErr error) {
+	ctx, span := otel.Tracer("lester/automation").Start(ctx, "lester.automation.dispatch", trace.WithAttributes(
+		attribute.String("lester.automation.delivery.id", id.String()),
+		attribute.String("lester.outcome", "unknown"),
+	))
+	defer func() {
+		if dispatchErr != nil {
+			span.SetAttributes(attribute.String("lester.outcome", "failed"))
+			span.SetStatus(codes.Error, "automation dispatch failed")
+		}
+		span.End()
+	}()
 	// A separate connection keeps ownership across the short claim commit. If a
 	// replica disappears after dispatching was persisted, the next owner only
 	// looks up the original submission receipt. It never calls Start again.
@@ -145,6 +160,7 @@ func (s *Service) dispatch(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 	if !locked {
+		span.SetAttributes(attribute.String("lester.outcome", "deferred"))
 		return nil
 	}
 	tx, err := s.DB.Begin(ctx)
@@ -156,6 +172,7 @@ func (s *Service) dispatch(ctx context.Context, id uuid.UUID) error {
 	var state, source string
 	var definitionID, workspace uuid.UUID
 	if err = tx.QueryRow(ctx, `SELECT automation_id,workspace_id FROM automation_deliveries WHERE id=$1`, id).Scan(&definitionID, &workspace); errors.Is(err, pgx.ErrNoRows) {
+		span.SetAttributes(attribute.String("lester.outcome", "not_found"))
 		return nil
 	} else if err != nil {
 		return err
@@ -170,8 +187,15 @@ func (s *Service) dispatch(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 	if state != "pending" && state != "dispatching" && state != "unknown" {
+		span.SetAttributes(attribute.String("lester.outcome", "ignored"))
 		return nil
 	}
+	triggerSource := "unknown"
+	switch source {
+	case "schedule", "webhook", "manual":
+		triggerSource = source
+	}
+	span.SetAttributes(attribute.String("lester.automation.trigger", triggerSource), attribute.String("lester.automation.id", definitionID.String()))
 	var input Input
 	if err = json.Unmarshal(raw, &input); err != nil {
 		return err
@@ -180,6 +204,7 @@ func (s *Service) dispatch(ctx context.Context, id uuid.UUID) error {
 		return errors.New("invalid stored trigger identity")
 	}
 	if state == "dispatching" || state == "unknown" {
+		span.SetAttributes(attribute.String("lester.automation.operation", "reconcile"))
 		if err = tx.Commit(ctx); err != nil {
 			return err
 		}
@@ -189,10 +214,17 @@ func (s *Service) dispatch(ctx context.Context, id uuid.UUID) error {
 		if _, err = tx.Exec(ctx, `UPDATE automation_deliveries SET state='cancelled',error_code='paused',updated_at=now() WHERE workspace_id=$1 AND id=$2`, workspace, id); err != nil {
 			return err
 		}
-		return tx.Commit(ctx)
+		err = tx.Commit(ctx)
+		if err == nil {
+			span.SetAttributes(attribute.String("lester.outcome", "cancelled"))
+		}
+		return err
 	}
 	occupied, err := busy(ctx, tx, definitionID)
 	if err != nil || occupied {
+		if err == nil {
+			span.SetAttributes(attribute.String("lester.outcome", "deferred"))
+		}
 		return err
 	}
 	var authorized bool
@@ -203,11 +235,18 @@ func (s *Service) dispatch(ctx context.Context, id uuid.UUID) error {
 		if _, err = tx.Exec(ctx, `UPDATE automation_deliveries SET state='failed',error_code='authorization_changed',updated_at=now() WHERE workspace_id=$1 AND id=$2`, workspace, id); err != nil {
 			return err
 		}
-		return tx.Commit(ctx)
+		err = tx.Commit(ctx)
+		if err == nil {
+			span.SetAttributes(attribute.String("lester.outcome", "rejected"))
+		}
+		return err
 	}
 	// Preserve acceptance order while an earlier occurrence is being dispatched.
 	var earlier bool
 	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM automation_deliveries a JOIN automation_deliveries b ON b.id=$2 WHERE a.automation_id=$1 AND a.state='pending' AND a.accepted_order<b.accepted_order)`, definitionID, id).Scan(&earlier); err != nil || earlier {
+		if err == nil {
+			span.SetAttributes(attribute.String("lester.outcome", "deferred"))
+		}
 		return err
 	}
 	if _, err = tx.Exec(ctx, `UPDATE automation_deliveries SET state='dispatching',updated_at=now() WHERE workspace_id=$1 AND id=$2`, workspace, id); err != nil {
@@ -219,6 +258,7 @@ func (s *Service) dispatch(ctx context.Context, id uuid.UUID) error {
 	if err = conn.Ping(ctx); err != nil {
 		return err
 	}
+	span.SetAttributes(attribute.String("lester.automation.operation", "start"))
 	runID, startErr := s.Runner.Start(ctx, input)
 	if startErr == nil && runID != uuid.Nil {
 		return s.acceptReceipt(ctx, input, runID)
@@ -228,7 +268,12 @@ func (s *Service) dispatch(ctx context.Context, id uuid.UUID) error {
 	return s.reconcile(ctx, input)
 }
 func (s *Service) acceptReceipt(ctx context.Context, input Input, runID uuid.UUID) error {
-	_, err := s.DB.Exec(ctx, `UPDATE automation_deliveries SET state='accepted',run_id=$3,error_code='',updated_at=now() WHERE workspace_id=$1 AND id=$2 AND state IN ('dispatching','unknown')`, input.WorkspaceID, input.ID, runID)
+	tag, err := s.DB.Exec(ctx, `UPDATE automation_deliveries SET state='accepted',run_id=$3,error_code='',updated_at=now() WHERE workspace_id=$1 AND id=$2 AND state IN ('dispatching','unknown')`, input.WorkspaceID, input.ID, runID)
+	if err == nil && tag.RowsAffected() > 0 {
+		span := trace.SpanFromContext(ctx)
+		span.SetAttributes(attribute.String("lester.outcome", "accepted"))
+		span.SetStatus(codes.Ok, "")
+	}
 	return err
 }
 func (s *Service) reconcile(ctx context.Context, input Input) error {

@@ -19,6 +19,7 @@ spec:
   template:
     metadata:
       annotations:
+        checksum/telemetry-config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         checksum/sandbox-config: {{ toJson .Values.sandbox | sha256sum }}
         {{- if not .Values.secrets.existingSecret }}
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
@@ -49,6 +50,7 @@ spec:
           image: {{ include "lester.image" (list .Values.images.sandboxService .) }}
           imagePullPolicy: {{ .Values.images.sandboxService.pullPolicy }}
           env:
+            {{- include "lester.telemetryEnv" (list . "sandboxService") | nindent 12 }}
             - name: HTTP_ADDR
               value: :8090
             - name: SANDBOX_PROVIDER

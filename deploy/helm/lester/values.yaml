@@ -48,6 +48,27 @@ config:
     xClientID: ""
     feishuClientID: ""
     slackClientID: ""
+  telemetry:
+    # Empty: enable only when an OTLP endpoint is configured; true always disables.
+    sdkDisabled: ""
+    serviceNames:
+      api: lester-api
+      sandboxService: lester-sandbox-service
+      artifactHost: lester-artifact-host
+    endpoint: ""
+    tracesEndpoint: ""
+    metricsEndpoint: ""
+    protocol: http/protobuf
+    tracesProtocol: ""
+    metricsProtocol: ""
+    resourceAttributes: ""
+    # Empty uses parentbased_always_on. Example: parentbased_traceidratio + "0.1".
+    tracesSampler: ""
+    tracesSamplerArg: ""
+    tracesExporter: otlp
+    metricsExporter: otlp
+    # Milliseconds; Go SDK default is 60000.
+    metricExportInterval: "60000"
   objectStore:
     endpoint: s3.example.com
     bucket: lester-skills
@@ -75,6 +96,11 @@ secrets:
   connectorXClientSecret: ""
   connectorFeishuClientSecret: ""
   connectorSlackClientSecret: ""
+  # Optional collector authentication. With existingSecret use the matching
+  # OTEL_EXPORTER_OTLP_{,TRACES_,METRICS_}HEADERS keys; absent keys are allowed.
+  otelHeaders: ""
+  otelTracesHeaders: ""
+  otelMetricsHeaders: ""
   # Required when sandbox.provider=acs. It must match the API key configured
   # on ack-sandbox-manager.
   acsSandboxAPIKey: ""

@@ -87,4 +87,6 @@ See the [service diagrams and execution/storage boundaries](docs/architecture.md
 
 Docker Compose provides a local deployment. Kubernetes/Helm supports external PostgreSQL, Redis and S3-compatible storage, with Docker or ACS Computers. Public deployments require HTTPS and an independent artifact hostname.
 
+[OpenTelemetry](docs/observability.md) exports backend traces and metrics to your collector, with trace-correlated JSON logs.
+
 Read [Deployment and upgrades](docs/deployment.md), [security configuration](docs/accounts-and-security.md#security-notes) and the [Helm reference](deploy/helm/lester/README.md) before operating a public service.

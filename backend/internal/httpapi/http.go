@@ -7,6 +7,8 @@ import (
 	"runtime/debug"
 	"strings"
 	"time"
+
+	"github.com/biubiuqiu/lester-agent/backend/internal/telemetry"
 )
 
 func JSON(w http.ResponseWriter, status int, value any) {
@@ -54,7 +56,8 @@ func Recover(log *slog.Logger) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if v := recover(); v != nil {
-					log.Error("panic", "value", v, "stack", string(debug.Stack()))
+					telemetry.MarkHTTPPanic(r.Context())
+					log.ErrorContext(r.Context(), "panic", "value", v, "stack", string(debug.Stack()))
 					Error(w, 500, errInternal{})
 				}
 			}()
@@ -68,7 +71,7 @@ func AccessLog(log *slog.Logger) func(http.Handler) http.Handler {
 			start := time.Now()
 			next.ServeHTTP(w, r)
 			if !strings.HasSuffix(r.URL.Path, "/events") {
-				log.Info("request", "method", r.Method, "path", r.URL.Path, "duration", time.Since(start))
+				log.InfoContext(r.Context(), "request", "method", telemetry.HTTPMethod(r.Method), "route", telemetry.HTTPRoute(r), "duration", time.Since(start))
 			}
 		})
 	}

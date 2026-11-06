@@ -87,4 +87,6 @@ Web 经网关访问 Go API；API 负责认证、任务执行、个人记忆与�
 
 Docker Compose 提供本地部署；Kubernetes/Helm 可使用外部 PostgreSQL、Redis、S3 兼容存储，以及 Docker 或 ACS Computer。公开部署需要 HTTPS 和独立的成果域名。
 
+[OpenTelemetry](docs/zh-CN/observability.md) 可向自有 Collector 导出后端追踪与指标，并关联 JSON 日志。
+
 上线前阅读[部署与升级](docs/zh-CN/deployment.md)、[安全配置](docs/zh-CN/accounts-and-security.md#安全提示)与 [Helm 参考](deploy/helm/lester/README.md)。

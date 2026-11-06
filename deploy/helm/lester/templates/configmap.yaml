@@ -26,3 +26,16 @@ data:
   OBJECT_STORE_BUCKET: {{ required "config.objectStore.bucket is required" .Values.config.objectStore.bucket | quote }}
   OBJECT_STORE_USE_SSL: {{ .Values.config.objectStore.useSSL | quote }}
 
+  OTEL_SDK_DISABLED: {{ .Values.config.telemetry.sdkDisabled | quote }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.config.telemetry.endpoint | quote }}
+  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: {{ .Values.config.telemetry.tracesEndpoint | quote }}
+  OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: {{ .Values.config.telemetry.metricsEndpoint | quote }}
+  OTEL_EXPORTER_OTLP_PROTOCOL: {{ .Values.config.telemetry.protocol | quote }}
+  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: {{ .Values.config.telemetry.tracesProtocol | quote }}
+  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL: {{ .Values.config.telemetry.metricsProtocol | quote }}
+  OTEL_RESOURCE_ATTRIBUTES: {{ .Values.config.telemetry.resourceAttributes | quote }}
+  OTEL_TRACES_SAMPLER: {{ .Values.config.telemetry.tracesSampler | quote }}
+  OTEL_TRACES_SAMPLER_ARG: {{ .Values.config.telemetry.tracesSamplerArg | quote }}
+  OTEL_TRACES_EXPORTER: {{ .Values.config.telemetry.tracesExporter | quote }}
+  OTEL_METRICS_EXPORTER: {{ .Values.config.telemetry.metricsExporter | quote }}
+  OTEL_METRIC_EXPORT_INTERVAL: {{ .Values.config.telemetry.metricExportInterval | quote }}

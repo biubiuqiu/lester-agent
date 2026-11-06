@@ -120,6 +120,7 @@ func (s *Service) finishCancelledRun(ctx context.Context, runID, conversationID 
 		return false, err
 	}
 	if status == "cancelled" {
+		setRunOutcome(ctx, runID, status)
 		return false, nil
 	}
 	if status != "running" && status != "cancelling" {
@@ -174,6 +175,7 @@ func (s *Service) finishCancelledRun(ctx context.Context, runID, conversationID 
 	if err = tx.Commit(ctx); err != nil {
 		return false, fmt.Errorf("finish cancelled run: %w", err)
 	}
+	setRunOutcome(ctx, runID, "cancelled")
 	return true, nil
 }
 
@@ -183,7 +185,7 @@ func (s *Service) finishContext(ctx context.Context, runID, conversationID uuid.
 		cause = ctx.Err()
 	}
 	if errors.Is(cause, ErrRunCancelled) {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 		defer cancel()
 		if _, err := s.finishCancelledRun(cleanupCtx, runID, conversationID); err != nil {
 			slog.Error("persist cancelled run", "run_id", runID, "error", err)

@@ -373,7 +373,7 @@ func (s *Service) SendSubmission(ctx context.Context, workspaceID, userID, id, s
 	if err = tx.Commit(ctx); err != nil {
 		return uuid.Nil, err
 	}
-	if s.executor.start(guard, workspaceID, id, runID) {
+	if s.executor.start(guard, workspaceID, id, runID, ctx) {
 		handedOff = true
 	} else {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

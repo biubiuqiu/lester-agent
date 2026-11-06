@@ -41,6 +41,7 @@ spec:
             - configMapRef:
                 name: {{ include "lester.fullname" . }}-config
           env:
+            {{- include "lester.telemetryEnv" (list . "artifactHost") | nindent 12 }}
             - name: HTTP_ADDR
               value: :8082
             {{- range $key := list "DATABASE_URL" "OBJECT_STORE_ACCESS_KEY" "OBJECT_STORE_SECRET_KEY" }}

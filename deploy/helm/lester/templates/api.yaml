@@ -43,6 +43,7 @@ spec:
             - secretRef:
                 name: {{ include "lester.secretName" . }}
           env:
+            {{- include "lester.telemetryEnv" (list . "api") | nindent 12 }}
             - name: HTTP_ADDR
               value: :8080
             - name: SANDBOX_SERVICE_URL

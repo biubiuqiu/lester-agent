@@ -125,7 +125,7 @@ func (s *Service) dispatchInputQueue(ctx context.Context, workspaceID, conversat
 	if err != nil || runID == uuid.Nil {
 		return
 	}
-	if s.executor.start(guard, workspaceID, conversationID, runID) {
+	if s.executor.start(guard, workspaceID, conversationID, runID, ctx) {
 		handedOff = true
 		return
 	}

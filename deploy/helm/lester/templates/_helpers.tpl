@@ -33,3 +33,26 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- printf "%s:%s" $image.repository (default $root.Chart.AppVersion $image.tag) -}}
 {{- end }}
 
+
+{{/* Select only telemetry config and collector credentials for every Go service. */}}
+{{- define "lester.telemetryEnv" -}}
+{{- $root := index . 0 -}}
+{{- $component := index . 1 -}}
+- name: OTEL_SERVICE_NAME
+  value: {{ index $root.Values.config.telemetry.serviceNames $component | quote }}
+{{- range $key := list "OTEL_SDK_DISABLED" "OTEL_EXPORTER_OTLP_ENDPOINT" "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT" "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT" "OTEL_EXPORTER_OTLP_PROTOCOL" "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL" "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL" "OTEL_RESOURCE_ATTRIBUTES" "OTEL_TRACES_SAMPLER" "OTEL_TRACES_SAMPLER_ARG" "OTEL_TRACES_EXPORTER" "OTEL_METRICS_EXPORTER" "OTEL_METRIC_EXPORT_INTERVAL" }}
+- name: {{ $key }}
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "lester.fullname" $root }}-config
+      key: {{ $key }}
+{{- end }}
+{{- range $key := list "OTEL_EXPORTER_OTLP_HEADERS" "OTEL_EXPORTER_OTLP_TRACES_HEADERS" "OTEL_EXPORTER_OTLP_METRICS_HEADERS" }}
+- name: {{ $key }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "lester.secretName" $root }}
+      key: {{ $key }}
+      optional: true
+{{- end }}
+{{- end }}

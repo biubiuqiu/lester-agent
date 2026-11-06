@@ -1,0 +1,33 @@
+# Optional local OTLP receiver. Append this file to the normal Compose command.
+# It receives telemetry only inside the Compose network, with no published ports.
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector:0.164.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    expose: ["4318"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+
+  api:
+    environment: &local-otel
+      OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-false}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      # Keep the local receipt check local, without production collector credentials.
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ""
+      OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: ""
+      OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: ""
+      OTEL_EXPORTER_OTLP_METRICS_PROTOCOL: ""
+      OTEL_EXPORTER_OTLP_HEADERS: ""
+      OTEL_EXPORTER_OTLP_TRACES_HEADERS: ""
+      OTEL_EXPORTER_OTLP_METRICS_HEADERS: ""
+
+  sandbox-service:
+    environment: *local-otel
+
+  artifact-host:
+    environment: *local-otel

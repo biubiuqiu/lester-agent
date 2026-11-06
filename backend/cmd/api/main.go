@@ -34,6 +34,7 @@ import (
 	"github.com/biubiuqiu/lester-agent/backend/internal/server"
 	"github.com/biubiuqiu/lester-agent/backend/internal/skill"
 	"github.com/biubiuqiu/lester-agent/backend/internal/speech"
+	"github.com/biubiuqiu/lester-agent/backend/internal/telemetry"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
@@ -45,7 +46,8 @@ func main() {
 }
 
 func run() error {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	logger := slog.New(telemetry.NewLogHandler(slog.NewJSONHandler(os.Stdout, nil)))
+	slog.SetDefault(logger)
 	cfg, err := config.Load()
 	if err != nil {
 		logger.Error("configuration", "error", err)
@@ -53,6 +55,18 @@ func run() error {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
+	observability, err := telemetry.Init(ctx, "lester-api")
+	if err != nil {
+		logger.Error("OpenTelemetry configuration", "error", err)
+		return err
+	}
+	defer func() {
+		flushCtx, stop := context.WithTimeout(context.Background(), 5*time.Second)
+		defer stop()
+		if observability.Shutdown(flushCtx) != nil {
+			logger.Warn("OpenTelemetry shutdown did not finish")
+		}
+	}()
 	db, err := database.Open(ctx, cfg.DatabaseURL)
 	if err != nil {
 		logger.Error("database", "error", err)

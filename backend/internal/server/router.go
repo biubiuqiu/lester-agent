@@ -19,6 +19,7 @@ import (
 	"github.com/biubiuqiu/lester-agent/backend/internal/reference"
 	"github.com/biubiuqiu/lester-agent/backend/internal/skill"
 	"github.com/biubiuqiu/lester-agent/backend/internal/speech"
+	"github.com/biubiuqiu/lester-agent/backend/internal/telemetry"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -46,7 +47,7 @@ type Dependencies struct {
 
 func Router(deps Dependencies) http.Handler {
 	router := chi.NewRouter()
-	router.Use(httpapi.DenyMicrophone, middleware.RequestID, httpapi.ClientIP(deps.TrustedProxyCIDRs), httpapi.Recover(deps.Logger), httpapi.AccessLog(deps.Logger), httpapi.CORS(deps.WebOrigin), auth.MutationOrigin(deps.WebOrigin))
+	router.Use(telemetry.HTTPMiddleware("api"), httpapi.DenyMicrophone, middleware.RequestID, httpapi.ClientIP(deps.TrustedProxyCIDRs), httpapi.Recover(deps.Logger), httpapi.AccessLog(deps.Logger), httpapi.CORS(deps.WebOrigin), auth.MutationOrigin(deps.WebOrigin))
 	router.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { httpapi.JSON(w, 200, map[string]bool{"ok": true}) })
 	router.Route("/api/v1", func(api chi.Router) {
 		if deps.AppConnections != nil {

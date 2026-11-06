@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/biubiuqiu/lester-agent/backend/internal/httpapi"
+	"github.com/biubiuqiu/lester-agent/backend/internal/telemetry"
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 )
@@ -29,6 +30,7 @@ func NewServiceHandler(provider Provider, token string) *ServiceHandler {
 }
 func (h *ServiceHandler) Router() http.Handler {
 	r := chi.NewRouter()
+	r.Use(telemetry.HTTPMiddleware("sandbox-service"))
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		httpapi.JSON(w, 200, map[string]any{"ok": true, "provider": h.provider.Name()})
 	})

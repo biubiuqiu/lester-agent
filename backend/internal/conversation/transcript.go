@@ -308,6 +308,7 @@ func (s *Service) finishFailedRun(ctx context.Context, runID, conversationID uui
 		return err
 	}
 	if status != "running" {
+		setRunOutcome(ctx, runID, status)
 		return nil
 	}
 	rows, err := tx.Query(ctx, `SELECT call->>'id',call->>'name'
@@ -359,6 +360,7 @@ func (s *Service) finishFailedRun(ctx context.Context, runID, conversationID uui
 	if err = tx.Commit(ctx); err != nil {
 		return fmt.Errorf("finish failed run: %w", err)
 	}
+	setRunOutcome(ctx, runID, "failed")
 	return nil
 }
 
@@ -376,6 +378,7 @@ func (s *Service) finishCompletedRun(ctx context.Context, runID, conversationID 
 		return err
 	}
 	if status == "completed" {
+		setRunOutcome(ctx, runID, status)
 		return nil
 	}
 	if status != "running" {
@@ -397,5 +400,9 @@ func (s *Service) finishCompletedRun(ctx context.Context, runID, conversationID 
 	if err = eventlog.Append(ctx, tx, runID, conversationID, "RUN_COMPLETED", map[string]any{}); err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	err = tx.Commit(ctx)
+	if err == nil {
+		setRunOutcome(ctx, runID, "completed")
+	}
+	return err
 }

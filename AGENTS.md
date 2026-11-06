@@ -222,6 +222,8 @@ Preserve these behaviors when changing the implementation:
 
 ## Backend conventions
 
+- Optional observability uses the shared OpenTelemetry SDK in `internal/telemetry`, with standard OTLP HTTP/protobuf or gRPC exporters. An unconfigured deployment remains disabled; explicit `OTEL_SDK_DISABLED=true` takes precedence. Keep exporter setup, batch processing and bounded shutdown flushing in service lifecycle wiring, not business handlers. Export failures must not fail or retry business operations, and SDK warnings must not reveal collector credentials.
+- Telemetry records operational metadata only: route templates, bounded registered operation/provider/tool names, status, duration and genuinely reported token counters. Never export prompts, responses, memories, arguments, commands, file contents/paths, raw URLs/query strings, headers, credentials or raw error messages. Do not add user/workspace/conversation/run identifiers to metric attributes. W3C traceparent propagation is separate from authentication and does not carry baggage/tracestate. A background run copies only SpanContext into its independent cancellation context; preserve request-independent execution and existing stop/shutdown ownership. Delayed queues and restart recovery do not persist trace context or imply continuity with the original request. Model streams end telemetry on stream termination/cancellation, not when their channels are returned; command exit-code failures remain failures even when the Go error is nil. Keep SSE/WebSocket HTTP interfaces intact.
 - Use Go `1.26.10` and keep the module rooted at `backend/`.
 - Keep `cmd/*/main.go` focused on dependency wiring and process lifecycle.
 - Put application behavior in the appropriate `backend/internal/*` package.

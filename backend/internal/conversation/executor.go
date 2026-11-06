@@ -32,21 +32,26 @@ type runExecutor struct {
 	queueContext     context.Context
 }
 
-func (e *runExecutor) start(guard *runGuard, workspaceID, conversationID, runID uuid.UUID) bool {
-	return e.launch(guard, conversationID, runID, func(ctx context.Context) { e.execute(ctx, workspaceID, conversationID, runID) })
+func (e *runExecutor) start(guard *runGuard, workspaceID, conversationID, runID uuid.UUID, parents ...context.Context) bool {
+	return e.launch(guard, conversationID, runID, func(ctx context.Context) { e.execute(ctx, workspaceID, conversationID, runID) }, parents...)
 }
 
-func (e *runExecutor) launch(guard *runGuard, conversationID, runID uuid.UUID, run func(context.Context)) bool {
+func (e *runExecutor) launch(guard *runGuard, conversationID, runID uuid.UUID, run func(context.Context), parents ...context.Context) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.stopping || e.queueContext != nil && e.queueContext.Err() != nil {
 		return false
 	}
-	ctx, cancel := context.WithCancelCause(context.Background())
+	parent := context.Background()
+	if len(parents) > 0 && parents[0] != nil {
+		parent = parents[0]
+	}
+	ctx, cancel := context.WithCancelCause(detachedExecutionContext(parent))
 	execution := &activeExecution{cancel: cancel, done: make(chan struct{})}
 	e.active.Store(runID, execution)
 	e.tasks.Add(1)
 	go func() {
+		ctx, endObservation := observeRun(ctx, conversationID, runID)
 		defer e.tasks.Done()
 		defer func() {
 			cancel(context.Canceled)
@@ -55,8 +60,10 @@ func (e *runExecutor) launch(guard *runGuard, conversationID, runID uuid.UUID, r
 			close(execution.done)
 			e.service.scheduleInputQueue(conversationID)
 		}()
+		defer endObservation()
 		defer func() {
 			if recover() != nil {
+				setRunOutcome(ctx, runID, "panic")
 				slog.Error("run executor panic", "run_id", runID)
 				e.service.finishExecutionError(ctx, runID, conversationID, errors.New("run executor stopped unexpectedly"))
 			}
@@ -541,6 +548,13 @@ func (e *runExecutor) executeTurns(ctx context.Context, conversationID, runID uu
 }
 
 func (e *runExecutor) runTool(ctx context.Context, runID, conversationID uuid.UUID, computer *Computer, call model.ToolCall, fileStates ...*agenttool.FileState) (any, error) {
+	name := e.service.tools.ToolName(call.Name)
+	return observeTool(ctx, name, runID, conversationID, func(ctx context.Context) (any, error) {
+		return e.executeTool(ctx, runID, conversationID, computer, call, fileStates...)
+	})
+}
+
+func (e *runExecutor) executeTool(ctx context.Context, runID, conversationID uuid.UUID, computer *Computer, call model.ToolCall, fileStates ...*agenttool.FileState) (any, error) {
 	s := e.service
 	_, _ = s.db.Exec(ctx, `UPDATE sandboxes SET last_active_at=now() WHERE provider_ref=$1`, computer.SandboxID)
 	environment := agenttool.Environment{

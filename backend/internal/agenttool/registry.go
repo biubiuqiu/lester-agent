@@ -121,6 +121,14 @@ func (r *Registry) Definitions() []model.Tool {
 	return append([]model.Tool(nil), r.definitions...)
 }
 
+// ToolName resolves aliases without exposing arbitrary model-supplied names to telemetry.
+func (r *Registry) ToolName(name string) string {
+	if handler, exists := r.handlers[name]; exists {
+		return handler.Definition().Name
+	}
+	return "unknown"
+}
+
 func (r *Registry) Execute(ctx context.Context, name string, arguments json.RawMessage, environment Environment) (any, error) {
 	handler, exists := r.handlers[name]
 	if !exists {

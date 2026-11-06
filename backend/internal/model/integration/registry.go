@@ -69,7 +69,7 @@ func (r *Registry) NewClient(spec ClientSpec) (modelruntime.Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("initialize %s provider: %w", spec.Provider, err)
 	}
-	return client, nil
+	return observeModelClient(client, provider.Name()), nil
 }
 
 func configString(config map[string]any, key string) string {

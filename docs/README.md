@@ -16,6 +16,7 @@ Start with installation, then choose a chapter for the work you want to do. Comm
 | [GitHub code tasks](github-code-tasks.md) | Authorized source checkout, sandbox tests, review, push and PRs. |
 | [Voice input](speech-input.md) | Configure transcription providers and turn speech into editable drafts. |
 | [Architecture and Computers](architecture.md) | Services, sandboxes, storage, events and model context. |
+| [OpenTelemetry](observability.md) | OTLP traces/metrics, correlated logs, privacy and collector setup. |
 | [Deployment and upgrades](deployment.md) | Upgrade checklist, gateway, Docker/ACS and Kubernetes/Helm. |
 | [Accounts, administration and security](accounts-and-security.md) | Registration, OAuth, tokens, avatars, admin access and security. |
 | [Development and CI](development.md) | Repository layout, local validation and GitHub Actions. |

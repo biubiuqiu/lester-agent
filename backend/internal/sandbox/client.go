@@ -9,6 +9,9 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/biubiuqiu/lester-agent/backend/internal/telemetry"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 type Client struct {
@@ -145,6 +148,9 @@ func (c *Client) json(ctx context.Context, method, path string, input, output an
 
 func (c *Client) request(ctx context.Context, method, endpoint string, body io.Reader) (*http.Request, error) {
 	request, err := http.NewRequestWithContext(ctx, method, endpoint, body)
+	if err == nil {
+		telemetry.TraceparentPropagator().Inject(ctx, propagation.HeaderCarrier(request.Header))
+	}
 	if err == nil && c.Token != "" {
 		request.Header.Set("Authorization", "Bearer "+c.Token)
 	}
