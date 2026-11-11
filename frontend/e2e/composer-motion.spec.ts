@@ -46,10 +46,24 @@ test("first submit moves the live composer, bridges slow navigation and restores
     const box = page.locator(".new-chat-composer .compose-box");
     const initial = (await box.boundingBox())!;
     await page.screenshot({ path: info.outputPath("before-send.png") });
+    // Arm the recorder before Enter: later browser round trips can outlast
+    // the animation when the full desktop/mobile suite is running.
+    const motion = await box.evaluateHandle(element => ({ complete: new Promise<number[]>(resolve => {
+      element.addEventListener("keydown", () => {
+        const points = [element.getBoundingClientRect().y], start = performance.now();
+        function frame() {
+          points.push(element.getBoundingClientRect().y);
+          if (performance.now() - start >= 430) resolve(points);
+          else requestAnimationFrame(frame);
+        }
+        requestAnimationFrame(frame);
+      }, { once: true, capture: true });
+    }) }));
     await page.getByRole("textbox", { name: "消息输入框", exact: true }).press("Enter");
     await expect(page.getByRole("button", { name: "发送消息", exact: true })).toBeDisabled();
     await page.locator("form.new-chat-composer").evaluate(form => { (form as HTMLFormElement).requestSubmit(); (form as HTMLFormElement).requestSubmit(); });
-    const points = await sampleMotion(page);
+    const points = await motion.evaluate(async sample => sample.complete);
+    await motion.dispose();
     const docked = (await box.boundingBox())!;
     expect(docked.y).toBeGreaterThan(initial.y + 60);
     expect(points.some(y => y > initial.y + 5 && y < docked.y - 5)).toBe(true);

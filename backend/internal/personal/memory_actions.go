@@ -27,6 +27,11 @@ func (s *Service) applyMemories(ctx context.Context, tx pgx.Tx, p auth.Principal
 			m, err = scanMemory(tx.QueryRow(ctx, `SELECT `+memoryColumns+` FROM personal_memories WHERE workspace_id=$1 AND user_id=$2 AND project_id IS NOT DISTINCT FROM $3::uuid AND lower(topic)=lower($4) FOR UPDATE`, p.WorkspaceID, p.UserID, project, strings.TrimSpace(a.Topic)))
 		}
 		if err == nil {
+			// Pausing is a user-owned availability choice. A generated action
+			// cannot bypass the hidden directory by reusing an older topic/ID.
+			if m.Paused {
+				return "", ErrModel
+			}
 			old := m
 			before = &old
 			if m.Deleted && a.Automatic {

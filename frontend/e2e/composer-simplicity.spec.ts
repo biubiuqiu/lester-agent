@@ -12,7 +12,9 @@ test("add menu groups materials, preserves drafts and leaves model and round sen
   await page.getByRole("button",{name:"移除 brief.txt",exact:true}).click();await expect(input).toHaveValue("保留我的草稿");
   const model=page.getByRole("combobox",{name:"当前模型",exact:true}),send=page.getByRole("button",{name:"发送消息",exact:true});
   const mb=await model.boundingBox(),sb=await send.boundingBox(),ab=await add.boundingBox();expect(mb!.x).toBeGreaterThan(ab!.x+ab!.width);expect(sb!.x).toBeGreaterThan(mb!.x);
-  expect(await send.evaluate(e=>getComputedStyle(e).borderRadius)).toBe("999px");await input.fill(prompt);await input.press("Enter");await expect(page).toHaveURL(`/app/c/${conversationId}`);await expect(model).toBeDisabled();await expect(page.locator(".composer-motion-ghost")).toHaveCount(0);
+  const shape=await send.evaluate(element=>{const bounds=element.getBoundingClientRect(),style=getComputedStyle(element);return {width:bounds.width,height:bounds.height,radii:[style.borderTopLeftRadius,style.borderTopRightRadius,style.borderBottomRightRadius,style.borderBottomLeftRadius].map(value=>Number.parseFloat(value))};});
+  expect(Math.abs(shape.width-shape.height)).toBeLessThanOrEqual(1);for(const radius of shape.radii)expect(radius).toBeGreaterThanOrEqual(Math.min(shape.width,shape.height)/2);
+  await input.fill(prompt);await input.press("Enter");await expect(page).toHaveURL(`/app/c/${conversationId}`);await expect(model).toBeDisabled();await expect(page.locator(".composer-motion-ghost")).toHaveCount(0);
   await input.fill("准备下一步");if(info.project.name==="mobile")await page.setViewportSize({width:320,height:740});
   const bounds=await page.locator(".compose-actions").locator("button,select").evaluateAll(elements=>elements.map(element=>{const r=element.getBoundingClientRect();return {x:r.x,right:r.right};}));
   for(const b of bounds){expect(b.x).toBeGreaterThanOrEqual(0);expect(b.right).toBeLessThanOrEqual(page.viewportSize()!.width+1);}

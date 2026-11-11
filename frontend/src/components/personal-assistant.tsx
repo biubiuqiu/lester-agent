@@ -11,11 +11,10 @@ import { useI18n } from "./i18n";
 import { MessageContent } from "./message-content";
 import { SpeechComposer } from "./speech-input";
 import { PersonalInbox } from "./personal-inbox";
-import { PersonalMemoryManager } from "./personal-memory-manager";
 import { BrandMark } from "./brand";
 
-export function PersonalAssistant({ user, projects, deployments, revision, active, onClose, onActivity, onDelegated }: { user: UserProfile; projects: Project[]; deployments: Deployment[]; revision: number; active: boolean; onClose: () => void; onActivity: (busy: boolean) => void; onDelegated: () => void }) {
-  const { t, locale } = useI18n();
+export function PersonalAssistant({ user, projects, deployments, revision, memoryRevision, onOpenMemory, onMemoryChanged, active, onClose, onActivity, onDelegated }: { user: UserProfile; projects: Project[]; deployments: Deployment[]; revision: number; memoryRevision: number; onOpenMemory: () => void; onMemoryChanged: () => void; active: boolean; onClose: () => void; onActivity: (busy: boolean) => void; onDelegated: () => void }) {
+  const { t } = useI18n();
   const key = viewKey(user.user_id, user.workspace_id, "personal");
   const [text, setText] = useState(() => readView(key).text);
   const [project, setProject] = useState(() => readView(key).personalProject);
@@ -26,9 +25,9 @@ export function PersonalAssistant({ user, projects, deployments, revision, activ
   const [error, setError] = useState("");
   const [pending, setPending] = useState(() => readView(key).personalPending);
   const [busy, setBusy] = useState(false), [checking, setChecking] = useState(false), [historyBusy, setHistoryBusy] = useState(false);
-  const [memoryOpen, setMemoryOpen] = useState(false);
   const mounted = useRef(true), sending = useRef(false), scroll = useRef<HTMLDivElement>(null), follow = useRef(true), input = useRef<HTMLTextAreaElement>(null);
   const loadedRevision = useRef(revision);
+  const loadedMemoryRevision = useRef(memoryRevision);
   const readGeneration = useRef(0);
   const taskRead = useRef<{ generation: number; controller: AbortController | null }>({ generation: 0, controller: null });
   const latestTasks = useRef<{ generation: number; tasks: PersonalTask[]; inbox?: InboxSnapshot } | null>(null);
@@ -77,6 +76,11 @@ export function PersonalAssistant({ user, projects, deployments, revision, activ
     void refreshTasks();
   }, [revision, refreshTasks]);
   useEffect(() => {
+    if (loadedMemoryRevision.current === memoryRevision) return;
+    loadedMemoryRevision.current = memoryRevision;
+    void refresh().catch(() => { if (mounted.current) setError("个人助理加载失败，请稍后检查状态"); });
+  }, [memoryRevision, refresh]);
+  useEffect(() => {
     const receive = (detail: unknown) => {
       if (!detail || typeof detail !== "object") return;
       const scope = detail as { userId?: string; workspaceId?: string };
@@ -106,6 +110,7 @@ export function PersonalAssistant({ user, projects, deployments, revision, activ
   }, [refresh, refreshTasks]);
   const accept = (turn: PersonalTurn) => {
     if (!mounted.current) return;
+    if (turn.changes.length) onMemoryChanged();
     readGeneration.current++;
     setState(previous => previous ? { ...previous, turns: mergePersonalTurns(previous.turns, [turn]) } : previous);
     if (turn.status !== "pending" && readView(key).personalPending === turn.id) {
@@ -163,7 +168,9 @@ export function PersonalAssistant({ user, projects, deployments, revision, activ
   }
   async function undo(id: string) {
     await api(`/api/v1/personal/changes/${id}/undo`, { method: "POST", body: "{}" });
+    if (!mounted.current) return;
     setState(previous => previous ? { ...previous, turns: previous.turns.map(turn => ({ ...turn, changes: turn.changes.map(change => change.id === id ? { ...change, undone: true } : change) })) } : previous);
+    onMemoryChanged();
     await refresh();
   }
   function prepare(prompt: string) {
@@ -172,7 +179,7 @@ export function PersonalAssistant({ user, projects, deployments, revision, activ
     input.current?.focus({ preventScroll: true });
   }
   return <div className="personal-assistant" onClick={event => { if (event.target instanceof Element && event.target.closest('a[href^="/app/"]') && window.matchMedia("(max-width: 1279px)").matches) onClose(); }}>
-    <div className="personal-toolbar"><div className="personal-identity"><span className="personal-identity-mark" aria-hidden="true"><BrandMark /></span><span><strong>Lester</strong><small>{t("个人助理")}</small></span></div><div className="personal-header-actions"><button type="button" onClick={() => setMemoryOpen(true)} disabled={!state} aria-label={t("管理记忆")}><Brain size={16} />{t("记忆")}{state?.memories.length ? <small>{state.memories.length}</small> : null}</button>
+    <div className="personal-toolbar"><div className="personal-identity"><span className="personal-identity-mark" aria-hidden="true"><BrandMark /></span><span><strong>Lester</strong><small>{t("个人助理")}</small></span></div><div className="personal-header-actions"><button type="button" onClick={onOpenMemory} aria-label={t("管理记忆")}><Brain size={16} />{t("记忆")}{state?.memories.length ? <small>{state.memories.length}</small> : null}</button>
       <details className="personal-options" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) event.currentTarget.open = false; }} onKeyDown={event => { if (event.key === "Escape" && event.currentTarget.open) { event.stopPropagation(); event.preventDefault(); event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }}><summary aria-label={t("助理设置")} title={t("助理设置")}><SlidersHorizontal size={16} /></summary><div>
         <label>{t("任务项目")}<select aria-label={t("对话项目范围")} value={selectedProject} onChange={event => { setProject(event.target.value); updateView(key, { personalProject: event.target.value }); }} disabled={busy}><option value="">{t("由 Lester 选择")}</option>{projects.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         <label>{t("个人助理模型")}<select aria-label={t("个人助理模型")} value={selectedModel} disabled={busy || !deployments.length} onChange={event => { setModel(event.target.value); updateView(key, { personalModel: event.target.value }); }}>{deployments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
@@ -188,7 +195,8 @@ export function PersonalAssistant({ user, projects, deployments, revision, activ
           {turn.reply ? <div className="personal-reply"><MessageContent content={turn.reply} /></div> : null}
           {turn.status === "failed" || turn.status === "interrupted" ? <p className="personal-turn-notice" role="status">{t("这次回复未完成，未自动重试。你可以重新发送。")}</p> : turn.status === "pending" ? <p className="personal-turn-notice">{t("Lester 正在回复…")}</p> : null}
           {turn.memory_notice ? <p className="personal-turn-notice" role="status">{t(turn.memory_notice)}</p> : null}
-          {turn.changes.length ? <div className="personal-memory-receipts">{turn.changes.map(change => <MemoryReceipt key={change.id} change={change} onUndo={() => undo(change.id)} />)}</div> : null}
+          {turn.changes.length ? <div className="personal-memory-receipts">{turn.changes.map(change => <MemoryReceipt key={change.id} change={change} onUndo={() => undo(change.id)} onInspect={async () => accept(await api<PersonalTurn>(`/api/v1/personal/messages/${encodeURIComponent(turn.id)}`))} />)}</div> : null}
+          {turn.memory_context?.length ? <details className="personal-memory-context"><summary>{t("本次参考 {0} 条记忆", [turn.memory_context.length])}</summary><ul>{turn.memory_context.map(memory => <li key={`${memory.id}:${memory.revision}`}><span>{memory.topic}</span><small>{t("版本 {0}", [memory.revision])} · {memory.project_id ? projects.find(project => project.id === memory.project_id)?.name ?? t("项目不可用") : t("个人范围")}</small></li>)}</ul></details> : null}
           {turn.task ? <TaskCard delegation={turn.task} live={state.tasks.find(task => task.id === turn.task!.conversation_id)} projectName={projects.find(item => item.id === turn.task!.project_id)?.name} onInspect={async () => { const receipt = await api<PersonalTurn>(`/api/v1/personal/messages/${turn.id}`); accept(receipt); await refresh(); if (mounted.current && receipt.task) onDelegated(); }} /> : null}
         </article>)}
         {busy ? <p className="personal-working" role="status"><LoaderCircle size={15} />{t("Lester 正在回复…")}</p> : null}
@@ -204,13 +212,13 @@ export function PersonalAssistant({ user, projects, deployments, revision, activ
         <SpeechComposer draftKey={key} inputRef={input} onText={draft} active={active} maxLength={12000} className="personal-composer-actions"><span className="personal-composer-hint">{t("记住重要的事，安排接下来的工作")}</span><span className="personal-composer-spacer" /><button className="send-button" aria-label={t("发送给个人助理")} disabled={!text.trim() || busy || !!pending || !state || !deployments.length}>{busy ? <LoaderCircle className="personal-spinner" /> : <ArrowUp />}</button></SpeechComposer>
       </form>
     </div>
-    {state ? <PersonalMemoryManager key={key} open={memoryOpen} memories={state.memories} projects={projects} automatic={state.auto_memory} locale={locale} onClose={() => setMemoryOpen(false)} onRefresh={refresh} onAutomatic={async enabled => { await api("/api/v1/personal/settings", { method: "PATCH", body: JSON.stringify({ auto_memory: enabled }) }); if (mounted.current) setState(previous => previous ? { ...previous, auto_memory: enabled } : previous); }} /> : null}
   </div>;
 }
 
-function MemoryReceipt({ change, onUndo }: { change: PersonalTurn["changes"][number]; onUndo: () => Promise<void> }) {
-  const { t } = useI18n(), [busy, setBusy] = useState(false), [error, setError] = useState("");
-  return <span className="personal-memory-receipt"><Brain size={13} /><span>{t(change.undone ? "已撤销记忆更新" : change.deleted ? "已忘记：{0}" : "已记住：{0}", [change.topic])}</span>{!change.undone ? <button type="button" disabled={busy} aria-label={t("撤销记忆 {0}", [change.topic])} title={t("撤销")} onClick={async () => { if (busy) return; setBusy(true); setError(""); try { await onUndo(); } catch (reason) { setError(reason instanceof Error ? reason.message : "操作失败"); } finally { setBusy(false); } }}><Undo2 size={13} /></button> : null}{error ? <span role="alert">{t(error)}</span> : null}</span>;
+function MemoryReceipt({ change, onUndo, onInspect }: { change: PersonalTurn["changes"][number]; onUndo: () => Promise<void>; onInspect: () => Promise<void> }) {
+  const { t } = useI18n(), [busy, setBusy] = useState(false), [error, setError] = useState(""), [uncertain, setUncertain] = useState(false);
+  const running = useRef(false);
+  return <span className="personal-memory-receipt"><Brain size={13} /><span>{t(change.undone ? "已撤销记忆更新" : change.deleted ? "已忘记：{0}" : "已记住：{0}", [change.topic])}</span>{!change.undone ? <button type="button" disabled={busy} aria-label={t(uncertain ? "检查状态" : "撤销记忆 {0}", [change.topic])} title={t(uncertain ? "检查状态" : "撤销")} onClick={async () => { if (running.current) return; running.current = true; setBusy(true); setError(""); try { if (uncertain) await onInspect(); else await onUndo(); } catch (reason) { if (uncertain || !(reason instanceof ApiError) || reason.status >= 500) { setUncertain(true); setError("操作结果未确认，请检查状态；不会自动重试。"); } else setError(reason instanceof Error ? reason.message : "操作失败"); } finally { running.current = false; setBusy(false); } }}>{uncertain ? t("检查状态") : <Undo2 size={13} />}</button> : null}{error && !change.undone ? <span role="alert">{t(error)}</span> : null}</span>;
 }
 function taskStatus(status: string) { return ({ running: "进行中", cancelling: "正在停止", completed: "已完成", awaiting_input: "等待你确认", failed: "执行失败", cancelled: "已停止", idle: "尚未开始" } as Record<string, string>)[status] ?? "状态待确认"; }
 function TaskCard({ delegation, live, projectName, onInspect }: { delegation: NonNullable<PersonalTurn["task"]>; live?: PersonalTask; projectName?: string; onInspect: () => Promise<void> }) {

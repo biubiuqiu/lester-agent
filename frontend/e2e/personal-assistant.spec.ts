@@ -308,6 +308,8 @@ test("persistent assistant remembers, corrects, forgets and undoes without creat
   await context.route("**/api/v1/personal**", async route => {
     const request = route.request(), path = new URL(request.url()).pathname;
     if (request.method() === "GET") {
+      if (path === "/api/v1/personal/memories") return route.fulfill({ json: { user_id: "22222222-2222-4222-8222-222222222222", workspace_id: "fixture-workspace", memories: state.memories, auto_memory: state.auto_memory } });
+      if (path.endsWith("/history")) return route.fulfill({ json: { memory: state.memories[0], changes: [], has_more: false } });
       if (path === "/api/v1/personal/tasks") return route.fulfill({ json: { tasks: state.tasks } });
       if (path.includes("/messages/")) return route.fulfill({ json: state.turns.find(turn => turn.id === path.split("/").at(-1)) });
       return route.fulfill({ json: state });
@@ -410,6 +412,7 @@ test("assistant loading failure retries reads and the memory dialog fits a short
   await page.getByRole("button", { name: "管理记忆", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Lester 的记忆", exact: true });
   await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("checkbox", { name: /自动记住重要信息/ })).toBeVisible();
   const box = await dialog.boundingBox(); expect(box!.y).toBeGreaterThanOrEqual(0); expect(box!.y + box!.height).toBeLessThanOrEqual(page.viewportSize()!.height + 1);
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);

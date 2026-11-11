@@ -140,6 +140,7 @@ export class WorkspaceApi {
     if (path === "/api/v1/auth/session") return reply({ access_expires_at: new Date(Date.now() + 7200000).toISOString(), refresh_expires_at: new Date(Date.now() + 2592000000).toISOString() });
     if (path === "/api/v1/speech/capabilities" && method === "GET") return reply({ enabled: false, provider: "openai", revision: 0, max_audio_bytes: 10485760, max_duration_seconds: 120 });
     if (path === "/api/v1/personal" && method === "GET") return reply({ turns: [], has_more: false, memories: [], tasks: [], inbox: { tasks: [], total: 0, next_cursor: "" }, auto_memory: true });
+    if (path === "/api/v1/personal/memories" && method === "GET") return reply({ user_id: user.user_id, workspace_id: user.workspace_id, memories: [], auto_memory: true });
     if (path === "/api/v1/personal/tasks" && method === "GET") return reply({ tasks: [], inbox: { tasks: [], total: 0, next_cursor: "" } });
     if (path === "/api/v1/personal/unread" && method === "GET") return reply({ tasks: [], total: 0, next_cursor: "" });
     if (path === "/api/v1/tasks") return reply({ tasks: [], next_cursor: "", attention_count: 0, observed_at: new Date().toISOString() });

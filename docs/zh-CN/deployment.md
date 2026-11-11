@@ -8,10 +8,12 @@
 
 1. 备份 PostgreSQL、对象存储和 Computer 数据，保留 `.env`、加密密钥与持久化数据卷。
 2. 停止活跃任务和 API 写入，确认已经应用的迁移编号。
-3. 按编号依次执行**尚未应用的全部迁移，直到 037**，每个迁移只执行一次。新数据库初始化不会自动升级旧数据卷；其他章节按功能提供的 SQL 示例只是历史步骤，不能代替完整升级。
+3. 按编号依次执行**尚未应用的全部迁移，直到 038**，每个迁移只执行一次。新数据库初始化不会自动升级旧数据卷；其他章节按功能提供的 SQL 示例只是历史步骤，不能代替完整升级。
 4. 同步构建和部署匹配版本的 API、Web 与 Sandbox Service，不能通过删除数据卷升级。
 
 全新安装请看[快速开始](getting-started.md)；事务执行 SQL 的方法见[账号升级](accounts-and-security.md#账号第三方登录与头像)和[上下文升级](architecture.md#已有部署升级)。完成全部缺失迁移后再重启最新服务。
+
+038 新增记忆暂停状态与撤销关系。回滚保留事实、历史与任务，但存在未忘记的暂停项时会拒绝；降级前需明确恢复使用。详见[记忆管理与升级](personal-assistant.md#升级与验证)。
 
 ## 本章目录
 
@@ -136,11 +138,11 @@ ACS 模式不挂载 Docker Socket，Sandbox Service 可以多副本运行。Char
 
 摘要是独立的无工具请求，有单独的用量记录与输出限制；校验通过且整个请求确实缩小后，才原子保存检查点和事件。格式错误、取消或无效缩小保留旧检查点，并停止本轮自动整理。每轮最多尝试整理两次；Provider 返回上下文过长时，只在尚无输出的情况下恢复一次。普通模型/工具循环仍不限制次数。受保护内容无法安全容纳时明确停止，不重放工具、不截断最新输入；下一次任务会恢复检查点，切换模型后重新估算完整请求。过程协作和文件审阅的剩余目标见[对标实施记录](../claude-code-alignment.md)。
 
-已有数据库完成 001–015 后，先备份、停止 API 写入，按顺序执行一次 016–037，再启动最新版服务；更早的数据库先补齐缺失迁移。保留密钥、文件与数据卷。回滚 018 前先停止命令任务；数据库回滚不会撤销文件修改或外部操作。
+已有数据库完成 001–015 后，先备份、停止 API 写入，按顺序执行一次 016–038，再启动最新版服务；更早的数据库先补齐缺失迁移。保留密钥、文件与数据卷。回滚 018 前先停止命令任务；数据库回滚不会撤销文件修改或外部操作。
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
-for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions 000022_run_inputs 000023_file_changes 000024_project_rules 000025_run_permissions 000026_cloud_task_indexes 000027_automations 000028_permission_reviews 000029_conversational_schedules 000030_native_signin 000031_personal_assistant 000032_app_connections 000033_github_code_workflows 000034_speech_input 000035_speech_providers 000036_conversation_reads 000037_desktop_devices; do
+for migration in 000016_run_submissions 000017_model_budget 000018_command_tasks 000019_model_request_usage 000020_context_checkpoints 000021_run_interactions 000022_run_inputs 000023_file_changes 000024_project_rules 000025_run_permissions 000026_cloud_task_indexes 000027_automations 000028_permission_reviews 000029_conversational_schedules 000030_native_signin 000031_personal_assistant 000032_app_connections 000033_github_code_workflows 000034_speech_input 000035_speech_providers 000036_conversation_reads 000037_desktop_devices 000038_memory_management; do
   docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "backend/migrations/${migration}.up.sql" || exit 1
 done
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --build api web sandbox-service

@@ -200,6 +200,70 @@ func (h *Handler) Memory(w http.ResponseWriter, r *http.Request) {
 	}
 	httpapi.JSON(w, 200, item)
 }
+
+func (h *Handler) Memories(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	p, _ := auth.FromContext(r.Context())
+	item, err := h.Service.MemoryCollection(r.Context(), p)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	httpapi.JSON(w, 200, item)
+}
+
+func (h *Handler) MemoryAvailability(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var input struct {
+		Revision int64 `json:"revision"`
+		Paused   *bool `json:"paused"`
+	}
+	if !decode(w, r, &input) {
+		return
+	}
+	if input.Paused == nil {
+		fail(w, ErrInvalid)
+		return
+	}
+	item, err := h.Service.SetMemoryPaused(r.Context(), p, id, input.Revision, *input.Paused)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	httpapi.JSON(w, 200, item)
+}
+
+func (h *Handler) MemoryHistory(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	p, _ := auth.FromContext(r.Context())
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	before := int64(0)
+	if values, present := r.URL.Query()["before_revision"]; present {
+		var err error
+		if len(values) != 1 {
+			fail(w, ErrInvalid)
+			return
+		}
+		before, err = strconv.ParseInt(values[0], 10, 64)
+		if err != nil || before <= 0 {
+			fail(w, ErrInvalid)
+			return
+		}
+	}
+	item, err := h.Service.MemoryHistory(r.Context(), p, id, before)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	httpapi.JSON(w, 200, item)
+}
 func (h *Handler) Undo(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.FromContext(r.Context())
 	id, ok := pathID(w, r)

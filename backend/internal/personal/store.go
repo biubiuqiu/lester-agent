@@ -37,15 +37,20 @@ func ensureThread(ctx context.Context, tx pgx.Tx, p auth.Principal) (int64, int6
 	return revision, after, auto, err
 }
 
-const memoryColumns = `id,project_id,kind,topic,content,evidence,source_turn_id,automatic,deleted,revision,updated_at`
+const memoryColumns = `id,project_id,kind,topic,content,evidence,source_turn_id,automatic,paused,deleted,revision,updated_at`
 
 func scanMemory(row pgx.Row) (m Memory, err error) {
-	err = row.Scan(&m.ID, &m.ProjectID, &m.Kind, &m.Topic, &m.Content, &m.Evidence, &m.SourceTurnID, &m.Automatic, &m.Deleted, &m.Revision, &m.UpdatedAt)
+	err = row.Scan(&m.ID, &m.ProjectID, &m.Kind, &m.Topic, &m.Content, &m.Evidence, &m.SourceTurnID, &m.Automatic, &m.Paused, &m.Deleted, &m.Revision, &m.UpdatedAt)
 	return
 }
 
 func (s *Service) Memories(ctx context.Context, p auth.Principal) ([]Memory, error) {
-	rows, err := s.DB.Query(ctx, `SELECT `+memoryColumns+` FROM personal_memories WHERE workspace_id=$1 AND user_id=$2 AND NOT deleted ORDER BY updated_at DESC,id LIMIT 128`, p.WorkspaceID, p.UserID)
+	collection, err := s.MemoryCollection(ctx, p)
+	return collection.Memories, err
+}
+
+func readMemories(ctx context.Context, tx pgx.Tx, p auth.Principal) ([]Memory, error) {
+	rows, err := tx.Query(ctx, `SELECT `+memoryColumns+` FROM personal_memories WHERE workspace_id=$1 AND user_id=$2 AND NOT deleted ORDER BY updated_at DESC,id LIMIT 128`, p.WorkspaceID, p.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -62,17 +67,19 @@ func (s *Service) Memories(ctx context.Context, p auth.Principal) ([]Memory, err
 }
 
 func (s *Service) History(ctx context.Context, p auth.Principal, before int64) ([]Turn, bool, error) {
-	rows, err := s.DB.Query(ctx, `SELECT id,seq,content,reply,status,created_at,memory_notice FROM personal_turns WHERE workspace_id=$1 AND user_id=$2 AND ($3::bigint=0 OR seq<$3) ORDER BY seq DESC LIMIT 31`, p.WorkspaceID, p.UserID, before)
+	rows, err := s.DB.Query(ctx, `SELECT id,seq,content,reply,status,created_at,memory_notice,usage FROM personal_turns WHERE workspace_id=$1 AND user_id=$2 AND ($3::bigint=0 OR seq<$3) ORDER BY seq DESC LIMIT 31`, p.WorkspaceID, p.UserID, before)
 	if err != nil {
 		return nil, false, err
 	}
 	items := []Turn{}
 	for rows.Next() {
 		var v Turn
-		if err = rows.Scan(&v.ID, &v.Seq, &v.Content, &v.Reply, &v.Status, &v.CreatedAt, &v.MemoryNotice); err != nil {
+		var usage []byte
+		if err = rows.Scan(&v.ID, &v.Seq, &v.Content, &v.Reply, &v.Status, &v.CreatedAt, &v.MemoryNotice, &usage); err != nil {
 			rows.Close()
 			return nil, false, err
 		}
+		v.MemoryContext = projectMemoryContext(usage)
 		items = append(items, v)
 	}
 	err = rows.Err()
@@ -96,13 +103,15 @@ func (s *Service) History(ctx context.Context, p auth.Principal, before int64) (
 }
 func (s *Service) Turn(ctx context.Context, p auth.Principal, id uuid.UUID) (Turn, error) {
 	var v Turn
-	err := s.DB.QueryRow(ctx, `SELECT id,seq,content,reply,status,created_at,memory_notice FROM personal_turns WHERE workspace_id=$1 AND user_id=$2 AND id=$3`, p.WorkspaceID, p.UserID, id).Scan(&v.ID, &v.Seq, &v.Content, &v.Reply, &v.Status, &v.CreatedAt, &v.MemoryNotice)
+	var usage []byte
+	err := s.DB.QueryRow(ctx, `SELECT id,seq,content,reply,status,created_at,memory_notice,usage FROM personal_turns WHERE workspace_id=$1 AND user_id=$2 AND id=$3`, p.WorkspaceID, p.UserID, id).Scan(&v.ID, &v.Seq, &v.Content, &v.Reply, &v.Status, &v.CreatedAt, &v.MemoryNotice, &usage)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return v, ErrNotFound
 	}
 	if err != nil {
 		return v, err
 	}
+	v.MemoryContext = projectMemoryContext(usage)
 	err = s.decorate(ctx, p, &v)
 	return v, err
 }
@@ -185,7 +194,7 @@ func (s *Service) EditMemory(ctx context.Context, p auth.Principal, id uuid.UUID
 }
 
 func writeMemory(ctx context.Context, tx pgx.Tx, p auth.Principal, m Memory) (Memory, error) {
-	return scanMemory(tx.QueryRow(ctx, `UPDATE personal_memories SET content=$4,evidence=$5,source_turn_id=$6,automatic=$7,deleted=$8,topic=$9,kind=$10,project_id=$11,revision=revision+1,updated_at=now() WHERE workspace_id=$1 AND user_id=$2 AND id=$3 RETURNING `+memoryColumns, p.WorkspaceID, p.UserID, m.ID, m.Content, m.Evidence, m.SourceTurnID, m.Automatic, m.Deleted, m.Topic, m.Kind, m.ProjectID))
+	return scanMemory(tx.QueryRow(ctx, `UPDATE personal_memories SET content=$4,evidence=$5,source_turn_id=$6,automatic=$7,deleted=$8,topic=$9,kind=$10,project_id=$11,paused=$12,revision=revision+1,updated_at=now() WHERE workspace_id=$1 AND user_id=$2 AND id=$3 RETURNING `+memoryColumns, p.WorkspaceID, p.UserID, m.ID, m.Content, m.Evidence, m.SourceTurnID, m.Automatic, m.Deleted, m.Topic, m.Kind, m.ProjectID, m.Paused))
 }
 
 func (s *Service) Undo(ctx context.Context, p auth.Principal, id uuid.UUID) error {
@@ -216,12 +225,15 @@ func (s *Service) Undo(ctx context.Context, p auth.Principal, id uuid.UUID) erro
 	if current.Revision != rev {
 		return ErrConflict
 	}
-	restored := current
+	// Decode a separate value: reusing current's UUID pointers would also
+	// rewrite the before snapshot that the new undo journal must preserve.
+	var restored Memory
 	if len(prior) > 0 {
 		if err = json.Unmarshal(prior, &restored); err != nil {
 			return err
 		}
 	} else {
+		restored = current
 		restored.Deleted = true
 		restored.Content = ""
 		restored.Evidence = ""
@@ -239,8 +251,16 @@ func (s *Service) Undo(ctx context.Context, p auth.Principal, id uuid.UUID) erro
 	if err = checkMemoryProject(ctx, tx, p, restored.ProjectID); err != nil {
 		return err
 	}
-	if _, err = writeMemory(ctx, tx, p, restored); err != nil {
+	restored, err = writeMemory(ctx, tx, p, restored)
+	if err != nil {
 		return memoryWriteError(err)
+	}
+	undoID, err := recordChange(ctx, tx, p, &current, restored, nil)
+	if err != nil {
+		return err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE personal_memory_changes SET undo_of=$2 WHERE id=$1`, undoID, id); err != nil {
+		return err
 	}
 	if _, err = tx.Exec(ctx, `UPDATE personal_memory_changes SET undone=true WHERE id=$1`, id); err != nil {
 		return err

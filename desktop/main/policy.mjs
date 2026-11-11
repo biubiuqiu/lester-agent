@@ -51,7 +51,7 @@ export function allowedCloudNavigation(value, origin) {
     const url = new URL(value);
     if (url.origin !== origin || url.username || url.password) return false;
     // No public pages, artifacts, login redirects or arbitrary remote origins.
-    return /^\/app(?:\/(?:new|c\/[a-f0-9-]{36}|p\/[a-f0-9-]{36}(?:\/overview)?|settings(?:\/(?:models|profile|sandbox|skills|connectors|automations))?|artifacts|contexts|agents(?:\/[a-z0-9][a-z0-9-]{0,127}(?:\/edit)?)?))?\/?$/i.test(url.pathname);
+    return /^\/app(?:\/(?:new|c\/[a-f0-9-]{36}|p\/[a-f0-9-]{36}(?:\/overview)?|settings(?:\/(?:models|profile|memory|sandbox|skills|connectors|automations))?|artifacts|contexts|agents(?:\/[a-z0-9][a-z0-9-]{0,127}(?:\/edit)?)?))?\/?$/i.test(url.pathname);
   } catch { return false; }
 }
 export function validateCloudOrigin(value) {

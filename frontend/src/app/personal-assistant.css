@@ -47,6 +47,8 @@
 .personal-memory-receipt { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; }
 .personal-memory-receipt button { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: inherit; }
 .personal-memory-receipt button:hover { background: var(--lester-color-surface-subtle); }
+.personal-memory-receipt button:has(svg) { flex-shrink: 0; }
+.personal-memory-receipt button:not(:has(svg)) { width: auto; padding: 0 5px; }
 .personal-memory-receipt [role=alert] { color: #a24032; }
 .personal-task-card { display: flex; align-items: start; gap: 12px; margin-top: 16px; padding: 15px; border: 1px solid var(--line); border-radius: 14px; background: var(--lester-color-surface); }
 .personal-task-icon { display: grid; flex-shrink: 0; width: 30px; height: 30px; place-items: center; border-radius: 9px; background: var(--lester-color-surface-subtle); color: var(--lester-color-text-muted); }
@@ -239,3 +241,36 @@ body:has(.dialog-backdrop) .personal-dock-launcher,body:has(.dialog-backdrop) .p
 @media (max-height: 560px) { .personal-memory-tools .personal-memory-search { width: 0; } }
 .personal-memory-observed { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .personal-memory-observed small { flex-basis: 100%; color: var(--faint); font-size: 10px; line-height: 1.6; }
+
+.personal-memory-page { max-width: 760px; overflow-wrap: anywhere; }
+.personal-memory-page > header { padding: 0 0 26px; }
+.personal-memory-page h1 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 28px; font-weight: 550; letter-spacing: -.035em; }
+.personal-memory-page header p { margin: 10px 0 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.personal-memory-page > .personal-auto-memory { margin: 0 0 24px; }
+.personal-memory-page > .personal-memory-tools,.personal-memory-page > .personal-memory-filters { padding-left: 0; padding-right: 0; }
+.personal-memory-page > .personal-memory-list { padding: 0; overflow: visible; }
+.personal-memory-page > :is(.personal-memory-notice,.personal-memory-observed,.personal-error,.personal-pending) { padding-left: 0; padding-right: 0; }
+.personal-memory-page > footer { margin-top: 16px; padding: 16px 0; border-top: 1px solid var(--line); color: var(--faint); font-size: 11px; line-height: 1.7; }
+.personal-memory-page footer > button { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; padding: 5px 0; border: 0; background: transparent; color: var(--muted); font-size: 12px; }
+.personal-memory-filters { flex-wrap: wrap; }
+.personal-memory-heading { align-items: baseline; }
+.personal-memory-heading > small { flex-shrink: 0; }
+.personal-memory-paused { color: var(--ink); }
+.personal-memory-actions { flex-wrap: wrap; }
+.personal-memory-actions button { min-height: 32px; }
+.personal-memory-history { margin: 16px 0 12px; }
+.personal-memory-version { padding: 12px 0; border-top: 1px solid var(--line); }
+.personal-memory-version > div { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+.personal-memory-version strong { font-size: 11px; font-weight: 550; }
+.personal-memory-version time { color: var(--faint); font-size: 10px; }
+.personal-memory-history-topic { display: block; margin-top: 8px; }
+.personal-memory-list .personal-memory-version p { margin: 7px 0 0; }
+.personal-memory-version p > span { display: block; margin-bottom: 4px; font-size: 10px; color: var(--faint); }
+.personal-memory-history > button,.personal-memory-history [role=alert] button,.personal-memory-notice > button { min-height: 32px; padding: 4px 7px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--muted); font-size: 11px; }
+.personal-memory-context { margin-top: 10px; color: var(--muted); font-size: 11px; }
+.personal-memory-context summary { width: fit-content; cursor: pointer; }
+.personal-memory-context ul { padding: 4px 0 0 16px; }
+.personal-memory-context li { padding: 3px 0; overflow-wrap: anywhere; }
+.personal-memory-context li > small { display: block; margin-top: 3px; font-size: 10px; color: var(--faint); }
+.personal-memory-page :is(button,input,select,textarea,summary):focus-visible { outline: 2px solid var(--lester-color-focus); outline-offset: 3px; }
+@media (max-width: 700px) { .personal-memory-page h1 { font-size: 26px; } .personal-memory-page .personal-memory-actions button { min-height: 40px; } }

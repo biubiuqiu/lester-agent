@@ -18,6 +18,7 @@ const menuItems = [
   { label: "上下文库", path: "/app/contexts", kind: "context" },
   { label: "自动任务", path: "/app/settings/automations", kind: "automation" },
   { label: "个人资料", path: "/app/settings/profile", kind: "profile" },
+  { label: "记忆", path: "/app/settings/memory", kind: "memory" },
   { label: "模型", path: "/app/settings/models", kind: "model" },
   { label: "应用连接", path: "/app/settings/connectors", kind: "connections" },
   { label: "Computer", path: "/app/settings/sandbox", kind: "computer" },

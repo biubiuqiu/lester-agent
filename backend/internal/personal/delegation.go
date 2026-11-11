@@ -24,7 +24,7 @@ func (s *Service) prepareDelegation(ctx context.Context, tx pgx.Tx, p auth.Princ
 	}
 	// Select facts for this specific task/project after all memory edits. No
 	// other project facts, files, permissions or previous chat are transferred.
-	rows, err := tx.Query(ctx, `SELECT `+memoryColumns+` FROM personal_memories WHERE workspace_id=$1 AND user_id=$2 AND NOT deleted AND (project_id IS NULL OR project_id=$3) ORDER BY updated_at DESC,id LIMIT 128`, p.WorkspaceID, p.UserID, projectID)
+	rows, err := tx.Query(ctx, `SELECT `+memoryColumns+` FROM personal_memories WHERE workspace_id=$1 AND user_id=$2 AND NOT deleted AND NOT paused AND (project_id IS NULL OR project_id=$3) ORDER BY updated_at DESC,id LIMIT 128`, p.WorkspaceID, p.UserID, projectID)
 	if err != nil {
 		return err
 	}

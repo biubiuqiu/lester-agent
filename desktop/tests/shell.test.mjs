@@ -96,7 +96,7 @@ test('local preview frames cannot navigate to network URLs, arbitrary files or t
   for(const value of ['about:blank','file:///app/renderer/preview.html','file:///app/renderer/index.html?inject=1'])assert.equal(allowedLocalNavigation(value,rendererPath,true),false);
 });
 test('cloud pane navigation, bounds, external URL and WSL paths stay confined',()=>{
-  const origin='https://cloud.test';assert.equal(allowedCloudNavigation(origin+'/app/c/123e4567-e89b-42d3-a456-426614174000',origin),true);
+  const origin='https://cloud.test';assert.equal(allowedCloudNavigation(origin+'/app/c/123e4567-e89b-42d3-a456-426614174000',origin),true);assert.equal(allowedCloudNavigation(origin+'/app/settings/memory',origin),true);assert.equal(allowedCloudNavigation(origin+'/app/settings/memory-admin',origin),false);
   for(const url of [origin+'/api/v1/secret',origin+'/login','file:///etc/passwd','https://evil.test/app','https://cloud.test.evil/app'])assert.equal(allowedCloudNavigation(url,origin),false);
   assert.deepEqual(clampBounds({x:-10,y:30,width:2000,height:2000},{width:900,height:600}),{x:0,y:30,width:900,height:570});
   assert.throws(()=>clampBounds({x:NaN,y:0,width:1,height:1},{width:900,height:600}),{code:'INVALID_VIEW_BOUNDS'});

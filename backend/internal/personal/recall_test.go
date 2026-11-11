@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -195,6 +196,7 @@ func TestFullMemoryCapacityStillFitsACompleteModelRequestAndRecall(t *testing.T)
 		ids = append(ids, m.ID.String())
 	}
 	pass := 0
+	var provided []Memory
 	calls := f.client(t, func(r model.ModelRequest) modelReply {
 		pass++
 		if toolcontext.EstimateInput(r)+3000 > 32000 {
@@ -203,6 +205,10 @@ func TestFullMemoryCapacityStillFitsACompleteModelRequestAndRecall(t *testing.T)
 		if pass == 1 {
 			if !strings.Contains(r.System, `"topic_truncated":true`) {
 				t.Fatal("catalogue truncation was not explicit")
+			}
+			provided = injectedModelMemories(t, r)
+			if len(provided) >= 24 {
+				t.Fatal("large fact bodies were not reduced by the complete token budget")
 			}
 			v := say("Checking saved preferences.")
 			v.MemoryLookup = &memoryLookup{IDs: ids}
@@ -213,8 +219,17 @@ func TestFullMemoryCapacityStillFitsACompleteModelRequestAndRecall(t *testing.T)
 		}
 		return say("已找到保存的偏好。")
 	})
-	if _, err := f.s.Chat(ctx, f.p, request("你记得哪些偏好？")); err != nil || calls.Load() != 2 {
+	turn, err := f.s.Chat(ctx, f.p, request("你记得哪些偏好？"))
+	if err != nil || calls.Load() != 2 {
 		t.Fatalf("full memory capacity blocked dialogue: %v (%d calls)", err, calls.Load())
+	}
+	lookedUp, err := recallMemories(memories, ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal([]any{map[string]any{"memory_context": memoryReferences(append(provided, lookedUp...))}})
+	if want := projectMemoryContext(raw); !reflect.DeepEqual(turn.MemoryContext, want) {
+		t.Fatal("reference receipt counted trimmed facts or omitted lookup bodies", turn.MemoryContext, want)
 	}
 }
 

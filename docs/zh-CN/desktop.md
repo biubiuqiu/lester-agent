@@ -41,7 +41,7 @@ Windows 的 `build:runner` 生成供 WSL2 使用的 Linux Runner；macOS 使用�
 
 ## 服务端升级与检查
 
-备份 PostgreSQL、对象存储和 Computer 数据，停止 API 写入与活跃任务，按顺序执行尚未应用的全部迁移至 `000037_desktop_devices.up.sql`。保留 `.env`、`MASTER_KEY_BASE64` 与数据卷，同步重建 API/Web。新 Compose 挂载 **001–037**；已有卷不会重新执行初始化 SQL，Helm 需单独执行 SQL。详见[升级检查](deployment.md#已有部署升级检查)。
+备份 PostgreSQL、对象存储和 Computer 数据，停止 API 写入与活跃任务，按顺序执行尚未应用的全部迁移至 `000038_memory_management.up.sql`。保留 `.env`、`MASTER_KEY_BASE64` 与数据卷，同步重建 API/Web。新 Compose 挂载 **001–038**；已有卷不会重新执行初始化 SQL，Helm 需单独执行 SQL。详见[升级检查](deployment.md#已有部署升级检查)。
 
 037 新增设备身份、派生共享模型定义及仅含元数据的本地任务目录。回滚移除这些目录和模型路由，保留云端历史消息及设备本地文件/SQLite。回滚前先断开桌面客户端并配套兼容 API；回滚不撤销任务或服务商已发生的操作。
 

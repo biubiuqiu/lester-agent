@@ -41,7 +41,7 @@ An offline device is shown as offline; that does not mean its tasks failed. Clou
 
 ## Server upgrade and checks
 
-Back up PostgreSQL, object storage and Computer data, stop API writes and active tasks, and apply every missing migration through `000037_desktop_devices.up.sql` in order. Preserve `.env`, `MASTER_KEY_BASE64` and all data volumes; rebuild API/Web together. Fresh Compose mounts **001–037**. Existing volumes never rerun initialization SQL; Helm operators apply SQL externally. See the [upgrade checklist](deployment.md#upgrading-an-existing-installation).
+Back up PostgreSQL, object storage and Computer data, stop API writes and active tasks, and apply every missing migration through `000038_memory_management.up.sql` in order. Preserve `.env`, `MASTER_KEY_BASE64` and all data volumes; rebuild API/Web together. Fresh Compose mounts **001–038**. Existing volumes never rerun initialization SQL; Helm operators apply SQL externally. See the [upgrade checklist](deployment.md#upgrading-an-existing-installation).
 
 Migration 037 adds device identities, derived shared-model definitions and the metadata-only local task directory. Its rollback removes this directory and model routing while retaining historical cloud messages and device-local files/SQLite. Disconnect desktop clients and use a compatible API version before rolling back; rollback does not undo task or provider effects.
 

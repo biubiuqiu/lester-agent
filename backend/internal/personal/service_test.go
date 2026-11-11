@@ -160,7 +160,7 @@ func TestPersonalMemoryProvenanceCorrectionsUndoAndIsolation(t *testing.T) {
 	}
 	stranger := f.p
 	stranger.UserID = uuid.New()
-	if got, e := f.s.Memories(ctx, stranger); e != nil || len(got) != 0 {
+	if got, e := f.s.Memories(ctx, stranger); !errors.Is(e, ErrUnauthorized) || len(got) != 0 {
 		t.Fatal("private memory leaked", e)
 	}
 	if _, e = f.s.Turn(ctx, stranger, v.ID); !errors.Is(e, ErrNotFound) {
@@ -515,7 +515,11 @@ func TestPersonalSessionRevokedDuringReplyAndMembershipRemoval(t *testing.T) {
 	if _, e := f.s.Chat(ctx, f.p, req); !errors.Is(e, ErrUnauthorized) {
 		t.Fatal("late model reply survived session revocation", e)
 	}
-	if items, e := f.s.Memories(ctx, f.p); e != nil || len(items) > 0 {
+	if _, e := f.s.Memories(ctx, f.p); !errors.Is(e, ErrUnauthorized) {
+		t.Fatal("revoked session could read memory", e)
+	}
+	var savedMemories int
+	if e := f.s.DB.QueryRow(ctx, `SELECT count(*) FROM personal_memories WHERE workspace_id=$1 AND user_id=$2`, f.p.WorkspaceID, f.p.UserID).Scan(&savedMemories); e != nil || savedMemories != 0 {
 		t.Fatal("revoked model reply stored memory", e)
 	}
 	if _, e := f.s.DB.Exec(ctx, `DELETE FROM workspace_members WHERE workspace_id=$1 AND user_id=$2`, f.p.WorkspaceID, f.p.UserID); e != nil {

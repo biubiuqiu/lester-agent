@@ -57,6 +57,7 @@ test("reopening the assistant refreshes other-window changes and recovers a fail
 test("memory search has an empty result and short-screen editing keeps the whole field usable", async ({ page, context, api }, info) => {
   const state: PersonalState = { turns: [], has_more: false, tasks: [], auto_memory: true, memories: [{ id: "memory-1", project_id: null, kind: "preference", topic: "写作习惯", content: "使用中文回答", evidence: "我希望中文回答", source_turn_id: "turn-1", automatic: false, deleted: false, revision: 1, updated_at: new Date().toISOString() }] };
   await context.route("**/api/v1/personal", route => route.fulfill({ json: state }));
+  await context.route("**/api/v1/personal/memories", route => route.fulfill({ json: { user_id: "22222222-2222-4222-8222-222222222222", workspace_id: "fixture-workspace", memories: state.memories, auto_memory: state.auto_memory } }));
   await page.setViewportSize({ width: 393, height: 360 });
   await page.goto("/app"); await expect(page.getByRole("textbox", { name: "消息输入框", exact: true })).toBeVisible();
   await page.locator(".personal-dock-launcher").click(); await page.getByRole("button", { name: "管理记忆", exact: true }).click();

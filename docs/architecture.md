@@ -72,6 +72,8 @@ For separately authorized [GitHub code tasks](github-code-tasks.md), `internal/g
 
 ### Personal assistant and unread replies
 
+Current personal facts and provenance in `personal_memories` are distinct from bounded model working context, the `personal_memory_changes` journal, personal dialogue and task history. One persistent manager serves the settings memory page and assistant dialog. Per-record pause retains editable facts while excluding them from future recall/delegation; undo appends its own history entry. Ordinary task composers do not automatically receive private memory. Explicitly delegated snapshots follow workspace task visibility. See [memory management and API](personal-assistant.md).
+
 `internal/personal` coordinates explicit new tasks and continuations through the existing conversation acceptance path. Its tool-free model sees bounded task and unread-reply metadata; concrete work still runs in isolated task conversations. PostgreSQL `conversation_read_states` stores each reader's last acknowledged public reply sequence. The inbox queries all owned conversations independently of the recent-task limit, and its reads never acknowledge replies. A focused foreground task view acknowledges the exact displayed reply end by message ID, so an older acknowledgement cannot hide a newer reply. Migration 036 starts tracking from an explicit baseline for existing history. See [personal memory, delegation and unread replies](personal-assistant.md).
 
 ### Speech input
@@ -229,7 +231,7 @@ Fresh installs apply 004–005 automatically. Migration 004 preserves old chat o
 
 ### Deliverable registration and reliable events upgrade
 
-The current version requires migrations 001–037. Migration 013 is described in [Accounts and sign-in](accounts-and-security.md#accounts-and-sign-in). The historical 004–005 commands above are insufficient for a full upgrade; apply every missing migration in numeric order. For a database already on 001–011, back it up, stop API writes, apply 012 once, then apply every remaining migration through 037 before rebuilding API/Web; see [the upgrade checklist](deployment.md#upgrading-an-existing-installation):
+The current version requires migrations 001–038. Migration 013 is described in [Accounts and sign-in](accounts-and-security.md#accounts-and-sign-in). The historical 004–005 commands above are insufficient for a full upgrade; apply every missing migration in numeric order. For a database already on 001–011, back it up, stop API writes, apply 012 once, then apply every remaining migration through 038 before rebuilding API/Web; see [the upgrade checklist](deployment.md#upgrading-an-existing-installation):
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
@@ -238,7 +240,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T post
   < backend/migrations/000012_deliverables_events.up.sql
 ```
 
-New Compose volumes initialize migrations 001–037; existing volumes never upgrade automatically. Do not delete volumes. Rolling back 012 drops registered metadata and pending delivery intents while preserving Computer files, messages, run events, and published artifacts. Stop the updated API before rollback and restore a compatible application version. Monitor pending outbox count and disk space during prolonged Redis outages.
+New Compose volumes initialize migrations 001–038; existing volumes never upgrade automatically. Do not delete volumes. Rolling back 012 drops registered metadata and pending delivery intents while preserving Computer files, messages, run events, and published artifacts. Stop the updated API before rollback and restore a compatible application version. Monitor pending outbox count and disk space during prolonged Redis outages.
 
 ---
 

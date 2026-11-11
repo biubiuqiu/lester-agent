@@ -8,6 +8,7 @@ import { api, type Deployment, type Project, type UserProfile } from "@/lib/api"
 import { resumeViewState, viewStateEpoch } from "@/lib/conversation-view-state";
 import { useT } from "./i18n";
 import { PersonalAssistant } from "./personal-assistant";
+import { PersonalMemoryManager } from "./personal-memory-manager";
 import { BrandMark } from "./brand";
 
 type Resources = { user: UserProfile; projects: Project[]; deployments: Deployment[] };
@@ -16,6 +17,8 @@ type DockContext = {
   tasksChanged: () => void;
   delegatedRevision: number;
   registerLauncher: (host: HTMLSpanElement | null) => void;
+  registerMemoryHost: (host: HTMLDivElement | null) => void;
+  openMemory: () => void;
 };
 const Context = createContext<DockContext | null>(null);
 export const usePersonalAssistantDock = () => useContext(Context);
@@ -41,13 +44,34 @@ export function PersonalAssistantDock({ children }: { children: React.ReactNode 
   const [loading, setLoading] = useState(false), [error, setError] = useState("");
   const [working, setWorking] = useState(false), [unread, setUnread] = useState(false);
   const [launcherHost, registerLauncher] = useState<HTMLSpanElement | null>(null);
+  const [memoryHost, setMemoryHost] = useState<HTMLDivElement | null>(null);
+  const [memoryOpen, setMemoryOpen] = useState(false), [memoryVisited, setMemoryVisited] = useState(false), [memoryRevision, setMemoryRevision] = useState(0);
+  const [memorySourceRevision, setMemorySourceRevision] = useState(0);
   const mobile = useSyncExternalStore(subscribeMobile, mobileSnapshot, desktopSnapshot);
   const dialog = useRef<HTMLDialogElement>(null), launcher = useRef<HTMLButtonElement>(null);
   const openRef = useRef(false), mounted = useRef(true), request = useRef<AbortController | null>(null);
   const wasWorking = useRef(false);
+  const memoryOpener = useRef<HTMLElement | null>(null), restoreMemoryFocus = useRef(false);
   const publish = useCallback((next: Resources) => setResources(next), []);
   const tasksChanged = useCallback(() => setRevision(value => value + 1), []);
-  const context = useMemo(() => ({ publish, tasksChanged, delegatedRevision, registerLauncher }), [publish, tasksChanged, delegatedRevision]);
+  const registerMemoryHost = useCallback((host: HTMLDivElement | null) => { setMemoryHost(host); if (host) { setMemoryVisited(true); setMemoryOpen(false); } }, []);
+  const openMemory = useCallback(() => {
+    memoryOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setMemoryVisited(true);
+    if (memoryHost) {
+      if (window.matchMedia("(max-width: 1279px)").matches) { openRef.current = false; setOpen(false); dialog.current?.close(); }
+      memoryHost.querySelector<HTMLElement>("h1")?.focus({ preventScroll: true }); memoryHost.scrollIntoView({ block: "start" });
+    } else setMemoryOpen(true);
+  }, [memoryHost]);
+  const closeMemory = useCallback(() => { restoreMemoryFocus.current = true; setMemoryOpen(false); }, []);
+  useEffect(() => {
+    if (memoryOpen || !restoreMemoryFocus.current) return;
+    restoreMemoryFocus.current = false;
+    if (!memoryHost && memoryOpener.current?.isConnected) memoryOpener.current.focus({ preventScroll: true });
+  }, [memoryOpen, memoryHost]);
+  const memoriesChanged = useCallback(() => setMemoryRevision(value => value + 1), []);
+  const assistantMemoriesChanged = useCallback(() => setMemorySourceRevision(value => value + 1), []);
+  const context = useMemo(() => ({ publish, tasksChanged, delegatedRevision, registerLauncher, registerMemoryHost, openMemory }), [publish, tasksChanged, delegatedRevision, registerMemoryHost, openMemory]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; request.current?.abort(); }; }, []);
   useEffect(() => {
     // Keep the entry above bottom input controls, including the right-hand
@@ -138,7 +162,8 @@ export function PersonalAssistantDock({ children }: { children: React.ReactNode 
     <div className={`personal-app-surface${open ? " personal-companion-open" : ""}`}>{children}</div>
     {mobile && launcherHost ? createPortal(entry, launcherHost) : entry}
     <dialog ref={dialog} id="personal-assistant-panel" className="personal-dock" aria-label={t("个人助理")} onCancel={event => { if (event.target === event.currentTarget) { event.preventDefault(); close(); } }} onKeyDown={event => { if (event.key === "Escape" && !event.nativeEvent.isComposing && event.target instanceof Element && !event.target.closest(".personal-memory-dialog")) { event.preventDefault(); event.stopPropagation(); close(); } }} onClick={event => { if (event.target === event.currentTarget) { const rect = event.currentTarget.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) close(); } }}>
-      {visited && resources ? <PersonalAssistant key={`${resources.user.user_id}:${resources.user.workspace_id}`} {...resources} revision={revision} active={open} onClose={close} onActivity={activity} onDelegated={() => { setDelegatedRevision(value => value + 1); tasksChanged(); }} /> : <div className="personal-dock-loading"><header><strong>{t("个人助理")}</strong><button type="button" className="icon-button" aria-label={t("收起个人助理")} onClick={close}><X size={18} /></button></header>{error ? <p role="alert">{t(error)}<button type="button" onClick={() => void load()}>{t("检查状态")}</button></p> : <p role="status">{t("正在载入…")}</p>}</div>}
+      {visited && resources ? <PersonalAssistant key={`${resources.user.user_id}:${resources.user.workspace_id}`} {...resources} revision={revision} memoryRevision={memoryRevision} onOpenMemory={openMemory} onMemoryChanged={assistantMemoriesChanged} active={open} onClose={close} onActivity={activity} onDelegated={() => { setDelegatedRevision(value => value + 1); tasksChanged(); }} /> : <div className="personal-dock-loading"><header><strong>{t("个人助理")}</strong><button type="button" className="icon-button" aria-label={t("收起个人助理")} onClick={close}><X size={18} /></button></header>{error ? <p role="alert">{t(error)}<button type="button" onClick={() => void load()}>{t("检查状态")}</button></p> : <p role="status">{t("正在载入…")}</p>}</div>}
     </dialog>
+    {memoryVisited || memoryHost ? <PersonalMemoryManager open={memoryOpen} host={memoryHost} revision={memorySourceRevision} onClose={closeMemory} onChanged={memoriesChanged} /> : null}
   </Context.Provider>;
 }

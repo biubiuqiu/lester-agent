@@ -101,6 +101,11 @@ for (const locale of ["zh-CN", "fr"] as const) {
         await popup.getByRole("button", { name: t("查看会话文件"), exact: true }).click();
         await expect(popup).toHaveCount(0);
         await expect(panel).toBeVisible();
+        await expect(panel.getByRole("tab", { name: t("文件"), exact: true })).toHaveAttribute("aria-selected", "true");
+        await expect(panel.getByRole("tabpanel", { name: t("文件"), exact: true })).toBeVisible();
+        await expect(panel.getByRole("treeitem", { name: /^index\.html\b/ })).toBeVisible();
+        await panel.getByRole("tab", { name: "index.html", exact: true }).click();
+        await expect(panel.getByRole("tab", { name: "index.html", exact: true })).toHaveAttribute("aria-selected", "true");
         await expect(panel.locator('iframe[title="index.html preview"]')).toBeVisible();
         expect(api.unexpected).toEqual([]);
         expect(errors).toEqual([]);

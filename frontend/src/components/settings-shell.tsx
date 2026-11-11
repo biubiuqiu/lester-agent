@@ -12,7 +12,7 @@ import { Brand } from "./brand";
 import { GuideLauncher } from "./user-guide";
 import { workspaceReturnPath } from "@/lib/workspace-return";
 
-export function SettingsShell({ active, children, returnTo = "/app" }: { active: "profile" | "models" | "sandbox" | "skills" | "automations" | "connectors"; children: ReactNode; returnTo?: string }) {
+export function SettingsShell({ active, children, returnTo = "/app" }: { active: "profile" | "memory" | "models" | "sandbox" | "skills" | "automations" | "connectors"; children: ReactNode; returnTo?: string }) {
   const router = useRouter();
   const t = useT();
   const navigation = useRef<HTMLElement>(null);
@@ -40,6 +40,7 @@ export function SettingsShell({ active, children, returnTo = "/app" }: { active:
       <div className="settings-sidebar-brand"><Brand /></div>
       <nav ref={navigation}>
         <button aria-current={active === "profile" ? "page" : undefined} className={active === "profile" ? "active" : ""} onClick={() => navigate("profile")}><ProductGlyph kind="profile" size={19} /><T>{"个人资料"}</T></button>
+        <button aria-current={active === "memory" ? "page" : undefined} className={active === "memory" ? "active" : ""} onClick={() => navigate("memory")}><ProductGlyph kind="memory" size={19} /><T>{"记忆"}</T></button>
         <button aria-current={active === "models" ? "page" : undefined} className={active === "models" ? "active" : ""} onClick={() => navigate("models")}><ProductGlyph kind="model" size={19} /><T>{"模型"}</T></button>
         <button aria-current={active === "connectors" ? "page" : undefined} className={active === "connectors" ? "active" : ""} onClick={() => navigate("connectors")}><ProductGlyph kind="connections" size={19} /><T>{"应用连接"}</T></button>
         <button aria-current={active === "sandbox" ? "page" : undefined} className={active === "sandbox" ? "active" : ""} onClick={() => navigate("sandbox")}><ProductGlyph kind="computer" size={19} />Computer</button>

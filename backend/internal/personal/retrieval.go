@@ -20,7 +20,7 @@ func selectMemories(memories []Memory, query string) []Memory {
 	}
 	ranked := []scored{}
 	for _, m := range memories {
-		if m.Deleted {
+		if m.Deleted || m.Paused {
 			continue
 		}
 		score := 0
@@ -98,6 +98,9 @@ func memoryTerms(query string) []string {
 func memoryDirectory(memories []Memory) []map[string]any {
 	items := make([]map[string]any, 0, len(memories))
 	for _, m := range memories {
+		if m.Paused {
+			continue
+		}
 		topic := []rune(m.Topic)
 		truncated := len(topic) > 40
 		if truncated {
@@ -114,7 +117,7 @@ func recallMemories(memories []Memory, ids []string) ([]Memory, error) {
 	}
 	byID := make(map[uuid.UUID]Memory, len(memories))
 	for _, m := range memories {
-		if !m.Deleted {
+		if !m.Deleted && !m.Paused {
 			byID[m.ID] = m
 		}
 	}

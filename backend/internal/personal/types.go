@@ -32,15 +32,25 @@ type Request struct {
 	ProjectID *uuid.UUID `json:"project_id"`
 }
 type Turn struct {
-	ID           uuid.UUID   `json:"id"`
-	Seq          int64       `json:"seq"`
-	Content      string      `json:"content"`
-	Reply        string      `json:"reply"`
-	MemoryNotice string      `json:"memory_notice,omitempty"`
-	Status       string      `json:"status"`
-	CreatedAt    time.Time   `json:"created_at"`
-	Changes      []Change    `json:"changes"`
-	Task         *Delegation `json:"task,omitempty"`
+	ID            uuid.UUID         `json:"id"`
+	Seq           int64             `json:"seq"`
+	Content       string            `json:"content"`
+	Reply         string            `json:"reply"`
+	MemoryNotice  string            `json:"memory_notice,omitempty"`
+	Status        string            `json:"status"`
+	CreatedAt     time.Time         `json:"created_at"`
+	Changes       []Change          `json:"changes"`
+	Task          *Delegation       `json:"task,omitempty"`
+	MemoryContext []MemoryReference `json:"memory_context,omitempty"`
+}
+
+// MemoryReference records facts supplied as reference, not a claim that the
+// model relied on them. Content and provider usage details stay private.
+type MemoryReference struct {
+	ID        uuid.UUID  `json:"id"`
+	Revision  int64      `json:"revision"`
+	Topic     string     `json:"topic"`
+	ProjectID *uuid.UUID `json:"project_id"`
 }
 type Memory struct {
 	ID           uuid.UUID  `json:"id"`
@@ -51,6 +61,7 @@ type Memory struct {
 	Evidence     string     `json:"evidence"`
 	SourceTurnID *uuid.UUID `json:"source_turn_id"`
 	Automatic    bool       `json:"automatic"`
+	Paused       bool       `json:"paused"`
 	Deleted      bool       `json:"deleted"`
 	Revision     int64      `json:"revision"`
 	UpdatedAt    time.Time  `json:"updated_at"`
