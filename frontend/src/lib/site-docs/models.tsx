@@ -24,7 +24,7 @@ export const sections: SiteDocSection[] = [
         <p><T>{"管理员在管理后台的“语音输入”配置全站服务，可选择 OpenAI 兼容接口、Groq Whisper、Together Whisper、ElevenLabs Scribe、Deepgram Nova 或 Mistral Voxtral。选择服务时自动填入接口和默认模型，模型仍可编辑。填写对应密钥并启用后，成员才能看到录音入口。"}</T></p>
         <p><T>{"Groq 和 Together 使用 OpenAI 兼容转写协议；自定义服务需提供支持 /audio/transcriptions 的 API 基础地址，不能仅兼容聊天接口。ElevenLabs、Deepgram 和 Mistral 使用各自的转写适配器。密钥只在服务端加密保存，后台不会回显；留空保留原密钥，切换服务商或接口域名时需重新填写。"}</T></p>
         <p><T>{"支持的语言和录音格式以所选服务、模型为准。Lester 不转换音频格式，也不会自动切换服务或回退模型。保存配置不代表服务已验证，需在实际浏览器中用短录音确认格式、权限、余额和网络；识别效果也需自行核对。Mistral 对 WebM/MP4 的支持尚未从官方资料确认，配置后需实际录音验证。"}</T></p>
-        <p><T>{"已有部署需备份并停止 API 写入，按顺序补齐迁移 001–036，再一起重建 API 和 Web，保留原加密密钥与数据卷。语音在 API 内调用，不使用 Computer、Skill 或 Agent 工具。App 需包含麦克风权限支持；生成文件预览不能请求录音。回滚 035 前需先切回 OpenAI 兼容或 ElevenLabs 配置；回滚 034 才会移除语音配置与短期回执，不删除任务、文件或普通聊天记录。"}</T></p>
+        <p><T>{"已有部署需备份并停止 API 写入，按顺序补齐迁移 001–037，再一起重建 API 和 Web，保留原加密密钥与数据卷。语音在 API 内调用，不使用 Computer、Skill 或 Agent 工具。App 需包含麦克风权限支持；生成文件预览不能请求录音。回滚 035 前需先切回 OpenAI 兼容或 ElevenLabs 配置；回滚 034 才会移除语音配置与短期回执，不删除任务、文件或普通聊天记录。"}</T></p>
       </> },
 { id: "shared", title: "管理员共享模型", content: <>
         <p><T>{"管理员可在独立管理后台配置共享模型。成员可以选择启用的共享模型，但无法读取其连接配置和凭证。个人默认模型优先于系统默认模型。"}</T></p>

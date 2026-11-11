@@ -16,6 +16,8 @@ const verificationErrors: Record<string, string> = {
 export function ModelDeploymentControls({ item, admin, onSaved }: { item: Deployment; admin: boolean; onSaved: () => Promise<void> }) {
   const t = useT();
   const base = admin ? "/api/v1/admin" : "/api/v1";
+  const deviceOffline = item.source === "device" && item.online !== true;
+  const canEditBudget = !item.read_only && item.source !== "device" && (!item.shared || admin);
   const [checking, setChecking] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
@@ -26,7 +28,7 @@ export function ModelDeploymentControls({ item, admin, onSaved }: { item: Deploy
   useEffect(() => () => abortCheck.current?.abort(), []);
 
   async function verify() {
-    if (pendingCheck.current) return;
+    if (pendingCheck.current || item.enabled === false || deviceOffline) return;
     pendingCheck.current = true;
     setChecking(true); setNotice(""); setError("");
     const controller = new AbortController();
@@ -49,7 +51,7 @@ export function ModelDeploymentControls({ item, admin, onSaved }: { item: Deploy
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pendingSave.current) return;
+    if (pendingSave.current || !canEditBudget) return;
     const form = new FormData(event.currentTarget);
     const budget = Object.fromEntries(["context_window", "output_reserve", "policy_window"].map(name => [name, Number(form.get(name))]));
     if (Object.values(budget).some(value => !Number.isSafeInteger(value) || value < 0 || value > 2147483647)) {
@@ -66,11 +68,12 @@ export function ModelDeploymentControls({ item, admin, onSaved }: { item: Deploy
   }
 
   return <div className="model-deployment-controls">
-    <button type="button" className="text-button" disabled={checking || item.enabled === false} onClick={verify}>{checking ? t("正在验证文本调用…") : t("验证连接")}</button>
+    <button type="button" className="text-button" disabled={checking || item.enabled === false || deviceOffline} onClick={verify}>{checking ? t("正在验证文本调用…") : t("验证连接")}</button>
     <small className="field-help"><T>{"会向服务商发送一次短文本请求，可能产生费用。"}</T></small>
+    {item.source === "device" ? <small className="field-help"><T>{"请在桌面客户端管理此模型。"}</T></small> : null}
     {notice && <p role="status" className="field-help">{t(notice)}</p>}
     {error && <p role="alert" className="settings-error">{t(error)}</p>}
-    {(!item.shared || admin) && <details className="model-budget-settings">
+    {canEditBudget && <details className="model-budget-settings">
       <summary><T>{"上下文预算"}</T></summary>
       <form onSubmit={save} aria-label={t("上下文预算")} aria-busy={saving}>
         <label className="field"><T>{"模型上下文窗口（tokens）"}</T><input name="context_window" type="number" min={0} max={2147483647} step={1} required defaultValue={item.context_window || 0} disabled={saving} /></label>

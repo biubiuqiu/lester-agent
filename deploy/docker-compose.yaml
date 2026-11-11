@@ -70,6 +70,7 @@ services:
       - ../backend/migrations/000034_speech_input.up.sql:/docker-entrypoint-initdb.d/034.sql:ro
       - ../backend/migrations/000035_speech_providers.up.sql:/docker-entrypoint-initdb.d/035.sql:ro
       - ../backend/migrations/000036_conversation_reads.up.sql:/docker-entrypoint-initdb.d/036.sql:ro
+      - ../backend/migrations/000037_desktop_devices.up.sql:/docker-entrypoint-initdb.d/037.sql:ro
     healthcheck:
       test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
       interval: 3s

@@ -58,6 +58,12 @@ This diagram shows the Docker Compose entry point. Kubernetes uses Ingress to ro
 - **Administration:** `/admin` uses role-protected API routes to manage accounts and shared models. Personal workspaces stay isolated, and provider credentials are encrypted at rest.
 - **Public artifacts:** Artifact Host reads published snapshots and their manifests. It never serves live Computer files or receives model credentials or sandbox tokens.
 
+### Desktop and local execution
+
+The [desktop app](desktop.md) is an Electron shell with a standalone local/cloud conversation sidebar. Its private Go stdio runner and the cloud conversation executor share `internal/harness` for the provider-neutral model/tool loop. Device-local SQLite stores the local task lifecycle; the runner executes tools in the selected project on macOS or Windows WSL2. Remote cloud pages run without the desktop preload.
+
+Cloud inference for local tasks uses the scoped desktop gateway, keeping server credentials on the server. Explicitly shared device models route cloud inference through an authenticated WebSocket, keeping device credentials on the device. Neither inference direction changes where tools execute. The owner-private cloud directory contains task/device metadata only; local transcripts and project files remain device-local. Offline state never triggers task migration or automatic operation replay.
+
 ### Connected apps and GitHub code
 
 `internal/connector` owns encrypted, per-user app grants and fixed-host API adapters. Task tools resolve the accepted run submitter; the personal assistant only delegates. Ordinary app search/read never grants a Computer access token or write authority.
@@ -223,7 +229,7 @@ Fresh installs apply 004–005 automatically. Migration 004 preserves old chat o
 
 ### Deliverable registration and reliable events upgrade
 
-The current version requires migrations 001–036. Migration 013 is described in [Accounts and sign-in](accounts-and-security.md#accounts-and-sign-in). The historical 004–005 commands above are insufficient for a full upgrade; apply every missing migration in numeric order. For a database already on 001–011, back it up, stop API writes, apply 012 once, then apply every remaining migration through 036 before rebuilding API/Web; see [the upgrade checklist](deployment.md#upgrading-an-existing-installation):
+The current version requires migrations 001–037. Migration 013 is described in [Accounts and sign-in](accounts-and-security.md#accounts-and-sign-in). The historical 004–005 commands above are insufficient for a full upgrade; apply every missing migration in numeric order. For a database already on 001–011, back it up, stop API writes, apply 012 once, then apply every remaining migration through 037 before rebuilding API/Web; see [the upgrade checklist](deployment.md#upgrading-an-existing-installation):
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/docker-compose.yaml stop api
@@ -232,7 +238,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml exec -T post
   < backend/migrations/000012_deliverables_events.up.sql
 ```
 
-New Compose volumes initialize migrations 001–036; existing volumes never upgrade automatically. Do not delete volumes. Rolling back 012 drops registered metadata and pending delivery intents while preserving Computer files, messages, run events, and published artifacts. Stop the updated API before rollback and restore a compatible application version. Monitor pending outbox count and disk space during prolonged Redis outages.
+New Compose volumes initialize migrations 001–037; existing volumes never upgrade automatically. Do not delete volumes. Rolling back 012 drops registered metadata and pending delivery intents while preserving Computer files, messages, run events, and published artifacts. Stop the updated API before rollback and restore a compatible application version. Monitor pending outbox count and disk space during prolonged Redis outages.
 
 ---
 

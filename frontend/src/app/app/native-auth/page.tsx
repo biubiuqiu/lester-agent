@@ -17,7 +17,8 @@ export default function NativeSignIn() {
     request.current = true; setBusy(true); setError("");
     try {
       const result = await api<{ code: string }>("/api/v1/auth/native/handoff", { method: "POST", body: JSON.stringify({ challenge }) });
-      const callback = new URL("lester://auth/callback"); callback.searchParams.set("code", result.code); callback.searchParams.set("state", state);
+      // Both schemes are fixed application destinations. Never accept a caller's callback URL.
+      const callback = new URL(params.get("client") === "desktop" ? "lester-desktop://auth/callback" : "lester://auth/callback"); callback.searchParams.set("code", result.code); callback.searchParams.set("state", state);
       location.assign(callback.href);
     } catch { setError("App 登录未完成，请回到 App 重新登录。"); }
     finally { request.current = false; setBusy(false); }

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/biubiuqiu/lester-agent/backend/internal/httpapi"
+	modelruntime "github.com/biubiuqiu/lester-agent/backend/internal/model/runtime"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -293,7 +294,7 @@ func (s *Service) Middleware(next http.Handler) http.Handler {
 		if avatarKey != "" {
 			p.AvatarURL = "/api/v1/me/avatar?v=" + url.QueryEscape(avatarKey)
 		}
-		ctx, cancel := s.guardLongRequest(context.WithValue(r.Context(), contextKey{}, p), p, 30*time.Second)
+		ctx, cancel := s.guardLongRequest(modelruntime.WithActor(context.WithValue(r.Context(), contextKey{}, p), p.UserID), p, 30*time.Second)
 		defer cancel()
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

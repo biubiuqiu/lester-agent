@@ -56,7 +56,7 @@ func (s *Store) SetDeploymentBudget(ctx context.Context, workspace, id uuid.UUID
 		return err
 	}
 	var current Deployment
-	if err = tx.QueryRow(ctx, `SELECT context_window,output_reserve,policy_window FROM model_deployments WHERE workspace_id=$1 AND id=$2 FOR UPDATE`, workspace, id).Scan(&current.ContextWindow, &current.OutputReserve, &current.PolicyWindow); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT context_window,output_reserve,policy_window FROM model_deployments WHERE workspace_id=$1 AND id=$2 AND NOT EXISTS(SELECT 1 FROM model_connections c WHERE c.id=model_deployments.connection_id AND c.provider='desktop') FOR UPDATE`, workspace, id).Scan(&current.ContextWindow, &current.OutputReserve, &current.PolicyWindow); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrDeploymentNotFound
 		}
@@ -97,7 +97,7 @@ func (s *Store) UpdateDeployment(ctx context.Context, workspace, id uuid.UUID, i
 		return err
 	}
 	var current Deployment
-	if err = tx.QueryRow(ctx, `SELECT context_window,output_reserve,policy_window FROM model_deployments WHERE workspace_id=$1 AND id=$2 FOR UPDATE`, workspace, id).Scan(&current.ContextWindow, &current.OutputReserve, &current.PolicyWindow); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT context_window,output_reserve,policy_window FROM model_deployments WHERE workspace_id=$1 AND id=$2 AND NOT EXISTS(SELECT 1 FROM model_connections c WHERE c.id=model_deployments.connection_id AND c.provider='desktop') FOR UPDATE`, workspace, id).Scan(&current.ContextWindow, &current.OutputReserve, &current.PolicyWindow); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrDeploymentNotFound
 		}
@@ -112,7 +112,7 @@ func (s *Store) UpdateDeployment(ctx context.Context, workspace, id uuid.UUID, i
 			return err
 		}
 	}
-	tag, err := tx.Exec(ctx, `UPDATE model_deployments SET name=$3,model_id=$4,is_default=$5,enabled=$6,connection_id=$7,context_window=$8,output_reserve=$9,policy_window=$10 WHERE workspace_id=$1 AND id=$2 AND EXISTS(SELECT 1 FROM model_connections WHERE id=$7 AND workspace_id=$1)`, workspace, id, strings.TrimSpace(in.Name), strings.TrimSpace(in.ModelID), in.IsDefault, in.Enabled, in.ConnectionID, updated.ContextWindow, updated.OutputReserve, updated.PolicyWindow)
+	tag, err := tx.Exec(ctx, `UPDATE model_deployments SET name=$3,model_id=$4,is_default=$5,enabled=$6,connection_id=$7,context_window=$8,output_reserve=$9,policy_window=$10 WHERE workspace_id=$1 AND id=$2 AND EXISTS(SELECT 1 FROM model_connections WHERE id=$7 AND workspace_id=$1 AND provider<>'desktop')`, workspace, id, strings.TrimSpace(in.Name), strings.TrimSpace(in.ModelID), in.IsDefault, in.Enabled, in.ConnectionID, updated.ContextWindow, updated.OutputReserve, updated.PolicyWindow)
 	if err != nil {
 		return err
 	}

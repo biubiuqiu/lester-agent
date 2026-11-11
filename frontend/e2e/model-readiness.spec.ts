@@ -72,3 +72,40 @@ test("members can verify a shared model while its budget controls stay private",
   await page.getByRole("button", { name: "验证连接", exact: true }).click();
   await expect(page.getByRole("alert").filter({ hasText: "验证失败：请检查服务商凭证。" })).toBeVisible();
 });
+
+test("desktop models show their device status and are managed on the desktop", async ({ page, context, api }, info) => {
+  await context.route("**/api/v1/model-deployments", route => route.fulfill({ json: { deployments: [
+    { id: "device-online", connection_id: "desktop-connection", name: "桌面在线模型", model_id: "fixture-online", enabled: true, shared: false, source: "device", device_name: "工作电脑", online: true, read_only: true },
+    { id: "device-offline", connection_id: "desktop-connection", name: "桌面离线模型", model_id: "fixture-offline", enabled: true, shared: false, source: "device", device_name: "家用电脑", online: false, read_only: true },
+  ] } }));
+  let verificationCalls = 0;
+  await context.route("**/api/v1/model-deployments/device-*/test", route => {
+    verificationCalls++;
+    expect(new URL(route.request().url()).pathname).toBe("/api/v1/model-deployments/device-online/test");
+    return route.fulfill({ json: { ok: true, verified: true, status: "verified_text_call", capability_scope: "text_call_only" } });
+  });
+  await page.goto("/app/settings/models");
+  const online = page.locator(".deployment-list article").filter({ hasText: "桌面在线模型" });
+  const offline = page.locator(".deployment-list article").filter({ hasText: "桌面离线模型" });
+  await expect(online.getByText("工作电脑 · 在线", { exact: true })).toBeVisible();
+  await expect(offline.getByText("家用电脑 · 离线", { exact: true })).toBeVisible();
+  await expect(offline.getByRole("button", { name: "验证连接", exact: true })).toBeDisabled();
+  await expect(page.getByText("请在桌面客户端管理此模型。", { exact: true })).toHaveCount(2);
+  await expect(page.locator(".model-budget-settings")).toHaveCount(0);
+  expect(verificationCalls).toBe(0);
+  await online.getByRole("button", { name: "验证连接", exact: true }).click();
+  await expect(online.getByRole("status")).toHaveText("文本调用已验证；工具与附件尚未验证。");
+  expect(verificationCalls).toBe(1);
+  expect(api.mutations.some(item => item.path.includes("/model-deployments/"))).toBe(false);
+  await page.screenshot({ path: info.outputPath("desktop-model-status.png") });
+});
+
+test("read-only deployments do not expose editable budget controls", async ({ page, context }) => {
+  await context.route("**/api/v1/model-deployments", route => route.fulfill({ json: { deployments: [
+    { id: "read-only-model", connection_id: "fixture-connection", name: "只读模型", model_id: "fixture", enabled: true, shared: false, source: "cloud", read_only: true },
+  ] } }));
+  await page.goto("/app/settings/models");
+  await expect(page.locator(".deployment-list article").filter({ hasText: "只读模型" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "验证连接", exact: true })).toBeEnabled();
+  await expect(page.locator(".model-budget-settings")).toHaveCount(0);
+});

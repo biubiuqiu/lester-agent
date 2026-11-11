@@ -1,0 +1,124 @@
+{
+  "name": "lester-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lester desktop workspace for macOS and Windows",
+  "author": "Lester contributors",
+  "type": "module",
+  "main": "main/index.mjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/*.test.mjs",
+    "test:e2e": "node tests/electron-system.mjs",
+    "check": "node scripts/check.mjs",
+    "build:runner": "node scripts/build-runner.mjs",
+    "build:runner:all": "node scripts/build-runner.mjs --all",
+    "build:icons": "node scripts/build-icons.mjs",
+    "pack": "electron-builder --dir",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux dir",
+    "prestart": "node scripts/sync-design-assets.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0"
+  },
+  "overrides": {
+    "minimatch@>=7.0.0 <11.0.1": "11.0.6"
+  },
+  "build": {
+    "appId": "org.lester.agent.desktop",
+    "productName": "Lester",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main/**/*",
+      "preload/**/*",
+      "renderer/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/runner",
+        "to": "runner",
+        "filter": [
+          "lester-runner-darwin-x64",
+          "lester-runner-darwin-arm64",
+          "lester-runner-linux-x64",
+          "lester-runner-linux-arm64"
+        ]
+      }
+    ],
+    "asar": true,
+    "protocols": [
+      {
+        "name": "Lester sign-in",
+        "schemes": [
+          "lester-desktop"
+        ]
+      }
+    ],
+    "mac": {
+      "icon": "build/icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "artifactName": "Lester-${version}-${arch}-setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "target": [
+        "dir"
+      ],
+      "category": "Development"
+    },
+    "publish": null,
+    "beforePack": "./scripts/before-pack.mjs"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "ws": "8.22.2"
+  }
+}

@@ -25,6 +25,7 @@ jobs:
       web: ${{ steps.changes.outputs.web }}
       ios: ${{ steps.changes.outputs.ios }}
       android: ${{ steps.changes.outputs.android }}
+      desktop: ${{ steps.changes.outputs.desktop }}
       gateway: ${{ steps.changes.outputs.gateway }}
       helm: ${{ steps.changes.outputs.helm }}
       sandbox_runtime: ${{ steps.changes.outputs.sandbox_runtime }}
@@ -147,6 +148,47 @@ jobs:
           PY
       - name: Build all backend executables
         run: go build ./cmd/...
+
+  desktop:
+    name: Desktop shell and local runner
+    needs: changes
+    if: needs.changes.outputs.desktop == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Install locked desktop dependencies
+        working-directory: desktop
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+        run: npm ci
+      - name: Check desktop source and shared design assets
+        working-directory: desktop
+        run: |
+          node scripts/sync-design-assets.mjs
+          git diff --exit-code -- renderer/assets
+          npm run check
+      - name: Audit desktop runtime dependencies
+        working-directory: desktop
+        run: npm audit --omit=dev --audit-level=high
+      - name: Test desktop isolation, credentials and bridge behavior
+        working-directory: desktop
+        run: npm test
+      - name: Test shared model loop and local execution
+        working-directory: backend
+        run: go test -count=1 -timeout=3m ./internal/harness ./internal/localrun
+      - name: Cross-compile bundled macOS and WSL2 runners
+        working-directory: desktop
+        run: npm run build:runner:all
 
   web:
     name: Frontend tests and build
@@ -433,7 +475,7 @@ jobs:
 
   checks:
     name: CI result
-    needs: [changes, gateway, go, web, ios, android, helm, sandbox-runtime, security-go, security-web]
+    needs: [changes, gateway, go, web, ios, android, desktop, helm, sandbox-runtime, security-go, security-web]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -452,7 +494,7 @@ jobs:
           if results["changes"]["result"] != "success":
               failed.append("check selection")
           selected = results["changes"].get("outputs", {})
-          for name in ("gateway", "go", "web", "ios", "android", "helm", "sandbox-runtime", "security-go", "security-web"):
+          for name in ("gateway", "go", "web", "ios", "android", "desktop", "helm", "sandbox-runtime", "security-go", "security-web"):
               flag = selected.get(name.replace("-", "_"))
               if flag not in ("true", "false") or (flag == "true" and results[name]["result"] != "success"):
                   failed.append(name + " did not complete its selected check")

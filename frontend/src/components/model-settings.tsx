@@ -189,8 +189,9 @@ export function ModelSettings({ admin = false, requestedReturn = "/app" }: { adm
               <div>
                 <strong>{item.name}</strong>
                 <small>{item.model_id}</small>
+                {item.source === "device" ? <small>{item.device_name ? <>{item.device_name} · </> : null}{t(item.online ? "在线" : "离线")}</small> : null}
               </div>
-              <div className="admin-model-actions">{item.shared && !admin && <span><T>{"共享"}</T></span>}{item.is_default && <span><T>{"默认"}</T></span>}{item.enabled === false && <span><T>{"已停用"}</T></span>}{admin && <button type="button" className="admin-edit" onClick={() => setEditing(item)}><T>{"编辑模型"}</T></button>}</div>
+              <div className="admin-model-actions">{item.shared && !admin && <span><T>{"共享"}</T></span>}{item.is_default && <span><T>{"默认"}</T></span>}{item.enabled === false && <span><T>{"已停用"}</T></span>}{admin && !item.read_only && item.source !== "device" && <button type="button" className="admin-edit" onClick={() => setEditing(item)}><T>{"编辑模型"}</T></button>}</div>
               <ModelDeploymentControls key={[item.id,item.model_id,item.connection_id,item.enabled].join(":")} item={item} admin={admin} onSaved={load} />
             </article>
           ))}

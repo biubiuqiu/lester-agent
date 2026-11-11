@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/biubiuqiu/lester-agent/backend/internal/agenttool"
+	"github.com/biubiuqiu/lester-agent/backend/internal/harness"
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
 	modelruntime "github.com/biubiuqiu/lester-agent/backend/internal/model/runtime"
 	"github.com/biubiuqiu/lester-agent/backend/internal/sandbox"
@@ -105,11 +106,16 @@ func (e *runExecutor) execute(ctx context.Context, workspaceID, conversationID, 
 		s.finishExecutionError(ctx, runID, conversationID, err)
 		return
 	}
-	var acceptedModel *uuid.UUID
-	if err = s.db.QueryRow(ctx, `SELECT model_deployment_id FROM runs WHERE id=$1 AND conversation_id=$2`, runID, conversationID).Scan(&acceptedModel); err != nil {
+	var acceptedModel, submittedBy *uuid.UUID
+	if err = s.db.QueryRow(ctx, `SELECT model_deployment_id,submitted_by FROM runs WHERE id=$1 AND conversation_id=$2`, runID, conversationID).Scan(&acceptedModel, &submittedBy); err != nil {
 		s.finishExecutionError(ctx, runID, conversationID, err)
 		return
 	}
+	actor := conversation.CreatedBy
+	if submittedBy != nil {
+		actor = *submittedBy
+	}
+	ctx = modelruntime.WithActor(ctx, actor)
 	if acceptedModel != nil {
 		conversation.ModelDeploymentID = *acceptedModel
 	}
@@ -262,288 +268,164 @@ func (e *runExecutor) executeTurns(ctx context.Context, conversationID, runID uu
 		budget, budgetErr := estimator.Evaluate(modelRequest, config)
 		return modelRequest, projection, budget, budgetErr
 	}
-	for turn := 0; ; turn++ {
-		if ctx.Err() != nil {
-			s.finishContext(ctx, runID, conversationID)
-			return
-		}
-		adjustments, adjustErr := s.applyRunAdjustments(ctx, conversationID, runID)
-		if adjustErr != nil {
-			s.finishExecutionError(ctx, runID, conversationID, adjustErr)
-			return
-		}
-		request.Messages = append(request.Messages, adjustments...)
-		// request retains the complete transcript; only this iteration's copy is
-		// projected. Never append new messages to a previously pruned history.
-		modelRequest, projection, budget, err := buildRequest()
-		if err != nil {
-			s.finishExecutionError(ctx, runID, conversationID, fmt.Errorf("build tool context: %w", err))
-			return
-		}
-		for attempt := 0; budget.ShouldCompact && !compactionDisabled && attempt < 2; attempt++ {
-			compactionBase := request
-			compactionBase.System = modelRequest.System
-			compactionBase.Tools = modelRequest.Tools
-			candidate, compactErr := e.compactContext(ctx, conversationID, runID, client, compactionBase, checkpoint, &estimator, config, budget, &requestIndex)
-			if compactErr != nil {
-				compactionDisabled = true // Open the circuit; keep the previous boundary.
-				s.event(ctx, runID, conversationID, "CONTEXT_COMPACTION_FAILED", map[string]any{"error_kind": string(modelruntime.ErrorKindOf(compactErr)), "prior_checkpoint_preserved": true})
-				break
+	var projection toolcontext.Projection
+	var budget toolcontext.Budget
+	var prepared model.ModelRequest
+	var files *agenttool.FileState
+	var executionRequestIndex int
+	hooks := harness.Hooks{
+		PrepareTurn: func(ctx context.Context, state *harness.State) (model.ModelRequest, error) {
+			request = state.Request
+			adjustments, adjustErr := s.applyRunAdjustments(ctx, conversationID, runID)
+			if adjustErr != nil {
+				return model.ModelRequest{}, adjustErr
 			}
-			checkpoint = candidate
-			modelRequest, projection, budget, err = buildRequest()
+			request.Messages = append(request.Messages, adjustments...)
+			state.Request = request
+			prepared, projection, budget, err = buildRequest()
 			if err != nil {
-				break
+				return prepared, fmt.Errorf("build tool context: %w", err)
 			}
-		}
-		if ctx.Err() != nil {
-			s.finishContext(ctx, runID, conversationID)
-			return
-		}
-		if err != nil {
-			s.finishExecutionError(ctx, runID, conversationID, err)
-			return
-		}
-		recoverContext := func(requestErr error, hasPartial bool) bool {
-			if hasPartial || ctx.Err() != nil || compactionDisabled || contextRecoveries >= 1 || modelruntime.ErrorKindOf(requestErr) != modelruntime.ErrorContextExceeded {
-				return false
+			for attempt := 0; budget.ShouldCompact && !compactionDisabled && attempt < 2; attempt++ {
+				compactionBase := request
+				compactionBase.System = prepared.System
+				compactionBase.Tools = prepared.Tools
+				candidate, compactErr := e.compactContext(ctx, conversationID, runID, client, compactionBase, checkpoint, &estimator, config, budget, &requestIndex)
+				if compactErr != nil {
+					compactionDisabled = true
+					s.event(ctx, runID, conversationID, "CONTEXT_COMPACTION_FAILED", map[string]any{"error_kind": string(modelruntime.ErrorKindOf(compactErr)), "prior_checkpoint_preserved": true})
+					break
+				}
+				checkpoint = candidate
+				prepared, projection, budget, err = buildRequest()
+				if err != nil {
+					break
+				}
+			}
+			if ctx.Err() != nil {
+				return prepared, context.Cause(ctx)
+			}
+			if err != nil {
+				return prepared, err
+			}
+			if budget.Exceeded {
+				return prepared, errors.New("上下文超过已配置的预算；请缩短输入或调整模型预算。")
+			}
+			return prepared, nil
+		},
+		ModelStarted: func(ctx context.Context, turn harness.Turn) error {
+			requestIndex, err = s.startModelRequest(ctx, runID, "execution", budget)
+			if err != nil {
+				return err
+			}
+			executionRequestIndex = requestIndex
+			// File observation grants remain scoped to this visible model turn.
+			files = agenttool.NewFileState(turn.Request.Messages)
+			s.event(ctx, runID, conversationID, "MODEL_STARTED", map[string]any{"turn": turn.Number, "request_index": requestIndex, "tool_context": projection.Stats, "context_budget": budget})
+			return nil
+		},
+		Delta: func(eventCtx context.Context, delta string) {
+			s.event(eventCtx, runID, conversationID, "MODEL_DELTA", map[string]any{"delta": delta})
+		},
+		ModelFinished: func(ctx context.Context, result harness.Result, requestErr error) error {
+			if err := s.finishModelRequest(ctx, runID, executionRequestIndex, result.Usage, requestErr); err != nil {
+				return err
+			}
+			if requestErr == nil {
+				estimator.Observe(toolcontext.EstimateInput(result.Turn.Request), result.Usage)
+				contextRecoveries = 0
+			}
+			return nil
+		},
+		RecoverModel: func(ctx context.Context, result harness.Result, requestErr error) (bool, error) {
+			if result.Text != "" || len(result.CallsByIndex) > 0 || ctx.Err() != nil || compactionDisabled || contextRecoveries >= 1 || modelruntime.ErrorKindOf(requestErr) != modelruntime.ErrorContextExceeded {
+				return false, nil
 			}
 			contextRecoveries++
 			compactionBase := request
-			compactionBase.System = modelRequest.System
-			compactionBase.Tools = modelRequest.Tools
+			compactionBase.System = result.Turn.Request.System
+			compactionBase.Tools = result.Turn.Request.Tools
 			candidate, compactErr := e.compactContext(ctx, conversationID, runID, client, compactionBase, checkpoint, &estimator, config, budget, &requestIndex)
 			if compactErr != nil {
 				compactionDisabled = true
 				s.event(ctx, runID, conversationID, "CONTEXT_COMPACTION_FAILED", map[string]any{"error_kind": string(modelruntime.ErrorKindOf(compactErr)), "prior_checkpoint_preserved": true})
-				return false
+				return false, nil
 			}
 			checkpoint = candidate
-			return true
-		}
-		if budget.Exceeded {
-			s.finishExecutionError(ctx, runID, conversationID, errors.New("上下文超过已配置的预算；请缩短输入或调整模型预算。"))
-			return
-		}
-		requestIndex, err = s.startModelRequest(ctx, runID, "execution", budget)
-		if err != nil {
-			s.finishExecutionError(ctx, runID, conversationID, err)
-			return
-		}
-		executionRequestIndex := requestIndex
-		var usage *modelruntime.NormalizedUsage
-		finishedUsage := false
-		finishUsage := func(requestErr error) error {
-			if finishedUsage {
-				return nil
+			return true, nil
+		},
+		Partial: func(_ context.Context, result harness.Result) {
+			s.savePartialResponse(runID, conversationID, result.Text, result.CallsByIndex)
+		},
+		Assistant: func(ctx context.Context, result harness.Result, assistant model.Message) (model.Message, error) {
+			assistant.RunID = runID.String()
+			assistant, err := s.appendMessageReceipt(ctx, conversationID, runID, assistant, "", nil)
+			if err != nil {
+				return assistant, err
 			}
-			finishedUsage = true
-			if usage == nil {
-				usage = &modelruntime.NormalizedUsage{Source: modelruntime.UsageMissing}
-			}
-			return s.finishModelRequest(ctx, runID, executionRequestIndex, usage, requestErr)
-		}
-		// A historical read that is no longer visible to this model request does
-		// not grant permission to overwrite that file. Keep the state shared only
-		// within this visible turn's tool batch.
-		files := agenttool.NewFileState(modelRequest.Messages)
-		s.event(ctx, runID, conversationID, "MODEL_STARTED", map[string]any{"turn": turn + 1, "request_index": requestIndex, "tool_context": projection.Stats, "context_budget": budget})
-		stream, err := client.Stream(ctx, modelRequest)
-		if err != nil {
-			_ = finishUsage(err)
-			if recoverContext(err, false) {
-				continue
-			}
-			s.finishExecutionError(ctx, runID, conversationID, err)
-			return
-		}
-		var text, pendingDelta strings.Builder
-		flushDeltaWithContext := func(eventCtx context.Context) {
-			if pendingDelta.Len() == 0 {
-				return
-			}
-			s.event(eventCtx, runID, conversationID, "MODEL_DELTA", map[string]any{"delta": pendingDelta.String()})
-			pendingDelta.Reset()
-		}
-		flushDelta := func() { flushDeltaWithContext(ctx) }
-		deltaTicker := time.NewTicker(75 * time.Millisecond)
-		callsByIndex := map[int]*model.ToolCall{}
-		var contextRetry bool
-		streamOpen := true
-		for streamOpen {
-			var event model.ModelEvent
-			var ok bool
-			select {
-			case event, ok = <-stream:
-				if !ok {
-					streamOpen = false
-					continue
-				}
-			case <-deltaTicker.C:
-				flushDelta()
-				continue
-			case <-ctx.Done():
-				streamOpen = false
-				continue
-			}
-			if event.NormalizedUsage != nil {
-				usage = event.NormalizedUsage.Clone()
-			}
-			if event.Err != nil {
-				_ = finishUsage(event.Err)
-				deltaTicker.Stop()
-				if recoverContext(event.Err, text.Len() > 0 || len(callsByIndex) > 0) {
-					contextRetry, streamOpen = true, false
-					continue
-				}
-				if ctx.Err() != nil {
-					cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-					flushDeltaWithContext(cleanupCtx)
-					cancel()
-					s.savePartialResponse(runID, conversationID, text.String(), callsByIndex)
-					s.finishContext(ctx, runID, conversationID)
-					return
-				}
-				flushDelta()
-				s.savePartialResponse(runID, conversationID, text.String(), callsByIndex)
-				s.finishExecutionError(ctx, runID, conversationID, event.Err)
-				return
-			}
-			if event.Delta != "" {
-				text.WriteString(event.Delta)
-				pendingDelta.WriteString(event.Delta)
-				if pendingDelta.Len() >= 2048 {
-					flushDelta()
-				}
-			}
-			for _, fragment := range event.ToolCallDeltas() {
-				if fragment == nil {
-					continue
-				}
-				call := callsByIndex[fragment.Index]
-				if call == nil {
-					call = &model.ToolCall{Index: fragment.Index}
-					callsByIndex[fragment.Index] = call
-				}
-				if fragment.ID != "" {
-					call.ID = fragment.ID
-				}
-				if fragment.Name != "" {
-					call.Name = fragment.Name
-				}
-				if arguments := fragment.Arguments; len(arguments) > 0 && string(arguments) != "{}" {
-					call.Arguments = append(call.Arguments, arguments...)
-				}
-			}
-		}
-		deltaTicker.Stop()
-		if contextRetry {
-			continue
-		}
-		if ctx.Err() != nil {
-			_ = finishUsage(ctx.Err())
-			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			flushDeltaWithContext(cleanupCtx)
-			cancel()
-			s.savePartialResponse(runID, conversationID, text.String(), callsByIndex)
-			s.finishContext(ctx, runID, conversationID)
-			return
-		}
-		flushDelta()
-		calls, err := assembledToolCalls(callsByIndex)
-		if err != nil {
-			_ = finishUsage(err)
-			s.savePartialResponse(runID, conversationID, text.String(), callsByIndex)
-			s.finishExecutionError(ctx, runID, conversationID, err)
-			return
-		}
-		if len(calls) == 0 && strings.TrimSpace(text.String()) == "" {
-			empty := &modelruntime.ProviderError{Kind: modelruntime.ErrorProtocol}
-			_ = finishUsage(empty)
-			s.finishExecutionError(ctx, runID, conversationID, empty)
-			return
-		}
-		if err = finishUsage(nil); err != nil {
-			s.finishExecutionError(ctx, runID, conversationID, err)
-			return
-		}
-		estimator.Observe(toolcontext.EstimateInput(modelRequest), usage)
-		contextRecoveries = 0
-		assistant := model.Message{Role: "assistant", Content: text.String(), ToolCalls: calls, RunID: runID.String()}
-		if assistant, err = s.appendMessageReceipt(ctx, conversationID, runID, assistant, "", nil); err != nil {
-			s.finishExecutionError(ctx, runID, conversationID, err)
-			return
-		}
-		s.event(ctx, runID, conversationID, "MODEL_COMPLETED", map[string]any{"request_index": requestIndex, "message_id": assistant.MessageID, "usage": usage, "context_budget": budget})
-		request.Messages = append(request.Messages, assistant)
-		if len(calls) == 0 {
-			if err = s.finishCompletedRun(ctx, runID, conversationID); err != nil {
-				if errors.Is(err, ErrPendingRunInputs) {
-					continue
-				}
-				s.finishExecutionError(ctx, runID, conversationID, err)
-			}
-			return
-		}
-		for _, call := range calls {
-			if ctx.Err() != nil {
-				s.finishContext(ctx, runID, conversationID)
-				return
-			}
+			s.event(ctx, runID, conversationID, "MODEL_COMPLETED", map[string]any{"request_index": requestIndex, "message_id": assistant.MessageID, "usage": result.Usage, "context_budget": budget})
+			return assistant, nil
+		},
+		ToolStarted: func(ctx context.Context, call model.ToolCall) {
 			s.event(ctx, runID, conversationID, "TOOL_STARTED", map[string]any{"tool": call.Name, "tool_call_id": call.ID, "arguments": string(call.Arguments)})
-			result, toolErr := e.runTool(ctx, runID, conversationID, computer, call, files)
-			if ctx.Err() != nil {
-				if errors.Is(context.Cause(ctx), ErrRunCancelled) && result != nil {
-					observed, encodeErr := json.Marshal(result)
-					if encodeErr == nil {
-						var envelope map[string]any
-						if json.Unmarshal(observed, &envelope) != nil || envelope == nil {
-							envelope = map[string]any{"observed_result": json.RawMessage(observed)}
-						}
-						envelope["cancelled"] = true
-						envelope["error"] = "The turn was cancelled. This result was observed; inspect its status and current state before continuing."
-						if raw, marshalErr := json.Marshal(envelope); marshalErr == nil {
-							cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-							_ = s.appendMessage(cleanupCtx, conversationID, runID, model.Message{Role: "tool", Content: string(raw), ToolCallID: call.ID}, call.Name, map[string]any{"is_error": true, "cancelled": true})
-							cancel()
-						}
-					}
-				}
-				s.finishContext(ctx, runID, conversationID)
-				return
-			}
+		},
+		ExecuteTool: func(ctx context.Context, call model.ToolCall) (any, error) {
+			return e.runTool(ctx, runID, conversationID, computer, call, files)
+		},
+		ToolResult: func(ctx context.Context, call model.ToolCall, result any, toolErr error) (model.Message, error) {
 			eventType := "TOOL_COMPLETED"
 			metadata := map[string]any{}
-			if commandResultFailed(call.Name, result) {
+			if commandResultFailed(call.Name, result) || toolErr != nil {
 				metadata["is_error"] = true
 				eventType = "TOOL_FAILED"
 			}
-			if toolErr != nil {
-				if retained, ok := result.(map[string]any); ok && retained != nil {
-					retained["error"] = toolErr.Error()
-				} else {
-					result = map[string]any{"error": toolErr.Error(), "observed_result": result}
-				}
-				metadata["is_error"] = true
-				eventType = "TOOL_FAILED"
-			}
-			raw, err := json.Marshal(result)
+			toolMessage, err := harness.ToolResultMessage(call, result, toolErr)
 			if err != nil {
-				s.finishExecutionError(ctx, runID, conversationID, fmt.Errorf("encode tool result: %w", err))
-				return
+				return toolMessage, err
 			}
-			toolMessage := model.Message{Role: "tool", Content: string(raw), ToolCallID: call.ID}
-			if toolMessage, err = s.appendMessageReceipt(ctx, conversationID, runID, toolMessage, call.Name, metadata); err != nil {
-				s.finishExecutionError(ctx, runID, conversationID, err)
-				return
+			toolMessage, err = s.appendMessageReceipt(ctx, conversationID, runID, toolMessage, call.Name, metadata)
+			if err != nil {
+				return toolMessage, err
 			}
-			payload := map[string]any{"tool": call.Name, "tool_call_id": call.ID, "result": json.RawMessage(raw)}
+			payload := map[string]any{"tool": call.Name, "tool_call_id": call.ID, "result": json.RawMessage(toolMessage.Content)}
 			if toolErr != nil {
 				payload["error"] = toolErr.Error()
 			}
 			s.event(ctx, runID, conversationID, eventType, payload)
-			request.Messages = append(request.Messages, toolMessage)
-		}
+			return toolMessage, nil
+		},
+		ToolInterrupted: func(ctx context.Context, call model.ToolCall, result any) {
+			if !errors.Is(context.Cause(ctx), ErrRunCancelled) || result == nil {
+				return
+			}
+			observed, encodeErr := json.Marshal(result)
+			if encodeErr != nil {
+				return
+			}
+			var envelope map[string]any
+			if json.Unmarshal(observed, &envelope) != nil || envelope == nil {
+				envelope = map[string]any{"observed_result": json.RawMessage(observed)}
+			}
+			envelope["cancelled"] = true
+			envelope["error"] = "The turn was cancelled. This result was observed; inspect its status and current state before continuing."
+			raw, marshalErr := json.Marshal(envelope)
+			if marshalErr != nil {
+				return
+			}
+			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			defer cancel()
+			_ = s.appendMessage(cleanupCtx, conversationID, runID, model.Message{Role: "tool", Content: string(raw), ToolCallID: call.ID}, call.Name, map[string]any{"is_error": true, "cancelled": true})
+		},
+		Complete: func(ctx context.Context, _ *harness.State) (bool, error) {
+			err := s.finishCompletedRun(ctx, runID, conversationID)
+			if errors.Is(err, ErrPendingRunInputs) {
+				return true, nil
+			}
+			return false, err
+		},
+	}
+	if _, runErr := harness.Run(ctx, client, request, hooks); runErr != nil {
+		s.finishExecutionError(ctx, runID, conversationID, runErr)
 	}
 }
 

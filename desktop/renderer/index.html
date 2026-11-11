@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'none'; frame-src 'self' blob: about:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Lester</title>
+  <link rel="icon" href="assets/lester.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/tokens.css">
+  <link rel="stylesheet" href="assets/xterm.css">
+  <link rel="stylesheet" href="styles.css">
+  <script src="assets/xterm.js" defer></script>
+  <script src="assets/addon-fit.js" defer></script>
+  <script src="app.js" type="module"></script>
+</head>
+<body>
+  <div id="app">
+    <aside class="sidebar" data-aria="navigation" aria-label="Navigation">
+      <div class="brand"><img src="assets/lester.svg" alt="" width="30" height="30"><strong>Lester</strong></div>
+      <button id="new-task" class="new-task"><span class="plus" aria-hidden="true">+</span><span data-t="newTask"></span></button>
+      <div class="sidebar-heading"><span data-t="projects"></span><button id="choose-project" class="icon-button" data-title="openFolder" aria-label="Open folder">+</button></div>
+      <nav id="project-list" class="project-list"></nav>
+      <div class="sidebar-heading"><span data-t="recent"></span><button id="refresh" class="icon-button" data-title="refresh" aria-label="Refresh">↻</button></div>
+      <input id="search" class="search" type="search" data-placeholder="search" aria-label="Search">
+      <nav id="conversation-list" class="conversation-list"></nav>
+      <div class="sidebar-footer"><div id="device-status" class="device-status"></div><button id="settings-button" class="settings-button"><img src="assets/profile.svg" alt="" width="22" height="22"><span data-t="settings"></span><span class="shortcut" aria-hidden="true">⌘ ,</span></button></div>
+    </aside>
+    <main id="main">
+      <header class="topbar"><div class="context"><strong id="conversation-title"></strong><span id="conversation-context"></span></div><div class="header-actions"><button id="workspace-toggle" class="quiet-button"><img src="assets/computer.svg" alt="" width="20" height="20"><span data-t="workspace"></span></button></div></header>
+      <div id="global-notice" class="notice" role="status" hidden></div>
+      <div id="cloud-content" hidden></div>
+      <div id="local-content" class="local-content">
+        <section id="chat" class="chat">
+          <div id="transcript" class="transcript" tabindex="0" data-aria="conversation" aria-label="Conversation">
+            <div id="welcome" class="welcome"><img src="assets/lester.svg" alt="" width="54" height="54"><h1 data-t="welcome"></h1><p data-t="welcomeHint"></p><button id="welcome-project" class="secondary-button" data-t="openFolder"></button></div>
+            <div id="messages" class="messages" aria-live="off"></div>
+          </div>
+          <button id="jump-bottom" class="jump-bottom" data-t="newContent" hidden></button>
+          <div id="composer-area" class="composer-area">
+            <div id="approval" class="approval" hidden></div>
+            <div id="receipt" class="notice receipt" role="status" hidden></div>
+            <form id="composer" class="composer">
+              <textarea id="prompt" rows="3" maxlength="65536" data-placeholder="prompt" aria-label="Message"></textarea>
+              <div class="composer-controls"><select id="project-picker" data-title="project" aria-label="Project"></select><select id="permission-mode" data-title="permissionMode" aria-label="Permissions"><option value="standard" data-t="standard"></option><option value="auto" data-t="auto"></option><option value="full" data-t="full"></option></select><span class="spacer"></span><select id="model-picker" data-title="model" aria-label="Model"></select><button id="send" class="send-button" type="submit" data-title="send" aria-label="Send">↑</button><button id="stop" class="stop-button" type="button" data-t="stop" hidden></button></div>
+            </form>
+            <p id="composer-hint" class="composer-hint"></p>
+          </div>
+        </section>
+        <section id="workspace" class="workspace" hidden data-aria="workspace" aria-label="Workspace"><div class="workspace-toolbar"><div class="workspace-tabs" role="tablist"><button data-pane="files" role="tab" data-t="files"></button><button data-pane="diff" role="tab" data-t="changes"></button><button data-pane="terminal" role="tab" data-t="terminal"></button></div><button id="close-workspace" class="icon-button" data-title="close" aria-label="Close">×</button></div><div id="workspace-body" class="workspace-body"></div></section>
+      </div>
+    </main>
+  </div>
+  <dialog id="settings" class="settings-dialog"><div class="dialog-heading"><h2 data-t="settings"></h2><button id="close-settings" class="icon-button" data-title="close" aria-label="Close">×</button></div><div class="settings-scroll"><label class="language-row"><span data-t="language"></span><select id="language"><option value="zh-CN">简体中文</option><option value="en">English</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="fr">Français</option><option value="es">Español</option></select></label><section><div class="section-heading"><h3 data-t="models"></h3><button id="add-model" class="quiet-button" data-t="addModel"></button></div><div id="model-list"></div><form id="model-form" hidden><input name="id" type="hidden"><label><span data-t="name"></span><input name="name" required maxlength="200"></label><div class="form-grid"><label><span data-t="provider"></span><select name="provider"><option value="openai_compatible">OpenAI compatible</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="anthropic_compatible">Anthropic compatible</option><option value="azure_openai">Azure OpenAI</option><option value="vertex">Vertex Anthropic</option><option value="foundry">Foundry Anthropic</option><option value="bedrock">Amazon Bedrock</option></select></label><label><span data-t="protocol"></span><select name="protocol"><option value="openai">OpenAI compatible</option><option value="anthropic">Anthropic</option></select></label></div><label><span data-t="endpoint"></span><input name="endpoint" type="url" required placeholder="https://api.openai.com/v1"></label><label><span data-t="modelId"></span><input name="model_id" required placeholder="gpt-4.1"></label><label><span data-t="apiKey"></span><input name="api_key" type="password" autocomplete="new-password"></label><p class="field-hint" data-t="keyHint"></p><details><summary data-t="advanced"></summary><label><span data-t="config"></span><textarea name="config" rows="3" spellcheck="false">{}</textarea></label></details><label class="check-label"><input name="share_with_cloud" type="checkbox"><span data-t="shareModel"></span></label><p class="field-hint" data-t="shareHint"></p><div class="form-actions"><button id="cancel-model" class="quiet-button" type="button" data-t="cancel"></button><button class="primary-button" type="submit" data-t="save"></button></div></form><p class="field-hint" data-t="modelHint"></p></section><section><h3 data-t="cloud"></h3><form id="cloud-form"><label><span data-t="cloudOrigin"></span><input name="origin" type="url" required placeholder="https://lester.example.com"></label><button class="secondary-button" type="submit" data-t="saveServer"></button></form><div id="cloud-status" class="cloud-status"></div><div class="form-actions"><button id="cloud-login" class="primary-button" data-t="signIn"></button><button id="cloud-logout" class="quiet-button" data-t="signOut" hidden></button></div></section><p id="storage-status" class="field-hint"></p><p id="settings-error" class="error" role="alert" hidden></p></div></dialog>
+</body>
+</html>

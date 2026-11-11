@@ -13,6 +13,6 @@ export const sections: SiteDocSection[] = [
 <p><T>{"Webhook 使用独立 Bearer 密钥和 X-Lester-Event-ID 请求头，接收最多 32 KiB 的 JSON 对象。密钥仅创建或重置时显示，服务端只保存哈希；请通过 HTTPS 发送并存入发送方密钥配置。同一事件 ID 和相同数据重发返回原记录，数据不同则拒绝。事件内容不能更改模型、项目或权限。这是通用入站接口，不包含外发回调或特定应用的原生适配器。"}</T></p>
 </> },
 { id: "upgrade", title: "部署与升级", content: <>
-<p><T>{"已有部署需备份并停止 API 写入与活跃任务，按顺序补齐迁移至 000036_conversation_reads.up.sql，再同步重建 API 与 Web。新 Compose 数据库初始化 001–036；不要删除数据卷。"}</T></p>
+<p><T>{"已有部署需备份并停止 API 写入与活跃任务，按顺序补齐迁移至 000037_desktop_devices.up.sql，再同步重建 API 与 Web。新 Compose 数据库初始化 001–037；不要删除数据卷。"}</T></p>
 </> }
 ];

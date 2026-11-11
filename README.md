@@ -13,7 +13,7 @@ An open-source, self-hostable AI agent workspace. Talk to one enduring Lester: i
 - **See the results:** file tabs, HTML/Markdown previews, source inspection and static-site publishing.
 - **Choose your tools:** multiple model providers, custom Agents, @ references, Skills and attachments.
 - **Work beyond one visit:** scheduled tasks, inbound webhooks and persistent task records.
-- **Use your own deployment:** Web in six languages, plus iPhone/iPad and Android clients.
+- **Use your own deployment:** Web in six languages, iPhone/iPad and Android clients, and [desktop local tasks](docs/desktop.md) for macOS/Windows.
 
 Lester focuses on conversation-driven work. It does not provide a Workflow/DAG editor or a multi-Agent orchestration UI. See the [user guide](docs/usage.md) for behavior and support boundaries.
 
@@ -52,7 +52,7 @@ Open [http://localhost:13000](http://localhost:13000), enter the workspace, regi
 
 [Full setup, PowerShell and alternate ports](docs/getting-started.md). Saving model configuration does not verify provider access; the first task confirms the actual call.
 
-**Existing installations:** preserve `.env`, encryption keys and volumes. Back up and apply every missing migration through **036** before running the matching services. Follow the [upgrade checklist](docs/deployment.md#upgrading-an-existing-installation); do not overwrite an existing configuration or delete volumes.
+**Existing installations:** preserve `.env`, encryption keys and volumes. Back up and apply every missing migration through **037** before running the matching services. Follow the [upgrade checklist](docs/deployment.md#upgrading-an-existing-installation); do not overwrite an existing configuration or delete volumes.
 
 Connect GitHub, Gmail, X, Feishu and Slack for [read-only task research](docs/app-connections.md).
 
@@ -75,6 +75,7 @@ Start with the [documentation index](docs/README.md), or open a chapter:
 | [Accounts and security](docs/accounts-and-security.md) | OAuth, rotating tokens, avatars and administration |
 | [Development and CI](docs/development.md) | Repository layout, local checks and GitHub Actions |
 | [Design system](docs/design-system.md) | Tokens, SVG rules and the offline HTML reference |
+| [Desktop and local tasks](docs/desktop.md) | macOS, Windows/WSL2, device models and local data |
 | [Mobile clients](docs/mobile.md) | iPhone, iPad and Android build/install guides |
 
 ## Architecture

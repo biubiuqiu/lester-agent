@@ -27,7 +27,7 @@ export const siteDocNavigation: SiteDocMetadata[] = [
   { slug: "connections", navTitle: "应用连接", title: "连接你的工作资料", description: "授权应用读取资料，或单独开启 GitHub 代码任务。", group: "work", glyph: "connections" },
   { slug: "automations", navTitle: "自动任务", title: "安排定时任务与外部触发", description: "通过会话、定时规则或 Webhook 发起任务。", group: "work", glyph: "automation" },
   { slug: "speech", navTitle: "语音输入", title: "把语音变成可编辑的草稿", description: "录音、转写、检查，再明确发送。", group: "work", glyph: "conversation" },
-  { slug: "mobile", navTitle: "移动客户端", title: "在手机与平板上使用 Lester", description: "连接自己的部署，在 iOS、iPadOS 和 Android 上继续工作。", group: "work", glyph: "computer" },
+  { slug: "mobile", navTitle: "客户端", title: "在桌面、手机与平板上使用 Lester", description: "在桌面处理本地任务，或在各平台连接自己的云端部署。", group: "work", glyph: "computer" },
   { slug: "deployment", navTitle: "部署与升级", title: "部署在自己的环境里", description: "管理访问地址、持久数据与版本升级。", group: "maintain", glyph: "computer" },
   { slug: "troubleshooting", navTitle: "常见问题", title: "遇到问题时，从这里排查", description: "配置、执行和成果预览的常见问题。", group: "maintain", glyph: null },
 ];

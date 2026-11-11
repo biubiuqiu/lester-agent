@@ -6,7 +6,7 @@ import re
 import subprocess
 from pathlib import Path
 
-JOBS = ("go", "web", "gateway", "helm", "sandbox_runtime", "security_go", "security_web", "workflows", "ios", "android")
+JOBS = ("go", "web", "gateway", "helm", "sandbox_runtime", "security_go", "security_web", "workflows", "ios", "android", "desktop")
 
 
 def changed_paths(event_name, event, repo="."):
@@ -49,16 +49,23 @@ def select_jobs(event_name, paths):
             continue
         if path.startswith("backend/"):
             jobs.update(go=True, security_go=True)
+            if (path.startswith(("backend/cmd/desktop-runner/", "backend/internal/harness/", "backend/internal/localrun/", "backend/internal/desktopcloud/", "backend/internal/model/"))
+                    or path in ("backend/go.mod", "backend/go.sum")):
+                jobs["desktop"] = True
             if (path == "backend/Dockerfile.sandbox-runtime"
                     or path.startswith(("backend/runtime/", "backend/cmd/lester-toolbox/", "backend/internal/toolboxfs/", "backend/internal/commandtask/", "backend/internal/githubsandbox/", "backend/internal/sandbox/"))
                     or path in ("backend/go.mod", "backend/go.sum", "backend/.dockerignore")):
                 jobs["sandbox_runtime"] = True
+        elif path.startswith("desktop/"):
+            jobs["desktop"] = True
         elif path.startswith("android/"):
             jobs["android"] = True
         elif path.startswith("ios/"):
             jobs["ios"] = True
         elif path.startswith("frontend/"):
             jobs["web"] = True
+            if path in ("frontend/src/design/tokens.json", "frontend/src/app/icon.svg", "frontend/public/design-system.html"):
+                jobs["desktop"] = True
             if path in ("frontend/package.json", "frontend/pnpm-lock.yaml", "frontend/pnpm-workspace.yaml"):
                 jobs["security_web"] = True
         elif path.startswith("deploy/gateway/") or path.startswith("deploy/docker-compose") or path == "deploy/.env.example":

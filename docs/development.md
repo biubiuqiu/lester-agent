@@ -17,10 +17,12 @@ lester-agent/
 ├── frontend/                     Next.js application
 │   ├── src/
 │   └── Dockerfile
+├── desktop/                      Electron shell and standalone local/cloud renderer
 ├── backend/                      Go application
 │   ├── cmd/api/                  API entry point
 │   ├── cmd/sandbox-service/      Sandbox Service entry point
 │   ├── cmd/lester-toolbox/       Static Computer filesystem helper
+│   ├── cmd/desktop-runner/       Private stdio desktop sidecar
 │   ├── internal/
 │   │   ├── agenttool/            Tool registry and independent handlers
 │   │   ├── toolboxfs/            Safe filesystem operations and protocol
@@ -93,6 +95,8 @@ helm lint deploy/helm/lester --set secrets.existingSecret=lester-test-secrets
 helm template lester deploy/helm/lester --set secrets.existingSecret=lester-test-secrets
 ```
 
+For desktop setup and focused validation, see [Desktop and local tasks](desktop.md#server-upgrade-and-checks). Runner cross-builds do not validate macOS/Windows signing or live WSL2 behavior.
+
 ## Continuous integration
 
 GitHub Actions runs on pushes to `main`, pull requests, and manual dispatch. New commits cancel older runs for the same event/branch or PR. Documentation-only changes skip unrelated builds; unknown paths or an unavailable Git comparison run all checks. CI configuration changes also validate workflows with actionlint and run the full suite.
@@ -103,6 +107,7 @@ GitHub Actions runs on pushes to `main`, pull requests, and manual dispatch. New
 | Frontend | Frontend changes | Frozen dependencies, tests, ESLint, production build/type checking, desktop/mobile Chromium regressions |
 | iOS / iPadOS | Native source, resource or build changes | Six-language resources, Core Swift tests and unsigned simulator/device builds on Xcode 26+ |
 | Android | Native source, resource or build changes | Pinned SDK, six-language resources, JVM tests, lint and unsigned APK builds |
+| Desktop | Desktop, shared harness/local runner/model or shared design asset changes | Locked npm dependencies, shell unit/static checks, harness/local execution tests and macOS/Linux x64/arm64 runner cross-builds |
 | Gateway / Compose | Gateway, Compose or deployment environment template changes | Config resolution, routing/cookies, preview isolation, uploads, SSE and WebSocket fixtures |
 | Helm | Chart changes | Chart lint and rendering with artifact ingress |
 | Go dependency security | Backend changes and weekly | Reachable vulnerable symbols via govulncheck |

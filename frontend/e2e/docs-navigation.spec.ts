@@ -11,7 +11,7 @@ const chapters = [
   ["/docs/connections", "连接你的工作资料", "github-code"],
   ["/docs/automations", "安排定时任务与外部触发", "automations"],
   ["/docs/speech", "把语音变成可编辑的草稿", "speech"],
-  ["/docs/mobile", "在手机与平板上使用 Lester", "android"],
+  ["/docs/mobile", "在桌面、手机与平板上使用 Lester", "android"],
   ["/docs/deployment", "部署在自己的环境里", "backup"],
   ["/docs/troubleshooting", "遇到问题时，从这里排查", "preview"],
 ] as const;

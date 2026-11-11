@@ -12,6 +12,7 @@ import (
 	"github.com/biubiuqiu/lester-agent/backend/internal/contextlibrary"
 	"github.com/biubiuqiu/lester-agent/backend/internal/conversation"
 	"github.com/biubiuqiu/lester-agent/backend/internal/deliverable"
+	"github.com/biubiuqiu/lester-agent/backend/internal/desktopcloud"
 	"github.com/biubiuqiu/lester-agent/backend/internal/httpapi"
 	"github.com/biubiuqiu/lester-agent/backend/internal/model"
 	"github.com/biubiuqiu/lester-agent/backend/internal/personal"
@@ -25,6 +26,7 @@ import (
 )
 
 type Dependencies struct {
+	Desktop           *desktopcloud.Handler
 	Speech            *speech.Handler
 	AppConnections    *connector.Handler
 	Personal          *personal.Handler
@@ -70,8 +72,26 @@ func Router(deps Dependencies) http.Handler {
 		api.Post("/auth/native/exchange", deps.Auth.NativeExchange)
 		api.With(deps.Auth.Middleware).Post("/auth/native/handoff", deps.Auth.NativeHandoff)
 		api.With(deps.Auth.Middleware).Get("/auth/session", deps.Auth.SessionStatus)
+		if deps.Desktop != nil {
+			api.Get("/desktop/devices/{id}/connect", deps.Desktop.Connect)
+			api.Group(func(desktop chi.Router) {
+				desktop.Use(deps.Desktop.Access(deps.Auth.Middleware))
+				desktop.Get("/desktop/models", deps.Desktop.ListModels)
+				desktop.Post("/desktop/models/{id}/generate", deps.Desktop.Generate)
+				desktop.Post("/desktop/models/{id}/stream", deps.Desktop.Stream)
+				desktop.Get("/desktop/conversations", deps.Desktop.ListConversations)
+				desktop.Put("/desktop/devices/{id}/models", deps.Desktop.SyncModels)
+				desktop.Put("/desktop/devices/{id}/conversations", deps.Desktop.SyncConversations)
+			})
+		}
 		api.Group(func(private chi.Router) {
 			private.Use(deps.Auth.Middleware)
+			if deps.Desktop != nil {
+				private.Get("/desktop/devices", deps.Desktop.ListDevices)
+				private.Post("/desktop/devices", deps.Desktop.RegisterDevice)
+				private.Delete("/desktop/devices/{id}", deps.Desktop.RevokeDevice)
+				private.Post("/desktop/devices/{id}/token", deps.Desktop.RotateToken)
+			}
 			if deps.Speech != nil {
 				private.Get("/speech/capabilities", deps.Speech.Capabilities)
 				private.Post("/speech/transcriptions", deps.Speech.Transcribe)

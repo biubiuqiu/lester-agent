@@ -17,10 +17,12 @@ lester-agent/
 ├── frontend/                     Next.js 前端工程
 │   ├── src/
 │   └── Dockerfile
+├── desktop/                      Electron 外壳与云端/本地统一界面
 ├── backend/                      Go 后端工程
 │   ├── cmd/api/                  API 服务入口
 │   ├── cmd/sandbox-service/      Sandbox 服务入口
 │   ├── cmd/lester-toolbox/       注入 Computer 的静态文件 Helper
+│   ├── cmd/desktop-runner/       私有 stdio 桌面侧进程
 │   ├── internal/                 后端内部实现
 │   │   ├── agenttool/            工具注册表与独立工具 Handler
 │   │   ├── toolboxfs/            Helper 的安全文件操作与协议
@@ -73,6 +75,8 @@ make test
 make web-check
 ```
 
+桌面客户端的启动与专项检查见[桌面与本地任务](desktop.md#服务端升级与检查)。Runner 交叉编译不代表已验证 macOS/Windows 签名或真实 WSL2 行为。
+
 ## GitHub CI
 
 CI 在推送 `main`、提交 PR 和手动运行时触发。同一事件下的分支或 PR 有新提交时，取消旧的检查。纯文档改动跳过无关构建；新增未知路径或无法获取 Git 比较范围时执行全套。修改 CI 本身会用 actionlint 验证工作流并执行全套。
@@ -83,6 +87,7 @@ CI 在推送 `main`、提交 PR 和手动运行时触发。同一事件下的分
 | 前端 | 前端改动 | 锁定依赖安装、测试、ESLint、生产构建与类型检查、桌面/手机 Chromium 回归 |
 | iOS / iPadOS | 原生源码、资源、构建配置改动 | 六语言资源、Core Swift 测试、Xcode 26+ 无签名模拟器及设备构建 |
 | Android | 原生源码、资源、构建配置改动 | 固定 SDK、六语言资源、JVM 测试、lint 与无签名 APK 构建 |
+| 桌面客户端 | 桌面、共享 Harness/本地 Runner/模型或共享设计资源改动 | npm 锁定依赖、外壳单元/静态检查、Harness/本地执行测试、macOS/Linux x64/arm64 Runner 交叉编译 |
 | 网关 / Compose | 网关、Compose、部署环境模板改动 | 配置解析、路由/Cookie、预览隔离、上传、SSE、WebSocket 模拟服务回归 |
 | Helm | Chart 改动 | lint 与包含产物 Ingress 的模板渲染 |
 | Go 依赖安全 | 后端改动及每周 | govulncheck 检查可调用的漏洞符号 |

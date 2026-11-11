@@ -13,7 +13,7 @@ Lester 是一个开源、可自部署的 AI Agent 工作区。常驻的个人助
 - **直接查看成果：** 多标签文件、HTML/Markdown 预览、源码检查与静态站点发布。
 - **选择模型与能力：** 多服务商模型、自定义 Agent、@ 引用、Skill 和附件。
 - **离开页面也能安排工作：** 定时任务、入站 Webhook 与持久化任务记录。
-- **使用自己的部署：** 六语言 Web，以及 iPhone、iPad 和 Android 客户端。
+- **使用自己的部署：** 六语言 Web、iPhone/iPad 和 Android 客户端，以及支持 macOS/Windows 的[桌面本地任务](docs/zh-CN/desktop.md)。
 
 产品以对话驱动工作，不提供 Workflow/DAG 编辑器或多 Agent 编排界面。完整行为与支持边界见[使用指南](docs/zh-CN/usage.md)。
 
@@ -52,7 +52,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --buil
 
 [完整安装、PowerShell 与端口调整](docs/zh-CN/getting-started.md)。保存模型配置不代表已经验证服务商访问，实际调用由任务确认。
 
-**已有部署：** 保留 `.env`、加密密钥和数据卷，备份后按编号执行尚未应用的全部迁移至 **036**，再启动匹配版本的服务。请先看[升级检查](docs/zh-CN/deployment.md#已有部署升级检查)，不要覆盖配置或删除数据卷。
+**已有部署：** 保留 `.env`、加密密钥和数据卷，备份后按编号执行尚未应用的全部迁移至 **037**，再启动匹配版本的服务。请先看[升级检查](docs/zh-CN/deployment.md#已有部署升级检查)，不要覆盖配置或删除数据卷。
 
 连接 GitHub、Gmail、X、飞书和 Slack，让任务[按需搜索和读取资料](docs/zh-CN/app-connections.md)。
 
@@ -75,6 +75,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yaml up -d --buil
 | [账号与安全](docs/zh-CN/accounts-and-security.md) | 单点登录、双令牌、头像、管理与安全配置 |
 | [开发与 CI](docs/zh-CN/development.md) | 仓库结构、本地检查与 GitHub Actions |
 | [设计规范](docs/zh-CN/design-system.md) | Token、SVG 规则与离线 HTML 规范页 |
+| [桌面与本地任务](docs/zh-CN/desktop.md) | macOS、Windows/WSL2、设备模型与本地数据 |
 | [移动客户端](docs/zh-CN/mobile.md) | iPhone、iPad 与 Android 的构建和安装入口 |
 
 ## 系统结构
