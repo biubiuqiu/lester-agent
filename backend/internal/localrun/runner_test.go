@@ -22,7 +22,10 @@ import (
 
 func waitForRun(t *testing.T, store *Store, requestID, status string) Run {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	// Long tool-loop tests now sync both the receipt transaction and JSONL for
+	// every message. Allow bounded disk/race-detector overhead, while still
+	// asserting the exact terminal status and number of executed tools.
+	deadline := time.Now().Add(15 * time.Second)
 	for {
 		run, err := store.Receipt(context.Background(), requestID)
 		if err != nil {

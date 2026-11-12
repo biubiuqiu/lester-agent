@@ -154,6 +154,14 @@ func (r *Runner) Send(ctx context.Context, conversationID, requestID, content st
 	}
 	run, accepted, events, err := r.Store.Accept(ctx, conversationID, requestID, content)
 	if err != nil || !accepted {
+		// Acceptance may have committed before a journal sync failed. Close that
+		// known receipt without ever starting or automatically replaying the task.
+		if err != nil && run.ID != "" {
+			cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			events, _ := r.Store.Finish(cleanup, run.ID, "interrupted", "context_storage_unavailable")
+			cancel()
+			r.emit(events...)
+		}
 		return run, accepted, err
 	}
 	runCtx, cancel := context.WithCancel(r.ctx)
@@ -257,7 +265,12 @@ func (r *Runner) execute(ctx context.Context, run Run, model ModelConfig) {
 		}
 		return saved.Runtime(), err
 	}
+	prepareContext, err := r.prepareContext(ctx, run, client)
+	if err != nil {
+		return
+	}
 	hooks := harness.Hooks{
+		PrepareTurn: prepareContext,
 		Delta: func(eventCtx context.Context, delta string) {
 			event, err := r.Store.AppendEvent(eventCtx, c.ID, run.ID, "TEXT_DELTA", map[string]string{"delta": delta})
 			if err == nil {

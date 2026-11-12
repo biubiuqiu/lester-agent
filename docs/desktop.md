@@ -33,7 +33,11 @@ You can also sign in to your own Lester deployment and select an authorized clou
 
 ## Storage, privacy and recovery
 
-Local projects, transcripts, runs, approvals and submission receipts live in a profile/device-bound SQLite database under the app's user-data directory (`profiles/<profile>/workspace.sqlite`). Project files stay in their selected folders. A different server/account uses a different profile; an incompatible database identity is rejected instead of being adopted automatically.
+Local messages, tool calls/results and summary checkpoints live in per-conversation JSONL files under the app's user-data directory: `profiles/<profile>/contexts/<conversation-id>.jsonl`. Projects, runs, approvals, events and original submission receipts remain in the profile's `workspace.sqlite`. A transactional SQLite outbox keeps acceptance consistent with JSONL; entries are removed after the journal is synced. Project files stay in their selected folders. A different server/account uses a different profile; mismatched profile/device identities are rejected.
+
+The updated runner automatically migrates existing SQLite transcripts, preserving message IDs, order, partial replies and submission receipts. Long context uses a validated summary from a tool-free model call for subsequent requests; the complete original transcript is never overwritten. Back up and restore the entire profile directory (SQLite and JSONL together). Do not open an upgraded profile with an older runner.
+
+Only one runner may write a profile at a time. Restart recovery repairs an unfinished last line only from committed outbox records. Missing acknowledged records, corruption or unsupported format versions produce errors instead of an empty conversation. Cloud execution continues to store its history in backend PostgreSQL.
 
 After cloud sign-in, the owner-private directory synchronizes only local task IDs, titles, project labels, status, timestamps and device metadata. Local transcript bodies, project paths and files are not uploaded to that directory. Other workspace members cannot browse this owner's local metadata.
 

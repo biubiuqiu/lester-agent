@@ -7,10 +7,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	modelruntime "github.com/biubiuqiu/lester-agent/backend/internal/model/runtime"
@@ -25,6 +27,11 @@ var (
 )
 
 type Store struct {
+	mu                  sync.Mutex
+	lock                *os.File
+	journals            *os.Root
+	closed              bool
+	contextCache        *cachedContext
 	db                  *sql.DB
 	deviceID, profileID string
 }
@@ -57,6 +64,48 @@ func OpenStore(stateDir, profileID, deviceID string) (*Store, error) {
 	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return nil, errors.New("local state directory must be a real directory")
 	}
+	stateRoot, err := os.OpenRoot(stateDir)
+	if err != nil {
+		return nil, err
+	}
+	defer stateRoot.Close()
+	lock, err := stateRoot.OpenFile("workspace.lock", os.O_CREATE|os.O_RDWR|stateOpenFlags, 0600)
+	if err != nil {
+		return nil, err
+	}
+	if info, e := lock.Stat(); e != nil || !info.Mode().IsRegular() {
+		lock.Close()
+		return nil, errors.New("local profile lock must be a regular file")
+	}
+	if err = lockState(lock); err != nil {
+		lock.Close()
+		return nil, errors.New("local profile is already open by another runner")
+	}
+	success := false
+	defer func() {
+		if !success {
+			lock.Close()
+		}
+	}()
+	if err = stateRoot.Mkdir("contexts", 0700); err != nil && !errors.Is(err, os.ErrExist) {
+		return nil, err
+	}
+	if err = syncStateDirectory(stateRoot); err != nil {
+		return nil, err
+	}
+	info, err = stateRoot.Lstat("contexts")
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return nil, errors.New("local contexts must be a real directory")
+	}
+	journals, err := stateRoot.OpenRoot("contexts")
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if !success {
+			journals.Close()
+		}
+	}()
 	file := filepath.Join(stateDir, "workspace.sqlite")
 	if info, err := os.Lstat(file); err == nil && (!info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0) {
 		return nil, errors.New("local state database must be a regular file")
@@ -78,11 +127,11 @@ func OpenStore(stateDir, profileID, deviceID string) (*Store, error) {
 		return nil, errors.New("open local state database")
 	}
 	db.SetMaxOpenConns(1)
-	if _, err = db.Exec(schema); err != nil {
+	if _, err = db.Exec(schema + journalSchema); err != nil {
 		db.Close()
 		return nil, errors.New("initialize local state database")
 	}
-	s := &Store{db: db, deviceID: deviceID, profileID: profileID}
+	s := &Store{db: db, deviceID: deviceID, profileID: profileID, lock: lock, journals: journals}
 	for key, value := range map[string]string{"profile_id": profileID, "device_id": deviceID} {
 		var saved string
 		err = db.QueryRow("SELECT value FROM identity WHERE key=?", key).Scan(&saved)
@@ -96,14 +145,30 @@ func OpenStore(stateDir, profileID, deviceID string) (*Store, error) {
 			return nil, errors.New("local state belongs to a different profile or device")
 		}
 	}
+	if err = s.migrateContext(context.Background()); err == nil {
+		err = s.flushContexts(context.Background())
+	}
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("initialize local context journals: %w", err)
+	}
 	if err = s.recoverInterrupted(context.Background()); err != nil {
 		db.Close()
 		return nil, errors.New("reconcile interrupted local tasks")
 	}
+	success = true
 	return s, nil
 }
 
-func (s *Store) Close() error           { return s.db.Close() }
+func (s *Store) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil
+	}
+	s.closed = true
+	return errors.Join(s.db.Close(), s.journals.Close(), s.lock.Close())
+}
 func timestamp(t time.Time) string      { return t.UTC().Format(time.RFC3339Nano) }
 func parseTimestamp(s string) time.Time { t, _ := time.Parse(time.RFC3339Nano, s); return t }
 func validID(id string) bool            { parsed, err := uuid.Parse(id); return err == nil && parsed != uuid.Nil }
@@ -271,20 +336,9 @@ func (s *Store) Receipt(ctx context.Context, requestID string) (Run, error) {
 	return scanRun(s.db.QueryRowContext(ctx, "SELECT "+runColumns+" FROM runs WHERE request_id=?", requestID))
 }
 
-func appendMessage(ctx context.Context, tx *sql.Tx, conversationID, runID string, m modelruntime.Message, partial bool) (Message, error) {
-	calls, err := json.Marshal(m.ToolCalls)
-	if err != nil {
-		return Message{}, err
-	}
-	if m.ToolCalls == nil {
-		calls = []byte("[]")
-	}
+func (s *Store) appendMessage(ctx context.Context, tx *sql.Tx, conversationID, runID string, m modelruntime.Message, partial bool) (Message, error) {
 	message := Message{ID: uuid.NewString(), ConversationID: conversationID, RunID: runID, Role: m.Role, Content: m.Content, ToolCalls: m.ToolCalls, ToolCallID: m.ToolCallID, Partial: partial, CreatedAt: time.Now().UTC()}
-	err = tx.QueryRowContext(ctx, "SELECT COALESCE(MAX(seq),0)+1 FROM messages WHERE conversation_id=?", conversationID).Scan(&message.Seq)
-	if err != nil {
-		return Message{}, err
-	}
-	_, err = tx.ExecContext(ctx, "INSERT INTO messages VALUES(?,?,?,?,?,?,?,?,?,?)", message.ID, conversationID, runID, message.Seq, message.Role, message.Content, string(calls), message.ToolCallID, partial, timestamp(message.CreatedAt))
+	err := s.stageRecord(ctx, tx, conversationID, &message, nil)
 	return message, err
 }
 
@@ -303,8 +357,13 @@ func appendEvent(ctx context.Context, tx *sql.Tx, conversationID, runID, kind st
 }
 
 func (s *Store) Accept(ctx context.Context, conversationID, requestID, content string) (Run, bool, []Event, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if !validID(conversationID) || !validID(requestID) || strings.TrimSpace(content) == "" || len(content) > 64<<10 {
 		return Run{}, false, nil, errors.New("valid conversation/request identities and a bounded message are required")
+	}
+	if _, err := s.loadContext(ctx, conversationID); err != nil {
+		return Run{}, false, nil, err
 	}
 	digest := sha256.Sum256([]byte(conversationID + "\x00" + content))
 	hash := hex.EncodeToString(digest[:])
@@ -342,7 +401,7 @@ func (s *Store) Accept(ctx context.Context, conversationID, requestID, content s
 	if err != nil {
 		return Run{}, false, nil, err
 	}
-	message, err := appendMessage(ctx, tx, conversationID, run.ID, modelruntime.Message{Role: "user", Content: content}, false)
+	message, err := s.appendMessage(ctx, tx, conversationID, run.ID, modelruntime.Message{Role: "user", Content: content}, false)
 	if err != nil {
 		return Run{}, false, nil, err
 	}
@@ -357,16 +416,31 @@ func (s *Store) Accept(ctx context.Context, conversationID, requestID, content s
 	if err = tx.Commit(); err != nil {
 		return Run{}, false, nil, err
 	}
+	if _, err = s.loadContext(ctx, conversationID); err != nil {
+		return run, false, nil, err
+	}
 	return run, true, []Event{event}, nil
 }
 
 func (s *Store) AppendMessage(ctx context.Context, conversationID, runID string, m modelruntime.Message, partial bool) (Message, Event, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, err := s.loadContext(ctx, conversationID); err != nil {
+		return Message{}, Event{}, err
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Message{}, Event{}, err
 	}
 	defer tx.Rollback()
-	message, err := appendMessage(ctx, tx, conversationID, runID, m, partial)
+	var status string
+	if err = tx.QueryRowContext(ctx, "SELECT status FROM runs WHERE id=? AND conversation_id=?", runID, conversationID).Scan(&status); err != nil {
+		return Message{}, Event{}, err
+	}
+	if status != "running" {
+		return Message{}, Event{}, ErrReceiptConflict
+	}
+	message, err := s.appendMessage(ctx, tx, conversationID, runID, m, partial)
 	if err != nil {
 		return Message{}, Event{}, err
 	}
@@ -374,7 +448,9 @@ func (s *Store) AppendMessage(ctx context.Context, conversationID, runID string,
 	if err != nil {
 		return Message{}, Event{}, err
 	}
-	err = tx.Commit()
+	if err = tx.Commit(); err == nil {
+		_, err = s.loadContext(ctx, conversationID)
+	}
 	return message, event, err
 }
 func (s *Store) AppendEvent(ctx context.Context, conversationID, runID, kind string, payload any) (Event, error) {
@@ -392,6 +468,8 @@ func (s *Store) AppendEvent(ctx context.Context, conversationID, runID, kind str
 }
 
 func (s *Store) Finish(ctx context.Context, runID, status, errorCode string) ([]Event, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if status != "completed" && status != "cancelled" && status != "failed" && status != "interrupted" {
 		return nil, errors.New("invalid terminal task state")
 	}
@@ -432,29 +510,15 @@ func (s *Store) Finish(ctx context.Context, runID, status, errorCode string) ([]
 }
 
 func (s *Store) Messages(ctx context.Context, conversationID string) ([]Message, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id,run_id,seq,role,content,tool_calls,tool_call_id,partial,created_at FROM messages WHERE conversation_id=? ORDER BY seq LIMIT 10001", conversationID)
-	if err != nil {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, err := s.Conversation(ctx, conversationID); err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := []Message{}
-	for rows.Next() {
-		m := Message{ConversationID: conversationID}
-		var calls, c string
-		if err = rows.Scan(&m.ID, &m.RunID, &m.Seq, &m.Role, &m.Content, &calls, &m.ToolCallID, &m.Partial, &c); err != nil {
-			return nil, err
-		}
-		if err = json.Unmarshal([]byte(calls), &m.ToolCalls); err != nil {
-			return nil, errors.New("invalid saved tool history")
-		}
-		m.CreatedAt = parseTimestamp(c)
-		out = append(out, m)
-	}
-	if len(out) > 10000 {
-		return nil, errors.New("local message history exceeds the supported bound")
-	}
-	return out, rows.Err()
+	state, err := s.loadContext(ctx, conversationID)
+	return state.Messages, err
 }
+
 func (s *Store) Events(ctx context.Context, conversationID string, after int64) ([]Event, error) {
 	rows, err := s.db.QueryContext(ctx, "SELECT seq,run_id,type,payload,created_at FROM events WHERE conversation_id=? AND seq>? ORDER BY seq LIMIT 1000", conversationID, max(after, 0))
 	if err != nil {
