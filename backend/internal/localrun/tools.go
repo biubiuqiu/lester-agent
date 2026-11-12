@@ -13,7 +13,11 @@ import (
 )
 
 func objectSchema(properties map[string]any, required ...string) map[string]any {
-	return map[string]any{"type": "object", "properties": properties, "required": required, "additionalProperties": false}
+	schema := map[string]any{"type": "object", "properties": properties, "additionalProperties": false}
+	if len(required) > 0 {
+		schema["required"] = required
+	}
+	return schema
 }
 func strSchema() map[string]any { return map[string]any{"type": "string"} }
 func localTools() []modelruntime.Tool {

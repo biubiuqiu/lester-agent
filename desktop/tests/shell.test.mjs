@@ -30,7 +30,10 @@ class FakeRunner extends EventEmitter {
 
 test('OS encrypted secrets survive reload and public metadata rejects nested credentials',async t=>{
   const storage=await store(t);await storage.setSecret('provider','private-provider-value');
-  const raw=await readFile(storage.file,'utf8');assert.ok(!raw.includes('private-provider-value'));assert.equal((await stat(storage.file)).mode&0o777,0o600);
+  const raw=await readFile(storage.file,'utf8');assert.ok(!raw.includes('private-provider-value'));
+  // Windows reports synthesized mode bits; POSIX chmod assertions apply only
+  // on filesystems where the storage permission contract is meaningful.
+  if(process.platform!=='win32')assert.equal((await stat(storage.file)).mode&0o777,0o600);
   const restored=await new DesktopStore(storage.directory,storage.safe).load();assert.equal(restored.getSecret('provider'),'private-provider-value');
   await assert.rejects(storage.setSetting('models',[{config:{nested:{api_key:'rejected'}}}]),{code:'PRIVATE_SETTING_REJECTED'});
 });
@@ -88,12 +91,13 @@ test('profiles isolate databases/models and keep device identity stable per acco
   await controller.close();
 });
 test('local preview frames cannot navigate to network URLs, arbitrary files or the privileged renderer',()=>{
-  const rendererPath='/app/renderer/index.html';
-  assert.equal(allowedLocalNavigation('file:///app/renderer/index.html',rendererPath,true),true);
-  assert.equal(allowedLocalNavigation('file:///app/renderer/preview.html#nonce',rendererPath,false),true);
+  const rendererPath=join(tmpdir(),'lester-navigation','index.html');
+  const mainURL=pathToFileURL(rendererPath).href,previewURL=pathToFileURL(join(tmpdir(),'lester-navigation','preview.html')).href;
+  assert.equal(allowedLocalNavigation(mainURL,rendererPath,true),true);
+  assert.equal(allowedLocalNavigation(previewURL+'#nonce',rendererPath,false),true);
   for(const value of ['about:blank','about:srcdoc'])assert.equal(allowedLocalNavigation(value,rendererPath,false),true);
-  for(const value of ['https://cloud.test/app','file:///etc/passwd','file:///app/renderer/index.html','file:///app/renderer/preview.html?inject=1','javascript:alert(1)','blob:null/document'])assert.equal(allowedLocalNavigation(value,rendererPath,false),false);
-  for(const value of ['about:blank','file:///app/renderer/preview.html','file:///app/renderer/index.html?inject=1'])assert.equal(allowedLocalNavigation(value,rendererPath,true),false);
+  for(const value of ['https://cloud.test/app','file:///etc/passwd',mainURL,previewURL+'?inject=1','javascript:alert(1)','blob:null/document'])assert.equal(allowedLocalNavigation(value,rendererPath,false),false);
+  for(const value of ['about:blank',previewURL,mainURL+'?inject=1'])assert.equal(allowedLocalNavigation(value,rendererPath,true),false);
 });
 test('cloud pane navigation, bounds, external URL and WSL paths stay confined',()=>{
   const origin='https://cloud.test';assert.equal(allowedCloudNavigation(origin+'/app/c/123e4567-e89b-42d3-a456-426614174000',origin),true);assert.equal(allowedCloudNavigation(origin+'/app/settings/memory',origin),true);assert.equal(allowedCloudNavigation(origin+'/app/settings/memory-admin',origin),false);

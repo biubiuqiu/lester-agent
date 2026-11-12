@@ -29,6 +29,8 @@ Add a device model in desktop model settings, select its protocol, endpoint and 
 
 You can also sign in to your own Lester deployment and select an authorized cloud model for a local task. Inference goes through the scoped desktop device gateway; the cloud provider's credential stays on the server. Local tool execution stays on this device. The model receives the task context needed for inference, including selected file/tool content.
 
+Cloud inference failures preserve bounded error categories such as authentication, rate limiting and context limits, including failures before streaming starts. Raw provider responses are never displayed, and failed or uncertain tasks are not automatically resent.
+
 **Share with cloud** is off by default for a device model. Enabling it advertises that model's metadata and allows your cloud tasks to request inference over the authenticated device WebSocket. The desktop app calls the configured provider locally; the provider credential stays on the device. Sharing requires the device to remain connected. Revoking the device or turning sharing off removes that route; neither creates a replacement run or changes a task's host.
 
 ## Storage, privacy and recovery

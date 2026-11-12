@@ -8,6 +8,17 @@ const hash = value => createHash('sha256').update(value).digest('hex');
 const profileHash = (origin, account) => hash(`${origin}\n${account}`).slice(0,32);
 const maxBytes = 16 << 20;
 function fail(code='CLOUD_REQUEST_FAILED') { return new DesktopError(code); }
+const modelErrorKinds = new Set(['context_length_exceeded','authentication','rate_limit','cancelled','transport','protocol','provider']);
+class ModelInferenceError extends DesktopError {
+  constructor(kind) { super('CLOUD_MODEL_FAILED'); this.kind=kind; }
+}
+async function modelHTTPError(response) {
+  // Only the gateway's stable classification crosses stdio. Never forward a
+  // provider response, message, URL or arbitrary error_kind from an HTTP body.
+  const fallback=response.status===401||response.status===403?'authentication':response.status===429?'rate_limit':response.status===400?'protocol':'provider';
+  let body;try{body=await readJSON(response)}catch{}
+  return new ModelInferenceError(modelErrorKinds.has(body?.error_kind)?body.error_kind:fallback);
+}
 function rows(value, key) { return Array.isArray(value) ? value : value?.[key] ?? []; }
 function uuid(value) { if(typeof value!=='string'||!UUID.test(value))throw fail('INVALID_REQUEST');return value; }
 function only(input, allowed) { boundedObject(input);if(Object.keys(input).some(key=>!allowed.includes(key)))throw fail('INVALID_REQUEST');return input; }
@@ -38,7 +49,7 @@ export function createCloudBridge({storage,shell,session,onEvent=()=>{},onAuthCh
   const token=()=>identity?storage.getSecret(tokenKey()):null;
   const getState=()=>({origin,partition:origin?partition():null,account_id:identity?.account_id??'',workspace_id:identity?.workspace_id??'',device_id:identity?.device_id??'',signed_in:!authInFlight&&!!identity&&!!token(),status:!origin?'unconfigured':!identity||!token()?'signed_out':socket?.readyState===1?'online':'offline'});
   function changed(){onEvent({type:'cloud-state',cloud:getState()});}
-  async function fetchAPI(path,{method='GET',body,device=false,signal,auth=true}={}) {
+  async function fetchAPI(path,{method='GET',body,device=false,signal,auth=true,inference=false}={}) {
     if(!origin)throw fail('CLOUD_NOT_CONFIGURED');
     const version=generation,currentOrigin=origin;
     if(auth&&!device&&renewSession)await renewSession({origin,partition:partition()});
@@ -53,7 +64,7 @@ export function createCloudBridge({storage,shell,session,onEvent=()=>{},onAuthCh
     try{
       response=await session.fromPartition(partition()).fetch(origin+path,{method,headers,body:body===undefined?undefined:JSON.stringify(body),credentials:device?'omit':'include',redirect:'error',cache:'no-store',signal:controller.signal});
       if(version!==generation||currentOrigin!==origin)throw fail('PROFILE_CHANGED');
-      if(!response.ok){await response.body?.cancel().catch(()=>{});if(response.status===401)throw fail('CLOUD_SIGN_IN_REQUIRED');if(response.status===409)throw fail('CLOUD_CONFLICT');if(response.status===429)throw fail('CLOUD_BUSY');throw fail();}
+      if(!response.ok){if(inference)throw await modelHTTPError(response);await response.body?.cancel().catch(()=>{});if(response.status===401)throw fail('CLOUD_SIGN_IN_REQUIRED');if(response.status===409)throw fail('CLOUD_CONFLICT');if(response.status===429)throw fail('CLOUD_BUSY');throw fail();}
       // Caller owns the returned stream, so its cancellation/deadline remain
       // active until its body has actually been consumed.
       const cleanup=()=>{clearTimeout(timeout);controllers.delete(controller);signal?.removeEventListener('abort',abort);};
@@ -142,7 +153,14 @@ export function createCloudBridge({storage,shell,session,onEvent=()=>{},onAuthCh
   async function cloudStream(params,{id,signal}){
     only(params,['model_id','request']);const modelID=uuid(params.model_id?.replace(/^cloud:/,''));boundedObject(params.request,4<<20);
     const selected=runner;if(!selected)throw fail('RUNNER_UNAVAILABLE');
-    const {response,cleanup}=await fetchAPI(`/api/v1/desktop/models/${modelID}/stream`,{method:'POST',device:true,body:params.request,signal});
+    let fetched;
+    try{fetched=await fetchAPI(`/api/v1/desktop/models/${modelID}/stream`,{method:'POST',device:true,body:params.request,signal,inference:true});}
+    catch(error){
+      if(!(error instanceof ModelInferenceError)||signal?.aborted||selected!==runner)throw error;
+      selected.notify('cloud.model.event',{request_id:id,event:{type:'RUN_FAILED',error_kind:error.kind}});
+      return {done:true};
+    }
+    const {response,cleanup}=fetched;
     const reader=response.body?.getReader();if(!reader){cleanup();throw fail('CLOUD_PROTOCOL_ERROR')}
     const decoder=new TextDecoder();let buffer='',size=0,completed=false,failed=false;
     const emit=line=>{let event;try{event=JSON.parse(line)}catch{throw fail('CLOUD_PROTOCOL_ERROR')};if(!object(event)||typeof event.type!=='string')throw fail('CLOUD_PROTOCOL_ERROR');if(event.type==='MODEL_COMPLETED')completed=true;if(event.error_kind||event.type==='RUN_FAILED')failed=true;selected.notify('cloud.model.event',{request_id:id,event});};

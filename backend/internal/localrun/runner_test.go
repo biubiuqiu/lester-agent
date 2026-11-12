@@ -53,6 +53,11 @@ func TestRunnerHTTPModelToolLoopRealFilesCommandApprovalAndReceipt(t *testing.T)
 			t.Error("credential was not supplied privately")
 		}
 		var body struct {
+			Tools []struct {
+				Function struct {
+					Parameters map[string]json.RawMessage `json:"parameters"`
+				} `json:"function"`
+			} `json:"tools"`
 			Messages []struct {
 				Role    string `json:"role"`
 				Content string `json:"content"`
@@ -60,6 +65,14 @@ func TestRunnerHTTPModelToolLoopRealFilesCommandApprovalAndReceipt(t *testing.T)
 		}
 		if json.NewDecoder(r.Body).Decode(&body) != nil {
 			t.Error("invalid provider request")
+		}
+		for _, tool := range body.Tools {
+			if required, present := tool.Function.Parameters["required"]; present && (string(required) == "null" || len(required) == 0 || required[0] != '[') {
+				// Strict compatible providers reject the entire request, even when
+				// the user only greets the agent and no tool will be called.
+				http.Error(w, `{"error":{"type":"invalid_request_error"}}`, http.StatusBadRequest)
+				return
+			}
 		}
 		w.Header().Set("Content-Type", "text/event-stream")
 		switch calls.Add(1) {

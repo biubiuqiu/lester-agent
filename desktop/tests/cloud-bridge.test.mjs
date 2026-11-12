@@ -308,6 +308,29 @@ test('local model cancellation aborts the cloud stream, preserves observed event
   await tick(); assert.equal(f.requests.length, 1);
 });
 
+test('cloud model HTTP failures preserve only allowlisted kinds without exposing or replaying the response', async t => {
+  for (const [status, body, kind] of [
+    [502, { error_kind: 'authentication', error: 'private-provider-secret' }, 'authentication'],
+    [502, { error_kind: 'rate_limit' }, 'rate_limit'],
+    [502, { error_kind: 'context_length_exceeded' }, 'context_length_exceeded'],
+    [502, { error_kind: 'transport' }, 'transport'],
+    [502, { error_kind: 'private-provider-secret', error: TOKEN }, 'provider'],
+    [400, { error: 'private-transcript' }, 'protocol'],
+    [401, {}, 'authentication'],
+    [429, {}, 'rate_limit'],
+    [502, 'not JSON: private-provider-secret', 'provider'],
+  ]) {
+    await t.test(`${status}/${kind}/${typeof body}`, async t => {
+      const f = fixture(t, { route() { return typeof body === 'string' ? new Response(body, { status }) : json(body, { status }); } });
+      const runner = new FakeRunner(); f.bridge.attachRunner(runner);
+      const result = await runner.handlers.get('cloud.model.stream')({ model_id: MODEL, request: {} }, { id: 'rejected-model', signal: new AbortController().signal });
+      assert.deepEqual(result, { done: true });
+      assert.deepEqual(runner.notifications, [{ method: 'cloud.model.event', params: { request_id: 'rejected-model', event: { type: 'RUN_FAILED', error_kind: kind } } }]);
+      assert.equal(f.requests.length, 1);
+    });
+  }
+});
+
 test('the model deadline remains active after response headers until the streaming body finishes', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const entered = deferred(); let fetchSignal;
