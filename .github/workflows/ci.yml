@@ -190,7 +190,9 @@ jobs:
         working-directory: desktop
         env:
           LESTER_DESKTOP_ARTIFACTS: ${{ runner.temp }}/desktop-renderer-artifacts
-        run: npm run test:ui
+        run: |
+          npm run test:ui
+          npm run test:ui:mac
       - name: Preserve desktop renderer failure screenshots
         if: failure()
         uses: actions/upload-artifact@v6

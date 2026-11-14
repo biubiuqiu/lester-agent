@@ -10,6 +10,9 @@ const invoke = async (action, ...args) => {
   return result.value;
 };
 contextBridge.exposeInMainWorld('lesterDesktop', Object.freeze({
+  // Non-sensitive presentation metadata is available before the first IPC reply.
+  // Execution and authorization continue to use the main process, not this value.
+  platform: process.platform,
   getState: () => invoke('getState'),
   chooseProject: () => invoke('chooseProject'),
   request: (method, params = {}) => invoke('request', method, params),

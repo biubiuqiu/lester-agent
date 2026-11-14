@@ -62,6 +62,7 @@ button img, .ui-icon { flex: none; }
 .device-status[data-status=error] .status-dot { background: var(--lester-color-danger); }
 .settings-button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 8px; text-align: left; font-size: 13px; }
 .shortcut { margin-left: auto; font-size: 11px; color: var(--lester-color-text-subtle); }
+.new-task .shortcut { color: inherit; opacity: .65; }
 main { display: flex; flex-direction: column; position: relative; min-width: 0; min-height: 0; }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex: none; min-height: 64px; padding: 12px 28px; border-bottom: 1px solid var(--lester-color-border); }
 .context { min-width: 0; }
@@ -229,3 +230,12 @@ h2 { margin: 0; font-size: 18px; font-weight: 600; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
 }
+
+/* Platform metadata comes from the local preload/main process. It changes only
+   presentation; remote workspaces never receive this preload or a drag bridge. */
+html[data-platform=darwin] body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", var(--lester-font-body); }
+html[data-platform=darwin] .sidebar { position: relative; padding-top: 56px; }
+html[data-platform=darwin] .sidebar::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 44px; app-region: drag; -webkit-app-region: drag; }
+html[data-platform=darwin] :is(.brand, .topbar) { app-region: drag; -webkit-app-region: drag; user-select: none; }
+html[data-platform=darwin] .topbar :is(button, a, input, select, .context) { app-region: no-drag; -webkit-app-region: no-drag; }
+html[data-platform=darwin] .topbar .context { user-select: text; }

@@ -9,6 +9,7 @@ import { createCloudBridge } from './cloud-bridge.mjs';
 import { createIPCHandler } from './ipc.mjs';
 import { createSessionRenewer } from './auth-session.mjs';
 import { allowedLocalNavigation, externalURL, validateCallback } from './policy.mjs';
+import { windowChrome } from './window-chrome.mjs';
 
 const directory=dirname(fileURLToPath(import.meta.url)),rendererPath=join(directory,'../renderer/index.html');
 let window,controller,cloud,cloudView,closing=false;
@@ -27,8 +28,8 @@ async function start() {
   if(process.defaultApp)app.setAsDefaultProtocolClient('lester-desktop',process.execPath,[join(directory,'..')]);
   else app.setAsDefaultProtocolClient('lester-desktop');
   const dataDirectory=app.getPath('userData'),storage=await new DesktopStore(dataDirectory,safeStorage).load();
-  window=new BrowserWindow({width:1380,height:900,minWidth:760,minHeight:540,show:false,title:'Lester',icon:join(directory,'../build/icon.png'),backgroundColor:'#faf9f6',webPreferences:{preload:join(directory,'../preload/index.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true,allowRunningInsecureContent:false}});
-  window.removeMenu();
+  window=new BrowserWindow({width:1380,height:900,minWidth:760,minHeight:540,show:false,title:'Lester',icon:join(directory,'../build/icon.png'),backgroundColor:'#faf9f6',...windowChrome(process.platform),webPreferences:{preload:join(directory,'../preload/index.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true,allowRunningInsecureContent:false}});
+  if(process.platform!=='darwin')window.removeMenu();
   const localSession=window.webContents.session;
   localSession.setPermissionRequestHandler((_contents,_permission,callback)=>callback(false));
   localSession.setPermissionCheckHandler(()=>false);

@@ -25,6 +25,8 @@ Windows 的 `build:runner` 生成供 WSL2 使用的 Linux Runner；macOS 使用�
 
 ## 导航与设置
 
+Windows 与 macOS 共用项目树、输入区、工作区和设置。macOS 额外使用系统字体、原生内嵌窗口按钮，并在侧栏顶部预留空间；标题栏空白处与品牌区域可以拖动窗口，按钮和可选中的任务标题不参与拖动。Windows/Linux 保留普通系统窗口边框。在本地工作区内，macOS 使用 **⌘,** 打开设置、**⌘N** 打开新草稿，Windows/Linux 对应 **Ctrl+,** 和 **Ctrl+N**。新任务快捷键不会关闭正在填写的设置表单，也不会发送任务。
+
 项目可以原地展开，直接查看下属会话。本地项目旁的 **+** 打开该目录的新任务草稿；展开项目不会发起任务。每组先显示五条最近会话，保留当前会话，并通过“显示更多”查看历史。搜索匹配项目名和会话标题，不切换当前会话，也不覆盖已有的折叠状态。来自其他设备的任务仍单独标明设备，不会变成本机会话。
 
 新任务的引导和输入框放在一起，已有会话的输入框保持在消息区下方。项目、模型与操作权限仍由你明确选择；切换项目或打开设置都不会自动发送任务。设置分为“通用”“模型”“Lester 云端”，切换分区或语言保留聊天草稿与未保存的模型表单。协议覆盖和 JSON 配置放在“高级选项”中。工作区标签支持左右方向键与 Home/End，设置标签支持上下方向键与 Home/End。
@@ -62,13 +64,14 @@ cd desktop
 npm test
 npm run check
 npm run test:ui
+npm run test:ui:mac
 npm run build:runner:all
 npm run test:e2e
 ```
 
 专项 CI 覆盖外壳单元/静态检查、无界面的渲染器交互检查、共享 Harness/本地 Runner 测试和 Runner 交叉编译。模拟检查不代表真实模型服务访问、macOS/Windows 签名或真实 WSL2/原生终端已通过验收；发布前仍需在目标系统验证。
 
-`test:ui` 使用独立的无头 Chromium 和测试桥接，不弹出 Electron 窗口，也不访问真实桌面客户端的数据。它检查项目树与搜索、六种语言、草稿、设置、键盘切换、HTML 预览隔离和紧凑窗口布局。Windows 默认使用已安装的 Chrome，其他系统使用 Playwright Chromium（`npx playwright install chromium`）；可用 `LESTER_BROWSER_CHANNEL` 选择其他已安装的浏览器通道。截图保存在临时目录，可用 `LESTER_DESKTOP_ARTIFACTS` 指定位置。该检查不验证原生 IPC、WSL2 或真实模型调用。
+`test:ui` 使用独立的无头 Chromium 和测试桥接，不弹出 Electron 窗口，也不访问真实桌面客户端的数据。它检查项目树与搜索、六种语言、草稿、设置、键盘切换、HTML 预览隔离和紧凑窗口布局。Windows 默认使用已安装的 Chrome，其他系统使用 Playwright Chromium（`npx playwright install chromium`）；可用 `LESTER_BROWSER_CHANNEL` 选择其他已安装的浏览器通道。`test:ui:mac` 用 macOS 展示元数据重复同一套检查，额外覆盖 Command 快捷键与原生按钮避让。截图按平台分别保存在临时目录或 `LESTER_DESKTOP_ARTIFACTS` 指定目录下。这些检查不代表 macOS 原生字体、红黄绿按钮点击、窗口拖动、Retina、原生 IPC、WSL2 或真实模型调用已通过实机验证。
 
 `test:e2e` 使用本机 Electron、真实 Runner、项目目录和终端，以及固定的模型服务测试数据；不会访问真实模型账号。Linux 需图形显示环境，例如 `xvfb-run -a npm run test:e2e`。仅在隔离的容器测试环境需要禁用 Electron 沙箱时设置 `LESTER_ELECTRON_NO_SANDBOX=1`，普通应用启动不使用此设置。截图保存在临时目录，可用 `LESTER_DESKTOP_ARTIFACTS` 指定位置。
 

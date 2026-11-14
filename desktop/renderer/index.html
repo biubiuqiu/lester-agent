@@ -34,7 +34,7 @@
   <div id="app">
     <aside class="sidebar" data-aria="navigation" aria-label="Navigation">
       <div class="brand"><img src="assets/lester.svg" alt="" width="30" height="30"><strong>Lester</strong></div>
-      <button id="new-task" class="new-task"><svg class="ui-icon" aria-hidden="true"><use href="#icon-plus"/></svg><span data-t="newTask"></span></button>
+      <button id="new-task" class="new-task"><svg class="ui-icon" aria-hidden="true"><use href="#icon-plus"/></svg><span data-t="newTask"></span><span id="new-task-shortcut" class="shortcut" aria-hidden="true"></span></button>
       <div class="search-field"><svg class="ui-icon" aria-hidden="true"><use href="#icon-search"/></svg><input id="search" type="search" data-placeholder="search" aria-label="Search"></div>
       <div id="sidebar-scroll" class="sidebar-scroll">
         <div class="sidebar-heading"><span data-t="projects"></span><button id="choose-project" class="icon-button" data-title="openFolder" aria-label="Open folder"><svg class="ui-icon" aria-hidden="true"><use href="#icon-plus"/></svg></button></div>
@@ -46,7 +46,7 @@
       </div>
       <div class="sidebar-footer">
         <div class="device-row"><div id="device-status" class="device-status"></div><button id="refresh" class="icon-button" data-title="refresh" aria-label="Refresh"><svg class="ui-icon" aria-hidden="true"><use href="#icon-refresh"/></svg></button></div>
-        <button id="settings-button" class="settings-button"><svg class="ui-icon" aria-hidden="true"><use href="#icon-settings"/></svg><span data-t="settings"></span><span class="shortcut" aria-hidden="true">Ctrl ,</span></button>
+        <button id="settings-button" class="settings-button"><svg class="ui-icon" aria-hidden="true"><use href="#icon-settings"/></svg><span data-t="settings"></span><span id="settings-shortcut" class="shortcut" aria-hidden="true"></span></button>
       </div>
     </aside>
     <main id="main">

@@ -10,7 +10,10 @@ import { chromium, expect } from '@playwright/test';
 
 const desktop = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const renderer = join(desktop, 'renderer');
-const artifacts = process.env.LESTER_DESKTOP_ARTIFACTS || await mkdtemp(join(tmpdir(), 'lester-renderer-qa-'));
+const platform = process.argv.find(argument => argument.startsWith('--platform='))?.slice('--platform='.length) || 'win32';
+assert.ok(['win32', 'darwin', 'linux'].includes(platform), 'supported renderer platform');
+const artifactRoot = process.env.LESTER_DESKTOP_ARTIFACTS || await mkdtemp(join(tmpdir(), 'lester-renderer-qa-'));
+const artifacts = join(artifactRoot, platform);
 await mkdir(artifacts, { recursive: true });
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.txt': 'text/plain' };
 const server = http.createServer(async (request, response) => {
@@ -30,16 +33,16 @@ try {
   const channel = process.env.LESTER_BROWSER_CHANNEL || (process.platform === 'win32' ? 'chrome' : undefined);
   browser = await chromium.launch({ headless: true, ...(channel ? { channel } : {}) });
   const context = await browser.newContext({ viewport: { width: 1366, height: 864 }, reducedMotion: 'reduce' });
-  await context.addInitScript(() => {
+  await context.addInitScript(({ platform }) => {
     if (window !== window.top) return;
     localStorage.setItem('lester-desktop-locale', 'zh-CN');
-    const projects = [{ id: 'p-1', name: 'lester-agent', path: '/mnt/g/codespace/lester-agent' }, { id: 'p-2', name: '个人项目', path: '/mnt/g/personal' }];
+    const projects = [{ id: 'p-1', name: 'lester-agent', path: platform === 'darwin' ? '/Users/example/Projects/lester-agent' : '/mnt/g/codespace/lester-agent' }, { id: 'p-2', name: '个人项目', path: platform === 'darwin' ? '/Users/example/Projects/personal' : '/mnt/g/personal' }];
     const tasks = [
       { id: 'c-1', title: '优化客户端界面', project_id: 'p-1', project_name: 'lester-agent', status: 'completed', model_id: 'fixture', updated_at: '2026-11-14' },
       { id: 'c-2', title: '整理项目文档', project_id: 'p-1', project_name: 'lester-agent', status: 'completed', model_id: 'fixture', updated_at: '2026-11-13' },
       { id: 'c-3', title: '读书笔记', project_id: 'p-2', project_name: '个人项目', status: 'idle', model_id: 'fixture', updated_at: '2026-11-12' },
     ];
-    const state = { profile_id: 'renderer-fixture', platform: 'win32', runner: { status: 'ready' }, secret_storage: { available: true }, cloud: { signed_in: false }, models: [{ id: 'fixture', name: '示例模型', provider: 'openai_compatible', model_id: 'fixture' }] };
+    const state = { profile_id: 'renderer-fixture', platform, runner: { status: 'ready' }, secret_storage: { available: true }, cloud: { signed_in: false }, models: [{ id: 'fixture', name: '示例模型', provider: 'openai_compatible', model_id: 'fixture' }] };
     const calls = [];
     const messages = [
       { id: 'm-1', role: 'user', content: '请整理客户端的界面和交互，让项目与会话的关系更清楚。' },
@@ -47,7 +50,7 @@ try {
     ];
     window.__rendererFixture = { calls, tasks, state };
     window.lesterDesktop = {
-      getState: async () => structuredClone(state), onEvent(handler) { window.__rendererFixture.emit = handler; }, closeCloudConversation: async () => {}, resizeCloudConversation: async () => {},
+      platform, getState: async () => structuredClone(state), onEvent(handler) { window.__rendererFixture.emit = handler; }, closeCloudConversation: async () => {}, resizeCloudConversation: async () => {},
       chooseProject: async () => structuredClone(projects[0]),
       request: async (method, params) => {
         calls.push({ method, params });
@@ -60,7 +63,7 @@ try {
         throw new Error(`Unexpected renderer fixture request: ${method}`);
       },
     };
-  });
+  }, { platform });
   page = await context.newPage();
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
@@ -72,9 +75,18 @@ try {
   await expect(group.locator('.conversation-row')).toHaveCount(2);
   await expect(group).toHaveAttribute('open', '');
   await expect(page.locator('#recent-section')).toBeHidden();
+  await expect(page.locator('html')).toHaveAttribute('data-platform', platform);
+  await expect(page.locator('#settings-shortcut')).toHaveText(platform === 'darwin' ? '⌘,' : 'Ctrl+,');
+  await expect(page.locator('#new-task-shortcut')).toHaveText(platform === 'darwin' ? '⌘N' : 'Ctrl+N');
+  if (platform === 'darwin') {
+    assert.ok((await page.locator('.brand').boundingBox()).y >= 44, 'brand clears native traffic lights');
+    assert.match(await page.locator('body').evaluate(node => getComputedStyle(node).fontFamily), /-apple-system/);
+    assert.equal(await page.locator('.topbar').evaluate(node => getComputedStyle(node).webkitAppRegion), 'drag');
+    assert.equal(await page.locator('#workspace-toggle').evaluate(node => getComputedStyle(node).webkitAppRegion), 'no-drag');
+  }
   await page.screenshot({ path: join(artifacts, 'desktop-new-task.png') });
   await page.setViewportSize({ width: 1552, height: 1014 });
-  await page.screenshot({ path: join(artifacts, 'desktop-new-task-native.png') });
+  await page.screenshot({ path: join(artifacts, 'desktop-new-task-large.png') });
   await page.setViewportSize({ width: 1366, height: 864 });
 
   // Filtering temporarily opens a group without replacing its saved fold state.
@@ -93,12 +105,16 @@ try {
   const draft = '这个任务草稿需要在设置和会话之间保留。';
   await page.locator('#prompt').fill(draft);
   await expect(page.locator('#send')).toBeEnabled();
-  await page.locator('#settings-button').click();
+  await page.keyboard.press(platform === 'darwin' ? 'Meta+,' : 'Control+,');
   await expect(page.locator('#settings-general')).toBeVisible();
   await page.locator('#language').selectOption('en');
   await page.locator('#settings-tab-models').click();
   await page.locator('#add-model').click();
   await page.locator('#model-form [name=name]').fill('An unsaved model');
+  await page.keyboard.press(platform === 'darwin' ? 'Meta+n' : 'Control+n');
+  await expect(page.locator('#settings')).toBeVisible();
+  await expect(page.locator('#model-form [name=name]')).toHaveValue('An unsaved model');
+  assert.equal(context.pages().length, 1, 'new-task shortcut does not open another window behind settings');
   await page.locator('#model-form details summary').click();
   await page.locator('#model-form [name=protocol]').selectOption('anthropic');
   await page.locator('#settings-tab-cloud').click();
@@ -135,7 +151,7 @@ try {
   await expect(page.locator('#chat')).not.toHaveClass(/is-new/);
   await expect(page.locator('#messages')).toContainText('项目导航');
   await page.locator('#prompt').fill('会话中的另一个草稿');
-  await page.locator('#new-task').click();
+  await page.keyboard.press(platform === 'darwin' ? 'Meta+n' : 'Control+n');
   await expect(page.locator('#prompt')).toHaveValue(draft);
   await group.locator('.conversation-row').first().click();
   await expect(page.locator('#prompt')).toHaveValue('会话中的另一个草稿');
@@ -230,7 +246,7 @@ try {
   assert.equal(calls.some(call => ['conversation.send', 'conversation.create', 'permission.respond', 'terminal.open'].includes(call.method)), false, 'view changes never execute or approve a task');
   assert.deepEqual(await page.locator('img').evaluateAll(images => images.filter(image => !image.complete || !image.naturalWidth).map(image => image.src)), []);
   assert.deepEqual(errors, []);
-  console.log(`Headless renderer checks passed: tree/search, six languages, drafts, settings, keyboard tabs, isolated preview and short-window approval/stop access. Viewports: 1366x864, 1552x1014, 760x540. Artifacts: ${artifacts}`);
+  console.log(`Headless ${platform} renderer checks passed: tree/search, six languages, drafts, settings, keyboard tabs, isolated preview and short-window approval/stop access. Viewports: 1366x864, 1552x1014, 760x540. Artifacts: ${artifacts}`);
 } catch (error) {
   await page?.screenshot({ path: join(artifacts, 'failure.png') }).catch(() => {});
   console.error(`Renderer failure evidence: ${artifacts}`);
