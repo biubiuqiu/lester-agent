@@ -45,6 +45,7 @@ try {
   await expect(page.locator('#global-notice')).toBeHidden();
   await page.locator('#settings-button').click();
   await page.locator('#language').selectOption('en');
+  await page.locator('#settings-tab-models').click();
   await page.locator('#add-model').click();
   await page.locator('[name=name]').fill('Fixture model');
   await page.locator('[name=endpoint]').fill(`http://127.0.0.1:${provider.address().port}/v1`);
@@ -84,7 +85,7 @@ try {
   await page.locator('#prompt').fill('draft survives reload');
   await page.reload();
   await page.waitForFunction(async () => (await window.lesterDesktop?.getState())?.runner?.status === 'ready');
-  await page.locator('#conversation-list button').first().click();
+  await page.locator('.conversation-row').first().click();
   await expect(page.locator('#prompt')).toHaveValue('draft survives reload');
   assert.equal(JSON.stringify(await page.evaluate(() => window.lesterDesktop.getState())).includes('fixture-key-no-real-secret'), false);
   assert.deepEqual(errors, []);

@@ -183,6 +183,21 @@ jobs:
       - name: Test desktop isolation, credentials and bridge behavior
         working-directory: desktop
         run: npm test
+      - name: Install headless desktop renderer browser
+        working-directory: desktop
+        run: npx playwright install --with-deps chromium
+      - name: Test desktop renderer interactions without native windows
+        working-directory: desktop
+        env:
+          LESTER_DESKTOP_ARTIFACTS: ${{ runner.temp }}/desktop-renderer-artifacts
+        run: npm run test:ui
+      - name: Preserve desktop renderer failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: desktop-renderer-failure
+          path: ${{ runner.temp }}/desktop-renderer-artifacts
+          if-no-files-found: ignore
       - name: Test shared model loop and local execution
         working-directory: backend
         run: go test -count=1 -timeout=3m ./internal/harness ./internal/localrun

@@ -29,6 +29,16 @@ for(const [language,value] of Object.entries({en:'Open this task on its device t
 for(const [language,values] of Object.entries({en:['Navigation','Conversation','Terminal input'],'zh-CN':['导航','会话','终端输入'],ja:['ナビゲーション','会話','ターミナル入力'],ko:['탐색','대화','터미널 입력'],fr:['Navigation','Conversation','Saisie du terminal'],es:['Navegación','Conversación','Entrada del terminal']})){
  for(const [index,key] of ['navigation','conversation','terminalInput'].entries())dictionaries[language][key]=values[index];
 }
+for (const [language, values] of Object.entries({
+ en: ['General', 'No matching projects or conversations'],
+ 'zh-CN': ['通用', '没有匹配的项目或会话'],
+ ja: ['一般', '一致するプロジェクトや会話はありません'],
+ ko: ['일반', '일치하는 프로젝트나 대화가 없습니다'],
+ fr: ['Général', 'Aucun projet ni conversation correspondant'],
+ es: ['General', 'No hay proyectos ni conversaciones coincidentes'],
+})) {
+ for (const [index, key] of ['general', 'noMatches'].entries()) dictionaries[language][key] = values[index];
+}
 export let locale=localStorage.getItem('lester-desktop-locale')||navigator.language;
 if(!dictionaries[locale])locale=Object.keys(dictionaries).find(key=>key.startsWith(locale.split('-')[0]))||'en';
 export function t(key){return dictionaries[locale][key]??en[key]??key;}

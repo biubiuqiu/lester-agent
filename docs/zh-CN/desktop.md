@@ -23,9 +23,15 @@ npm start
 
 Windows 的 `build:runner` 生成供 WSL2 使用的 Linux Runner；macOS 使用本机架构。`npm run build:runner:all` 交叉编译 macOS/Linux 的 x64、arm64 Runner。`npm run pack`、`npm run dist:mac`、`npm run dist:win` 打包桌面外壳；正式分发仍需配置对应平台的签名与公证。构建成功不代表已经完成签名或真实设备测试。
 
+## 导航与设置
+
+项目可以原地展开，直接查看下属会话。本地项目旁的 **+** 打开该目录的新任务草稿；展开项目不会发起任务。每组先显示五条最近会话，保留当前会话，并通过“显示更多”查看历史。搜索匹配项目名和会话标题，不切换当前会话，也不覆盖已有的折叠状态。来自其他设备的任务仍单独标明设备，不会变成本机会话。
+
+新任务的引导和输入框放在一起，已有会话的输入框保持在消息区下方。项目、模型与操作权限仍由你明确选择；切换项目或打开设置都不会自动发送任务。设置分为“通用”“模型”“Lester 云端”，切换分区或语言保留聊天草稿与未保存的模型表单。协议覆盖和 JSON 配置放在“高级选项”中。工作区标签支持左右方向键与 Home/End，设置标签支持上下方向键与 Home/End。
+
 ## 模型与凭证
 
-在桌面模型设置中添加设备模型，选择协议、接口地址、Model ID 并填写凭证。保存配置与真实服务调用分开。设备凭证由 Electron 的操作系统安全存储加密（macOS 使用 Keychain，Windows 使用系统保护存储）；Runner 仅通过主进程私有 IPC 接收凭证，不写入 SQLite，也不发送到云端目录。
+在桌面模型设置中添加设备模型，选择服务商、接口地址、Model ID 并填写凭证。保存配置与真实服务调用分开。设备凭证由 Electron 的操作系统安全存储加密（macOS 使用 Keychain，Windows 使用系统保护存储）；Runner 仅通过主进程私有 IPC 接收凭证，不写入 SQLite，也不发送到云端目录。
 
 登录自己的 Lester 部署后，本地任务也可选择有权使用的云端模型。推理经过限定范围的桌面设备网关，云端服务商密钥保留在服务器，本地工具仍在设备执行。推理所需的任务上下文（包括选入的文件和工具内容）会发送给所选模型。
 
@@ -55,11 +61,14 @@ Windows 的 `build:runner` 生成供 WSL2 使用的 Linux Runner；macOS 使用�
 cd desktop
 npm test
 npm run check
+npm run test:ui
 npm run build:runner:all
 npm run test:e2e
 ```
 
-专项 CI 覆盖外壳单元/静态检查、共享 Harness/本地 Runner 测试和 Runner 交叉编译。模拟检查不代表真实模型服务访问、macOS/Windows 签名或真实 WSL2/原生终端已通过验收；发布前仍需在目标系统验证。
+专项 CI 覆盖外壳单元/静态检查、无界面的渲染器交互检查、共享 Harness/本地 Runner 测试和 Runner 交叉编译。模拟检查不代表真实模型服务访问、macOS/Windows 签名或真实 WSL2/原生终端已通过验收；发布前仍需在目标系统验证。
+
+`test:ui` 使用独立的无头 Chromium 和测试桥接，不弹出 Electron 窗口，也不访问真实桌面客户端的数据。它检查项目树与搜索、六种语言、草稿、设置、键盘切换、HTML 预览隔离和紧凑窗口布局。Windows 默认使用已安装的 Chrome，其他系统使用 Playwright Chromium（`npx playwright install chromium`）；可用 `LESTER_BROWSER_CHANNEL` 选择其他已安装的浏览器通道。截图保存在临时目录，可用 `LESTER_DESKTOP_ARTIFACTS` 指定位置。该检查不验证原生 IPC、WSL2 或真实模型调用。
 
 `test:e2e` 使用本机 Electron、真实 Runner、项目目录和终端，以及固定的模型服务测试数据；不会访问真实模型账号。Linux 需图形显示环境，例如 `xvfb-run -a npm run test:e2e`。仅在隔离的容器测试环境需要禁用 Electron 沙箱时设置 `LESTER_ELECTRON_NO_SANDBOX=1`，普通应用启动不使用此设置。截图保存在临时目录，可用 `LESTER_DESKTOP_ARTIFACTS` 指定位置。
 

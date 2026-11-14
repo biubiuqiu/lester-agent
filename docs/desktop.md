@@ -23,9 +23,15 @@ npm start
 
 On Windows, `build:runner` produces the Linux runner used by WSL2. macOS builds use the host architecture. `npm run build:runner:all` cross-compiles the macOS and Linux x64/arm64 runners. `npm run pack`, `npm run dist:mac` and `npm run dist:win` package the shell; release distribution still requires the platform's signing/notarization configuration. Build success is not evidence of a signed release or a native-device test.
 
+## Navigation and settings
+
+Projects expand in place to show their conversations. The **+** beside a local project opens a draft in that folder; expanding a project never starts a task. Each group initially shows five recent conversations, keeps the current task visible, and offers **Show more**. Search matches project names and conversation titles without changing your selection or saved fold state. Tasks advertised by another device remain labeled separately; they do not become local conversations.
+
+New tasks keep the introduction and composer together. Existing conversations keep the composer below their transcript. Project, model and permission choices remain explicit, and no task is sent merely by choosing a project or opening settings. Settings has **General**, **Models** and **Lester cloud** tabs; switching tabs or language preserves message and unsaved model drafts. Model protocol overrides and JSON configuration live under **Advanced**. Workspace tabs support arrow keys and Home/End; settings tabs use Up/Down and Home/End.
+
 ## Models and credentials
 
-Add a device model in desktop model settings, select its protocol, endpoint and Model ID, and enter its credential. Configuration is saved separately from proving a real provider request. Device credentials are encrypted through Electron's OS-backed secure storage (Keychain on macOS, Windows protected storage on Windows); the runner receives them only through private main-process IPC. They are not stored in SQLite or sent to the cloud directory.
+Add a device model in desktop model settings, select its provider, endpoint and Model ID, and enter its credential. Configuration is saved separately from proving a real provider request. Device credentials are encrypted through Electron's OS-backed secure storage (Keychain on macOS, Windows protected storage on Windows); the runner receives them only through private main-process IPC. They are not stored in SQLite or sent to the cloud directory.
 
 You can also sign in to your own Lester deployment and select an authorized cloud model for a local task. Inference goes through the scoped desktop device gateway; the cloud provider's credential stays on the server. Local tool execution stays on this device. The model receives the task context needed for inference, including selected file/tool content.
 
@@ -55,11 +61,14 @@ Migration 037 adds device identities, derived shared-model definitions and the m
 cd desktop
 npm test
 npm run check
+npm run test:ui
 npm run build:runner:all
 npm run test:e2e
 ```
 
-Focused CI covers shell unit/static checks, shared harness/local runner tests and runner cross-compilation. These checks use fixtures and do not establish live model-provider access, macOS/Windows signing, or real WSL2/native terminal behavior. Test those on the target OS before distributing a release.
+Focused CI covers shell unit/static checks, headless renderer interaction checks, shared harness/local runner tests and runner cross-compilation. These checks use fixtures and do not establish live model-provider access, macOS/Windows signing, or real WSL2/native terminal behavior. Test those on the target OS before distributing a release.
+
+`test:ui` uses an isolated, headless Chromium browser and a test bridge, without opening an Electron window or accessing your real desktop profile. It checks project trees/search, six languages, drafts, settings, keyboard navigation, HTML preview isolation and compact layouts. Windows uses the installed Chrome channel by default; other systems use Playwright's Chromium (`npx playwright install chromium`). `LESTER_BROWSER_CHANNEL` can select another installed channel. Screenshots go to a temporary directory unless `LESTER_DESKTOP_ARTIFACTS` is set. This test does not validate native IPC, WSL2 or a live model.
 
 `test:e2e` uses the actual Electron app, runner, project filesystem and terminal with a deterministic model-provider fixture; it does not access a live model account. Linux needs a graphical display, for example `xvfb-run -a npm run test:e2e`. Set `LESTER_ELECTRON_NO_SANDBOX=1` only when an isolated container test requires disabling Electron's sandbox; normal app startup does not use that setting. Screenshots go to a temporary directory unless `LESTER_DESKTOP_ARTIFACTS` is set.
 
